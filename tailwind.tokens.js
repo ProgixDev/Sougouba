@@ -1,0 +1,60 @@
+/**
+ * Plain-JS mirror of theme/tokens.ts's color ramps, for tailwind.config.js
+ * (which runs under plain Node/CJS and can't import the TS source). Keep
+ * these hex values in sync with theme/tokens.ts if you ever change them.
+ */
+module.exports = {
+  forest: {
+    50: '#EEF6F1',
+    100: '#D6EBDF',
+    200: '#AFD7C0',
+    300: '#82BE9C',
+    400: '#57A379',
+    500: '#35875C',
+    600: '#246B47',
+    700: '#1C5439',
+    800: '#17422E',
+    900: '#123626',
+    950: '#0A2018',
+  },
+  terracotta: {
+    50: '#FDF3EE',
+    100: '#FBE3D6',
+    200: '#F5C4A8',
+    300: '#EE9F72',
+    400: '#E67D48',
+    500: '#D9642C',
+    600: '#BF5122',
+    700: '#9C401B',
+    800: '#7C3417',
+    900: '#642A13',
+    950: '#38160A',
+  },
+  mustard: {
+    50: '#FDF8E9',
+    100: '#FAEEC4',
+    200: '#F4DD8C',
+    300: '#EDC957',
+    400: '#E4B233',
+    500: '#D89A1E',
+    600: '#B57C16',
+    700: '#8E6013',
+    800: '#714E14',
+    900: '#5C4114',
+    950: '#332309',
+  },
+  neutral: {
+    25: '#FEFDFB',
+    50: '#FAF9F7',
+    100: '#F0EEEA',
+    200: '#E2DED7',
+    300: '#C9C3B8',
+    400: '#A9A196',
+    500: '#8A8175',
+    600: '#6E665C',
+    700: '#554F47',
+    800: '#3D3833',
+    900: '#292520',
+    950: '#17140F',
+  },
+};

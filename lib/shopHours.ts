@@ -1,0 +1,89 @@
+import type { Vendor, VendorHours } from '@/data/types';
+import { minutesOfDay } from '@/data/utils/time';
+
+export interface ShopDay {
+  /** Today's entry from the vendor's week, or null if the shop lists no hours for today. */
+  hours: VendorHours | null;
+  closedToday: boolean;
+  /** Minutes since midnight. */
+  openMinutes: number;
+  closeMinutes: number;
+  nowMinutes: number;
+  /** Trading right now. */
+  isOpen: boolean;
+  /** 0 before opening, 1 after closing — where "now" sits in the trading day. */
+  progress: number;
+}
+
+/**
+ * Where the shop is in its own day.
+ *
+ * A merchant's unit of time is the trading day, not the calendar week: the
+ * dashboard opens on "am I open, how far through, how has it gone". Everything
+ * needed to draw that comes from `vendor.hours` plus the clock, so it lives here
+ * rather than being recomputed in each screen.
+ */
+export function shopDay(vendor: Vendor, now: Date = new Date()): ShopDay {
+  const hours = vendor.hours.find((h) => h.day === now.getDay()) ?? null;
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const closedToday = !hours || Boolean(hours.closed);
+
+  if (!hours || closedToday) {
+    return {
+      hours,
+      closedToday: true,
+      openMinutes: 0,
+      closeMinutes: 0,
+      nowMinutes,
+      isOpen: false,
+      progress: 0,
+    };
+  }
+
+  const openMinutes = minutesOfDay(hours.open);
+  const closeMinutes = minutesOfDay(hours.close);
+  const span = Math.max(1, closeMinutes - openMinutes);
+
+  return {
+    hours,
+    closedToday: false,
+    openMinutes,
+    closeMinutes,
+    nowMinutes,
+    isOpen: nowMinutes >= openMinutes && nowMinutes < closeMinutes,
+    progress: clamp01((nowMinutes - openMinutes) / span),
+  };
+}
+
+/**
+ * One line telling the merchant their trading state.
+ *
+ * Phrased as what happens next rather than as a status word — "ferme à 21:00" is
+ * actionable where "Ouvert" alone is not.
+ */
+export function shopStatusLine(day: ShopDay): string {
+  if (day.closedToday) return "Fermé aujourd'hui";
+  if (day.isOpen) return `Ouvert · ferme à ${day.hours!.close}`;
+  if (day.nowMinutes < day.openMinutes) return `Ouvre à ${day.hours!.open}`;
+  return `Fermé · rouvre demain`;
+}
+
+/**
+ * Where a timestamp falls across the trading day, as 0–1.
+ *
+ * Clamped rather than rejected. An order placed before the shop opened is real —
+ * someone ordering ahead — and dropping it would let the strip show fewer orders
+ * than the queue beside it counts. It sits at the start of the day instead,
+ * which is where it is waiting. Null only when the shop does not trade today, in
+ * which case there is no track to place it on.
+ */
+export function positionInDay(day: ShopDay, iso: string): number | null {
+  if (day.closedToday) return null;
+  const at = new Date(iso);
+  const minutes = at.getHours() * 60 + at.getMinutes();
+  return clamp01((minutes - day.openMinutes) / Math.max(1, day.closeMinutes - day.openMinutes));
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}

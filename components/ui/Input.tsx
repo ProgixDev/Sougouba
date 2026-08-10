@@ -1,0 +1,161 @@
+import { useEffect, useState } from 'react';
+import { Eye, EyeOff, type LucideIcon } from 'lucide-react-native';
+import { Pressable, TextInput, View, type TextInputProps } from 'react-native';
+import Animated, {
+  interpolate,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+
+import { useColorScheme, useThemeColors } from '@/hooks/useColorScheme';
+import { darkColors, lightColors } from '@/theme/colors';
+import { neutral } from '@/theme/tokens';
+import { Text } from './Text';
+
+export interface InputProps extends TextInputProps {
+  label: string;
+  error?: string;
+  helperText?: string;
+  required?: boolean;
+  isPassword?: boolean;
+  icon?: LucideIcon;
+}
+
+const FIELD_HEIGHT = 58;
+
+export function Input({
+  label,
+  error,
+  helperText,
+  required,
+  isPassword,
+  icon: Icon,
+  secureTextEntry,
+  value,
+  defaultValue,
+  onFocus,
+  onBlur,
+  onChangeText,
+  placeholder: _placeholder,
+  ...rest
+}: InputProps) {
+  const [focused, setFocused] = useState(false);
+  const [filled, setFilled] = useState(Boolean((value ?? defaultValue)?.toString().length));
+  const [hidden, setHidden] = useState(!!isPassword);
+  const { colorScheme } = useColorScheme();
+  const colors = colorScheme === 'dark' ? darkColors : lightColors;
+
+  const labelFloat = useSharedValue(filled ? 1 : 0);
+  const focusRing = useSharedValue(0);
+
+  // Controlled resets (e.g. react-hook-form's reset()) should re-sync the floated label.
+  useEffect(() => {
+    const nextFilled = Boolean(value?.toString().length);
+    setFilled(nextFilled);
+    labelFloat.value = withTiming(nextFilled || focused ? 1 : 0, { duration: 160 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  const labelStyle = useAnimatedStyle(() => ({
+    top: interpolate(labelFloat.value, [0, 1], [19, 6]),
+    transform: [{ scale: interpolate(labelFloat.value, [0, 1], [1, 0.78]) }],
+  }));
+
+  const labelColorStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(
+      focusRing.value,
+      [0, 1],
+      [error ? colors.destructive : colors.mutedForeground, error ? colors.destructive : colors.primary]
+    ),
+  }));
+
+  const borderStyle = useAnimatedStyle(() => ({
+    borderColor: error
+      ? colors.destructive
+      : interpolateColor(focusRing.value, [0, 1], [colors.borderStrong, colors.primary]),
+    shadowOpacity: error ? 0 : interpolate(focusRing.value, [0, 1], [0, 0.14]),
+  }));
+
+  const iconColor = error ? colors.destructive : focused ? colors.primary : neutral[400];
+
+  return (
+    <View className="gap-1.5">
+      <Animated.View
+        className="rounded-2xl bg-card border-[1.5px] px-4 flex-row items-center"
+        style={[{ height: FIELD_HEIGHT }, SOFT_FOCUS_SHADOW, borderStyle]}
+      >
+        {Icon ? (
+          <View className="mr-3">
+            <Icon size={19} color={iconColor} strokeWidth={2} />
+          </View>
+        ) : null}
+
+        <View className="flex-1" style={{ height: FIELD_HEIGHT }}>
+          <Animated.View pointerEvents="none" className="absolute left-0" style={[{ transformOrigin: 'left' }, labelStyle]}>
+            <Animated.Text className="font-sans-medium text-base" style={labelColorStyle} numberOfLines={1}>
+              {label}
+              {required ? ' *' : ''}
+            </Animated.Text>
+          </Animated.View>
+
+          <TextInput
+            className="text-base text-foreground font-sans-medium"
+            style={{ height: FIELD_HEIGHT, paddingTop: 22 }}
+            value={value}
+            defaultValue={defaultValue}
+            secureTextEntry={isPassword ? hidden : secureTextEntry}
+            onFocus={(e) => {
+              setFocused(true);
+              focusRing.value = withTiming(1, { duration: 160 });
+              labelFloat.value = withTiming(1, { duration: 160 });
+              onFocus?.(e);
+            }}
+            onBlur={(e) => {
+              setFocused(false);
+              focusRing.value = withTiming(0, { duration: 160 });
+              labelFloat.value = withTiming(filled ? 1 : 0, { duration: 160 });
+              onBlur?.(e);
+            }}
+            onChangeText={(text) => {
+              const nextFilled = text.length > 0;
+              setFilled(nextFilled);
+              labelFloat.value = withTiming(nextFilled || focused ? 1 : 0, { duration: 160 });
+              onChangeText?.(text);
+            }}
+            placeholder=""
+            {...rest}
+          />
+        </View>
+
+        {isPassword ? (
+          <Pressable
+            hitSlop={8}
+            onPress={() => setHidden((h) => !h)}
+            accessibilityLabel={hidden ? 'Afficher le mot de passe' : 'Masquer le mot de passe'}
+          >
+            {hidden ? <EyeOff size={19} color={colors.mutedForeground} /> : <Eye size={19} color={colors.mutedForeground} />}
+          </Pressable>
+        ) : null}
+      </Animated.View>
+
+      {error ? (
+        <Text variant="caption" tone="destructive">
+          {error}
+        </Text>
+      ) : helperText ? (
+        <Text variant="caption" tone="muted">
+          {helperText}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+const SOFT_FOCUS_SHADOW = {
+  shadowColor: '#246B47',
+  shadowOffset: { width: 0, height: 0 },
+  shadowRadius: 10,
+  elevation: 3,
+};

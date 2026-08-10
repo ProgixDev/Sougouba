@@ -1,0 +1,223 @@
+import { router } from 'expo-router';
+import { SearchX } from 'lucide-react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Keyboard, ScrollView, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { FilterSheet, ProductGrid, SearchField } from '@/components/customer';
+import { Chip, EmptyState, Text } from '@/components/ui';
+import { categoriesApi, productsApi, vendorsApi } from '@/data/api';
+import type { Category, ID, Product, Vendor } from '@/data/types';
+import { useDebounce } from '@/hooks/useDebounce';
+import { useTabBarInset } from '@/hooks/useTabBarInset';
+import {
+  activeFilterCount,
+  applyFilters,
+  emptyFilters,
+  type ProductFilters,
+} from '@/lib/productFilters';
+import { dynamicRoutes } from '@/lib/routes';
+import { useCartStore } from '@/store/useCartStore';
+
+const BROWSE_LIMIT = 24;
+
+export default function SearchScreen() {
+  const tabBarInset = useTabBarInset();
+  const addItem = useCartStore((s) => s.addItem);
+
+  const [query, setQuery] = useState('');
+  const [categoryId, setCategoryId] = useState<ID | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [results, setResults] = useState<Product[] | null>(null);
+  const [searching, setSearching] = useState(false);
+
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [filters, setFilters] = useState<ProductFilters>(emptyFilters);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  // What the sheet's button counts. Tracked separately from `filters` so the
+  // count updates as the draft changes, without applying anything.
+  const [draftFilters, setDraftFilters] = useState<ProductFilters>(emptyFilters);
+
+  const debouncedQuery = useDebounce(query, 250);
+
+  useEffect(() => {
+    Promise.all([
+      categoriesApi.getCategories(),
+      productsApi.getProducts(),
+      vendorsApi.getVendors(),
+    ]).then(([c, p, v]) => {
+      setCategories(c);
+      setAllProducts(p);
+      setVendors(v);
+    });
+  }, []);
+
+  useEffect(() => {
+    const trimmed = debouncedQuery.trim();
+    if (!trimmed) {
+      // `searchProducts('')` returns [] by design, which would read as "no
+      // results" — an empty query means "no query", so browse everything.
+      setResults(null);
+      setSearching(false);
+      return;
+    }
+    let active = true;
+    setSearching(true);
+    productsApi.searchProducts(trimmed).then((found) => {
+      if (!active) return;
+      setResults(found);
+      setSearching(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [debouncedQuery]);
+
+  /** The full narrowing pipeline for a given filter set: query → category → filters. */
+  const narrow = useCallback(
+    (active: ProductFilters) => {
+      const pool = results ?? allProducts;
+      const byCategory = categoryId ? pool.filter((p) => p.categoryId === categoryId) : pool;
+      return applyFilters(byCategory, active);
+    },
+    [results, allProducts, categoryId]
+  );
+
+  const filterCount = activeFilterCount(filters);
+
+  const { visible, browseTruncated } = useMemo(() => {
+    const narrowed = narrow(filters);
+    // Idle browse would otherwise mount all 78 cards at once — each with its own
+    // Reanimated value and pressable — which stutters on first paint. A query, a
+    // category or a filter narrows things enough to show every match.
+    const browsing = !results && !categoryId && filterCount === 0;
+    return {
+      visible: browsing ? narrowed.slice(0, BROWSE_LIMIT) : narrowed,
+      browseTruncated: browsing && narrowed.length > BROWSE_LIMIT,
+    };
+  }, [narrow, filters, results, categoryId, filterCount]);
+
+  /** Live count behind the sheet's button, computed from the draft, not what is applied. */
+  const draftResultCount = useMemo(() => narrow(draftFilters).length, [narrow, draftFilters]);
+
+  const iconByCategory = useMemo(
+    () => Object.fromEntries(categories.map((c) => [c.id, c.icon])),
+    [categories]
+  );
+
+  const hasQuery = debouncedQuery.trim().length > 0;
+
+  return (
+    <SafeAreaView className="flex-1 bg-background" edges={['top']}>
+      <View className="px-5 pt-2 pb-4 gap-4">
+        <Text variant="title" weight="bold" className="text-[26px]">
+          Recherche
+        </Text>
+        <SearchField
+          value={query}
+          onChangeText={setQuery}
+          activeFilterCount={filterCount}
+          onFilterPress={() => {
+            Keyboard.dismiss();
+            setSheetOpen(true);
+          }}
+        />
+      </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerClassName="px-5 gap-2 pb-4"
+        // Filters stay reachable while a keyboard is up.
+        keyboardShouldPersistTaps="handled"
+      >
+        {categories.map((category) => (
+          <Chip
+            key={category.id}
+            label={category.shortNameFr}
+            selected={categoryId === category.id}
+            onPress={() => setCategoryId((current) => (current === category.id ? null : category.id))}
+          />
+        ))}
+      </ScrollView>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: tabBarInset + 24 }}
+        keyboardShouldPersistTaps="handled"
+        onScrollBeginDrag={Keyboard.dismiss}
+      >
+        <View className="px-5 pb-3 flex-row items-center gap-3">
+          <Text variant="caption" tone="muted" className="flex-1">
+            {searching
+              ? 'Recherche…'
+              : browseTruncated
+                ? `Suggestions — ${visible.length} produits, cherchez pour voir le reste`
+                : `${visible.length} ${visible.length === 1 ? 'résultat' : 'résultats'}${
+                    hasQuery ? ` pour « ${debouncedQuery.trim()} »` : ''
+                  }`}
+          </Text>
+          {filterCount > 0 ? (
+            <Text
+              variant="caption"
+              weight="semibold"
+              tone="secondary"
+              accessibilityRole="button"
+              accessibilityLabel="Effacer les filtres"
+              onPress={() => setFilters(emptyFilters)}
+            >
+              Effacer les filtres
+            </Text>
+          ) : null}
+        </View>
+
+        {!searching && visible.length === 0 ? (
+          <EmptyState
+            icon={SearchX}
+            title="Aucun résultat"
+            description={
+              filterCount > 0
+                ? 'Aucun produit ne correspond à vos filtres. Élargissez-les pour voir plus de résultats.'
+                : categoryId && hasQuery
+                  ? 'Essayez un autre mot-clé ou retirez le filtre de catégorie.'
+                  : 'Essayez un autre mot-clé.'
+            }
+            actionLabel={filterCount > 0 ? 'Effacer les filtres' : undefined}
+            onAction={filterCount > 0 ? () => setFilters(emptyFilters) : undefined}
+          />
+        ) : (
+          <ProductGrid
+            products={visible}
+            iconByCategory={iconByCategory}
+            loading={searching}
+            skeletonCount={6}
+            onPressProduct={(product) =>
+              router.push({ pathname: dynamicRoutes.productDetail, params: { id: product.id } })
+            }
+            onAddProduct={(product) =>
+              addItem({
+                productId: product.id,
+                vendorId: product.vendorId,
+                unitPriceCad: product.priceCad,
+              })
+            }
+          />
+        )}
+      </ScrollView>
+
+      <FilterSheet
+        visible={sheetOpen}
+        filters={filters}
+        vendors={vendors}
+        resultCount={draftResultCount}
+        onDraftChange={setDraftFilters}
+        onApply={(next) => {
+          setFilters(next);
+          setSheetOpen(false);
+        }}
+        onClose={() => setSheetOpen(false)}
+      />
+    </SafeAreaView>
+  );
+}

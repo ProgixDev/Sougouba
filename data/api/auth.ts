@@ -1,0 +1,105 @@
+import { users as seedUsers } from '../seed/users';
+import type { User, UserRole } from '../types';
+import { delay } from '../utils/delay';
+import { generateId } from '../utils/ids';
+import { createPersistedTable } from '../utils/persistedTable';
+
+/**
+ * The mock "backend"'s account table.
+ *
+ * Persisted so an account created during a demo survives a restart — otherwise
+ * signing back in reports "no such account", which reads as a broken app rather
+ * than a mock-data limitation.
+ */
+const table = createPersistedTable<User>('sougouba-mock-accounts', seedUsers);
+
+/** Copies out so the session store never holds a live reference into the table. */
+function snapshot(user: User): User {
+  return { ...user };
+}
+
+function findByEmail(email: string): User | undefined {
+  const normalized = email.trim().toLowerCase();
+  return table.rows().find((u) => u.email.toLowerCase() === normalized);
+}
+
+export class AuthError extends Error {}
+
+export async function mockSignIn(email: string, _password: string): Promise<User> {
+  await table.ready;
+  await delay(500, 900);
+  const user = findByEmail(email);
+  if (!user) {
+    throw new AuthError('Aucun compte ne correspond à cette adresse courriel.');
+  }
+  return snapshot(user);
+}
+
+export async function mockSignUp(fullName: string, email: string, _password: string): Promise<User> {
+  await table.ready;
+  await delay(500, 900);
+  if (findByEmail(email)) {
+    throw new AuthError('Un compte existe déjà avec cette adresse courriel.');
+  }
+  const user: User = {
+    id: generateId('usr'),
+    fullName: fullName.trim(),
+    email: email.trim().toLowerCase(),
+    memberSince: new Date().toISOString(),
+    role: null,
+    favoriteProductIds: [],
+    favoriteVendorIds: [],
+    addresses: [],
+  };
+  await table.add(user);
+  return snapshot(user);
+}
+
+export async function mockSelectRole(userId: string, role: UserRole): Promise<User> {
+  await table.ready;
+  await delay(300, 500);
+  const user = table.rows().find((u) => u.id === userId);
+  if (!user) throw new AuthError('Utilisateur introuvable.');
+  user.role = role;
+  await table.save(user.id);
+  return snapshot(user);
+}
+
+/**
+ * Link a merchant account to a shop.
+ *
+ * There is no shop-onboarding flow in the prototype, so an account that signs up
+ * in the app and picks "commerçant" has no `vendorId` and every business screen
+ * renders its "no shop linked" fallback. `hooks/useBusinessDemoSeed.ts` calls
+ * this to hand a new owner one of the seeded shops; persisting it here is what
+ * makes the choice survive a relaunch.
+ */
+export async function mockAttachVendor(userId: string, vendorId: string): Promise<User> {
+  await table.ready;
+  await delay(200, 400);
+  const user = table.rows().find((u) => u.id === userId);
+  if (!user) throw new AuthError('Utilisateur introuvable.');
+  user.vendorId = vendorId;
+  await table.save(user.id);
+  return snapshot(user);
+}
+
+export async function mockOAuthContinue(provider: 'google' | 'apple'): Promise<User> {
+  await table.ready;
+  await delay(600, 1000);
+  const email = provider === 'google' ? 'demo.google@sougouba.ca' : 'demo.apple@sougouba.ca';
+  const existing = findByEmail(email);
+  if (existing) return snapshot(existing);
+  const user: User = {
+    id: generateId('usr'),
+    fullName: provider === 'google' ? 'Utilisateur Google' : 'Utilisateur Apple',
+    email,
+    memberSince: new Date().toISOString(),
+    role: null,
+    favoriteProductIds: [],
+    favoriteVendorIds: [],
+    addresses: [],
+  };
+  await table.add(user);
+  return snapshot(user);
+}
