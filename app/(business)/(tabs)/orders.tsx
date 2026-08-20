@@ -1,10 +1,10 @@
 import { useFocusEffect, router } from 'expo-router';
-import { Inbox, Store } from 'lucide-react-native';
+import { Inbox, ShieldCheck } from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CounterHeader, OrderQueueCard } from '@/components/business';
+import { CounterHeader, OrderQueueCard, PendingApproval } from '@/components/business';
 import { Chip, EmptyState, Reveal, Skeleton, Text } from '@/components/ui';
 import { ordersApi } from '@/data/api';
 import type { ID, Order } from '@/data/types';
@@ -12,13 +12,17 @@ import { useOwnerVendor } from '@/hooks/useOwnerVendor';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { customerLabel } from '@/lib/customerNames';
 import { formatCad } from '@/lib/format';
-import { isActiveStatus, nextStatus } from '@/lib/orderStatus';
+import { isActiveStatus, nextStatusFor } from '@/lib/orderStatus';
 import { dynamicRoutes } from '@/lib/routes';
 
-type Filter = 'active' | 'delivered' | 'cancelled' | 'all';
+type Filter = 'active' | 'disputes' | 'delivered' | 'cancelled' | 'all';
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'active', label: 'À traiter' },
+  // Second, not last: a complaint is the other thing in this queue that is
+  // waiting on the merchant, and it does not appear under "À traiter" because a
+  // disputed order has usually already been delivered.
+  { key: 'disputes', label: 'Litiges' },
   { key: 'delivered', label: 'Livrées' },
   { key: 'cancelled', label: 'Annulées' },
   { key: 'all', label: 'Toutes' },
@@ -26,7 +30,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 
 export default function BusinessOrdersScreen() {
   const tabBarInset = useTabBarInset();
-  const { vendor, loading: vendorLoading, missing } = useOwnerVendor();
+  const { vendor, loading: vendorLoading, missing, pending, reload } = useOwnerVendor();
   const [orders, setOrders] = useState<Order[]>([]);
   const [filter, setFilter] = useState<Filter>('active');
   const [loading, setLoading] = useState(true);
@@ -61,7 +65,9 @@ export default function BusinessOrdersScreen() {
 
   const advance = useCallback(
     async (order: Order) => {
-      const next = nextStatus(order.status);
+      // Merchant-scoped: at `ready` this is null, because handing the bag over
+      // is the courier's move, not a button the shop can press on their behalf.
+      const next = nextStatusFor(order.status, 'merchant');
       if (!next) return;
       setAdvancingId(order.id);
       await ordersApi.updateOrderStatus(order.id, next, new Date().toISOString());
@@ -71,9 +77,12 @@ export default function BusinessOrdersScreen() {
     [load]
   );
 
-  const counts = useMemo(
+  const counts = useMemo<Record<Filter, number>>(
     () => ({
       active: orders.filter((o) => isActiveStatus(o.status)).length,
+      // Counts what is waiting on the merchant, not the whole history — a chip
+      // reading "Litiges (9)" beside nine already answered is a false alarm.
+      disputes: orders.filter((o) => o.dispute && o.dispute.status !== 'answered').length,
       delivered: orders.filter((o) => o.status === 'delivered').length,
       cancelled: orders.filter((o) => o.status === 'cancelled').length,
       all: orders.length,
@@ -89,6 +98,14 @@ export default function BusinessOrdersScreen() {
         return orders
           .filter((o) => isActiveStatus(o.status))
           .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      case 'disputes':
+        // Unanswered first — the answered ones are here for the record.
+        return orders
+          .filter((o) => o.dispute)
+          .sort((a, b) => {
+            const pending = Number(a.dispute?.status === 'answered') - Number(b.dispute?.status === 'answered');
+            return pending !== 0 ? pending : b.createdAt.localeCompare(a.createdAt);
+          });
       case 'delivered':
         return orders.filter((o) => o.status === 'delivered');
       case 'cancelled':
@@ -103,16 +120,10 @@ export default function BusinessOrdersScreen() {
     [visible]
   );
 
-  if (missing) {
-    return (
-      <SafeAreaView className="flex-1 bg-background" edges={['top']}>
-        <EmptyState
-          icon={Store}
-          title="Aucune boutique associée"
-          description="Ce compte commerçant n’est pas encore rattaché à une boutique."
-        />
-      </SafeAreaView>
-    );
+  // A shop that is filed but not cleared is as unusable as no shop at all,
+  // and for the merchant it is a different sentence — see `PendingApproval`.
+  if (missing || pending) {
+    return <PendingApproval state={missing ? 'missing' : 'pending'} onApproved={reload} />;
   }
 
   return (
@@ -157,19 +168,36 @@ export default function BusinessOrdersScreen() {
           ListHeaderComponent={
             visible.length > 0 ? (
               <Text variant="caption" tone="muted" className="text-[12px]">
-                {visible.length} {visible.length === 1 ? 'commande' : 'commandes'}
-                {filter !== 'cancelled' ? ` · ${formatCad(visibleTotal)}` : ''}
+                {visible.length}{' '}
+                {filter === 'disputes'
+                  ? visible.length === 1
+                    ? 'litige'
+                    : 'litiges'
+                  : visible.length === 1
+                    ? 'commande'
+                    : 'commandes'}
+                {filter !== 'cancelled' && filter !== 'disputes'
+                  ? ` · ${formatCad(visibleTotal)}`
+                  : ''}
               </Text>
             ) : null
           }
           ListEmptyComponent={
             <EmptyState
-              icon={Inbox}
-              title={filter === 'active' ? 'Rien en attente' : 'Aucune commande'}
+              icon={filter === 'disputes' ? ShieldCheck : Inbox}
+              title={
+                filter === 'active'
+                  ? 'Rien en attente'
+                  : filter === 'disputes'
+                    ? 'Aucun litige'
+                    : 'Aucune commande'
+              }
               description={
                 filter === 'active'
                   ? 'Les nouvelles commandes apparaîtront ici dès qu’un client passe commande.'
-                  : 'Rien à afficher pour ce filtre.'
+                  : filter === 'disputes'
+                    ? 'Aucun client n’a signalé de problème sur vos commandes.'
+                    : 'Rien à afficher pour ce filtre.'
               }
             />
           }

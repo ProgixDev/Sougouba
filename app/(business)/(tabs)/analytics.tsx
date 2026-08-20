@@ -1,12 +1,19 @@
 import { useFocusEffect } from 'expo-router';
-import { ChartColumn, Store } from 'lucide-react-native';
+import { ChartColumn } from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BarChart } from 'react-native-gifted-charts';
 
-import { CounterHeader, SlabMetric, StatColumns, onSlab } from '@/components/business';
-import { Badge, EmptyState, Reveal, Skeleton, Text } from '@/components/ui';
+import {
+  CounterHeader,
+  PayoutSummary,
+  PendingApproval,
+  SlabMetric,
+  StatColumns,
+  onSlab,
+} from '@/components/business';
+import { Badge, Reveal, Skeleton, Text } from '@/components/ui';
 import { ordersApi } from '@/data/api';
 import type { Order, OrderStatus } from '@/data/types';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
@@ -23,7 +30,7 @@ const RANGES = [
 
 export default function BusinessAnalyticsScreen() {
   const tabBarInset = useTabBarInset();
-  const { vendor, loading: vendorLoading, missing } = useOwnerVendor();
+  const { vendor, loading: vendorLoading, missing, pending, reload } = useOwnerVendor();
   const { width } = useWindowDimensions();
   const colors = useThemeColors();
 
@@ -52,6 +59,7 @@ export default function BusinessAnalyticsScreen() {
   );
 
   const comparison = useMemo(() => comparePeriods(orders, days), [orders, days]);
+  const rangeLabel = RANGES.find((r) => r.days === days)?.label ?? `${days} jours`;
   const summary = comparison.current;
 
   // Chart width tracks the card, and bars are sized from the bucket count so a
@@ -77,16 +85,10 @@ export default function BusinessAnalyticsScreen() {
     [summary.buckets]
   );
 
-  if (missing) {
-    return (
-      <SafeAreaView className="flex-1 bg-background" edges={['top']}>
-        <EmptyState
-          icon={Store}
-          title="Aucune boutique associée"
-          description="Ce compte commerçant n’est pas encore rattaché à une boutique."
-        />
-      </SafeAreaView>
-    );
+  // A shop that is filed but not cleared is as unusable as no shop at all,
+  // and for the merchant it is a different sentence — see `PendingApproval`.
+  if (missing || pending) {
+    return <PendingApproval state={missing ? 'missing' : 'pending'} onApproved={reload} />;
   }
 
   return (
@@ -154,6 +156,19 @@ export default function BusinessAnalyticsScreen() {
                       deltaPct: comparison.basketDeltaPct,
                     },
                   ]}
+                />
+              </Reveal>
+            </View>
+
+            {/* Directly under the period's figures, because it is the same
+                period read the other way: what was sold, versus what arrives. */}
+            <View className="px-5 pt-4">
+              <Reveal delay={40}>
+                <PayoutSummary
+                  salesCad={summary.revenueCad}
+                  commissionCad={summary.commissionCad}
+                  netCad={summary.netCad}
+                  rangeLabel={rangeLabel}
                 />
               </Reveal>
             </View>

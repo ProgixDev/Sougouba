@@ -1,16 +1,17 @@
 import { router } from 'expo-router';
+import { PackageOpen } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 
-import { HomeHeader, ProductGrid, VendorCard } from '@/components/customer';
-import { useTabBarInset } from '@/hooks/useTabBarInset';
+import { HomeHeader, ProductGrid, VendorCard, VerticalCard } from '@/components/customer';
 import { EmptyState, Reveal, SectionHeader, SkeletonCard, Text } from '@/components/ui';
 import { categoriesApi, productsApi, vendorsApi } from '@/data/api';
-import type { Category, ID, Product, Vendor } from '@/data/types';
+import type { Category, Product, Vendor, VendorType } from '@/data/types';
+import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { dynamicRoutes, routes } from '@/lib/routes';
+import { verticals } from '@/lib/verticals';
 import { useCartStore } from '@/store/useCartStore';
 import { useSessionStore } from '@/store/useSessionStore';
-import { PackageOpen } from 'lucide-react-native';
 
 const FEATURED_LIMIT = 6;
 const VENDOR_CARD_WIDTH = 232;
@@ -23,7 +24,6 @@ export default function CustomerHomeScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<ID | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -54,24 +54,39 @@ export default function CustomerHomeScreen() {
     [categories]
   );
 
-  const featured = useMemo(() => {
-    const pool = selectedCategoryId
-      ? products.filter((p) => p.categoryId === selectedCategoryId)
-      : // No filter: lead with genuine deals so the grid has something to say.
-        [...products].sort(
-          (a, b) => Number(Boolean(b.compareAtPriceCad)) - Number(Boolean(a.compareAtPriceCad))
-        );
-    return pool.slice(0, FEATURED_LIMIT);
-  }, [products, selectedCategoryId]);
+  /**
+   * What each front door actually leads to right now. A card that only said
+   * "Restaurant" would be a label; saying how many shops are behind it, and how
+   * fast the quickest one delivers, makes it a destination worth choosing.
+   */
+  const inventory = useMemo(() => {
+    const byType = {} as Record<VendorType, { count: number; fastestEtaMin?: number }>;
+    for (const { type } of verticals) {
+      const shops = vendors.filter((v) => v.vendorType === type);
+      byType[type] = {
+        count: shops.length,
+        fastestEtaMin: shops.length
+          ? Math.min(...shops.map((v) => v.deliveryEtaMin))
+          : undefined,
+      };
+    }
+    return byType;
+  }, [vendors]);
 
-  const nearbyVendors = useMemo(() => {
-    const pool = selectedCategoryId
-      ? vendors.filter((v) => v.categoryIds.includes(selectedCategoryId))
-      : vendors;
-    return [...pool].sort((a, b) => a.deliveryEtaMin - b.deliveryEtaMin).slice(0, 6);
-  }, [vendors, selectedCategoryId]);
+  // No category filter to honour any more, so the grid leads with genuine deals
+  // rather than with whatever the catalogue happens to return first.
+  const featured = useMemo(
+    () =>
+      [...products]
+        .sort((a, b) => Number(Boolean(b.compareAtPriceCad)) - Number(Boolean(a.compareAtPriceCad)))
+        .slice(0, FEATURED_LIMIT),
+    [products]
+  );
 
-  const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
+  const nearbyVendors = useMemo(
+    () => [...vendors].sort((a, b) => a.deliveryEtaMin - b.deliveryEtaMin).slice(0, 6),
+    [vendors]
+  );
 
   return (
     <View className="flex-1 bg-background">
@@ -83,18 +98,33 @@ export default function CustomerHomeScreen() {
         <HomeHeader
           fullName={user?.fullName ?? ''}
           city="Montréal, QC"
-          categories={categories}
-          selectedCategoryId={selectedCategoryId}
-          // Tapping the active category clears it — otherwise the only way back
-          // to the full catalogue would be a separate "all" chip.
-          onSelectCategory={(id) => setSelectedCategoryId((current) => (current === id ? null : id))}
           onSearchPress={() => router.push(routes.customerSearch)}
           onProfilePress={() => router.push(routes.customerProfile)}
         />
 
-        <View className="mt-7 gap-4">
+        {/* The first decision the app asks for, above everything else on the
+            screen (CDC addendum v1.1, §01). */}
+        <View className="px-5 mt-6 gap-3.5">
+          {verticals.map((vertical, index) => (
+            <Reveal key={vertical.type} index={index}>
+              <VerticalCard
+                vertical={vertical}
+                shopCount={loading ? undefined : inventory[vertical.type]?.count}
+                fastestEtaMin={loading ? undefined : inventory[vertical.type]?.fastestEtaMin}
+                onPress={() =>
+                  router.push({
+                    pathname: dynamicRoutes.vendorList,
+                    params: { type: vertical.type },
+                  })
+                }
+              />
+            </Reveal>
+          ))}
+        </View>
+
+        <View className="mt-8 gap-4">
           <SectionHeader
-            title={selectedCategory ? selectedCategory.nameFr : 'Populaires'}
+            title="Populaires"
             actionLabel="Tout voir"
             onAction={() => router.push(routes.customerSearch)}
           />
@@ -103,7 +133,7 @@ export default function CustomerHomeScreen() {
             <EmptyState
               icon={PackageOpen}
               title="Aucun produit ici"
-              description="Cette catégorie est vide pour le moment. Essayez-en une autre."
+              description="Le catalogue est vide pour le moment."
             />
           ) : (
             <ProductGrid
@@ -133,7 +163,7 @@ export default function CustomerHomeScreen() {
           ) : nearbyVendors.length === 0 ? (
             <View className="px-5">
               <Text variant="caption" tone="muted">
-                Aucun commerce dans cette catégorie pour l’instant.
+                Aucun commerce pour l’instant.
               </Text>
             </View>
           ) : (

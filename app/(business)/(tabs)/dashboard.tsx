@@ -1,11 +1,11 @@
 import { useFocusEffect, router } from 'expo-router';
-import { Store, TriangleAlert } from 'lucide-react-native';
+import { TriangleAlert } from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CounterHeader, DayStrip, OrderQueueCard, SlabMetric, StatColumns } from '@/components/business';
-import { EmptyState, Reveal, SectionHeader, Skeleton, Text } from '@/components/ui';
+import { CounterHeader, DayStrip, OrderQueueCard, PendingApproval, SlabMetric, StatColumns } from '@/components/business';
+import { Reveal, SectionHeader, Skeleton, Text } from '@/components/ui';
 import { ordersApi, productsApi } from '@/data/api';
 import type { ID, Order, Product } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
@@ -14,7 +14,7 @@ import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { comparePeriods } from '@/lib/analytics';
 import { customerLabel } from '@/lib/customerNames';
 import { formatCad } from '@/lib/format';
-import { isActiveStatus, nextStatus } from '@/lib/orderStatus';
+import { isActiveStatus, nextStatusFor } from '@/lib/orderStatus';
 import { dynamicRoutes, routes } from '@/lib/routes';
 import { shopDay, shopStatusLine } from '@/lib/shopHours';
 
@@ -25,7 +25,7 @@ const QUEUE_PREVIEW = 4;
 export default function BusinessDashboardScreen() {
   const tabBarInset = useTabBarInset();
   const colors = useThemeColors();
-  const { vendor, loading: vendorLoading, missing } = useOwnerVendor();
+  const { vendor, loading: vendorLoading, missing, pending, reload } = useOwnerVendor();
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -67,7 +67,9 @@ export default function BusinessDashboardScreen() {
 
   const advance = useCallback(
     async (order: Order) => {
-      const next = nextStatus(order.status);
+      // Merchant-scoped: at `ready` this is null, because handing the bag over
+      // is the courier's move, not a button the shop can press on their behalf.
+      const next = nextStatusFor(order.status, 'merchant');
       if (!next) return;
       setAdvancingId(order.id);
       await ordersApi.updateOrderStatus(order.id, next, new Date().toISOString());
@@ -84,11 +86,14 @@ export default function BusinessDashboardScreen() {
     return orders.filter((o) => new Date(o.createdAt).toDateString() === today);
   }, [orders]);
 
+  // Subtotals, matching `summariseOrders` — the same word must not mean the
+  // order total here and the goods sold on Analytique. Neither the TPS/TVQ the
+  // shop remits nor the delivery fee it never sees is a receipt.
   const todayRevenue = useMemo(
     () =>
       todayOrders
         .filter((o) => o.status !== 'cancelled')
-        .reduce((sum, o) => sum + o.totalCad, 0),
+        .reduce((sum, o) => sum + o.subtotalCad, 0),
     [todayOrders]
   );
 
@@ -117,16 +122,10 @@ export default function BusinessDashboardScreen() {
 
   const busy = vendorLoading || loading;
 
-  if (missing) {
-    return (
-      <SafeAreaView className="flex-1 bg-background" edges={['top']}>
-        <EmptyState
-          icon={Store}
-          title="Aucune boutique associée"
-          description="Ce compte commerçant n’est pas encore rattaché à une boutique. Contactez Sougouba pour l’activer."
-        />
-      </SafeAreaView>
-    );
+  // A shop that is filed but not cleared is as unusable as no shop at all,
+  // and for the merchant it is a different sentence — see `PendingApproval`.
+  if (missing || pending) {
+    return <PendingApproval state={missing ? 'missing' : 'pending'} onApproved={reload} />;
   }
 
   return (

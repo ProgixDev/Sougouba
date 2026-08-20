@@ -77,6 +77,7 @@ export default function RootLayout() {
           <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
           <Stack.Screen name="(customer)" options={{ animation: 'fade' }} />
           <Stack.Screen name="(business)" options={{ animation: 'fade' }} />
+          <Stack.Screen name="(courier)" options={{ animation: 'fade' }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

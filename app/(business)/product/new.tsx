@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
 import { Store } from 'lucide-react-native';
+import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ProductForm } from '@/components/business';
-import { BackHeader, EmptyState } from '@/components/ui';
+import { BackHeader, EmptyState, Skeleton } from '@/components/ui';
 import { productsApi } from '@/data/api';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
 import { routes } from '@/lib/routes';
@@ -11,7 +12,22 @@ import { routes } from '@/lib/routes';
 export default function NewProductScreen() {
   const { vendor, missing } = useOwnerVendor();
 
-  if (missing) {
+  // The form is built from the shop's own sections, so it cannot be rendered
+  // before the shop resolves.
+  if (!vendor && !missing) {
+    return (
+      <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
+        <BackHeader title="Nouveau produit" />
+        <View className="px-5 gap-3">
+          <Skeleton height={58} radius={16} />
+          <Skeleton height={58} radius={16} />
+          <Skeleton height={120} radius={16} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (missing || !vendor) {
     return (
       <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
         <BackHeader />
@@ -28,12 +44,13 @@ export default function NewProductScreen() {
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <BackHeader title="Nouveau produit" />
       <ProductForm
+        vendor={vendor}
         submitLabel="Ajouter au catalogue"
         onSubmit={async (values, tags) => {
-          if (!vendor) return;
           await productsApi.createProduct({
             vendorId: vendor.id,
             categoryId: values.categoryId,
+            sectionId: values.sectionId,
             name: values.name,
             description: values.description,
             priceCad: values.priceCad,

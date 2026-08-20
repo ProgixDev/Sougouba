@@ -1,30 +1,54 @@
 import { Redirect, router } from 'expo-router';
-import { Check, ShoppingBag, Store } from 'lucide-react-native';
+import { Bike, Check, ShoppingBag, Store } from 'lucide-react-native';
 import { MotiView } from 'moti';
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CourierSignupSheet, MerchantSignupSheet } from '@/components/onboarding';
 import { Button, Text } from '@/components/ui';
 import { authApi } from '@/data/api';
 import type { UserRole } from '@/data/types';
 import { homeRouteForRole, routes } from '@/lib/routes';
 import { useSessionStore } from '@/store/useSessionStore';
-import { forest } from '@/theme/tokens';
+import { forest, terracotta } from '@/theme/tokens';
 import type { LucideIcon } from 'lucide-react-native';
 
-const options: { role: UserRole; icon: LucideIcon; title: string; description: string }[] = [
+interface RoleOption {
+  role: UserRole;
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  /** Icon disc tint. Identifies the role; selection is carried by the border and the check. */
+  tint: { on: string; off: string };
+}
+
+const FOREST_TINT = { on: forest[600], off: forest[100] };
+
+const options: RoleOption[] = [
   {
     role: 'customer',
     icon: ShoppingBag,
     title: 'Je suis client',
     description: 'Je veux commander des produits auprès de commerces près de chez moi.',
+    tint: FOREST_TINT,
   },
   {
     role: 'business',
     icon: Store,
     title: 'Je suis commerçant',
-    description: 'Je veux vendre mes produits et gérer ma boutique sur Sougouba.',
+    description: 'Je veux inscrire ma boutique et vendre sur Sougouba.',
+    tint: FOREST_TINT,
+  },
+  {
+    // Terracotta rather than a third hue: the livreur is the one role that works
+    // on the road, and the ramp already carries that warmth. The selection
+    // affordance stays forest across all three so "chosen" reads the same way.
+    role: 'courier',
+    icon: Bike,
+    title: 'Je suis livreur',
+    description: 'Je veux livrer les commandes des commerces de ma ville.',
+    tint: { on: terracotta[600], off: terracotta[100] },
   },
 ];
 
@@ -36,6 +60,8 @@ const options: { role: UserRole; icon: LucideIcon; title: string; description: s
 export default function RoleSelectScreen() {
   const [selected, setSelected] = useState<UserRole | null>(null);
   const [saving, setSaving] = useState(false);
+  const [merchantSheet, setMerchantSheet] = useState(false);
+  const [courierSheet, setCourierSheet] = useState(false);
   const user = useSessionStore((s) => s.user);
   const setRole = useSessionStore((s) => s.setRole);
 
@@ -49,24 +75,44 @@ export default function RoleSelectScreen() {
 
   async function confirm() {
     if (!selected || !user) return;
+    // Both of the working roles are gated on a human reading a file, so both
+    // explain that before the form rather than after it. The merchant branch is
+    // no longer a hand-off to the administration site — registration is in the
+    // app now — but the approval it ends in is unchanged.
+    if (selected === 'business') return setMerchantSheet(true);
+    // A courier registers in the app, but the file still waits on a human
+    // (CDC addendum v1.1, §04). Same courtesy as the merchant branch: say so
+    // before the form, not after it.
+    if (selected === 'courier') return setCourierSheet(true);
+    await commitRole(selected);
+  }
+
+  async function commitRole(role: UserRole) {
+    if (!user) return;
     setSaving(true);
     try {
       // Write through to the mock backend too, so signing out and back in with
       // the same account restores the role instead of re-asking for it.
-      await authApi.mockSelectRole(user.id, selected);
+      await authApi.mockSelectRole(user.id, role);
     } catch {
       // Mock layer only fails if the user vanished; the local session is still
       // the source of truth for navigation, so fall through and set it anyway.
     } finally {
       setSaving(false);
     }
-    setRole(selected);
-    router.replace(homeRouteForRole(selected));
+    setRole(role);
+    router.replace(homeRouteForRole(role));
   }
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <View className="flex-1 px-6 pt-6 gap-8">
+      {/* Scrollable since the third role landed: three cards plus the header
+          overflow a small screen, and the Continuer button is pinned below. */}
+      <ScrollView
+        className="flex-1"
+        showsVerticalScrollIndicator={false}
+        contentContainerClassName="px-6 pt-6 pb-4 gap-8"
+      >
         <View className="gap-2">
           <Text variant="title" weight="bold">
             Vous êtes...
@@ -98,9 +144,13 @@ export default function RoleSelectScreen() {
                 >
                   <View
                     className="w-14 h-14 rounded-full items-center justify-center"
-                    style={{ backgroundColor: isSelected ? forest[600] : forest[100] }}
+                    style={{ backgroundColor: isSelected ? opt.tint.on : opt.tint.off }}
                   >
-                    <Icon size={26} color={isSelected ? '#FFFFFF' : forest[600]} strokeWidth={1.75} />
+                    <Icon
+                      size={26}
+                      color={isSelected ? '#FFFFFF' : opt.tint.on}
+                      strokeWidth={1.75}
+                    />
                   </View>
                   <View className="flex-1 gap-1">
                     <Text weight="bold" variant="body">
@@ -120,9 +170,9 @@ export default function RoleSelectScreen() {
             );
           })}
         </View>
-      </View>
+      </ScrollView>
 
-      <View className="px-6 pb-4">
+      <View className="px-6 pb-4 pt-3">
         <Button
           label="Continuer"
           variant="primary"
@@ -133,6 +183,29 @@ export default function RoleSelectScreen() {
           onPress={confirm}
         />
       </View>
+
+      <MerchantSignupSheet
+        visible={merchantSheet}
+        onClose={() => setMerchantSheet(false)}
+        onContinue={() => {
+          setMerchantSheet(false);
+          // The account now exists as a merchant with no shop filed — which is
+          // precisely what the business tabs render as "Inscrivez votre
+          // boutique", and then as "Demande en attente" once the form is sent.
+          commitRole('business');
+        }}
+      />
+
+      <CourierSignupSheet
+        visible={courierSheet}
+        onClose={() => setCourierSheet(false)}
+        onContinue={() => {
+          setCourierSheet(false);
+          // Same parking spot as a merchant without a shop: the role is real,
+          // the file is not approved yet, and the courier tabs say so.
+          commitRole('courier');
+        }}
+      />
     </SafeAreaView>
   );
 }

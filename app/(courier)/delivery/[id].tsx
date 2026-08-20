@@ -1,0 +1,328 @@
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { MapPin, Navigation, Phone, Store, TriangleAlert } from 'lucide-react-native';
+import { useCallback, useState } from 'react';
+import { Linking, Platform, Pressable, ScrollView, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { DeliveryMap } from '@/components/map';
+import { BackHeader, Button, EmptyState, Skeleton, Text } from '@/components/ui';
+import { couriersApi, ordersApi, vendorsApi } from '@/data/api';
+import type { Courier, Order, Vendor } from '@/data/types';
+import { useThemeColors } from '@/hooks/useColorScheme';
+import { useDeliveryProgress } from '@/hooks/useDeliveryProgress';
+import { formatCad } from '@/lib/format';
+import { formatDistance } from '@/lib/geo';
+import { courierActionLabel, nextStatusFor } from '@/lib/orderStatus';
+import { orderReference } from '@/lib/orderRef';
+import { dynamicRoutes } from '@/lib/routes';
+import { useDispatchStore } from '@/store/useDispatchStore';
+
+/**
+ * One run, in full.
+ *
+ * The map stays at the top because it is still the thing being acted on, but
+ * this screen can afford what the driving surface cannot: the items to collect,
+ * the exact addresses, the customer's code, and a way out if something is wrong.
+ *
+ * Navigation hands off to the phone's own maps app rather than trying to be a
+ * turn-by-turn engine. Mapbox draws the picture; Apple and Google own the voice.
+ */
+export default function CourierDeliveryScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const colors = useThemeColors();
+  const setActiveOrder = useDispatchStore((s) => s.setActiveOrder);
+
+  const [order, setOrder] = useState<Order | null>(null);
+  const [vendor, setVendor] = useState<Vendor | null>(null);
+  const [courier, setCourier] = useState<Courier | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  const progress = useDeliveryProgress(order, vendor, courier);
+
+  const load = useCallback(async () => {
+    const found = await ordersApi.getOrderById(id);
+    setOrder(found ?? null);
+    if (found) {
+      setVendor((await vendorsApi.getVendorById(found.vendorId)) ?? null);
+      if (found.delivery) {
+        setCourier((await couriersApi.getCourierById(found.delivery.courierId)) ?? null);
+      }
+    }
+    setLoading(false);
+  }, [id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load])
+  );
+
+  async function advance() {
+    if (!order || busy) return;
+    const next = nextStatusFor(order.status, 'courier');
+    if (!next) return;
+    if (next === 'delivered') {
+      router.push({ pathname: dynamicRoutes.courierProof, params: { id: order.id } });
+      return;
+    }
+    setBusy(true);
+    try {
+      const updated = await ordersApi.markPickedUp(order.id, new Date().toISOString());
+      if (updated) setOrder(updated);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Opens the platform's maps app. `maps://` on iOS, `geo:` on Android — both
+   * fall back to a Google Maps URL, which every device can open one way or
+   * another.
+   */
+  function navigateTo(lat: number, lng: number, label: string) {
+    const encoded = encodeURIComponent(label);
+    const url =
+      Platform.OS === 'ios'
+        ? `maps://?daddr=${lat},${lng}&q=${encoded}`
+        : `geo:${lat},${lng}?q=${lat},${lng}(${encoded})`;
+    Linking.openURL(url).catch(() =>
+      Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`)
+    );
+  }
+
+  const actionLabel = order ? courierActionLabel(order.status) : null;
+  const towardsShop = progress?.phase === 'to_pickup' || progress?.phase === 'awaiting_pickup';
+  const target = towardsShop ? vendor?.address : order?.deliveryAddress;
+
+  return (
+    <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
+      <BackHeader title={order ? `Course ${orderReference(order)}` : 'Course'} />
+
+      {loading ? (
+        <View className="px-5 gap-4">
+          <Skeleton height={200} radius={20} />
+          <Skeleton height={120} radius={20} />
+        </View>
+      ) : !order || !order.delivery ? (
+        <View className="flex-1 items-center justify-center">
+          <EmptyState
+            icon={Navigation}
+            title="Course introuvable"
+            description="Cette course n’existe plus ou ne vous est pas attribuée."
+          />
+        </View>
+      ) : (
+        <>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 28, gap: 20 }}
+          >
+            <View className="h-[220px] mx-5 rounded-[20px] overflow-hidden">
+              <DeliveryMap
+                pickup={progress?.pickup ?? order.deliveryAddress}
+                dropoff={progress?.dropoff ?? order.deliveryAddress}
+                courier={progress?.position}
+                bearing={progress?.bearing ?? 0}
+                route={progress?.leg?.points}
+                progress={progress?.progress ?? 0}
+                variant="card"
+                interactive={false}
+              />
+            </View>
+
+            <View className="px-5 gap-5">
+              <Stop
+                icon={Store}
+                tint={colors.primary}
+                active={Boolean(towardsShop)}
+                title={vendor?.name ?? 'Commerce'}
+                lines={[vendor?.address.street ?? '', `${vendor?.address.city ?? ''}`]}
+                etaMin={towardsShop ? progress?.etaMin : undefined}
+                onNavigate={
+                  vendor
+                    ? () => navigateTo(vendor.address.lat, vendor.address.lng, vendor.name)
+                    : undefined
+                }
+              />
+
+              <Stop
+                icon={MapPin}
+                tint={colors.secondary}
+                active={progress?.phase === 'to_dropoff'}
+                title={order.deliveryAddress.street}
+                lines={[
+                  `${order.deliveryAddress.city} ${order.deliveryAddress.postalCode}`,
+                  order.customerName ?? '',
+                ]}
+                etaMin={progress?.phase === 'to_dropoff' ? progress.etaMin : undefined}
+                onNavigate={() =>
+                  navigateTo(
+                    order.deliveryAddress.lat,
+                    order.deliveryAddress.lng,
+                    order.deliveryAddress.street
+                  )
+                }
+              />
+
+              {/* The code the shopper reads out at the door. Shown here as well
+                  as on the proof screen so it can be checked before knocking. */}
+              <View className="rounded-[20px] bg-card p-4 gap-1.5">
+                <Text variant="label" tone="muted" className="text-[10px]">
+                  Code de livraison
+                </Text>
+                <Text
+                  weight="bold"
+                  className="text-[28px] tracking-[6px]"
+                  style={{ fontVariant: ['tabular-nums'] }}
+                >
+                  {order.delivery.pin}
+                </Text>
+                <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
+                  Le client vous le donne à la remise. Il figure aussi sur sa commande.
+                </Text>
+              </View>
+
+              <View className="rounded-[20px] bg-card p-4 gap-3">
+                <Text variant="label" tone="muted" className="text-[10px]">
+                  À récupérer
+                </Text>
+                {order.items.map((item) => (
+                  <View key={item.productId} className="flex-row items-baseline gap-3">
+                    <Text variant="caption" weight="bold" className="text-[13px] w-7">
+                      ×{item.qty}
+                    </Text>
+                    <Text variant="caption" className="flex-1 text-[13px]" numberOfLines={2}>
+                      {item.name}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              <View className="rounded-[20px] bg-card p-4 gap-2">
+                <View className="flex-row items-center justify-between">
+                  <Text variant="caption" tone="muted" className="text-[13px]">
+                    Distance de livraison
+                  </Text>
+                  <Text variant="caption" weight="bold" className="text-[13px]">
+                    {formatDistance(order.delivery.distanceKm)}
+                  </Text>
+                </View>
+                <View className="flex-row items-center justify-between">
+                  <Text variant="caption" tone="muted" className="text-[13px]">
+                    Pourboire
+                  </Text>
+                  <Text variant="caption" weight="bold" className="text-[13px]">
+                    {order.delivery.tipCad > 0 ? formatCad(order.delivery.tipCad) : '—'}
+                  </Text>
+                </View>
+                <View className="h-px bg-border my-0.5" />
+                <View className="flex-row items-center justify-between">
+                  <Text variant="caption" weight="bold" className="text-[14px]">
+                    Votre gain
+                  </Text>
+                  <Text weight="bold" className="text-[17px]">
+                    {formatCad(order.delivery.earningsCad)}
+                  </Text>
+                </View>
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={() =>
+                  router.push({ pathname: dynamicRoutes.courierReport, params: { id: order.id } })
+                }
+                className="flex-row items-center gap-2.5 rounded-2xl border border-border p-4 active:bg-muted"
+              >
+                <TriangleAlert size={16} color={colors.mutedForeground} strokeWidth={2} />
+                <Text variant="caption" tone="muted" className="flex-1 text-[13px]">
+                  Signaler un problème avec cette course
+                </Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+
+          {actionLabel ? (
+            <View className="px-5 pt-3 border-t border-border bg-card">
+              <Button
+                label={actionLabel}
+                variant="primary"
+                size="lg"
+                fullWidth
+                loading={busy}
+                onPress={advance}
+              />
+            </View>
+          ) : null}
+        </>
+      )}
+    </SafeAreaView>
+  );
+}
+
+/**
+ * One end of the run.
+ *
+ * The active stop is the one being driven to; the other is dimmed rather than
+ * hidden, because knowing where you have been is part of knowing where you are.
+ */
+function Stop({
+  icon: Icon,
+  tint,
+  active,
+  title,
+  lines,
+  etaMin,
+  onNavigate,
+}: {
+  icon: typeof Store;
+  tint: string;
+  active: boolean;
+  title: string;
+  lines: string[];
+  etaMin?: number;
+  onNavigate?: () => void;
+}) {
+  return (
+    <View className="flex-row items-start gap-3" style={{ opacity: active ? 1 : 0.55 }}>
+      <View
+        className="w-10 h-10 rounded-full items-center justify-center mt-0.5"
+        style={{ backgroundColor: `${tint}1A` }}
+      >
+        <Icon size={18} color={tint} strokeWidth={2} />
+      </View>
+      <View className="flex-1 gap-0.5">
+        <Text variant="caption" weight="bold" className="text-[15px]" numberOfLines={1}>
+          {title}
+        </Text>
+        {lines
+          .filter(Boolean)
+          .map((line) => (
+            <Text key={line} variant="caption" tone="muted" className="text-[12px]">
+              {line}
+            </Text>
+          ))}
+      </View>
+      {etaMin !== undefined ? (
+        <View className="items-end mr-1">
+          <Text weight="bold" className="text-[17px]" style={{ fontVariant: ['tabular-nums'] }}>
+            {etaMin}
+          </Text>
+          <Text variant="caption" tone="muted" className="text-[11px]">
+            min
+          </Text>
+        </View>
+      ) : null}
+      {onNavigate ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Naviguer vers ${title}`}
+          onPress={onNavigate}
+          className="w-10 h-10 rounded-full items-center justify-center bg-muted active:opacity-70"
+        >
+          <Navigation size={16} color={tint} strokeWidth={2.2} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}

@@ -1,10 +1,22 @@
 import type { Vendor } from '../types';
 
-export const vendors: Vendor[] = [
+/**
+ * `status` is stamped on at the export rather than typed ten times: every shop
+ * that ships with the app is by definition one an administrator already
+ * cleared, and a per-entry field would be ten chances to leave one `pending` and
+ * quietly drop a shop out of the customer browse.
+ */
+const approved: Omit<Vendor, 'status'>[] = [
   {
     id: 'vnd_marche_bamako',
     slug: 'marche-bamako',
     name: 'Marché Bamako',
+    vendorType: 'grocery',
+    specialtyFr: 'Épicerie ouest-africaine',
+    sections: [
+      { id: 'sec_bamako_produce', nameFr: 'Fruits & légumes' },
+      { id: 'sec_bamako_grains', nameFr: 'Céréales & farines' },
+    ],
     logoUrl: '',
     coverUrl: '',
     categoryIds: ['cat_produce', 'cat_grains', 'cat_spices'],
@@ -40,6 +52,13 @@ export const vendors: Vendor[] = [
     id: 'vnd_epicerie_atlas',
     slug: 'epicerie-atlas',
     name: 'Épicerie Atlas',
+    vendorType: 'grocery',
+    specialtyFr: 'Épicerie maghrébine',
+    sections: [
+      { id: 'sec_atlas_couscous', nameFr: 'Semoules & couscous' },
+      { id: 'sec_atlas_epices', nameFr: 'Épices & condiments' },
+      { id: 'sec_atlas_pains', nameFr: 'Pains & thé' },
+    ],
     logoUrl: '',
     coverUrl: '',
     categoryIds: ['cat_spices', 'cat_grains', 'cat_bakery', 'cat_beverages'],
@@ -75,6 +94,13 @@ export const vendors: Vendor[] = [
     id: 'vnd_boucherie_sahel',
     slug: 'boucherie-sahel',
     name: 'Boucherie du Sahel',
+    vendorType: 'grocery',
+    specialtyFr: 'Boucherie halal',
+    sections: [
+      { id: 'sec_sahel_rouge', nameFr: 'Boeuf & agneau' },
+      { id: 'sec_sahel_volaille', nameFr: 'Volaille' },
+      { id: 'sec_sahel_charcut', nameFr: 'Charcuterie & abats' },
+    ],
     logoUrl: '',
     coverUrl: '',
     categoryIds: ['cat_meat'],
@@ -110,6 +136,13 @@ export const vendors: Vendor[] = [
     id: 'vnd_saveurs_dakar',
     slug: 'saveurs-de-dakar',
     name: 'Saveurs de Dakar',
+    vendorType: 'restaurant',
+    specialtyFr: 'Sénégalais · Poisson et riz',
+    sections: [
+      { id: 'sec_dakar_entrees', nameFr: 'Entrées' },
+      { id: 'sec_dakar_plats', nameFr: 'Plats' },
+      { id: 'sec_dakar_boissons', nameFr: 'Boissons' },
+    ],
     logoUrl: '',
     coverUrl: '',
     categoryIds: ['cat_prepared', 'cat_beverages'],
@@ -145,6 +178,12 @@ export const vendors: Vendor[] = [
     id: 'vnd_douceurs_maghreb',
     slug: 'douceurs-du-maghreb',
     name: 'Douceurs du Maghreb',
+    vendorType: 'restaurant',
+    specialtyFr: 'Pâtisserie · Salon de thé',
+    sections: [
+      { id: 'sec_douceurs_patis', nameFr: 'Pâtisseries' },
+      { id: 'sec_douceurs_laits', nameFr: 'Laitages' },
+    ],
     logoUrl: '',
     coverUrl: '',
     categoryIds: ['cat_bakery', 'cat_dairy'],
@@ -180,6 +219,13 @@ export const vendors: Vendor[] = [
     id: 'vnd_teranga',
     slug: 'epicerie-teranga',
     name: 'Épicerie Teranga',
+    vendorType: 'grocery',
+    specialtyFr: 'Épicerie sénégalaise',
+    sections: [
+      { id: 'sec_teranga_riz', nameFr: 'Riz & céréales' },
+      { id: 'sec_teranga_frais', nameFr: 'Fruits & légumes' },
+      { id: 'sec_teranga_epicerie', nameFr: 'Épicerie & boissons' },
+    ],
     logoUrl: '',
     coverUrl: '',
     categoryIds: ['cat_produce', 'cat_grains', 'cat_beverages', 'cat_dairy'],
@@ -215,6 +261,14 @@ export const vendors: Vendor[] = [
     id: 'vnd_souk_medina',
     slug: 'souk-el-medina',
     name: 'Souk El Medina',
+    vendorType: 'grocery',
+    specialtyFr: 'Épicerie maghrébine · Épices',
+    sections: [
+      { id: 'sec_medina_epices', nameFr: 'Épices' },
+      { id: 'sec_medina_condim', nameFr: 'Condiments' },
+      { id: 'sec_medina_prepares', nameFr: 'Plats préparés' },
+      { id: 'sec_medina_couscous', nameFr: 'Couscous & dattes' },
+    ],
     logoUrl: '',
     coverUrl: '',
     categoryIds: ['cat_spices', 'cat_prepared', 'cat_grains', 'cat_dairy', 'cat_produce'],
@@ -250,6 +304,14 @@ export const vendors: Vendor[] = [
     id: 'vnd_kilimandjaro',
     slug: 'marche-kilimandjaro',
     name: 'Marché Kilimandjaro',
+    vendorType: 'grocery',
+    specialtyFr: 'Épicerie est-africaine',
+    sections: [
+      { id: 'sec_kili_frais', nameFr: 'Fruits & légumes' },
+      { id: 'sec_kili_farines', nameFr: 'Farines & pâtes' },
+      { id: 'sec_kili_viande', nameFr: 'Viande & poisson' },
+      { id: 'sec_kili_sauces', nameFr: 'Sauces & pains' },
+    ],
     logoUrl: '',
     coverUrl: '',
     categoryIds: ['cat_produce', 'cat_meat', 'cat_grains', 'cat_spices', 'cat_bakery'],
@@ -283,8 +345,16 @@ export const vendors: Vendor[] = [
   },
   {
     id: 'vnd_boulangerie_tanit',
-    slug: 'boulangerie-tanit',
-    name: 'Boulangerie Tanit',
+    slug: 'cafe-tanit',
+    name: 'Café Tanit',
+    vendorType: 'restaurant',
+    specialtyFr: 'Maghrébin · Petit-déjeuner',
+    sections: [
+      { id: 'sec_tanit_dejeuner', nameFr: 'Petit-déjeuner' },
+      { id: 'sec_tanit_patis', nameFr: 'Pâtisseries' },
+      { id: 'sec_tanit_laits', nameFr: 'Laitages' },
+      { id: 'sec_tanit_boissons', nameFr: 'Boissons' },
+    ],
     logoUrl: '',
     coverUrl: '',
     categoryIds: ['cat_bakery', 'cat_dairy', 'cat_beverages'],
@@ -320,6 +390,14 @@ export const vendors: Vendor[] = [
     id: 'vnd_mama_adjoa',
     slug: 'chez-mama-adjoa',
     name: 'Chez Mama Adjoa',
+    vendorType: 'restaurant',
+    specialtyFr: 'Ouest-africain · Cuisine maison',
+    sections: [
+      { id: 'sec_adjoa_entrees', nameFr: 'Entrées' },
+      { id: 'sec_adjoa_plats', nameFr: 'Plats' },
+      { id: 'sec_adjoa_accomp', nameFr: 'Accompagnements' },
+      { id: 'sec_adjoa_boissons', nameFr: 'Boissons' },
+    ],
     logoUrl: '',
     coverUrl: '',
     categoryIds: ['cat_prepared', 'cat_beverages', 'cat_produce', 'cat_bakery', 'cat_grains'],
@@ -352,3 +430,5 @@ export const vendors: Vendor[] = [
     ownerId: 'usr_owner_adjoa',
   },
 ];
+
+export const vendors: Vendor[] = approved.map((v) => ({ ...v, status: 'approved' }));

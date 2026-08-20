@@ -1,16 +1,19 @@
-import { router, useLocalSearchParams } from 'expo-router';
-import { MapPin, ReceiptText, Store } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { MapPin, MessageSquareWarning, ReceiptText, Store } from 'lucide-react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { OrderStatusTimeline } from '@/components/customer';
+import { CourierTrackingCard, DisputeSheet, OrderStatusTimeline } from '@/components/customer';
+import { DeliveryMap } from '@/components/map';
 import { useThemeColors } from '@/hooks/useColorScheme';
-import { Badge, BackHeader, EmptyState, Skeleton, Text } from '@/components/ui';
-import { ordersApi, vendorsApi } from '@/data/api';
-import type { Order, Vendor } from '@/data/types';
+import { useDeliveryProgress } from '@/hooks/useDeliveryProgress';
+import { Badge, BackHeader, Button, EmptyState, PriceSummary, Skeleton, Text } from '@/components/ui';
+import { couriersApi, ordersApi, vendorsApi } from '@/data/api';
+import type { Courier, DisputeReason, Order, Vendor } from '@/data/types';
 import { formatCad, formatDate, formatTime } from '@/lib/format';
-import { orderStatusMeta } from '@/lib/orderStatus';
+import { canOpenDispute, disputeReasonLabel } from '@/lib/disputes';
+import { isActiveStatus, orderStatusMeta } from '@/lib/orderStatus';
 import { routes } from '@/lib/routes';
 import { orderReference } from '@/lib/orderRef';
 
@@ -19,28 +22,56 @@ export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [order, setOrder] = useState<Order | null>(null);
   const [vendor, setVendor] = useState<Vendor | null>(null);
+  const [courier, setCourier] = useState<Courier | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reporting, setReporting] = useState(false);
+
+  // The courier's position is interpolated locally, so it moves smoothly
+  // between fetches; this only has to catch *status* changes — a pickup, a
+  // delivery — which is why eight seconds is plenty.
+  const progress = useDeliveryProgress(order, vendor, courier);
+
+  const activeRef = useRef(true);
+
+  const load = useCallback(async () => {
+    if (!id) return;
+    const found = await ordersApi.getOrderById(id);
+    if (!activeRef.current) return;
+    setOrder(found ?? null);
+    if (!found) return;
+    const v = await vendorsApi.getVendorById(found.vendorId);
+    if (activeRef.current) setVendor(v ?? null);
+    if (found.delivery) {
+      const c = await couriersApi.getCourierById(found.delivery.courierId);
+      if (activeRef.current) setCourier(c ?? null);
+    } else if (activeRef.current) {
+      setCourier(null);
+    }
+  }, [id]);
 
   useEffect(() => {
-    if (!id) return;
-    let active = true;
+    activeRef.current = true;
     setLoading(true);
-    ordersApi
-      .getOrderById(id)
-      .then(async (found) => {
-        if (!active) return;
-        setOrder(found ?? null);
-        if (!found) return;
-        const v = await vendorsApi.getVendorById(found.vendorId);
-        if (active) setVendor(v ?? null);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    load().finally(() => {
+      if (activeRef.current) setLoading(false);
+    });
     return () => {
-      active = false;
+      activeRef.current = false;
     };
-  }, [id]);
+  }, [load]);
+
+  // The one place this app polls. Everywhere else a screen owns the change it
+  // is showing; here the change is happening on someone else's phone, and a
+  // tracking screen that only updates when you leave and come back is not a
+  // tracking screen. Stops the moment the order is finished.
+  const polling = Boolean(order && isActiveStatus(order.status));
+  useFocusEffect(
+    useCallback(() => {
+      if (!polling) return;
+      const timer = setInterval(() => void load(), 8000);
+      return () => clearInterval(timer);
+    }, [polling, load])
+  );
 
   if (!loading && !order) {
     return (
@@ -58,6 +89,17 @@ export default function OrderDetailScreen() {
   }
 
   const meta = order ? orderStatusMeta[order.status] : null;
+
+  async function report(reason: DisputeReason, message: string) {
+    if (!order) return;
+    const updated = await ordersApi.openDispute(order.id, {
+      reason,
+      message,
+      at: new Date().toISOString(),
+    });
+    if (updated) setOrder(updated);
+    setReporting(false);
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
@@ -84,9 +126,75 @@ export default function OrderDetailScreen() {
               {meta ? <Badge label={meta.label} tone={meta.tone} /> : null}
             </View>
 
+            {/* The map only earns its place once someone is actually driving:
+                before a courier accepts there is nothing to watch, and after
+                delivery the timeline is the better record. */}
+            {progress && progress.phase !== 'delivered' && courier ? (
+              <Section title="Votre livreur">
+                <View className="gap-3">
+                  <View className="h-[200px] rounded-[20px] overflow-hidden">
+                    <DeliveryMap
+                      pickup={progress.pickup}
+                      dropoff={progress.dropoff}
+                      courier={progress.position}
+                      bearing={progress.bearing}
+                      route={progress.leg?.points}
+                      progress={progress.progress}
+                      variant="card"
+                      interactive={false}
+                    />
+                  </View>
+                  <CourierTrackingCard
+                    courier={courier}
+                    phase={progress.phase}
+                    etaMin={progress.etaMin}
+                    pin={order.delivery!.pin}
+                  />
+                </View>
+              </Section>
+            ) : null}
+
             <Section title="Suivi">
-              <OrderStatusTimeline order={order} />
+              <OrderStatusTimeline order={order} courierName={courier?.fullName} />
             </Section>
+
+            {order.dispute ? (
+              <Section title="Problème signalé">
+                <View className="gap-3">
+                  <View className="flex-row items-center gap-2">
+                    <MessageSquareWarning size={16} color={colors.destructive} strokeWidth={2} />
+                    <Text variant="caption" weight="bold" className="flex-1">
+                      {disputeReasonLabel(order.dispute.reason)}
+                    </Text>
+                    <Badge
+                      label={order.dispute.status === 'answered' ? 'Répondu' : 'En attente'}
+                      tone={order.dispute.status === 'answered' ? 'success' : 'warning'}
+                      size="sm"
+                    />
+                  </View>
+                  <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
+                    {order.dispute.message}
+                  </Text>
+
+                  {/* The merchant's answer, when there is one. Settling the
+                      dispute is the platform's job, so nothing here closes it. */}
+                  {order.dispute.merchantReply ? (
+                    <View className="rounded-2xl bg-muted p-3 gap-1">
+                      <Text variant="label" tone="muted" className="text-[10px]">
+                        Réponse du commerce
+                      </Text>
+                      <Text variant="caption" className="text-[13px] leading-[19px]">
+                        {order.dispute.merchantReply}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text variant="caption" tone="muted" className="text-[12px]">
+                      Le commerce a été informé. Vous verrez sa réponse ici.
+                    </Text>
+                  )}
+                </View>
+              </Section>
+            ) : null}
 
             {vendor ? (
               <Section title="Commerce">
@@ -138,14 +246,34 @@ export default function OrderDetailScreen() {
                   </View>
                 ))}
                 <View className="h-px bg-border my-1" />
-                <Row label="Sous-total" value={formatCad(order.subtotalCad)} />
-                <Row label="Livraison" value={formatCad(order.deliveryFeeCad)} />
-                <Row label="Total" value={formatCad(order.totalCad)} emphasis />
+                <PriceSummary
+                  subtotalCad={order.subtotalCad}
+                  gstCad={order.gstCad}
+                  qstCad={order.qstCad}
+                  deliveryFeeCad={order.deliveryFeeCad}
+                  totalCad={order.totalCad}
+                />
               </View>
             </Section>
+            {canOpenDispute(order) ? (
+              <Button
+                label="Signaler un problème"
+                variant="outline"
+                size="md"
+                fullWidth
+                icon={<MessageSquareWarning size={17} color={colors.primary} strokeWidth={2.2} />}
+                onPress={() => setReporting(true)}
+              />
+            ) : null}
           </View>
         )}
       </ScrollView>
+
+      <DisputeSheet
+        visible={reporting}
+        onClose={() => setReporting(false)}
+        onSubmit={report}
+      />
     </SafeAreaView>
   );
 }
@@ -157,19 +285,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
         {title}
       </Text>
       <View className="rounded-2xl bg-card p-4">{children}</View>
-    </View>
-  );
-}
-
-function Row({ label, value, emphasis = false }: { label: string; value: string; emphasis?: boolean }) {
-  return (
-    <View className="flex-row items-center justify-between">
-      <Text variant="caption" tone={emphasis ? 'default' : 'muted'} weight={emphasis ? 'bold' : 'regular'}>
-        {label}
-      </Text>
-      <Text weight="bold" className={emphasis ? 'text-[17px]' : 'text-[14px]'}>
-        {value}
-      </Text>
     </View>
   );
 }

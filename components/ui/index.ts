@@ -14,6 +14,7 @@ export { Reveal } from './Reveal';
 export { Skeleton, SkeletonCircle, SkeletonCard } from './Skeleton';
 export { EmptyState } from './EmptyState';
 export { SectionHeader } from './SectionHeader';
+export { PriceSummary } from './PriceSummary';
 export { StatPill } from './StatPill';
 export { TabBarBackground } from './TabBarBackground';
 export { TabBarIcon } from './TabBarIcon';

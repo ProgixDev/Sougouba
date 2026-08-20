@@ -2,7 +2,7 @@ import { Redirect, Stack } from 'expo-router';
 
 import { VendorSwitchDialog } from '@/components/customer';
 import { useDemoSeed } from '@/hooks/useDemoSeed';
-import { routes } from '@/lib/routes';
+import { homeRouteForRole, routes } from '@/lib/routes';
 import { useSessionStore } from '@/store/useSessionStore';
 
 export default function CustomerLayout() {
@@ -19,7 +19,10 @@ export default function CustomerLayout() {
     return <Redirect href={routes.onboarding} />;
   }
   if (user.role !== 'customer') {
-    return <Redirect href={user.role === 'business' ? routes.businessDashboard : routes.roleSelect} />;
+    // Resolved through the role map rather than a ternary: with three roles a
+    // `business ? … : roleSelect` branch sends a livreur back to the gate they
+    // already passed.
+    return <Redirect href={user.role ? homeRouteForRole(user.role) : routes.roleSelect} />;
   }
 
   return (

@@ -24,6 +24,8 @@ export interface InputProps extends TextInputProps {
 }
 
 const FIELD_HEIGHT = 58;
+/** Four lines under the floating label — enough to describe a problem without scrolling. */
+const MULTILINE_HEIGHT = 122;
 
 export function Input({
   label,
@@ -38,6 +40,7 @@ export function Input({
   onFocus,
   onBlur,
   onChangeText,
+  multiline,
   placeholder: _placeholder,
   ...rest
 }: InputProps) {
@@ -79,12 +82,15 @@ export function Input({
   }));
 
   const iconColor = error ? colors.destructive : focused ? colors.primary : neutral[400];
+  const fieldHeight = multiline ? MULTILINE_HEIGHT : FIELD_HEIGHT;
 
   return (
     <View className="gap-1.5">
       <Animated.View
-        className="rounded-2xl bg-card border-[1.5px] px-4 flex-row items-center"
-        style={[{ height: FIELD_HEIGHT }, SOFT_FOCUS_SHADOW, borderStyle]}
+        // A multiline field grows downward, so its contents align to the top —
+        // centring them would float four lines of text in the middle of the box.
+        className={`rounded-2xl bg-card border-[1.5px] px-4 flex-row ${multiline ? 'items-start' : 'items-center'}`}
+        style={[{ height: fieldHeight }, SOFT_FOCUS_SHADOW, borderStyle]}
       >
         {Icon ? (
           <View className="mr-3">
@@ -92,7 +98,7 @@ export function Input({
           </View>
         ) : null}
 
-        <View className="flex-1" style={{ height: FIELD_HEIGHT }}>
+        <View className="flex-1" style={{ height: fieldHeight }}>
           <Animated.View pointerEvents="none" className="absolute left-0" style={[{ transformOrigin: 'left' }, labelStyle]}>
             <Animated.Text className="font-sans-medium text-base" style={labelColorStyle} numberOfLines={1}>
               {label}
@@ -102,7 +108,13 @@ export function Input({
 
           <TextInput
             className="text-base text-foreground font-sans-medium"
-            style={{ height: FIELD_HEIGHT, paddingTop: 22 }}
+            multiline={multiline}
+            style={{
+              height: fieldHeight,
+              paddingTop: 22,
+              paddingBottom: multiline ? 12 : 0,
+              textAlignVertical: multiline ? 'top' : 'center',
+            }}
             value={value}
             defaultValue={defaultValue}
             secureTextEntry={isPassword ? hidden : secureTextEntry}

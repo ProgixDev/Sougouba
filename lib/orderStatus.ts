@@ -55,6 +55,53 @@ export function nextStatus(status: OrderStatus): OrderStatus | null {
 }
 
 /**
+ * Who is entitled to move an order out of a given status.
+ *
+ * Before there were couriers the merchant advanced the whole path, including
+ * "Confier au livreur" — an action they could take while nobody had so much as
+ * accepted the run. Now the merchant's job ends when the bag is packed, and the
+ * two steps that describe someone physically carrying it belong to whoever is
+ * carrying it.
+ *
+ * `null` means the status is terminal, or is waiting on something other than a
+ * button: `ready` sits there until a courier accepts.
+ */
+export type StatusActor = 'merchant' | 'courier';
+
+export const STATUS_ACTOR: Record<OrderStatus, StatusActor | null> = {
+  pending: 'merchant',
+  confirmed: 'merchant',
+  preparing: 'merchant',
+  ready: 'courier',
+  out_for_delivery: 'courier',
+  delivered: null,
+  cancelled: null,
+};
+
+/**
+ * The next step *this* actor can take, or null if it is not their move.
+ *
+ * `nextStatus` still answers the shape of the happy path and is what the
+ * timeline and the seed reason about; this answers who gets a button.
+ */
+export function nextStatusFor(status: OrderStatus, actor: StatusActor): OrderStatus | null {
+  return STATUS_ACTOR[status] === actor ? nextStatus(status) : null;
+}
+
+/**
+ * The courier's two actions, phrased as things they do rather than states the
+ * order enters — same rule as `ADVANCE_LABELS` below.
+ */
+const COURIER_ADVANCE_LABELS: Partial<Record<OrderStatus, string>> = {
+  ready: 'J’ai récupéré la commande',
+  out_for_delivery: 'Confirmer la livraison',
+};
+
+export function courierActionLabel(status: OrderStatus): string | null {
+  return nextStatusFor(status, 'courier') ? (COURIER_ADVANCE_LABELS[status] ?? null) : null;
+}
+
+/**
  * Imperative label for the advance button, phrased as the action the shop is
  * taking rather than the state it lands in ("Accepter", not "Confirmée") — a
  * button labelled with a past participle reads as a status, not a control.
@@ -63,6 +110,10 @@ const ADVANCE_LABELS: Record<OrderStatus, string> = {
   pending: 'Accepter la commande',
   confirmed: 'Commencer la préparation',
   preparing: 'Marquer comme prête',
+  // Kept because `advanceActionLabel` is defined over every status, but the
+  // merchant no longer reaches it: `STATUS_ACTOR.ready` is the courier, so
+  // `nextStatusFor(status, 'merchant')` returns null here and the button that
+  // used to carry this label is replaced by a waiting line.
   ready: 'Confier au livreur',
   out_for_delivery: 'Marquer comme livrée',
   delivered: '',

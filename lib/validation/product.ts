@@ -34,6 +34,7 @@ export const productSchema = z
     name: z.string().trim().min(2, 'Nom du produit requis'),
     description: z.string().trim().min(10, 'Décrivez le produit en quelques mots'),
     categoryId: z.string().min(1, 'Choisissez une catégorie'),
+    sectionId: z.string().min(1, 'Choisissez un rayon'),
     priceCad: requiredNumber('Prix requis', { allowZero: false }),
     compareAtPriceCad: optionalNumber(),
     stockQty: requiredNumber('Quantité en stock requise'),

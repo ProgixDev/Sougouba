@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BackHeader, Button, Text } from '@/components/ui';
+import { BackHeader, Button, PriceSummary, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { ordersApi } from '@/data/api';
 import { defaultDeliveryAddress } from '@/data/seed/addresses';
@@ -29,7 +29,7 @@ export default function CheckoutScreen() {
   const colors = useThemeColors();
   const user = useSessionStore((s) => s.user);
   const clearCart = useCartStore((s) => s.clear);
-  const { lines, vendor, subtotalCad, deliveryFeeCad, totalCad } = useCartDetails();
+  const { lines, vendor, subtotalCad, gstCad, qstCad, deliveryFeeCad, totalCad } = useCartDetails();
 
   const cards = usePreferencesStore((s) => s.paymentMethods);
   const card = cards.find((c) => c.isDefault) ?? cards[0];
@@ -176,11 +176,14 @@ export default function CheckoutScreen() {
             </View>
           </Section>
 
-          <View className="gap-3 rounded-2xl bg-card p-4">
-            <Row label="Sous-total" value={formatCad(subtotalCad)} />
-            <Row label="Frais de livraison" value={formatCad(deliveryFeeCad)} />
-            <View className="h-px bg-border my-1" />
-            <Row label="Total" value={formatCad(totalCad)} emphasis />
+          <View className="rounded-2xl bg-card p-4">
+            <PriceSummary
+              subtotalCad={subtotalCad}
+              gstCad={gstCad}
+              qstCad={qstCad}
+              deliveryFeeCad={deliveryFeeCad}
+              totalCad={totalCad}
+            />
           </View>
 
           {error ? (
@@ -278,18 +281,5 @@ function PaymentOption({
         {selected ? <View className="w-2.5 h-2.5 rounded-full bg-primary" /> : null}
       </View>
     </Pressable>
-  );
-}
-
-function Row({ label, value, emphasis = false }: { label: string; value: string; emphasis?: boolean }) {
-  return (
-    <View className="flex-row items-center justify-between">
-      <Text variant="caption" tone={emphasis ? 'default' : 'muted'} weight={emphasis ? 'bold' : 'regular'}>
-        {label}
-      </Text>
-      <Text weight="bold" className={emphasis ? 'text-[19px]' : 'text-[14px]'}>
-        {value}
-      </Text>
-    </View>
   );
 }

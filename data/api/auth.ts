@@ -66,13 +66,13 @@ export async function mockSelectRole(userId: string, role: UserRole): Promise<Us
 }
 
 /**
- * Link a merchant account to a shop.
+ * Link a merchant account to a shop — the moment a registration is approved.
  *
- * There is no shop-onboarding flow in the prototype, so an account that signs up
- * in the app and picks "commerçant" has no `vendorId` and every business screen
- * renders its "no shop linked" fallback. `hooks/useBusinessDemoSeed.ts` calls
- * this to hand a new owner one of the seeded shops; persisting it here is what
- * makes the choice survive a relaunch.
+ * No screen in the app calls this, and none should: under the CDC addendum the
+ * approval happens in the administration back-office, by a person reading the
+ * documents the merchant uploaded. This is the app-side half of that write, kept
+ * so the pending state has something real to become when that back-office
+ * exists. Until then, `usr_owner_*` accounts arrive already linked from the seed.
  */
 export async function mockAttachVendor(userId: string, vendorId: string): Promise<User> {
   await table.ready;
@@ -80,6 +80,23 @@ export async function mockAttachVendor(userId: string, vendorId: string): Promis
   const user = table.rows().find((u) => u.id === userId);
   if (!user) throw new AuthError('Utilisateur introuvable.');
   user.vendorId = vendorId;
+  await table.save(user.id);
+  return snapshot(user);
+}
+
+/**
+ * Links an approved courier file to its account.
+ *
+ * The courier half of `mockAttachVendor`, and the same caveat: the approval
+ * itself belongs to the administration back-office. What the app can honestly
+ * write is the association, once someone else has decided.
+ */
+export async function mockAttachCourier(userId: string, courierId: string): Promise<User> {
+  await table.ready;
+  await delay(200, 400);
+  const user = table.rows().find((u) => u.id === userId);
+  if (!user) throw new AuthError('Utilisateur introuvable.');
+  user.courierId = courierId;
   await table.save(user.id);
   return snapshot(user);
 }

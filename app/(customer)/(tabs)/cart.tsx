@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CartItemRow } from '@/components/customer';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
-import { Button, EmptyState, Reveal, Skeleton, Text } from '@/components/ui';
+import { Button, EmptyState, PriceSummary, Reveal, Skeleton, Text } from '@/components/ui';
 import { categoriesApi } from '@/data/api';
 import type { Category } from '@/data/types';
 import { useCartDetails } from '@/hooks/useCartDetails';
@@ -18,7 +18,8 @@ import { useCartStore } from '@/store/useCartStore';
 export default function CartScreen() {
   const tabBarInset = useTabBarInset();
   const colors = useThemeColors();
-  const { lines, vendor, subtotalCad, deliveryFeeCad, totalCad, loading } = useCartDetails();
+  const { lines, vendor, subtotalCad, gstCad, qstCad, deliveryFeeCad, totalCad, loading } =
+    useCartDetails();
   const setQty = useCartStore((s) => s.setQty);
   const clear = useCartStore((s) => s.clear);
 
@@ -102,11 +103,14 @@ export default function CartScreen() {
           </View>
         )}
 
-        <View className="mx-5 mt-7 gap-3 rounded-2xl bg-card p-4">
-          <SummaryRow label="Sous-total" value={formatCad(subtotalCad)} />
-          <SummaryRow label="Frais de livraison" value={formatCad(deliveryFeeCad)} />
-          <View className="h-px bg-border my-1" />
-          <SummaryRow label="Total" value={formatCad(totalCad)} emphasis />
+        <View className="mx-5 mt-7 rounded-2xl bg-card p-4">
+          <PriceSummary
+            subtotalCad={subtotalCad}
+            gstCad={gstCad}
+            qstCad={qstCad}
+            deliveryFeeCad={deliveryFeeCad}
+            totalCad={totalCad}
+          />
         </View>
       </ScrollView>
 
@@ -145,27 +149,6 @@ function Header({ onClear }: { onClear?: () => void }) {
           Vider
         </Text>
       ) : null}
-    </View>
-  );
-}
-
-function SummaryRow({
-  label,
-  value,
-  emphasis = false,
-}: {
-  label: string;
-  value: string;
-  emphasis?: boolean;
-}) {
-  return (
-    <View className="flex-row items-center justify-between">
-      <Text variant={emphasis ? 'body' : 'caption'} weight={emphasis ? 'bold' : 'regular'} tone={emphasis ? 'default' : 'muted'}>
-        {label}
-      </Text>
-      <Text variant={emphasis ? 'subtitle' : 'caption'} weight="bold" className={emphasis ? 'text-[19px]' : ''}>
-        {value}
-      </Text>
     </View>
   );
 }

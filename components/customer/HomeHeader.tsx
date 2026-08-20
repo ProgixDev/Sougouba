@@ -4,39 +4,31 @@ import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar, Text } from '@/components/ui';
-import type { Category, ID } from '@/data/types';
 import { useColorScheme, useThemeColors } from '@/hooks/useColorScheme';
 import { forest, mustard } from '@/theme/tokens';
-import { CategoryRow } from './CategoryRow';
 import { SearchField } from './SearchField';
 
 export interface HomeHeaderProps {
   fullName: string;
   city: string;
-  categories: Category[];
-  selectedCategoryId?: ID | null;
-  onSelectCategory?: (id: ID) => void;
   onSearchPress?: () => void;
   onProfilePress?: () => void;
 }
 
 /**
- * The Home hero panel: location, search and categories on one soft gradient
- * field with a deep bottom-only radius, exactly as in the reference.
+ * The Home hero panel: location and search on one soft gradient field with a
+ * deep bottom-only radius.
  *
- * It carries the screen's only gradient on purpose. The rest of Home is plain
- * background so the panel reads as a single deliberate surface rather than
- * decoration — which is also why CategoryRow is transparent.
+ * It carries the screen's only gradient on purpose — the rest of Home is plain
+ * background, so the panel reads as a single deliberate surface rather than
+ * decoration.
+ *
+ * It used to close with a strip of eight category circles. Those asked the
+ * shopper to filter a mixed catalogue before deciding what kind of shop they
+ * wanted; the CDC addendum puts that choice first instead, and it is now made on
+ * the two `VerticalCard`s directly below this panel.
  */
-export function HomeHeader({
-  fullName,
-  city,
-  categories,
-  selectedCategoryId,
-  onSelectCategory,
-  onSearchPress,
-  onProfilePress,
-}: HomeHeaderProps) {
+export function HomeHeader({ fullName, city, onSearchPress, onProfilePress }: HomeHeaderProps) {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { colorScheme } = useColorScheme();
@@ -55,7 +47,7 @@ export function HomeHeader({
       end={{ x: 1, y: 1 }}
       style={{
         paddingTop: insets.top + 8,
-        paddingBottom: 22,
+        paddingBottom: 26,
         borderBottomLeftRadius: 34,
         borderBottomRightRadius: 34,
       }}
@@ -84,14 +76,6 @@ export function HomeHeader({
 
       <View className="px-5 mt-5">
         <SearchField onPress={onSearchPress} />
-      </View>
-
-      <View className="mt-6">
-        <CategoryRow
-          categories={categories}
-          selectedId={selectedCategoryId}
-          onSelect={onSelectCategory}
-        />
       </View>
     </LinearGradient>
   );

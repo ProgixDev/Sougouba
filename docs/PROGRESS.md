@@ -203,6 +203,184 @@ app/
 
 `components/onboarding/illustrations/OnboardingIllustration.tsx`: the reusable onboarding art component.
 
+## Livreur (courier) — the third role
+
+Added after the CDC addendum flagged livreurs as a party to disputes (§04). The
+role is `courier` in code, "Livreur" in every string.
+
+**Route group** `app/(courier)/`, anchor `missions`, four tabs — Missions
+(`Navigation`), Courses (`History`), Gains (`Wallet`), Profil (`User`). Four not
+five: the home screen is a full-bleed map and a fifth label starts eating the
+only screen that matters while someone is driving. Stack screens: `signup`,
+`delivery/[id]`, `proof/[id]`, `report/[id]`.
+
+**`UserRole` is now three-way.** `homeRouteForRole` was a binary ternary that
+fell through to the customer home — it is an exhaustive `Record` now, so a
+fourth role fails to compile instead of silently landing in the shopper app.
+Both existing group guards route through it for the same reason.
+
+**Ownership of the order status split.** The merchant's path ends at `ready`;
+the courier owns `ready → out_for_delivery → delivered`. `lib/orderStatus.ts`
+keeps `nextStatus` / `ADVANCE_LABELS` untouched (verify-logic asserts them) and
+adds `STATUS_ACTOR` + `nextStatusFor(status, actor)` beside them. The merchant's
+"Confier au livreur" button is gone; the queue row shows "En attente d'un
+livreur" / "Livreur en route" instead.
+
+**Position is derived, never stored.** `lib/courierRoute.ts` regenerates a route
+from the order id (deterministic dog-legs over the Montréal grid, no Directions
+API) and `progressAt()` reads the wall clock against `delivery.acceptedAt` /
+`pickedUpAt`. Kill the app mid-run and the courier is exactly where they should
+be. `hooks/useDeliveryProgress.ts` is the **same hook on both sides** — two
+implementations would eventually disagree, and the bug would be a shopper
+watching a driver who is not where the driver's own screen says they are.
+
+**Dispatch** (`lib/dispatch.ts`, `store/useDispatchStore.ts`,
+`hooks/useDispatchEngine.ts`): one offer at a time, 30 s countdown, nearest shop
+first with age breaking ties inside ~500 m. `passedOrderIds` is what makes a
+decline stick. Two traps already hit and fixed — an expired offer must be
+cleared even while the courier is mid-run or offline (the store persists it), and
+an active run outranks an offer in the render.
+
+**Mapbox** (`@rnmapbox/maps` 10.3.5, Maps SDK v11). `components/map/DeliveryMap.tsx`
+is the only file that renders Mapbox components; everything above it speaks
+`LatLng`, so `MapFallback` can replace it wholesale when there is no token.
+`app.json` became `app.config.ts` so the secret download token comes from `.env`
+(see `.env.example`) instead of being committed. Three things that cost real
+time and are easy to hit again:
+  - a zero-area camera `bounds` (idle state, where pickup/dropoff/courier are all
+    the same point) gives no usable zoom and renders a **blank grey map that
+    still authenticates** — it reads as a bad token. Falls back to
+    `centerCoordinate` + `zoomLevel`.
+  - the compass draws at the map's top-right, under the floating header, and
+    bleeds through the glass as a dark blob. Disabled — rotation is off anyway.
+  - a map-first layout must pass `padding` matching its floating UI, or the
+    camera frames the route behind the header and the sheet.
+
+**Courier pay** — `data/courierPay.ts`, base + per km + tip. In `data/` for the
+reason `data/taxes.ts` is: the seed builder needs it and `data/` must not import
+from `lib/`. **Rates are placeholders — confirm with the client.** The earnings
+breakdown derives its distance line by subtraction so it reconciles to the sum of
+what was actually paid; recomputing it from raw kilometres rounds a different
+number of times and put 254,88 $ at the top of the screen and 254,86 $ at the
+bottom.
+
+## Livreur, second pass — motion, history, and a look of its own
+
+**The simulation now runs on a fast clock.** `DEMO_TIME_SCALE` in
+`lib/courierRoute.ts` (currently 10; **set it to 1 for production**) multiplies
+elapsed time inside `progressAt`. At 1x a courier advances about five metres a
+second, which on a camera framing a five-kilometre route is under a pixel — the
+map was indistinguishable from a still photograph for the whole length of a
+demo. Scaling the *clock* rather than nudging a stored position keeps every
+guarantee the module was built on: position is still a pure function of (route,
+elapsed), a cold start still resumes correctly, and the courier's screen and the
+shopper's still agree because both read the same scaled clock. The ETA is derived
+from the same progress value, so the countdown falls in step with the marker
+instead of contradicting it. `hooks/useDeliveryProgress.ts` ticks at 250 ms now,
+not 1 s — under the fast clock a one-second tick moved the puck in visible jumps.
+
+**Two map bugs the fast clock exposed.**
+  - The camera `bounds` memo depended on the courier's coordinate object, which
+    is new on every tick. Mapbox restarted its 600 ms fly-to four times a second
+    and the map *shivered*. Bounds are now keyed on a ~200 m quantised
+    `frameKey`, so the frame is recomputed only when the run has actually gone
+    somewhere.
+  - A single end-to-end line says where a trip goes, never how much is left.
+    `splitPath()` cuts the route at the courier and `DeliveryMap` draws three
+    layers — a white casing (a 4pt forest line vanishes over a dark park or a
+    motorway ribbon), the road already driven in neutral, the road ahead at full
+    weight. Both halves include the cut point, so they meet exactly under the
+    puck at any zoom; `verify-logic` asserts that and that the cut sits where
+    `positionAlong` puts the marker. `MapFallback` does the same split, because
+    the point of the fallback is that it is the same picture without tiles.
+
+The courier marker gained a sonar ring, on only when a route exists — idle, the
+Missions map still plots the courier at their own base, and a pulse there claims
+movement that is not happening.
+
+**A courier who signs up in the app now has a history.** Only the eight seeded
+couriers appeared on any delivery, so a demo account opened on an empty Courses
+tab, a Gains screen reading 0,00 $ and a profile stuck at "nouveau" — three of
+the four courier screens demonstrating nothing. `ordersApi.ensureDemoRuns()` is
+the courier twin of `ensureDemoOrders`: idempotent by construction (it does
+nothing once this courier is on an order), seeded from the courier id, and built
+through the *same* `buildOrder` as everything else — `OrderSpec` gained an
+optional `courier` so the seed builder can be told who drove it instead of
+drawing one by proximity. Shops are the ones nearest the courier's base, by the
+same measure the dispatcher ranks with; drop-offs are the addresses nearest those
+shops. ~30 days, with rest days, so the chart is not a flat comb.
+
+⚠️ **It is two writes and they can be interrupted between.** The runs go into the
+orders table, then `couriersApi.recordDemoHistory` reconciles the courier's own
+`deliveryCount` / `rating`. `useCourierDemoSeed` originally depended on the
+`courier` *object*, which `useCourierProfile` rebuilds on every focus — the
+effect re-ran mid-flight and its cleanup cancelled the second write, leaving a
+courier with 97 deliveries and a profile still reading "nouveau". It depends on
+primitives now, only the `onSeeded` callback is cancellable, and it repairs an
+account already in that state by counting the existing runs.
+
+**The courier has its own headline surface.** `components/courier/CourierSlab.tsx`
+is to the livreur what `CounterHeader` is to the merchant — same rounded shelf,
+own palette: graphite with a mustard corner glow, mustard being the accent that
+already marks the courier on every map in the product. Three roles, three
+surfaces, recognisable before a word is read. `CourierSlabSurface` is the bare
+gradient pair, shared with the profile header, and it owns the status bar
+(set on focus, restored on blur — a mounted `<StatusBar>` keeps forcing light
+glyphs over the Missions map, because tab screens stay mounted after they are
+left).
+
+**Three contrast findings, all caught arithmetically rather than by eye** — see
+the new blocks in `scripts/verify-contrast.ts`:
+  - The glow is composited *over* the slab, so the audit blends it in before
+    checking anything drawn on top. Against that corner, `neutral[400]` labels
+    fell under AA; they are `neutral[300]`. The glow's alpha is mirrored in both
+    files — keep them in step.
+  - Chart bars are data marks and must clear 3:1 against the card. Fading the
+    quiet days to 40 % put them at ~1.5:1. Darkening the highlight instead
+    cleared the threshold and read *backwards* — on a white card the brighter bar
+    looks emphasised, so the best day looked like the dullest. The highlight is
+    the app's primary green now: unmistakable among gold, and it already means
+    "selected" everywhere else.
+  - Mustard body text does not reach AA on a white card at caption size. The tip
+    line keeps the accent on the icon (3:1) and sets the amount in the foreground
+    colour at semibold — emphasis by weight, and never meaning by colour alone.
+
+**Deltas on the courier screens are not green-up / red-down.** On a shop's
+dashboard that reads as performance; on a courier's payout it reads as a verdict
+on their week, and a quiet Tuesday is not a failing grade. The arrow carries the
+direction. `components/business/StatColumns.tsx` keeps the merchant convention —
+this is a deliberate divergence, not drift.
+
+`lib/courierAnalytics.ts` is the courier twin of `lib/analytics.ts` and the
+reason the headline, the chart, the breakdown and the payout cannot disagree: the
+merchant module sums `subtotalCad` over orders a shop sold, a courier is paid
+`delivery.earningsCad` over runs they drove, and those are different numbers over
+different sets. `verify-logic` checks that bucket totals sum to the range total,
+that the fare components add up, that an empty window is zero rather than NaN,
+and that a payout date is always a Friday and never behind us.
+
+## Merchant registration moved into the app
+
+The CDC addendum (§02) routed shop registration to the administration website.
+**The client has since asked for it to happen in the app, and it now does** —
+`lib/merchantPortal.ts` is deleted, replaced by `lib/merchantOnboarding.ts` +
+`app/(business)/signup.tsx`. What did *not* change is that a human approves it;
+this is a deliberate divergence from §02 worth restating when the back-office
+ships.
+
+`vendorsApi` was read-only over the seed and is now a persisted table. `Vendor`
+gained `status` + `registration`, and **every customer-facing list filters to
+`approved`** — a pending shop is invisible to shoppers, which is what the
+approval step is for. Id and owner lookups deliberately do not filter, so a
+merchant can see their own pending shop. A seed invariant fails the build if a
+seeded shop is ever left `pending`, because that bug looks like an empty
+catalogue rather than like a bug.
+
+`useOwnerVendor` and `useCourierProfile` both answer three states now (missing /
+pending / approved), and `PendingApproval` / `CourierGate` say a different
+sentence for each — telling someone to wait when they have not applied, or
+asking them to apply when they already have, are both ways of looking broken.
+
 ## What's left
 
 ### Finish Phase 1 (splash/onboarding/auth/role-gate)

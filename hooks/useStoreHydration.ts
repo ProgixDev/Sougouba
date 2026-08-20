@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { useCartStore } from '@/store/useCartStore';
+import { useDispatchStore } from '@/store/useDispatchStore';
 import { useFavoritesStore } from '@/store/useFavoritesStore';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 import { useSessionStore } from '@/store/useSessionStore';
@@ -20,6 +21,7 @@ const persistedStores = [
   useCartStore,
   useFavoritesStore,
   usePreferencesStore,
+  useDispatchStore,
 ];
 
 /**

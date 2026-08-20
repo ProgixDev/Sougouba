@@ -5,7 +5,7 @@ import PagerView from 'react-native-pager-view';
 import Animated, { useAnimatedStyle, useDerivedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { OnboardingSlide } from '@/components/onboarding/OnboardingSlide';
+import { OnboardingSlide } from '@/components/onboarding';
 import { Button, Text } from '@/components/ui';
 import { onboardingImages } from '@/lib/onboardingImages';
 import { routes } from '@/lib/routes';

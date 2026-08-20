@@ -1,5 +1,20 @@
-import type { Address, Order, OrderItem, OrderStatus } from '../types';
+import { courierEarnings } from '../courierPay';
+import { deliveryPin, legDurationMin } from '../delivery';
+import { orderTotal, roundCad, taxesOn } from '../taxes';
+import type {
+  Address,
+  Courier,
+  DisputeReason,
+  Order,
+  OrderDelivery,
+  OrderItem,
+  OrderStatus,
+  ProofMethod,
+} from '../types';
+import { distanceKm } from '../utils/geo';
+import { hashString, mulberry32 } from '../utils/random';
 import { addMinutesIso, minutesOfDay, localIsoAt, localMinutesAgo, localWeekday } from '../utils/time';
+import { couriers } from './couriers';
 import { products } from './products';
 import { users } from './users';
 import { vendors } from './vendors';
@@ -48,6 +63,15 @@ function addr(
   return { id, label, street, city, postalCode, lat, lng, isDefault: true };
 }
 
+/** A complaint attached to a seeded order, so both dispute states are reachable on a first launch. */
+interface DisputeSpec {
+  reason: DisputeReason;
+  message: string;
+  /** Minutes after the order was placed. */
+  afterMinutes: number;
+  reply?: string;
+}
+
 export interface OrderSpec {
   id: string;
   customerId: string;
@@ -57,6 +81,17 @@ export interface OrderSpec {
   address: keyof typeof addresses | Address;
   lines: [productId: string, qty: number][];
   status: OrderStatus;
+  dispute?: DisputeSpec;
+  /**
+   * Who drove it, when the caller already knows.
+   *
+   * The seed leaves this unset and lets `buildDelivery` draw a courier from the
+   * ones nearest the shop. Runtime demo history (`ordersApi.ensureDemoRuns`)
+   * sets it, because the whole point of those rows is that *this* courier
+   * delivered them — and a courier who signed up in the app is not in
+   * `data/seed/couriers.ts` for the proximity draw to find.
+   */
+  courier?: Pick<Courier, 'id' | 'base' | 'vehicle'>;
   /** Device-local wall-clock time with an explicit offset; the app formats with fr-CA. */
   createdAt: string;
 }
@@ -84,11 +119,11 @@ function resolveNarrative(spec: NarrativeSpec): OrderSpec {
  */
 const narrative: NarrativeSpec[] = [
   { id: 'ord_1001', customerId: 'usr_customer_demo', vendorId: 'vnd_saveurs_dakar', address: 'aissatou', lines: [['prd_thieboudienne', 1], ['prd_jus_bissap', 2]], status: 'delivered', daysAgo: 12, at: '18:12' },
-  { id: 'ord_1002', customerId: 'usr_customer_demo', vendorId: 'vnd_douceurs_maghreb', address: 'aissatou', lines: [['prd_cornes_gazelle', 1], ['prd_lben', 2]], status: 'delivered', daysAgo: 9, at: '11:05' },
+  { id: 'ord_1002', customerId: 'usr_customer_demo', vendorId: 'vnd_douceurs_maghreb', address: 'aissatou', lines: [['prd_cornes_gazelle', 1], ['prd_lben', 2]], status: 'delivered', daysAgo: 9, at: '11:05', dispute: { reason: 'missing_items', message: 'Il manquait un des deux lben dans la commande. Les cornes de gazelle étaient parfaites.', afterMinutes: 95, reply: 'Désolé pour l’oubli — nous créditons le lben manquant sur votre prochaine commande. Merci de nous l’avoir signalé.' } },
   { id: 'ord_1003', customerId: 'usr_customer_demo', vendorId: 'vnd_marche_bamako', address: 'aissatou', lines: [['prd_mangue_kent', 3], ['prd_banane_plantain', 2], ['prd_gombo_frais', 1]], status: 'out_for_delivery', minutesAgo: 44 },
   { id: 'ord_1004', customerId: 'usr_customer_demo', vendorId: 'vnd_epicerie_atlas', address: 'aissatou', lines: [['prd_couscous_moyen', 1], ['prd_ras_el_hanout', 1], ['prd_harissa_artisanale', 2]], status: 'preparing', minutesAgo: 17 },
   { id: 'ord_1005', customerId: 'usr_customer_demo', vendorId: 'vnd_boucherie_sahel', address: 'aissatou', lines: [['prd_merguez_maison', 2]], status: 'cancelled', daysAgo: 7, at: '09:30' },
-  { id: 'ord_1016', customerId: 'usr_customer_demo', vendorId: 'vnd_boulangerie_tanit', address: 'aissatou', lines: [['prd_msemen', 2], ['prd_cafe_turc', 1]], status: 'delivered', daysAgo: 21, at: '08:25' },
+  { id: 'ord_1016', customerId: 'usr_customer_demo', vendorId: 'vnd_boulangerie_tanit', address: 'aissatou', lines: [['prd_msemen', 2], ['prd_cafe_turc', 1]], status: 'delivered', daysAgo: 21, at: '08:25', dispute: { reason: 'late', message: 'La commande est arrivée plus d’une heure après l’heure annoncée, les msemen étaient froids.', afterMinutes: 140 } },
   { id: 'ord_1023', customerId: 'usr_customer_demo', vendorId: 'vnd_mama_adjoa', address: 'aissatou', lines: [['prd_soupe_arachide', 1]], status: 'cancelled', daysAgo: 3, at: '20:10' },
 
   // One order at each remaining pipeline stage, so every status is reachable on
@@ -113,29 +148,17 @@ const narrative: NarrativeSpec[] = [
 
 const HISTORY_DAYS = 45;
 
-/** Deterministic PRNG. Small, well-distributed, and stable across engines. */
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function hashString(value: string): number {
-  let hash = 2166136261;
-  for (let i = 0; i < value.length; i++) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
 const customerIds = users.filter((u) => u.role === 'customer').map((u) => u.id);
 /** Address book keys, in the same order as the customers they belong to. */
 const addressKeys = Object.keys(addresses) as (keyof typeof addresses)[];
+
+/**
+ * The customer address book, as a list. `lib/postalGeo.ts` reads it to derive
+ * coordinates for addresses the shopper types: these are the only records that
+ * pair a real Montréal-region postal code with real coordinates, so they are
+ * also the only honest source for that lookup.
+ */
+export const orderAddresses: Address[] = Object.values(addresses);
 
 /**
  * Where a shop's orders cluster during the day. Groceries are a lunch-and-after-
@@ -341,6 +364,71 @@ const HAPPY_PATH: OrderStatus[] = [
   'delivered',
 ];
 
+/**
+ * The delivery leg of a seeded order.
+ *
+ * Only orders that reached the road have one: before `out_for_delivery` no
+ * courier has accepted, and a cancelled order never got that far. Everything is
+ * derived — the courier from the order id, the distances from real coordinates,
+ * the pay from `data/courierPay.ts` — so `scripts/verify-seed.ts` can recompute
+ * every figure and catch drift the moment a rate changes.
+ *
+ * The courier is drawn from the three nearest to the shop rather than the single
+ * nearest: with ten shops and eight couriers, always taking the closest would
+ * pin one courier to one shop for all 45 days of history.
+ */
+function buildDelivery(
+  spec: OrderSpec,
+  vendor: (typeof vendors)[number],
+  address: Address
+): OrderDelivery | undefined {
+  if (spec.status !== 'out_for_delivery' && spec.status !== 'delivered') return undefined;
+
+  const rng = mulberry32(hashString(`delivery:${spec.id}`));
+  const nearest = [...couriers]
+    .sort(
+      (a, b) => distanceKm(a.base, vendor.address) - distanceKm(b.base, vendor.address)
+    )
+    .slice(0, 3);
+  const courier = spec.courier ?? nearest[hashString(spec.id) % nearest.length];
+
+  const toPickupKm = distanceKm(courier.base, vendor.address);
+  const runKm = distanceKm(vendor.address, address);
+
+  // Roughly half of shoppers tip, between 1 and 6 dollars. Rounded to the
+  // quarter because that is how the checkout will offer it.
+  const tipCad = rng() < 0.5 ? 0 : Math.round((1 + rng() * 5) * 4) / 4;
+
+  const createdAt = spec.createdAt;
+  const accepted = STEP_OFFSETS.ready! + 2;
+
+  return {
+    courierId: courier.id,
+    acceptedAt: addMinutesIso(createdAt, accepted),
+    pickedUpAt: addMinutesIso(createdAt, STEP_OFFSETS.out_for_delivery!),
+    ...(spec.status === 'delivered'
+      ? { deliveredAt: addMinutesIso(createdAt, STEP_OFFSETS.delivered!) }
+      : {}),
+    pickupEtaMin: legDurationMin(toPickupKm, courier.vehicle),
+    dropoffEtaMin: legDurationMin(runKm, courier.vehicle),
+    distanceKm: Math.round(runKm * 100) / 100,
+    pin: deliveryPin(spec.id),
+    ...(spec.status === 'delivered'
+      ? {
+          proof: {
+            // Photo and PIN only in the seed: a signature is a captured image
+            // with no file behind it here, and a proof pointing at a URI that
+            // does not exist would render as a broken frame.
+            method: (rng() < 0.5 ? 'photo' : 'pin') as ProofMethod,
+            at: addMinutesIso(createdAt, STEP_OFFSETS.delivered!),
+          },
+        }
+      : {}),
+    tipCad,
+    earningsCad: courierEarnings(Math.round(runKm * 100) / 100, tipCad),
+  };
+}
+
 function buildStatusHistory(status: OrderStatus, createdAt: string) {
   if (status === 'cancelled') {
     return [
@@ -376,8 +464,11 @@ export function buildOrder(spec: OrderSpec): Order {
   const vendor = vendorById.get(spec.vendorId);
   if (!vendor) throw new Error(`Seed order ${spec.id} references unknown vendor ${spec.vendorId}`);
 
-  const subtotalCad = round2(items.reduce((sum, i) => sum + i.unitPriceCad * i.qty, 0));
+  const subtotalCad = roundCad(items.reduce((sum, i) => sum + i.unitPriceCad * i.qty, 0));
   const deliveryFeeCad = vendor.deliveryFeeCad;
+  const taxes = taxesOn(subtotalCad);
+  const deliveryAddress = typeof spec.address === 'string' ? addresses[spec.address] : spec.address;
+  const delivery = buildDelivery(spec, vendor, deliveryAddress);
 
   return {
     id: spec.id,
@@ -387,17 +478,30 @@ export function buildOrder(spec: OrderSpec): Order {
     items,
     status: spec.status,
     subtotalCad,
+    ...taxes,
     deliveryFeeCad,
-    totalCad: round2(subtotalCad + deliveryFeeCad),
-    deliveryAddress: typeof spec.address === 'string' ? addresses[spec.address] : spec.address,
+    totalCad: orderTotal(subtotalCad, taxes, deliveryFeeCad),
+    deliveryAddress,
     createdAt: spec.createdAt,
     statusHistory: buildStatusHistory(spec.status, spec.createdAt),
+    ...(delivery ? { delivery } : {}),
+    ...(spec.dispute
+      ? {
+          dispute: {
+            reason: spec.dispute.reason,
+            message: spec.dispute.message,
+            openedAt: addMinutesIso(spec.createdAt, spec.dispute.afterMinutes),
+            status: spec.dispute.reply ? ('answered' as const) : ('open' as const),
+            ...(spec.dispute.reply
+              ? {
+                  merchantReply: spec.dispute.reply,
+                  answeredAt: addMinutesIso(spec.createdAt, spec.dispute.afterMinutes + 55),
+                }
+              : {}),
+          },
+        }
+      : {}),
   };
-}
-
-/** Money is summed from floats, so round once at the boundary. */
-function round2(value: number): number {
-  return Math.round(value * 100) / 100;
 }
 
 const generated = vendors.flatMap((_, index) => generateForVendor(index));

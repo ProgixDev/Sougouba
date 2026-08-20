@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { productsApi, vendorsApi } from '@/data/api';
+import { orderTotal, roundCad, taxesOn } from '@/data/taxes';
 import type { CartItem, Product, Vendor } from '@/data/types';
 import { useCartStore } from '@/store/useCartStore';
 
@@ -13,6 +14,8 @@ export interface CartDetails {
   lines: CartLine[];
   vendor: Vendor | null;
   subtotalCad: number;
+  gstCad: number;
+  qstCad: number;
   deliveryFeeCad: number;
   totalCad: number;
   loading: boolean;
@@ -29,6 +32,9 @@ export interface CartDetails {
  * Delivery fee comes from the vendor, so it is 0 until that resolves; totals are
  * derived from the *stored* unit price, not the current catalogue price, so a
  * price change mid-session can't silently alter what the shopper was quoted.
+ *
+ * Tax comes from `data/taxes.ts`, the same module the mock backend uses to price
+ * the order it writes — so the figure quoted in the cart is the figure charged.
  */
 export function useCartDetails(): CartDetails {
   const items = useCartStore((s) => s.items);
@@ -78,18 +84,20 @@ export function useCartDetails(): CartDetails {
   );
 
   const subtotalCad = useMemo(
-    () => items.reduce((sum, i) => sum + i.unitPriceCad * i.qty, 0),
+    () => roundCad(items.reduce((sum, i) => sum + i.unitPriceCad * i.qty, 0)),
     [items]
   );
 
+  const taxes = useMemo(() => taxesOn(subtotalCad), [subtotalCad]);
   const deliveryFeeCad = items.length > 0 ? (vendor?.deliveryFeeCad ?? 0) : 0;
 
   return {
     lines,
     vendor,
     subtotalCad,
+    ...taxes,
     deliveryFeeCad,
-    totalCad: subtotalCad + deliveryFeeCad,
+    totalCad: orderTotal(subtotalCad, taxes, deliveryFeeCad),
     loading,
   };
 }

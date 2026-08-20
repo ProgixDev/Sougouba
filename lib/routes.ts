@@ -38,6 +38,12 @@ export const routes = {
   businessAnalytics: '/(business)/(tabs)/analytics',
   businessProfile: '/(business)/(tabs)/profile',
   businessProductNew: '/(business)/product/new',
+  businessSignup: '/(business)/signup',
+  courierMissions: '/(courier)/(tabs)/missions',
+  courierHistory: '/(courier)/(tabs)/history',
+  courierEarnings: '/(courier)/(tabs)/earnings',
+  courierProfile: '/(courier)/(tabs)/profile',
+  courierSignup: '/(courier)/signup',
 } as const;
 
 /**
@@ -46,6 +52,8 @@ export const routes = {
  * names for you, and there is no chance of an unescaped id breaking the path.
  */
 export const dynamicRoutes = {
+  /** Level 1 of the browse: every shop in one vertical (épicerie or restaurant). */
+  vendorList: '/(customer)/vertical/[type]',
   productDetail: '/(customer)/product/[id]',
   vendorDetail: '/(customer)/vendor/[id]',
   orderDetail: '/(customer)/order/[id]',
@@ -54,9 +62,30 @@ export const dynamicRoutes = {
   businessOrderDetail: '/(business)/order/[id]',
   /** Product editor. The create case is the static sibling `/(business)/product/new`. */
   businessProductEdit: '/(business)/product/[id]',
+  /** The courier's live run: map, pickup and drop-off. */
+  courierDelivery: '/(courier)/delivery/[id]',
+  /** Proof of delivery capture — photo, signature or PIN. */
+  courierProof: '/(courier)/proof/[id]',
+  courierReport: '/(courier)/report/[id]',
 } as const;
 
-/** Landing route for a user who has completed the full sign-up + role gate. */
+/**
+ * Landing route for a user who has completed the full sign-up + role gate.
+ *
+ * A `Record` rather than a ternary chain on purpose: the previous binary version
+ * fell through to the customer home for anything that was not `business`, so
+ * adding a third role would have silently dropped livreurs into the shopper app
+ * instead of failing to compile.
+ */
+// `satisfies` rather than an annotation: the annotation would widen every value
+// to the union of all routes, and callers pass this straight to `router.replace`,
+// where typed routes want the literal.
+const HOME_BY_ROLE = {
+  customer: routes.customerHome,
+  business: routes.businessDashboard,
+  courier: routes.courierMissions,
+} as const satisfies Record<UserRole, string>;
+
 export function homeRouteForRole(role: UserRole) {
-  return role === 'business' ? routes.businessDashboard : routes.customerHome;
+  return HOME_BY_ROLE[role];
 }

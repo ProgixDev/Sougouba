@@ -1,10 +1,9 @@
 import { useFocusEffect, router } from 'expo-router';
-import { PackagePlus, Plus, Store } from 'lucide-react-native';
+import { PackagePlus, Plus } from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, RefreshControl, SectionList, View } from 'react-native';
 
-import { CounterHeader, onSlab } from '@/components/business';
+import { CounterHeader, PendingApproval, onSlab } from '@/components/business';
 import { SearchField } from '@/components/customer';
 import { Badge, CatalogImage, EmptyState, Reveal, Skeleton, Text } from '@/components/ui';
 import { categoriesApi, productsApi } from '@/data/api';
@@ -17,9 +16,18 @@ import { dynamicRoutes, routes } from '@/lib/routes';
 
 const LOW_STOCK_THRESHOLD = 20;
 
+interface CatalogSection {
+  id: string;
+  title: string;
+  data: Product[];
+}
+
+/** Products whose shelf no longer exists. A merchant's own catalogue must never hide one of their products. */
+const UNFILED_SECTION_ID = 'unfiled';
+
 export default function BusinessCatalogScreen() {
   const tabBarInset = useTabBarInset();
-  const { vendor, loading: vendorLoading, missing } = useOwnerVendor();
+  const { vendor, loading: vendorLoading, missing, pending, reload } = useOwnerVendor();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -73,21 +81,41 @@ export default function BusinessCatalogScreen() {
     );
   }, [products, query]);
 
+  /**
+   * The catalogue, under the merchant's own headings.
+   *
+   * Shown grouped rather than as one list because these headings are what the
+   * shopper sees on the shop page: filing a dish under "Desserts" and then
+   * checking it landed there is a two-screen round trip if this screen only ever
+   * shows a flat list. Ordered as the shop orders them, and searching narrows
+   * within the grouping rather than flattening it.
+   */
+  const sections = useMemo<CatalogSection[]>(() => {
+    if (!vendor) return [];
+    const known = new Set(vendor.sections.map((s) => s.id));
+    const grouped = vendor.sections
+      .map((section) => ({
+        id: section.id,
+        title: section.nameFr,
+        data: visible.filter((p) => p.sectionId === section.id),
+      }))
+      .filter((section) => section.data.length > 0);
+
+    const unfiled = visible.filter((p) => !known.has(p.sectionId));
+    return unfiled.length > 0
+      ? [...grouped, { id: UNFILED_SECTION_ID, title: 'Non classés', data: unfiled }]
+      : grouped;
+  }, [vendor, visible]);
+
   const outOfStock = useMemo(
     () => products.filter((p) => p.isAvailable && p.stockQty <= LOW_STOCK_THRESHOLD).length,
     [products]
   );
 
-  if (missing) {
-    return (
-      <SafeAreaView className="flex-1 bg-background" edges={['top']}>
-        <EmptyState
-          icon={Store}
-          title="Aucune boutique associée"
-          description="Ce compte commerçant n’est pas encore rattaché à une boutique."
-        />
-      </SafeAreaView>
-    );
+  // A shop that is filed but not cleared is as unusable as no shop at all,
+  // and for the merchant it is a different sentence — see `PendingApproval`.
+  if (missing || pending) {
+    return <PendingApproval state={missing ? 'missing' : 'pending'} onApproved={reload} />;
   }
 
   return (
@@ -128,17 +156,26 @@ export default function BusinessCatalogScreen() {
           ))}
         </View>
       ) : (
-        <FlatList
-          data={visible}
+        <SectionList
+          sections={sections}
           keyExtractor={(product) => product.id}
+          stickySectionHeadersEnabled
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             paddingHorizontal: 20,
-            paddingTop: 20,
             paddingBottom: tabBarInset + 24,
-            gap: 12,
           }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          renderSectionHeader={({ section }) => (
+            <View className="flex-row items-baseline gap-2 bg-background pt-5 pb-2.5">
+              <Text variant="caption" weight="bold" className="text-[15px]">
+                {section.title}
+              </Text>
+              <Text variant="caption" tone="muted" className="text-[12px]">
+                {section.data.length}
+              </Text>
+            </View>
+          )}
           ListEmptyComponent={
             <EmptyState
               icon={PackagePlus}
@@ -155,7 +192,7 @@ export default function BusinessCatalogScreen() {
           renderItem={({ item: product, index }) => {
             const lowStock = product.isAvailable && product.stockQty <= LOW_STOCK_THRESHOLD;
             return (
-              <Reveal index={index}>
+              <Reveal index={index} className="mb-3">
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Modifier ${product.name}`}

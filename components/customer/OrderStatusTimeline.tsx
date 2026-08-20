@@ -9,6 +9,8 @@ import { neutral } from '@/theme/tokens';
 
 export interface OrderStatusTimelineProps {
   order: Order;
+  /** Names the person on the "en livraison" step once one is assigned. */
+  courierName?: string;
 }
 
 /**
@@ -22,8 +24,12 @@ export interface OrderStatusTimelineProps {
  * A cancelled order gets its own single row: cancellation is an exit from the
  * flow, not a position on it, and drawing it as "step 4 of 6" would misrepresent
  * what happened.
+ *
+ * Once a courier is assigned, the "en livraison" step carries their name. "En
+ * livraison" is a state; "Moussa apporte votre commande" is a person, and the
+ * step is more reassuring for saying which.
  */
-export function OrderStatusTimeline({ order }: OrderStatusTimelineProps) {
+export function OrderStatusTimeline({ order, courierName }: OrderStatusTimelineProps) {
   const timeByStatus = Object.fromEntries(order.statusHistory.map((e) => [e.status, e.at]));
 
   if (order.status === 'cancelled') {
@@ -88,6 +94,11 @@ export function OrderStatusTimeline({ order }: OrderStatusTimelineProps) {
               >
                 {orderStatusMeta[status].label}
               </Text>
+              {status === 'out_for_delivery' && courierName && done ? (
+                <Text variant="caption" tone="muted" className="text-[12px]">
+                  Avec {courierName}
+                </Text>
+              ) : null}
               {at ? (
                 <Text variant="caption" tone="muted" className="text-[12px]">
                   {formatDate(at)} · {formatTime(at)}

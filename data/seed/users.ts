@@ -181,4 +181,27 @@ export const users: User[] = [
     favoriteVendorIds: [],
     addresses: [],
   },
+  // One account per seeded courier. Kept in the same order as `data/seed/couriers.ts`,
+  // whose `userId` must resolve to one of these — `scripts/verify-seed.ts` asserts it.
+  ...([
+    ['usr_courier_moussa', 'Moussa Traoré', 'moussa.traore@example.com', 'crr_moussa'],
+    ['usr_courier_fatou', 'Fatou Camara', 'fatou.camara@example.com', 'crr_fatou'],
+    ['usr_courier_youssef', 'Youssef El Idrissi', 'youssef.elidrissi@example.com', 'crr_youssef'],
+    ['usr_courier_awa', 'Awa Ndiaye', 'awa.ndiaye@example.com', 'crr_awa'],
+    ['usr_courier_karim', 'Karim Belkacem', 'karim.belkacem@example.com', 'crr_karim'],
+    ['usr_courier_ines', 'Inès Kaboré', 'ines.kabore@example.com', 'crr_ines'],
+    ['usr_courier_daniel', 'Daniel Okonkwo', 'daniel.okonkwo@example.com', 'crr_daniel'],
+    ['usr_courier_sofia', 'Sofia Mansouri', 'sofia.mansouri@example.com', 'crr_sofia'],
+  ] as const).map(
+    ([id, fullName, email, courierId]): User => ({
+      id,
+      fullName,
+      email,
+      role: 'courier',
+      courierId,
+      favoriteProductIds: [],
+      favoriteVendorIds: [],
+      addresses: [],
+    })
+  ),
 ];

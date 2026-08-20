@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { darkColors, lightColors, type ThemeColors } from '../theme/colors';
-import { forest, mustard, semantic } from '../theme/tokens';
+import { forest, mustard, neutral, semantic } from '../theme/tokens';
 
 const AA_TEXT = 4.5;
 const AA_LARGE = 3;
@@ -125,6 +125,78 @@ for (const pair of SLAB_PAIRS) {
   console.log(
     `  ${pass ? 'ok  ' : 'FAIL'} ${value.toFixed(2).padStart(5)}:1  (min ${pair.min})  ${pair.name}` +
       `  [${pair.fg} on ${SLAB_LIGHTEST}]`
+  );
+}
+
+/** Flatten a translucent overlay onto an opaque ground, the way the compositor does. */
+function blend(over: string, under: string, alpha: number): string {
+  const parse = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const [ar, ag, ab] = parse(over);
+  const [br, bg, bb] = parse(under);
+  const mix = (a: number, b: number) => Math.round(a * alpha + b * (1 - alpha));
+  return (
+    '#' +
+    [mix(ar, br), mix(ag, bg), mix(ab, bb)]
+      .map((n) => n.toString(16).padStart(2, '0'))
+      .join('')
+      .toUpperCase()
+  );
+}
+
+// ── The courier slab ─────────────────────────────────────────────────────────
+//
+// `components/courier/CourierSlab.tsx` does for the livreur what `CounterHeader`
+// does for the merchant: a header that is dark in both themes, so its
+// foregrounds are fixed and invisible to the audit above. Checked against
+// `neutral[800]` — the light end of the gradient, and the worst case for
+// light-on-dark. The mustard accent is checked at the body threshold rather than
+// the large-text one because it carries the delta percentage and the eyebrow,
+// both of which are small.
+// Mirrors GLOW_ALPHA_HEX in components/courier/CourierSlab.tsx.
+const COURIER_SLAB_GLOW_ALPHA = 0x26 / 255;
+const COURIER_SLAB_LIGHTEST = blend(mustard[400], neutral[900], COURIER_SLAB_GLOW_ALPHA);
+const COURIER_SLAB_PAIRS: { name: string; fg: string; min: number }[] = [
+  { name: 'slab headline figures', fg: '#F6F2E9', min: AA_TEXT },
+  { name: 'slab labels and captions', fg: neutral[300], min: AA_TEXT },
+  { name: 'slab accent (eyebrow, delta)', fg: mustard[300], min: AA_TEXT },
+  { name: 'selected segment label', fg: neutral[900], min: AA_TEXT },
+];
+
+console.log('\nCOURIER SLAB (dark in both themes)');
+for (const pair of COURIER_SLAB_PAIRS) {
+  // The selected segment inverts: dark text on the ivory pill, not on the slab.
+  const bg = pair.name === 'selected segment label' ? '#F6F2E9' : COURIER_SLAB_LIGHTEST;
+  const value = ratio(pair.fg, bg);
+  const pass = value >= pair.min;
+  if (!pass) failures++;
+  console.log(
+    `  ${pass ? 'ok  ' : 'FAIL'} ${value.toFixed(2).padStart(5)}:1  (min ${pair.min})  ${pair.name}` +
+      `  [${pair.fg} on ${bg}]`
+  );
+}
+
+// ── The earnings chart ───────────────────────────────────────────────────────
+//
+// `components/courier/EarningsChart.tsx` draws the courier's daily bars on a
+// plain card. They are data marks, not decoration, so each has to clear the 3:1
+// non-text threshold against the card it sits on — in both themes, and for both
+// the base and the emphasised tone. Opacity-based de-emphasis was rejected here
+// for exactly this reason; see the note in that file.
+const CHART_PAIRS: { name: string; fg: string; bg: string }[] = [
+  { name: 'bar, light', fg: mustard[600], bg: lightColors.card },
+  { name: 'bar highlighted, light', fg: lightColors.primary, bg: lightColors.card },
+  { name: 'bar, dark', fg: mustard[500], bg: darkColors.card },
+  { name: 'bar highlighted, dark', fg: darkColors.primary, bg: darkColors.card },
+];
+
+console.log('\nEARNINGS CHART (data marks, min 3:1)');
+for (const pair of CHART_PAIRS) {
+  const value = ratio(pair.fg, pair.bg);
+  const pass = value >= AA_LARGE;
+  if (!pass) failures++;
+  console.log(
+    `  ${pass ? 'ok  ' : 'FAIL'} ${value.toFixed(2).padStart(5)}:1  (min ${AA_LARGE})  ${pair.name}` +
+      `  [${pair.fg} on ${pair.bg}]`
   );
 }
 

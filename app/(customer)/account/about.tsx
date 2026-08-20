@@ -2,9 +2,11 @@ import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import { ChevronRight, Mail, ShieldCheck, Store } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
+import { useState } from 'react';
 import { Linking, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { MerchantSignupSheet } from '@/components/onboarding';
 import { BackHeader, Reveal, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
 
@@ -13,6 +15,7 @@ const SUPPORT_EMAIL = 'soutien@sougouba.ca';
 export default function AboutScreen() {
   const colors = useThemeColors();
   const version = Constants.expoConfig?.version ?? '1.0.0';
+  const [signupSheet, setSignupSheet] = useState(false);
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
@@ -59,11 +62,16 @@ export default function AboutScreen() {
               onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
             />
             <View className="h-px bg-border ml-16" />
+            {/* Not a mailto: shop registration is a form in the app followed by
+                a manual approval. The sheet explains that; it is the same one
+                the role gate shows, minus the part that commits an account —
+                this reader is a shopper asking how selling works, not someone
+                changing role. */}
             <LinkRow
               icon={Store}
               label="Inscrire mon commerce"
-              detail="Vendre sur Sougouba"
-              onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Inscrire%20mon%20commerce`)}
+              detail="Comment vendre sur Sougouba"
+              onPress={() => setSignupSheet(true)}
             />
           </View>
         </Reveal>
@@ -85,6 +93,8 @@ export default function AboutScreen() {
           </View>
         </Reveal>
       </ScrollView>
+
+      <MerchantSignupSheet visible={signupSheet} onClose={() => setSignupSheet(false)} />
     </SafeAreaView>
   );
 }

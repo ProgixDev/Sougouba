@@ -31,7 +31,11 @@ yarn-error.*
 *.pem
 
 # local env files
+# `.env` carries the Mapbox *secret* download token (sk.…), which is a build
+# credential and must never be committed. `.env.example` documents the names.
+.env
 .env*.local
+!.env.example
 
 # typescript
 *.tsbuildinfo

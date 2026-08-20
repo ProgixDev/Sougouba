@@ -8,10 +8,12 @@ import { ProductForm } from '@/components/business';
 import { BackHeader, EmptyState, Skeleton } from '@/components/ui';
 import { productsApi } from '@/data/api';
 import type { Product } from '@/data/types';
+import { useOwnerVendor } from '@/hooks/useOwnerVendor';
 import { routes } from '@/lib/routes';
 
 export default function EditProductScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { vendor, missing } = useOwnerVendor();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -50,7 +52,7 @@ export default function EditProductScreen() {
     );
   }
 
-  if (loading) {
+  if (loading || (!vendor && !missing)) {
     return (
       <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
         <BackHeader title="Modifier" />
@@ -63,7 +65,7 @@ export default function EditProductScreen() {
     );
   }
 
-  if (!product) {
+  if (!product || !vendor) {
     return (
       <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
         <BackHeader />
@@ -82,12 +84,14 @@ export default function EditProductScreen() {
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <BackHeader title="Modifier le produit" />
       <ProductForm
+        vendor={vendor}
         product={product}
         submitLabel="Enregistrer"
         onDelete={confirmDelete}
         onSubmit={async (values, tags) => {
           await productsApi.updateProduct(product.id, {
             categoryId: values.categoryId,
+            sectionId: values.sectionId,
             name: values.name,
             description: values.description,
             priceCad: values.priceCad,

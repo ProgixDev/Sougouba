@@ -5,7 +5,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, Switch, View } from 'react-
 
 import { Button, Chip, Input, Text } from '@/components/ui';
 import { categoriesApi } from '@/data/api';
-import type { Category, Product } from '@/data/types';
+import type { Category, Product, Vendor } from '@/data/types';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import {
   parseTags,
@@ -16,6 +16,8 @@ import {
 import { darkColors, lightColors } from '@/theme/colors';
 
 export interface ProductFormProps {
+  /** The shop being edited — its `sections` are the shelves a product can go on. */
+  vendor: Vendor;
   /** Omit to create. */
   product?: Product;
   submitLabel: string;
@@ -30,7 +32,7 @@ export interface ProductFormProps {
  * inputs have no number type, and holding them as numbers means fighting
  * `NaN` on every keystroke while the field is mid-edit.
  */
-export function ProductForm({ product, submitLabel, onSubmit, onDelete }: ProductFormProps) {
+export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }: ProductFormProps) {
   const { colorScheme } = useColorScheme();
   const colors = colorScheme === 'dark' ? darkColors : lightColors;
 
@@ -52,6 +54,7 @@ export function ProductForm({ product, submitLabel, onSubmit, onDelete }: Produc
       name: product?.name ?? '',
       description: product?.description ?? '',
       categoryId: product?.categoryId ?? '',
+      sectionId: product?.sectionId ?? '',
       priceCad: product ? String(product.priceCad) : '',
       compareAtPriceCad: product?.compareAtPriceCad ? String(product.compareAtPriceCad) : '',
       stockQty: product ? String(product.stockQty) : '',
@@ -109,6 +112,38 @@ export function ProductForm({ product, submitLabel, onSubmit, onDelete }: Produc
                 error={errors.description?.message}
                 required
               />
+            )}
+          />
+        </View>
+
+        <View className="gap-3">
+          {/* Where the product sits on this shop's own page. Asked before the
+              platform category because it is the one the merchant thinks in:
+              they are adding a dish to a course, or a bag of rice to a shelf. */}
+          <Text variant="label" tone="muted">
+            {vendor.vendorType === 'restaurant' ? 'Section du menu' : 'Rayon'}
+          </Text>
+          <Controller
+            control={control}
+            name="sectionId"
+            render={({ field: { onChange, value } }) => (
+              <>
+                <View className="flex-row flex-wrap gap-2">
+                  {vendor.sections.map((section) => (
+                    <Chip
+                      key={section.id}
+                      label={section.nameFr}
+                      selected={value === section.id}
+                      onPress={() => onChange(section.id)}
+                    />
+                  ))}
+                </View>
+                {errors.sectionId ? (
+                  <Text variant="caption" tone="destructive">
+                    {errors.sectionId.message}
+                  </Text>
+                ) : null}
+              </>
             )}
           />
         </View>

@@ -1,11 +1,16 @@
-import { ChevronRight } from 'lucide-react-native';
+import { Bike, ChevronRight, Clock3 } from 'lucide-react-native';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { Badge, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import type { Order } from '@/data/types';
 import { formatCad, formatElapsed } from '@/lib/format';
-import { advanceActionLabel, isActiveStatus, orderStatusMeta } from '@/lib/orderStatus';
+import {
+  advanceActionLabel,
+  isActiveStatus,
+  nextStatusFor,
+  orderStatusMeta,
+} from '@/lib/orderStatus';
 
 export interface OrderQueueCardProps {
   order: Order;
@@ -14,6 +19,8 @@ export interface OrderQueueCardProps {
   /** Omitted on closed orders and on screens where advancing is not the point. */
   onAdvance?: () => void;
   advancing?: boolean;
+  /** Resolved by the caller when the run has been accepted. */
+  courierName?: string;
 }
 
 /**
@@ -36,11 +43,30 @@ export function OrderQueueCard({
   onPress,
   onAdvance,
   advancing = false,
+  courierName,
 }: OrderQueueCardProps) {
   const colors = useThemeColors();
   const meta = orderStatusMeta[order.status];
-  const actionLabel = advanceActionLabel(order.status);
+  // Only what the shop can actually do. At `ready` the queue row shows the
+  // waiting line below instead of a button nobody behind the counter can honour.
+  const actionLabel = nextStatusFor(order.status, 'merchant')
+    ? advanceActionLabel(order.status)
+    : null;
   const showAction = Boolean(onAdvance) && isActiveStatus(order.status) && Boolean(actionLabel);
+  // The counter's half of the hand-off. Between packing the bag and the courier
+  // driving off there is a real wait, and a ticket that simply loses its button
+  // reads as a ticket that broke.
+  const handoff =
+    !showAction && isActiveStatus(order.status) && order.status !== 'pending'
+      ? order.delivery
+        ? {
+            icon: Bike,
+            label: courierName ? `${courierName} · en route` : 'Livreur en route',
+          }
+        : order.status === 'ready'
+          ? { icon: Clock3, label: 'En attente d’un livreur' }
+          : null
+      : null;
 
   const preview = order.items
     .map((item) => (item.qty > 1 ? `${item.name} ×${item.qty}` : item.name))
@@ -56,6 +82,11 @@ export function OrderQueueCard({
       >
         <View className="flex-row items-center gap-2">
           <Badge label={meta.label} tone={meta.tone} size="sm" />
+          {/* An unanswered complaint outranks the status: it is the reason to
+              open this ticket ahead of the others. */}
+          {order.dispute && order.dispute.status !== 'answered' ? (
+            <Badge label="Litige" tone="destructive" size="sm" />
+          ) : null}
           <Text variant="caption" tone="muted" className="text-[12px] flex-1">
             {formatElapsed(order.createdAt)}
           </Text>
@@ -94,6 +125,17 @@ export function OrderQueueCard({
             </Text>
           )}
         </Pressable>
+      ) : null}
+
+      {handoff ? (
+        // Same geometry as the action row so the card keeps one rhythm whether
+        // the merchant has a move to make or is waiting on someone else.
+        <View className="flex-row items-center justify-center gap-2 h-12 border-t border-border">
+          <handoff.icon size={14} color={colors.mutedForeground} strokeWidth={2} />
+          <Text variant="caption" tone="muted" className="text-[12px]">
+            {handoff.label}
+          </Text>
+        </View>
       ) : null}
     </View>
   );

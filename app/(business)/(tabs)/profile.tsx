@@ -1,13 +1,16 @@
-import { Clock, LogOut, MapPin, Moon, Star, Store, Sun, Truck } from 'lucide-react-native';
+import { router } from 'expo-router';
+import { Clock, Clock3, LogOut, MapPin, Moon, Receipt, Star, Store, Sun, Truck } from 'lucide-react-native';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { CounterHeader } from '@/components/business';
-import { Badge, CatalogImage, Reveal, Skeleton, Text } from '@/components/ui';
+import { Badge, Button, CatalogImage, Reveal, Skeleton, Text } from '@/components/ui';
 import type { VendorHours } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
 import { formatCad } from '@/lib/format';
+import { COMMISSION_RATE, MONTHLY_SUBSCRIPTION_CAD } from '@/lib/monetization';
+import { routes } from '@/lib/routes';
 import { shopDay, shopStatusLine } from '@/lib/shopHours';
 import { useSessionStore } from '@/store/useSessionStore';
 import { useThemeStore } from '@/store/useThemeStore';
@@ -20,7 +23,7 @@ export default function BusinessProfileScreen() {
   const tabBarInset = useTabBarInset();
   const user = useSessionStore((s) => s.user);
   const signOut = useSessionStore((s) => s.signOut);
-  const { vendor, loading } = useOwnerVendor();
+  const { vendor, loading, missing, approved } = useOwnerVendor();
 
   const preference = useThemeStore((s) => s.preference);
   const setPreference = useThemeStore((s) => s.setPreference);
@@ -47,7 +50,7 @@ export default function BusinessProfileScreen() {
             <Skeleton height={150} radius={20} />
             <Skeleton height={200} radius={20} />
           </View>
-        ) : vendor ? (
+        ) : approved && vendor ? (
           <>
             <Reveal className="mx-5 rounded-[20px] bg-card overflow-hidden">
               <CatalogImage id={vendor.id} kind="vendor" radius={0} height={130} />
@@ -106,18 +109,59 @@ export default function BusinessProfileScreen() {
             </Reveal>
           </>
         ) : (
+          /* The profile tab keeps its own version of this state rather than
+             handing over to `PendingApproval`: the account and theme rows below
+             still belong to a merchant whose shop is not live yet. */
           <View className="mx-5 rounded-[20px] bg-card p-6 items-center gap-3">
             <View className="w-14 h-14 items-center justify-center rounded-full bg-muted">
-              <Store size={24} color={colors.mutedForeground} strokeWidth={1.75} />
+              {missing ? (
+                <Store size={24} color={colors.mutedForeground} strokeWidth={1.75} />
+              ) : (
+                <Clock3 size={24} color={colors.mutedForeground} strokeWidth={1.75} />
+              )}
             </View>
             <Text variant="caption" weight="bold">
-              Aucune boutique associée
+              {missing ? 'Aucune boutique' : 'Demande en attente'}
             </Text>
             <Text variant="caption" tone="muted" className="text-center">
-              Ce compte n’est pas encore rattaché à une boutique Sougouba.
+              {missing
+                ? 'Inscrivez votre commerce pour commencer à vendre sur Sougouba.'
+                : 'Votre boutique sera visible une fois votre dossier validé par un administrateur Sougouba.'}
             </Text>
+            {missing ? (
+              <Button
+                label="Inscrire ma boutique"
+                variant="outline"
+                size="sm"
+                onPress={() => router.push(routes.businessSignup)}
+              />
+            ) : null}
           </View>
         )}
+
+        {/* What selling here costs, stated once where a merchant would look for
+            it (CDC addendum v1.1, §05). Both charges apply — the subscription is
+            not an alternative to the commission. */}
+        {approved && vendor ? (
+          <Reveal delay={100} className="mt-4 mx-5 rounded-[20px] bg-card p-4 gap-3">
+            <Text variant="label" tone="muted" className="text-[10px]">
+              Votre forfait
+            </Text>
+            <View className="flex-row items-center gap-3">
+              <View className="w-9 h-9 items-center justify-center rounded-full bg-primary/10">
+                <Receipt size={17} color={colors.primary} strokeWidth={2} />
+              </View>
+              <View className="flex-1 gap-0.5">
+                <Text variant="caption" weight="semibold">
+                  {formatCad(MONTHLY_SUBSCRIPTION_CAD)} par mois
+                </Text>
+                <Text variant="caption" tone="muted" className="text-[12px]">
+                  Plus {Math.round(COMMISSION_RATE * 100)} % de commission sur chaque commande
+                </Text>
+              </View>
+            </View>
+          </Reveal>
+        ) : null}
 
         <Reveal delay={120} className="mt-4 mx-5 rounded-[20px] bg-card p-4 gap-3">
           <Text variant="label" tone="muted" className="text-[10px]">

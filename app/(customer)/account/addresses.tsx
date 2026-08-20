@@ -18,6 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BackHeader, Badge, Button, EmptyState, Input, Reveal, Text } from '@/components/ui';
 import type { Address } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
+import { coordinatesFor } from '@/lib/postalGeo';
 import { type AddressValues, addressSchema } from '@/lib/validation/profile';
 import { useSessionStore } from '@/store/useSessionStore';
 
@@ -46,7 +47,14 @@ export default function AddressesScreen() {
     if (existing) {
       persist(
         addresses.map((a) =>
-          a.id === existing.id ? { ...a, ...values, postalCode: formatted } : a
+          a.id === existing.id
+            ? {
+                ...a,
+                ...values,
+                postalCode: formatted,
+                ...coordinatesFor(formatted, values.city),
+              }
+            : a
         )
       );
     } else {
@@ -56,10 +64,11 @@ export default function AddressesScreen() {
           ...values,
           postalCode: formatted,
           id: `addr_${Date.now().toString(36)}`,
-          // Coordinates are part of the Address shape but nothing in the
-          // prototype maps them; a shipped geocoder is out of scope.
-          lat: 0,
-          lng: 0,
+          // Approximated from the postal code (see `lib/postalGeo.ts`). These
+          // used to be written as 0,0 — harmless while nothing read them, and
+          // wrong the moment the shop list started sorting by distance, which
+          // then measured from the Gulf of Guinea.
+          ...coordinatesFor(formatted, values.city),
           isDefault: addresses.length === 0,
         },
       ]);

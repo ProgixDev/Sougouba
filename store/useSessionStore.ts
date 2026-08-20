@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware';
 import type { User, UserRole } from '@/data/types';
 import { asyncStorage } from './storage';
 import { useCartStore } from './useCartStore';
+import { useDispatchStore } from './useDispatchStore';
 import { useFavoritesStore } from './useFavoritesStore';
 import { usePreferencesStore } from './usePreferencesStore';
 
@@ -50,6 +51,9 @@ export const useSessionStore = create<SessionState>()(
         useCartStore.getState().clear();
         useFavoritesStore.getState().reset();
         usePreferencesStore.getState().reset();
+        // A courier's online flag and their run must not follow the next
+        // account that signs in on this device.
+        useDispatchStore.getState().reset();
         set({ user: null });
       },
     }),

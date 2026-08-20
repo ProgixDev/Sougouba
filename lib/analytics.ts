@@ -1,4 +1,5 @@
 import type { ID, Order, OrderStatus } from '@/data/types';
+import { commissionOn } from './monetization';
 
 export interface DayBucket {
   /** `YYYY-MM-DD` in local time. */
@@ -10,7 +11,12 @@ export interface DayBucket {
 }
 
 export interface RangeSummary {
+  /** Goods sold — see the note on `summariseOrders`. */
   revenueCad: number;
+  /** Sougouba's 12 % cut of `revenueCad`. */
+  commissionCad: number;
+  /** What reaches the merchant from these sales, before the monthly subscription. */
+  netCad: number;
   orderCount: number;
   avgBasketCad: number;
   buckets: DayBucket[];
@@ -25,6 +31,13 @@ export interface RangeSummary {
  * Cancelled orders are excluded from revenue but still counted in
  * `statusCounts` — a shop needs to see its cancellation rate, but cancelled
  * money was never earned.
+ *
+ * **Revenue is the product subtotal, not the order total.** It used to be
+ * `order.totalCad`, which was already generous — the delivery fee in it pays the
+ * delivery, not the shop — and became plainly wrong once orders started carrying
+ * TPS and TVQ, money the merchant collects on the government's behalf and does
+ * not keep. A dashboard that counts it as "Recettes" tells a merchant they
+ * earned about 20 % more than they did.
  */
 export function summariseOrders(orders: Order[], days: number, now = new Date()): RangeSummary {
   const start = startOfDay(now);
@@ -58,12 +71,12 @@ export function summariseOrders(orders: Order[], days: number, now = new Date())
     statusCounts[order.status] = (statusCounts[order.status] ?? 0) + 1;
     if (order.status === 'cancelled') continue;
 
-    revenueCad += order.totalCad;
+    revenueCad += order.subtotalCad;
     orderCount += 1;
 
     const bucket = byDate.get(toKey(placed));
     if (bucket) {
-      bucket.revenueCad += order.totalCad;
+      bucket.revenueCad += order.subtotalCad;
       bucket.orderCount += 1;
     }
 
@@ -84,8 +97,13 @@ export function summariseOrders(orders: Order[], days: number, now = new Date())
     .sort((a, b) => b.qty - a.qty)
     .slice(0, 5);
 
+  const sales = round2(revenueCad);
+  const commissionCad = commissionOn(sales);
+
   return {
-    revenueCad: round2(revenueCad),
+    revenueCad: sales,
+    commissionCad,
+    netCad: round2(sales - commissionCad),
     orderCount,
     avgBasketCad: orderCount > 0 ? round2(revenueCad / orderCount) : 0,
     buckets: buckets.map((b) => ({ ...b, revenueCad: round2(b.revenueCad) })),
