@@ -39,11 +39,15 @@ export const routes = {
   businessProfile: '/(business)/(tabs)/profile',
   businessProductNew: '/(business)/product/new',
   businessSignup: '/(business)/signup',
+  /** Post-registration confirmation — separate so the form can't be back-navigated into. */
+  businessSignupConfirmed: '/(business)/signup-confirmed',
   courierMissions: '/(courier)/(tabs)/missions',
   courierHistory: '/(courier)/(tabs)/history',
   courierEarnings: '/(courier)/(tabs)/earnings',
   courierProfile: '/(courier)/(tabs)/profile',
   courierSignup: '/(courier)/signup',
+  /** Twin of `businessSignupConfirmed`, for the same reason. */
+  courierSignupConfirmed: '/(courier)/signup-confirmed',
 } as const;
 
 /**

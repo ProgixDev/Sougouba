@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 
-import { Button, Input, Text } from '@/components/ui';
+import { Button, CitySelect, Input, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import {
   VENDOR_TYPE_LABELS,
@@ -18,6 +18,8 @@ import {
   type ShopDocumentsValues,
   type ShopIdentityValues,
 } from '@/lib/validation/merchant';
+
+import { DeliveryGrid } from './DeliveryGrid';
 
 export interface ShopSignupValues {
   identity: ShopIdentityValues;
@@ -62,7 +64,6 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
       street: '',
       city: 'Montréal',
       postalCode: '',
-      deliveryFeeCad: '',
       deliveryEtaMin: '',
     },
   });
@@ -242,14 +243,12 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
             <Controller
               control={addressForm.control}
               name="city"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  label="Ville"
+              render={({ field: { onChange, value } }) => (
+                <CitySelect
                   value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
+                  onChange={onChange}
                   error={addressForm.formState.errors.city?.message}
-                  required
+                  helperText="Les villes que Sougouba dessert aujourd’hui."
                 />
               )}
             />
@@ -265,23 +264,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
                   autoCapitalize="characters"
                   error={addressForm.formState.errors.postalCode?.message}
                   required
-                  helperText="Sert à calculer la distance affichée à vos clients."
-                />
-              )}
-            />
-            <Controller
-              control={addressForm.control}
-              name="deliveryFeeCad"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  label="Frais de livraison ($)"
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  keyboardType="decimal-pad"
-                  error={addressForm.formState.errors.deliveryFeeCad?.message}
-                  required
-                  helperText="Non taxés, ajoutés au total de la commande."
+                  helperText="Doit correspondre à la ville choisie. Sert à calculer la distance jusqu’à vos clients."
                 />
               )}
             />
@@ -300,6 +283,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
                 />
               )}
             />
+            <DeliveryGrid />
           </View>
         ) : null}
 

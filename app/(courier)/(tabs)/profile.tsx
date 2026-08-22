@@ -3,20 +3,22 @@ import {
   Bike,
   Car,
   ChevronRight,
+  Landmark,
   LogOut,
   Moon,
+  Motorbike,
   Phone,
   Route,
   ShieldCheck,
   Star,
   Sun,
-  Truck,
 } from 'lucide-react-native';
 import { useCallback, useMemo } from 'react';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { CourierGate, CourierSlabSurface, onCourierSlab } from '@/components/courier';
 import { Avatar, Reveal, Text } from '@/components/ui';
+import { bankLabel } from '@/data/banks';
 import { BASE_FARE_CAD, PER_KM_CAD } from '@/data/courierPay';
 import type { VehicleType } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
@@ -34,7 +36,9 @@ import { mustard } from '@/theme/tokens';
 
 const VEHICLE_ICONS: Record<VehicleType, typeof Bike> = {
   bike: Bike,
-  scooter: Truck,
+  // `scooter` is the stored value; "Moto" is what it is called everywhere a
+  // human reads it (see VEHICLE_LABELS), so the glyph follows the label.
+  scooter: Motorbike,
   car: Car,
 };
 
@@ -185,6 +189,24 @@ export default function CourierProfileScreen() {
               </Text>
               <Row icon={Phone} label="Téléphone" value={courier.phone} colors={colors} />
               <Row icon={Route} label="Secteur" value={courier.city} colors={colors} />
+              {/* Absent on the eight seeded couriers, who predate in-app
+                  registration — the rows are not drawn empty. */}
+              {courier.insurance ? (
+                <Row
+                  icon={ShieldCheck}
+                  label="Assurance"
+                  value={`${courier.insurance.insurerName} — échéance ${courier.insurance.expiry}`}
+                  colors={colors}
+                />
+              ) : null}
+              {courier.payout ? (
+                <Row
+                  icon={Landmark}
+                  label="Versements"
+                  value={`${bankLabel(courier.payout.bankId, courier.payout.bankNameOther)} •••• ${courier.payout.account.slice(-4)}`}
+                  colors={colors}
+                />
+              ) : null}
               <Row
                 icon={Star}
                 label="Membre depuis"

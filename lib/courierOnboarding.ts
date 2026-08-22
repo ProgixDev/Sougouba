@@ -14,7 +14,7 @@
 export const COURIER_SIGNUP_STEPS = [
   {
     title: 'Vous et votre véhicule',
-    body: 'Vos coordonnées, votre ville et le moyen avec lequel vous livrez — vélo, scooter ou voiture.',
+    body: 'Vos coordonnées, votre ville et le moyen avec lequel vous livrez — vélo, moto ou voiture.',
   },
   {
     title: 'Vos documents',

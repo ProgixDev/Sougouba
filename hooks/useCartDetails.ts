@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { productsApi, vendorsApi } from '@/data/api';
+import { deliveryFeeBetween } from '@/data/deliveryPricing';
 import { orderTotal, roundCad, taxesOn } from '@/data/taxes';
 import type { CartItem, Product, Vendor } from '@/data/types';
+import { distanceKm } from '@/data/utils/geo';
+import { deliveryAddressFor } from '@/lib/deliveryAddress';
 import { useCartStore } from '@/store/useCartStore';
+import { useSessionStore } from '@/store/useSessionStore';
 
 export interface CartLine {
   item: CartItem;
@@ -17,6 +21,8 @@ export interface CartDetails {
   gstCad: number;
   qstCad: number;
   deliveryFeeCad: number;
+  /** Shop to shopper, straight-line. `undefined` while the vendor is loading. */
+  deliveryDistanceKm?: number;
   totalCad: number;
   loading: boolean;
 }
@@ -29,7 +35,9 @@ export interface CartDetails {
  * Checkout both need the same join plus the same totals, so it lives here rather
  * than being written twice and drifting.
  *
- * Delivery fee comes from the vendor, so it is 0 until that resolves; totals are
+ * The delivery fee is no longer the shop's number: it comes from the Sougouba
+ * grid (`data/deliveryPricing.ts`) applied to the distance between the shop and
+ * where the order is going, so it is 0 until the vendor resolves. Totals are
  * derived from the *stored* unit price, not the current catalogue price, so a
  * price change mid-session can't silently alter what the shopper was quoted.
  *
@@ -39,6 +47,7 @@ export interface CartDetails {
 export function useCartDetails(): CartDetails {
   const items = useCartStore((s) => s.items);
   const vendorId = useCartStore((s) => s.vendorId);
+  const user = useSessionStore((s) => s.user);
 
   const [products, setProducts] = useState<Record<string, Product>>({});
   const [vendor, setVendor] = useState<Vendor | null>(null);
@@ -89,7 +98,13 @@ export function useCartDetails(): CartDetails {
   );
 
   const taxes = useMemo(() => taxesOn(subtotalCad), [subtotalCad]);
-  const deliveryFeeCad = items.length > 0 ? (vendor?.deliveryFeeCad ?? 0) : 0;
+
+  // Measured against the same address `checkout` will write onto the order, so
+  // the figure quoted in the cart is the figure charged.
+  const destination = useMemo(() => deliveryAddressFor(user), [user]);
+  const deliveryDistanceKm = vendor ? distanceKm(vendor.address, destination) : undefined;
+  const deliveryFeeCad =
+    items.length > 0 && vendor ? deliveryFeeBetween(vendor.address, destination) : 0;
 
   return {
     lines,
@@ -97,6 +112,7 @@ export function useCartDetails(): CartDetails {
     subtotalCad,
     ...taxes,
     deliveryFeeCad,
+    ...(deliveryDistanceKm === undefined ? {} : { deliveryDistanceKm }),
     totalCad: orderTotal(subtotalCad, taxes, deliveryFeeCad),
     loading,
   };

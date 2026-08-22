@@ -5,15 +5,18 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 
 import { HomeHeader, ProductGrid, VendorCard, VerticalCard } from '@/components/customer';
 import { EmptyState, Reveal, SectionHeader, SkeletonCard, Text } from '@/components/ui';
-import { categoriesApi, productsApi, vendorsApi } from '@/data/api';
-import type { Category, Product, Vendor, VendorType } from '@/data/types';
+import { categoriesApi, ordersApi, productsApi, vendorsApi } from '@/data/api';
+import type { Category, ID, Product, Vendor, VendorType } from '@/data/types';
+import { distanceKm } from '@/data/utils/geo';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
+import { deliveryAddressFor } from '@/lib/deliveryAddress';
 import { dynamicRoutes, routes } from '@/lib/routes';
 import { verticals } from '@/lib/verticals';
 import { useCartStore } from '@/store/useCartStore';
 import { useSessionStore } from '@/store/useSessionStore';
 
-const FEATURED_LIMIT = 6;
+const BEST_SELLER_LIMIT = 6;
+const NEARBY_LIMIT = 6;
 const VENDOR_CARD_WIDTH = 232;
 
 export default function CustomerHomeScreen() {
@@ -24,18 +27,21 @@ export default function CustomerHomeScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [bestSellerIds, setBestSellerIds] = useState<ID[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    const [nextCategories, nextProducts, nextVendors] = await Promise.all([
+    const [nextCategories, nextProducts, nextVendors, nextBestSellers] = await Promise.all([
       categoriesApi.getCategories(),
       productsApi.getProducts(),
       vendorsApi.getVendors(),
+      ordersApi.getTopProductIds(BEST_SELLER_LIMIT),
     ]);
     setCategories(nextCategories);
     setProducts(nextProducts);
     setVendors(nextVendors);
+    setBestSellerIds(nextBestSellers);
   }, []);
 
   useEffect(() => {
@@ -73,19 +79,48 @@ export default function CustomerHomeScreen() {
     return byType;
   }, [vendors]);
 
-  // No category filter to honour any more, so the grid leads with genuine deals
-  // rather than with whatever the catalogue happens to return first.
-  const featured = useMemo(
-    () =>
-      [...products]
-        .sort((a, b) => Number(Boolean(b.compareAtPriceCad)) - Number(Boolean(a.compareAtPriceCad)))
-        .slice(0, FEATURED_LIMIT),
-    [products]
-  );
+  /**
+   * Actually the best sellers, counted over every order the platform has taken
+   * (`ordersApi.getTopProductIds`) — the section used to be headed "Populaires"
+   * over a list sorted by whether an item carried a struck-through price.
+   *
+   * A brand-new catalogue has no sales to rank, and an empty rail under
+   * "Articles les + vendus" reads as a broken screen rather than as an honest
+   * one, so the deals-first order is kept as the tail-filler it always was.
+   */
+  const bestSellers = useMemo(() => {
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const ranked = bestSellerIds
+      .map((id) => byId.get(id))
+      .filter((p): p is Product => p !== undefined);
+    if (ranked.length >= BEST_SELLER_LIMIT) return ranked.slice(0, BEST_SELLER_LIMIT);
 
-  const nearbyVendors = useMemo(
-    () => [...vendors].sort((a, b) => a.deliveryEtaMin - b.deliveryEtaMin).slice(0, 6),
-    [vendors]
+    const seen = new Set(ranked.map((p) => p.id));
+    const filler = [...products]
+      .filter((p) => !seen.has(p.id))
+      .sort((a, b) => Number(Boolean(b.compareAtPriceCad)) - Number(Boolean(a.compareAtPriceCad)));
+    return [...ranked, ...filler].slice(0, BEST_SELLER_LIMIT);
+  }, [products, bestSellerIds]);
+
+  /** Where the shopper takes delivery — the distances below are theirs, not the city's. */
+  const origin = useMemo(() => deliveryAddressFor(user), [user]);
+
+  /**
+   * Restaurants only, nearest first (client, août 2026).
+   *
+   * It listed every shop sorted by announced ETA, under a heading that said
+   * "près de vous" — neither the vertical nor the proximity was true. Distance
+   * is measured the same way `vertical/[type]` measures it, so a restaurant does
+   * not change place between the two screens.
+   */
+  const nearbyRestaurants = useMemo(
+    () =>
+      vendors
+        .filter((v) => v.vendorType === 'restaurant')
+        .map((vendor) => ({ vendor, km: distanceKm(origin, vendor.address) }))
+        .sort((a, b) => a.km - b.km)
+        .slice(0, NEARBY_LIMIT),
+    [vendors, origin]
   );
 
   return (
@@ -124,12 +159,12 @@ export default function CustomerHomeScreen() {
 
         <View className="mt-8 gap-4">
           <SectionHeader
-            title="Populaires"
+            title="Articles les + vendus"
             actionLabel="Tout voir"
             onAction={() => router.push(routes.customerSearch)}
           />
 
-          {!loading && featured.length === 0 ? (
+          {!loading && bestSellers.length === 0 ? (
             <EmptyState
               icon={PackageOpen}
               title="Aucun produit ici"
@@ -137,7 +172,7 @@ export default function CustomerHomeScreen() {
             />
           ) : (
             <ProductGrid
-              products={featured}
+              products={bestSellers}
               iconByCategory={iconByCategory}
               loading={loading}
               onPressProduct={(product) =>
@@ -155,15 +190,21 @@ export default function CustomerHomeScreen() {
         </View>
 
         <View className="mt-8 gap-4">
-          <SectionHeader title="Commerces près de vous" />
+          <SectionHeader
+            title="Restaurants près de chez vous"
+            actionLabel="Tout voir"
+            onAction={() =>
+              router.push({ pathname: dynamicRoutes.vendorList, params: { type: 'restaurant' } })
+            }
+          />
           {loading ? (
             <View className="px-5">
               <SkeletonCard />
             </View>
-          ) : nearbyVendors.length === 0 ? (
+          ) : nearbyRestaurants.length === 0 ? (
             <View className="px-5">
               <Text variant="caption" tone="muted">
-                Aucun commerce pour l’instant.
+                Aucun restaurant pour l’instant.
               </Text>
             </View>
           ) : (
@@ -172,11 +213,12 @@ export default function CustomerHomeScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerClassName="px-5 gap-3.5"
             >
-              {nearbyVendors.map((vendor, index) => (
+              {nearbyRestaurants.map(({ vendor, km }, index) => (
                 <Reveal key={vendor.id} index={index} from="right">
                   <VendorCard
                     vendor={vendor}
                     width={VENDOR_CARD_WIDTH}
+                    distanceKm={km}
                     onPress={() =>
                       router.push({ pathname: dynamicRoutes.vendorDetail, params: { id: vendor.id } })
                     }

@@ -35,7 +35,6 @@ const approved: Omit<Vendor, 'status'>[] = [
     rating: 4.7,
     reviewCount: 214,
     deliveryEtaMin: 30,
-    deliveryFeeCad: 3.99,
     isHalalCertified: true,
     hours: [
       { day: 0, open: '10:00', close: '19:00' },
@@ -77,7 +76,6 @@ const approved: Omit<Vendor, 'status'>[] = [
     rating: 4.8,
     reviewCount: 356,
     deliveryEtaMin: 25,
-    deliveryFeeCad: 2.99,
     isHalalCertified: true,
     hours: [
       { day: 0, open: '10:00', close: '18:00' },
@@ -119,7 +117,6 @@ const approved: Omit<Vendor, 'status'>[] = [
     rating: 4.6,
     reviewCount: 178,
     deliveryEtaMin: 35,
-    deliveryFeeCad: 4.49,
     isHalalCertified: true,
     hours: [
       { day: 0, closed: true, open: '', close: '' },
@@ -161,7 +158,6 @@ const approved: Omit<Vendor, 'status'>[] = [
     rating: 4.9,
     reviewCount: 412,
     deliveryEtaMin: 40,
-    deliveryFeeCad: 4.99,
     isHalalCertified: true,
     hours: [
       { day: 0, open: '11:00', close: '20:00' },
@@ -202,7 +198,6 @@ const approved: Omit<Vendor, 'status'>[] = [
     rating: 4.8,
     reviewCount: 289,
     deliveryEtaMin: 30,
-    deliveryFeeCad: 3.49,
     isHalalCertified: false,
     hours: [
       { day: 0, open: '10:00', close: '18:00' },
@@ -244,7 +239,6 @@ const approved: Omit<Vendor, 'status'>[] = [
     rating: 4.8,
     reviewCount: 296,
     deliveryEtaMin: 28,
-    deliveryFeeCad: 3.49,
     isHalalCertified: true,
     hours: [
       { day: 0, open: '10:00', close: '18:00' },
@@ -287,7 +281,6 @@ const approved: Omit<Vendor, 'status'>[] = [
     rating: 4.6,
     reviewCount: 187,
     deliveryEtaMin: 35,
-    deliveryFeeCad: 4.49,
     isHalalCertified: true,
     hours: [
       { day: 0, open: '11:00', close: '18:00' },
@@ -330,7 +323,6 @@ const approved: Omit<Vendor, 'status'>[] = [
     rating: 4.5,
     reviewCount: 142,
     deliveryEtaMin: 40,
-    deliveryFeeCad: 4.99,
     isHalalCertified: true,
     hours: [
       { day: 0, open: '', close: '', closed: true },
@@ -373,7 +365,6 @@ const approved: Omit<Vendor, 'status'>[] = [
     rating: 4.9,
     reviewCount: 412,
     deliveryEtaMin: 25,
-    deliveryFeeCad: 2.99,
     isHalalCertified: true,
     hours: [
       { day: 0, open: '07:30', close: '17:00' },
@@ -416,7 +407,6 @@ const approved: Omit<Vendor, 'status'>[] = [
     rating: 4.7,
     reviewCount: 231,
     deliveryEtaMin: 38,
-    deliveryFeeCad: 4.29,
     isHalalCertified: false,
     hours: [
       { day: 0, open: '11:00', close: '20:00' },

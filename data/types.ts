@@ -118,7 +118,6 @@ export interface Vendor {
   rating: number;
   reviewCount: number;
   deliveryEtaMin: number;
-  deliveryFeeCad: number;
   isHalalCertified: boolean;
   hours: VendorHours[];
   /** The shop's own headings, in the order it wants them read. */
@@ -141,7 +140,12 @@ export interface Product {
   priceCad: number;
   compareAtPriceCad?: number;
   imageUrl: string;
-  nutrition: NutritionInfo;
+  /**
+   * Optional (client, août 2026): a merchant opts in with a checkbox on the
+   * product form. Absent means "not declared" — `NutritionRow` is not rendered
+   * at all rather than drawn with holes in it.
+   */
+  nutrition?: NutritionInfo;
   stockQty: number;
   isAvailable: boolean;
   tags: string[];
@@ -258,6 +262,13 @@ export interface Order {
   /** TPS and TVQ, charged on `subtotalCad` alone — never on the delivery fee. See `data/taxes.ts`. */
   gstCad: number;
   qstCad: number;
+  /**
+   * What delivery actually cost this shopper, snapshot at checkout.
+   *
+   * Derived from the distance through `data/deliveryPricing.ts` rather than read
+   * off the shop — but stored, not recomputed on read: the grid can be
+   * re-priced tomorrow and a receipt must still say what was charged.
+   */
   deliveryFeeCad: number;
   totalCad: number;
   deliveryAddress: Address;
@@ -288,6 +299,30 @@ export type CourierStatus = 'pending' | 'approved' | 'suspended';
  * in, the file is what the platform vets, and an order references the file. A
  * courier who changes their email is still the courier on yesterday's delivery.
  */
+/**
+ * The papers behind a motorised courier.
+ *
+ * Absent on a bike, and absent on the eight seeded couriers — they predate
+ * in-app registration, the same way `Vendor.registration` does. An
+ * administrator reads the documents themselves out of band; what the app holds
+ * is the references.
+ */
+export interface CourierInsurance {
+  insurerName: string;
+  policyNumber: string;
+  /** MM/AAAA, as an insurer prints it. */
+  expiry: string;
+}
+
+/** Where a courier is paid. `bankId` indexes `data/banks.ts`. */
+export interface CourierPayout {
+  bankId: string;
+  /** Only when `bankId` is `other` — the name the courier typed. */
+  bankNameOther?: string;
+  transit: string;
+  account: string;
+}
+
 export interface Courier {
   id: ID;
   /** The account this file belongs to. */
@@ -298,7 +333,18 @@ export interface Courier {
   vehicle: VehicleType;
   /** Absent for a bike. */
   plate?: string;
+  /** Absent for a bike. */
+  licenceNumber?: string;
+  /** Absent for a bike. Required of moto and voiture at registration. */
+  insurance?: CourierInsurance;
+  /**
+   * Absent on the seeded couriers. Collected at registration and, until this
+   * was fixed, thrown away between the form and the API — the payout step
+   * validated a bank account nothing ever stored.
+   */
+  payout?: CourierPayout;
   city: string;
+  postalCode?: string;
   /** Where a courier sits while online and idle — the origin every offer is ranked from. */
   base: LatLng;
   rating: number;

@@ -98,12 +98,19 @@ export default function EditProductScreen() {
             // Explicitly undefined when cleared, so removing a strike-through
             // price actually removes it instead of leaving the old value.
             compareAtPriceCad: values.compareAtPriceCad,
-            nutrition: {
-              calories: values.calories,
-              proteinG: values.proteinG,
-              fatG: values.fatG,
-              weightG: values.weightG,
-            },
+            // `hasNutrition` gates the four fields, and the schema guarantees
+            // they are all present once it is set — so this is either the whole
+            // block or none of it, never a partial one.
+            ...(values.hasNutrition
+              ? {
+                  nutrition: {
+                    calories: values.calories!,
+                    proteinG: values.proteinG!,
+                    fatG: values.fatG!,
+                    weightG: values.weightG!,
+                  },
+                }
+              : {}),
             stockQty: values.stockQty,
             isAvailable: values.isAvailable,
             tags,

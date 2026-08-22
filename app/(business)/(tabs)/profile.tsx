@@ -2,8 +2,9 @@ import { router } from 'expo-router';
 import { Clock, Clock3, LogOut, MapPin, Moon, Receipt, Star, Store, Sun, Truck } from 'lucide-react-native';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 
-import { CounterHeader } from '@/components/business';
+import { CounterHeader, DeliveryGrid } from '@/components/business';
 import { Badge, Button, CatalogImage, Reveal, Skeleton, Text } from '@/components/ui';
+import { MIN_DELIVERY_FEE_CAD } from '@/data/deliveryPricing';
 import type { VendorHours } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
@@ -86,7 +87,7 @@ export default function BusinessProfileScreen() {
                   <View className="flex-row items-center gap-1.5">
                     <Truck size={14} color={colors.mutedForeground} strokeWidth={2} />
                     <Text variant="caption" tone="muted">
-                      {formatCad(vendor.deliveryFeeCad)}
+                      dès {formatCad(MIN_DELIVERY_FEE_CAD)}
                     </Text>
                   </View>
                 </View>
@@ -106,6 +107,10 @@ export default function BusinessProfileScreen() {
                     <HoursRow key={entry.day} entry={entry} isToday={entry.day === today} />
                   ))}
               </View>
+            </Reveal>
+
+            <Reveal delay={80} className="mt-4 mx-5">
+              <DeliveryGrid />
             </Reveal>
           </>
         ) : (

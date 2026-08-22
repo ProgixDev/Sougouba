@@ -36,6 +36,8 @@ import {
   emptyFilters,
   hasActiveFilters,
 } from '../lib/productFilters';
+import { DELIVERY_TIERS, deliveryFeeFor } from '../data/deliveryPricing';
+import { addressSchema } from '../lib/validation/profile';
 import { parseTags, productSchema } from '../lib/validation/product';
 
 let failures = 0;
@@ -57,10 +59,21 @@ const base = {
   stockQty: '40',
   isAvailable: true,
   tags: 'bio, frais',
+  hasNutrition: true,
   calories: '360',
   proteinG: '7',
   fatG: '1',
   weightG: '5000',
+};
+
+/** The common case since the client made nutrition opt-in: a product with none. */
+const withoutNutrition = {
+  ...base,
+  hasNutrition: false,
+  calories: '',
+  proteinG: '',
+  fatG: '',
+  weightG: '',
 };
 
 const ok = productSchema.safeParse(base);
@@ -89,6 +102,25 @@ check(
 check('short description rejected', !productSchema.safeParse({ ...base, description: 'court' }).success);
 check('missing category rejected', !productSchema.safeParse({ ...base, categoryId: '' }).success);
 check('missing section rejected', !productSchema.safeParse({ ...base, sectionId: '' }).success);
+
+// Nutrition is opt-in (client, août 2026): blank is fine unless the merchant
+// ticked the box, and a half-filled block is not — the product page draws four
+// columns or none.
+check('product without nutrition parses', productSchema.safeParse(withoutNutrition).success,
+  JSON.stringify(productSchema.safeParse(withoutNutrition).error?.issues ?? []));
+{
+  const parsed = productSchema.safeParse(withoutNutrition);
+  check('unticked nutrition is undefined', parsed.success && parsed.data.calories === undefined);
+}
+check(
+  'ticked but blank nutrition rejected',
+  !productSchema.safeParse({ ...base, calories: '' }).success
+);
+check(
+  'unticked ignores blanks entirely',
+  productSchema.safeParse({ ...withoutNutrition, weightG: '' }).success
+);
+check('zero calories allowed when ticked', productSchema.safeParse({ ...base, calories: '0' }).success);
 
 check('tags parsed + deduped', JSON.stringify(parseTags(' Bio , frais,bio, ')) === '["bio","frais"]',
   JSON.stringify(parseTags(' Bio , frais,bio, ')));
@@ -495,6 +527,73 @@ check('every filter set counts once', activeFilterCount({ sort: 'name', priceBan
   check('the next payout is not behind us', payout.getTime() >= new Date(now).setHours(0, 0, 0, 0));
   check('the pending payout is never more than the all-time total',
     pendingPayoutCad(runs, now) <= summariseRuns(runs, 3650, now).earningsCad + 0.01);
+}
+
+// ── address: served city + matching postal code ──────────────────────────────
+// The rule the client asked for ("valider la ville, éviter les incohérences").
+// Three copies of a city check used to disagree; these assert the one that
+// replaced them, including the case that used to pass silently — a real postal
+// code under the wrong city, which sent `coordinatesFor` to the centre of the
+// region and made every distance derived from it wrong.
+{
+  const ok = addressSchema.safeParse({
+    label: 'Domicile',
+    street: '1420 Rue Sainte-Catherine Ouest',
+    city: 'Montréal',
+    postalCode: 'h3g1r8',
+  });
+  check('valid address parses', ok.success, JSON.stringify(ok.error?.issues ?? []));
+  check('postal code is normalised', ok.success && ok.data.postalCode === 'H3G 1R8',
+    ok.success ? ok.data.postalCode : '');
+
+  const unserved = addressSchema.safeParse({
+    label: 'Chalet', street: '10 Rue des Forges', city: 'Trois-Rivières', postalCode: 'G8T 1A1',
+  });
+  check('unserved city rejected', !unserved.success);
+
+  const mismatch = addressSchema.safeParse({
+    label: 'Domicile', street: '1420 Rue Sainte-Catherine Ouest', city: 'Montréal',
+    postalCode: 'G8T 1A1',
+  });
+  check('postal code outside the chosen city rejected', !mismatch.success);
+
+  const wrongCity = addressSchema.safeParse({
+    label: 'Domicile', street: '100 Boulevard Cartier', city: 'Montréal', postalCode: 'H7S 1Y7',
+  });
+  check('a Laval code under Montréal is rejected', !wrongCity.success);
+  check('Laval code under Laval is accepted', addressSchema.safeParse({
+    label: 'Domicile', street: '100 Boulevard Cartier', city: 'Laval', postalCode: 'H7S 1Y7',
+  }).success);
+
+  // Montréal-Nord is a borough of Montréal, so its codes must pass under both
+  // names. Rejecting someone who wrote the city they live in is a validator
+  // being wrong on principle.
+  check('Montréal-Nord code passes as Montréal', addressSchema.safeParse({
+    label: 'Domicile', street: '4000 Rue de Charleroi', city: 'Montréal', postalCode: 'H1G 2S4',
+  }).success);
+  check('Montréal-Nord code passes as Montréal-Nord', addressSchema.safeParse({
+    label: 'Domicile', street: '4000 Rue de Charleroi', city: 'Montréal-Nord', postalCode: 'H1G 2S4',
+  }).success);
+
+  check('malformed postal code rejected', !addressSchema.safeParse({
+    label: 'Domicile', street: '1420 Rue Sainte-Catherine Ouest', city: 'Montréal', postalCode: 'H3G1',
+  }).success);
+}
+
+// ── the delivery grid ────────────────────────────────────────────────────────
+// Bands, not a per-kilometre rate, so the boundaries are the whole behaviour.
+{
+  check('inside the first band', deliveryFeeFor(1.4) === DELIVERY_TIERS[0].feeCad);
+  check('a band includes its own upper bound', deliveryFeeFor(2) === DELIVERY_TIERS[0].feeCad);
+  check('just past a bound moves up one band', deliveryFeeFor(2.01) === DELIVERY_TIERS[1].feeCad);
+  check('a very long run falls in the open band',
+    deliveryFeeFor(400) === DELIVERY_TIERS.at(-1)!.feeCad);
+  check('a negative distance is not free', deliveryFeeFor(-3) === DELIVERY_TIERS[0].feeCad);
+  check('NaN is not free', deliveryFeeFor(Number.NaN) === DELIVERY_TIERS[0].feeCad);
+  check('the fee never falls as the distance grows',
+    [0, 1, 2, 3, 5, 6, 8, 9, 12, 13, 40].every(
+      (km, i, all) => i === 0 || deliveryFeeFor(km) >= deliveryFeeFor(all[i - 1]!)
+    ));
 }
 
 console.log(failures === 0 ? '\nALL LOGIC CHECKS PASS' : `\n${failures} FAILURES`);

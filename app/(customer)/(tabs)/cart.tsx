@@ -18,8 +18,17 @@ import { useCartStore } from '@/store/useCartStore';
 export default function CartScreen() {
   const tabBarInset = useTabBarInset();
   const colors = useThemeColors();
-  const { lines, vendor, subtotalCad, gstCad, qstCad, deliveryFeeCad, totalCad, loading } =
-    useCartDetails();
+  const {
+    lines,
+    vendor,
+    subtotalCad,
+    gstCad,
+    qstCad,
+    deliveryFeeCad,
+    deliveryDistanceKm,
+    totalCad,
+    loading,
+  } = useCartDetails();
   const setQty = useCartStore((s) => s.setQty);
   const clear = useCartStore((s) => s.clear);
 
@@ -109,6 +118,7 @@ export default function CartScreen() {
             gstCad={gstCad}
             qstCad={qstCad}
             deliveryFeeCad={deliveryFeeCad}
+            deliveryDistanceKm={deliveryDistanceKm}
             totalCad={totalCad}
           />
         </View>

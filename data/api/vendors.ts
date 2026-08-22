@@ -100,7 +100,6 @@ export interface ShopApplication {
   specialtyFr: string;
   isHalalCertified: boolean;
   address: Address;
-  deliveryFeeCad: number;
   deliveryEtaMin: number;
   registration: Omit<ShopRegistration, 'submittedAt'>;
 }
@@ -169,7 +168,6 @@ export async function submitShopApplication(input: ShopApplication): Promise<Ven
     rating: 0,
     reviewCount: 0,
     deliveryEtaMin: input.deliveryEtaMin,
-    deliveryFeeCad: input.deliveryFeeCad,
     isHalalCertified: input.isHalalCertified,
     hours: DEFAULT_HOURS,
     sections: defaultSections(id, input.vendorType),

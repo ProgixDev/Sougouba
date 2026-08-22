@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { CreditCard, MapPin, Store, Wallet } from 'lucide-react-native';
+import { CreditCard, MapPin, PlusCircle, Store } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,17 +7,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BackHeader, Button, PriceSummary, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { ordersApi } from '@/data/api';
-import { defaultDeliveryAddress } from '@/data/seed/addresses';
 import type { OrderItem } from '@/data/types';
 import { useCartDetails } from '@/hooks/useCartDetails';
+import { deliveryAddressFor } from '@/lib/deliveryAddress';
 import { formatCad } from '@/lib/format';
 import { dynamicRoutes, routes } from '@/lib/routes';
 import { useCartStore } from '@/store/useCartStore';
 import { usePreferencesStore, type PaymentBrand } from '@/store/usePreferencesStore';
 import { useSessionStore } from '@/store/useSessionStore';
 import { forest, neutral } from '@/theme/tokens';
-
-type PaymentMethod = 'card' | 'cash';
 
 const cardBrandLabels: Record<PaymentBrand, string> = {
   visa: 'Visa',
@@ -29,28 +27,40 @@ export default function CheckoutScreen() {
   const colors = useThemeColors();
   const user = useSessionStore((s) => s.user);
   const clearCart = useCartStore((s) => s.clear);
-  const { lines, vendor, subtotalCad, gstCad, qstCad, deliveryFeeCad, totalCad } = useCartDetails();
+  const {
+    lines,
+    vendor,
+    subtotalCad,
+    gstCad,
+    qstCad,
+    deliveryFeeCad,
+    deliveryDistanceKm,
+    totalCad,
+  } = useCartDetails();
 
+  // Cash on delivery is gone (client, août 2026): every order is paid in the
+  // app, so a card is not one option among two — it is the precondition. With
+  // none saved the screen says so and the CTA refuses rather than quietly
+  // falling back to something the platform no longer settles.
   const cards = usePreferencesStore((s) => s.paymentMethods);
-  const card = cards.find((c) => c.isDefault) ?? cards[0];
+  const [cardId, setCardId] = useState<string | null>(null);
+  const card = cards.find((c) => c.id === cardId) ?? cards.find((c) => c.isDefault) ?? cards[0];
 
-  const [payment, setPayment] = useState<PaymentMethod>(card ? 'card' : 'cash');
-
-  // Removing the last card from Moyens de paiement and coming straight back
-  // would otherwise leave "carte" selected with no card row to show it on.
+  // Adding or removing cards in Moyens de paiement and coming straight back
+  // must not leave a selection pointing at a card that is no longer there.
   useEffect(() => {
-    if (!card && payment === 'card') setPayment('cash');
-  }, [card, payment]);
+    if (cardId && !cards.some((c) => c.id === cardId)) setCardId(null);
+  }, [cards, cardId]);
+
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Honour the address marked default in Adresses de livraison; fall back to the
-  // first one, then to the seeded address for an account that has none.
-  const address =
-    user?.addresses.find((a) => a.isDefault) ?? user?.addresses[0] ?? defaultDeliveryAddress;
+  // The same address `useCartDetails` measured the delivery fee against — two
+  // copies of this rule would price one journey and deliver another.
+  const address = deliveryAddressFor(user);
 
   async function placeOrder() {
-    if (!user || !vendor || lines.length === 0) return;
+    if (!user || !vendor || !card || lines.length === 0) return;
     setError(null);
     setPlacing(true);
     try {
@@ -71,7 +81,6 @@ export default function CheckoutScreen() {
         customerName: user.fullName,
         vendorId: vendor.id,
         items,
-        deliveryFeeCad,
         deliveryAddress: address,
         createdAt: new Date().toISOString(),
       });
@@ -135,30 +144,42 @@ export default function CheckoutScreen() {
 
           <Section
             title="Paiement"
-            actionLabel={card ? 'Gérer' : 'Ajouter une carte'}
-            onAction={() => router.push(routes.accountPayment)}
+            actionLabel={cards.length ? 'Gérer' : undefined}
+            onAction={cards.length ? () => router.push(routes.accountPayment) : undefined}
           >
-            <View className="gap-2">
-              {/* The card shown is the one marked default in Moyens de paiement,
-                  not a fixed string — removing every card leaves cash as the
-                  only honest option. */}
-              {card ? (
-                <PaymentOption
-                  icon={CreditCard}
-                  label={`${cardBrandLabels[card.brand]} •••• ${card.last4}`}
-                  caption={`${card.holder} — expire ${card.expiry}`}
-                  selected={payment === 'card'}
-                  onPress={() => setPayment('card')}
-                />
-              ) : null}
-              <PaymentOption
-                icon={Wallet}
-                label="Argent comptant"
-                caption="À la livraison"
-                selected={payment === 'cash'}
-                onPress={() => setPayment('cash')}
-              />
-            </View>
+            {cards.length ? (
+              <View className="gap-2">
+                {cards.map((method) => (
+                  <PaymentOption
+                    key={method.id}
+                    icon={CreditCard}
+                    label={`${cardBrandLabels[method.brand]} •••• ${method.last4}`}
+                    caption={`${method.holder} — expire ${method.expiry}`}
+                    selected={method.id === card?.id}
+                    onPress={() => setCardId(method.id)}
+                  />
+                ))}
+              </View>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Ajouter un moyen de paiement"
+                onPress={() => router.push(routes.accountPayment)}
+                className="flex-row items-center gap-3 active:opacity-70"
+              >
+                <View className="w-10 h-10 items-center justify-center rounded-full bg-primary/10">
+                  <PlusCircle size={18} color={colors.primary} strokeWidth={2} />
+                </View>
+                <View className="flex-1">
+                  <Text variant="caption" weight="bold">
+                    Ajouter un moyen de paiement
+                  </Text>
+                  <Text variant="caption" tone="muted" className="text-[12px]">
+                    Les paiements se font dans l’application — pas de comptant à la livraison.
+                  </Text>
+                </View>
+              </Pressable>
+            )}
           </Section>
 
           <Section title={`Articles (${lines.length})`}>
@@ -182,6 +203,7 @@ export default function CheckoutScreen() {
               gstCad={gstCad}
               qstCad={qstCad}
               deliveryFeeCad={deliveryFeeCad}
+              deliveryDistanceKm={deliveryDistanceKm}
               totalCad={totalCad}
             />
           </View>
@@ -196,16 +218,18 @@ export default function CheckoutScreen() {
 
       <View className="px-5 pt-3 border-t border-border bg-card">
         <Button
-          label={`Confirmer — ${formatCad(totalCad)}`}
+          label={card ? `Confirmer — ${formatCad(totalCad)}` : 'Ajouter un moyen de paiement'}
           variant="cta"
           size="lg"
           fullWidth
           loading={placing}
           disabled={lines.length === 0 || !vendor}
-          onPress={placeOrder}
+          onPress={card ? placeOrder : () => router.push(routes.accountPayment)}
         />
         <Text variant="caption" tone="muted" className="text-center mt-2 mb-1 text-[11px]">
-          Paiement simulé — aucune transaction réelle n’est effectuée.
+          {card
+            ? 'Paiement simulé — aucune transaction réelle n’est effectuée.'
+            : 'Une carte est requise : Sougouba n’accepte pas le paiement à la livraison.'}
         </Text>
       </View>
     </SafeAreaView>

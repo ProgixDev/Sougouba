@@ -59,12 +59,19 @@ export default function NewProductScreen() {
             // so a product created in-app has no image and falls back to the
             // branded placeholder.
             imageUrl: '',
-            nutrition: {
-              calories: values.calories,
-              proteinG: values.proteinG,
-              fatG: values.fatG,
-              weightG: values.weightG,
-            },
+            // `hasNutrition` gates the four fields, and the schema guarantees
+            // they are all present once it is set — so this is either the whole
+            // block or none of it, never a partial one.
+            ...(values.hasNutrition
+              ? {
+                  nutrition: {
+                    calories: values.calories!,
+                    proteinG: values.proteinG!,
+                    fatG: values.fatG!,
+                    weightG: values.weightG!,
+                  },
+                }
+              : {}),
             stockQty: values.stockQty,
             isAvailable: values.isAvailable,
             tags,

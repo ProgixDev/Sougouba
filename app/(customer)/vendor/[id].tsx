@@ -14,13 +14,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MenuItemRow, ProductCard, useCardWidth } from '@/components/customer';
 import { Badge, CatalogImage, Chip, EmptyState, Skeleton, Text } from '@/components/ui';
 import { categoriesApi, productsApi, vendorsApi } from '@/data/api';
+import { deliveryFeeBetween } from '@/data/deliveryPricing';
 import type { Category, Product, Vendor } from '@/data/types';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { deliveryAddressFor } from '@/lib/deliveryAddress';
 import { formatCad } from '@/lib/format';
 import { dynamicRoutes, routes } from '@/lib/routes';
 import { shopDay, shopStatusLine } from '@/lib/shopHours';
 import { useCartStore } from '@/store/useCartStore';
 import { useFavoritesStore } from '@/store/useFavoritesStore';
+import { useSessionStore } from '@/store/useSessionStore';
 import { darkColors, lightColors } from '@/theme/colors';
 import { mustard, terracotta } from '@/theme/tokens';
 
@@ -60,6 +63,9 @@ export default function VendorDetailScreen() {
   const addItem = useCartStore((s) => s.addItem);
   const isFavorite = useFavoritesStore((s) => (id ? s.vendorIds.includes(id) : false));
   const toggleVendor = useFavoritesStore((s) => s.toggleVendor);
+  const user = useSessionStore((s) => s.user);
+  /** Where an order from here would go — the delivery fee is a function of it. */
+  const destination = useMemo(() => deliveryAddressFor(user), [user]);
 
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -247,7 +253,7 @@ export default function VendorDetailScreen() {
                       </Text>
                     </View>
                     <Text variant="caption" tone="muted">
-                      Livraison {formatCad(vendor.deliveryFeeCad)}
+                      Livraison {formatCad(deliveryFeeBetween(vendor.address, destination))}
                     </Text>
                   </View>
 

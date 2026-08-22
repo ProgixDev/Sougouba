@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { MotiView } from 'moti';
 import { useEffect, useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { KeyboardAvoidingView, Platform, ScrollView, Switch, View } from 'react-native';
 
 import { Button, Chip, Input, Text } from '@/components/ui';
@@ -60,12 +61,18 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
       stockQty: product ? String(product.stockQty) : '',
       isAvailable: product?.isAvailable ?? true,
       tags: product?.tags.join(', ') ?? '',
-      calories: product ? String(product.nutrition.calories) : '',
-      proteinG: product ? String(product.nutrition.proteinG) : '',
-      fatG: product ? String(product.nutrition.fatG) : '',
-      weightG: product ? String(product.nutrition.weightG) : '',
+      // Off for a new product, and on for one that already declares values —
+      // opening the editor with the section collapsed over data the merchant
+      // entered would read as having lost it.
+      hasNutrition: Boolean(product?.nutrition),
+      calories: product?.nutrition ? String(product.nutrition.calories) : '',
+      proteinG: product?.nutrition ? String(product.nutrition.proteinG) : '',
+      fatG: product?.nutrition ? String(product.nutrition.fatG) : '',
+      weightG: product?.nutrition ? String(product.nutrition.weightG) : '',
     },
   });
+
+  const hasNutrition = useWatch({ control, name: 'hasNutrition' });
 
   async function submit(values: ProductFormValues) {
     setFormError(null);
@@ -258,78 +265,115 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
           />
         </View>
 
+        {/* Opt-in (client, août 2026). Four required numbers stood between a
+            merchant and saving a sack of rice; most of the catalogue has no
+            label to copy them off. Collapsed rather than merely optional —
+            fields that are visible read as expected. */}
         <View className="gap-4">
-          <Text variant="label" tone="muted">
-            Valeurs nutritionnelles
-          </Text>
-          <View className="flex-row gap-3">
-            <View className="flex-1">
-              <Controller
-                control={control}
-                name="calories"
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <Input
-                    label="Calories"
-                    keyboardType="number-pad"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={errors.calories?.message}
+          <Controller
+            control={control}
+            name="hasNutrition"
+            render={({ field: { onChange, value } }) => (
+              <View className="flex-row items-center justify-between rounded-2xl bg-card px-4 py-3">
+                <View className="flex-1 pr-3">
+                  <Text variant="caption" weight="semibold">
+                    Ajouter les valeurs nutritionnelles
+                  </Text>
+                  <Text variant="caption" tone="muted" className="text-[12px]">
+                    Facultatif — affichées sur la fiche produit si renseignées
+                  </Text>
+                </View>
+                <Switch
+                  value={value}
+                  onValueChange={onChange}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  accessibilityLabel="Ajouter les valeurs nutritionnelles"
+                />
+              </View>
+            )}
+          />
+
+          {hasNutrition ? (
+            <MotiView
+              from={{ opacity: 0, translateY: -8 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: 'timing', duration: 200 }}
+              className="gap-4"
+            >
+              <View className="flex-row gap-3">
+                <View className="flex-1">
+                  <Controller
+                    control={control}
+                    name="calories"
+                    render={({ field: { onChange, onBlur, value } }) => (
+                      <Input
+                        label="Calories"
+                        keyboardType="number-pad"
+                        value={value}
+                        onChangeText={onChange}
+                        onBlur={onBlur}
+                        error={errors.calories?.message}
+                        required
+                      />
+                    )}
                   />
-                )}
-              />
-            </View>
-            <View className="flex-1">
-              <Controller
-                control={control}
-                name="proteinG"
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <Input
-                    label="Protéines (g)"
-                    keyboardType="number-pad"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={errors.proteinG?.message}
+                </View>
+                <View className="flex-1">
+                  <Controller
+                    control={control}
+                    name="proteinG"
+                    render={({ field: { onChange, onBlur, value } }) => (
+                      <Input
+                        label="Protéines (g)"
+                        keyboardType="number-pad"
+                        value={value}
+                        onChangeText={onChange}
+                        onBlur={onBlur}
+                        error={errors.proteinG?.message}
+                        required
+                      />
+                    )}
                   />
-                )}
-              />
-            </View>
-          </View>
-          <View className="flex-row gap-3">
-            <View className="flex-1">
-              <Controller
-                control={control}
-                name="fatG"
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <Input
-                    label="Lipides (g)"
-                    keyboardType="number-pad"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={errors.fatG?.message}
+                </View>
+              </View>
+              <View className="flex-row gap-3">
+                <View className="flex-1">
+                  <Controller
+                    control={control}
+                    name="fatG"
+                    render={({ field: { onChange, onBlur, value } }) => (
+                      <Input
+                        label="Lipides (g)"
+                        keyboardType="number-pad"
+                        value={value}
+                        onChangeText={onChange}
+                        onBlur={onBlur}
+                        error={errors.fatG?.message}
+                        required
+                      />
+                    )}
                   />
-                )}
-              />
-            </View>
-            <View className="flex-1">
-              <Controller
-                control={control}
-                name="weightG"
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <Input
-                    label="Poids (g)"
-                    keyboardType="number-pad"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={errors.weightG?.message}
+                </View>
+                <View className="flex-1">
+                  <Controller
+                    control={control}
+                    name="weightG"
+                    render={({ field: { onChange, onBlur, value } }) => (
+                      <Input
+                        label="Poids (g)"
+                        keyboardType="number-pad"
+                        value={value}
+                        onChangeText={onChange}
+                        onBlur={onBlur}
+                        error={errors.weightG?.message}
+                        required
+                      />
+                    )}
                   />
-                )}
-              />
-            </View>
-          </View>
+                </View>
+              </View>
+            </MotiView>
+          ) : null}
         </View>
 
         <Controller

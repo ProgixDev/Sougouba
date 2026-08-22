@@ -205,7 +205,9 @@ export default function ProductDetailScreen() {
                 </Text>
               </View>
 
-              <NutritionRow nutrition={product.nutrition} />
+              {/* Declaring nutrition is optional for the merchant, so the strip
+                  is absent rather than empty when they did not. */}
+              {product.nutrition ? <NutritionRow nutrition={product.nutrition} /> : null}
 
               {product.tags.length > 0 ? (
                 <View className="flex-row flex-wrap gap-2">

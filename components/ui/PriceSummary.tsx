@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 
 import { formatCad } from '@/lib/format';
+import { formatDistance } from '@/lib/geo';
 import { Text } from './Text';
 
 export interface PriceSummaryProps {
@@ -8,6 +9,12 @@ export interface PriceSummaryProps {
   gstCad: number;
   qstCad: number;
   deliveryFeeCad: number;
+  /**
+   * Shop-to-door distance, if the caller knows it. Named on the delivery line —
+   * the fee is set by distance now, and a number with no stated basis reads as
+   * arbitrary.
+   */
+  deliveryDistanceKm?: number;
   totalCad: number;
 }
 
@@ -30,6 +37,7 @@ export function PriceSummary({
   gstCad,
   qstCad,
   deliveryFeeCad,
+  deliveryDistanceKm,
   totalCad,
 }: PriceSummaryProps) {
   return (
@@ -41,7 +49,14 @@ export function PriceSummary({
         <Line label="Taxe provinciale (TVQ)" value={qstCad} tier="minor" />
       </View>
 
-      <Line label="Livraison" value={deliveryFeeCad} />
+      <Line
+        label={
+          deliveryDistanceKm === undefined
+            ? 'Livraison'
+            : `Livraison (${formatDistance(deliveryDistanceKm)})`
+        }
+        value={deliveryFeeCad}
+      />
 
       <View className="h-px bg-border mt-1.5" />
 

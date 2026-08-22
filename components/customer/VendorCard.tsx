@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 
 import { Badge, CatalogImage, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
+import { MIN_DELIVERY_FEE_CAD, deliveryFeeFor } from '@/data/deliveryPricing';
 import type { Vendor } from '@/data/types';
 import { formatCad } from '@/lib/format';
 import { formatDistance } from '@/lib/geo';
@@ -101,8 +102,13 @@ export function VendorCard({
               label={formatDistance(distanceKm)}
             />
           ) : null}
+          {/* The shop no longer sets this. When we know where the shopper is
+              we quote the real fee; otherwise the floor of the grid, which is a
+              promise the grid always keeps. */}
           <Text variant="caption" tone="muted" className="text-[12px]">
-            {formatCad(vendor.deliveryFeeCad)}
+            {distanceKm === undefined
+              ? `dès ${formatCad(MIN_DELIVERY_FEE_CAD)}`
+              : formatCad(deliveryFeeFor(distanceKm))}
           </Text>
           {vendor.isHalalCertified ? (
             <View className="ml-auto">

@@ -15,11 +15,24 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BackHeader, Badge, Button, EmptyState, Input, Reveal, Text } from '@/components/ui';
+import {
+  BackHeader,
+  Badge,
+  Button,
+  CitySelect,
+  EmptyState,
+  Input,
+  Reveal,
+  Text,
+} from '@/components/ui';
 import type { Address } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { coordinatesFor } from '@/lib/postalGeo';
-import { type AddressValues, addressSchema } from '@/lib/validation/profile';
+import {
+  type AddressInput,
+  type AddressValues,
+  addressSchema,
+} from '@/lib/validation/profile';
 import { useSessionStore } from '@/store/useSessionStore';
 
 export default function AddressesScreen() {
@@ -41,19 +54,15 @@ export default function AddressesScreen() {
   }
 
   function save(values: AddressValues, existing: Address | null) {
-    const normalisedPostal = values.postalCode.toUpperCase().replace(/[ -]/g, '');
-    const formatted = `${normalisedPostal.slice(0, 3)} ${normalisedPostal.slice(3)}`;
-
+    // `postalCodeSchema` normalises on the way out of the resolver, so the
+    // hand-rolled reformat that used to live here is gone — and the courier and
+    // shop forms now get the same treatment instead of storing whatever was
+    // typed.
     if (existing) {
       persist(
         addresses.map((a) =>
           a.id === existing.id
-            ? {
-                ...a,
-                ...values,
-                postalCode: formatted,
-                ...coordinatesFor(formatted, values.city),
-              }
+            ? { ...a, ...values, ...coordinatesFor(values.postalCode, values.city) }
             : a
         )
       );
@@ -62,13 +71,12 @@ export default function AddressesScreen() {
         ...addresses,
         {
           ...values,
-          postalCode: formatted,
           id: `addr_${Date.now().toString(36)}`,
           // Approximated from the postal code (see `lib/postalGeo.ts`). These
           // used to be written as 0,0 — harmless while nothing read them, and
           // wrong the moment the shop list started sorting by distance, which
           // then measured from the Gulf of Guinea.
-          ...coordinatesFor(formatted, values.city),
+          ...coordinatesFor(values.postalCode, values.city),
           isDefault: addresses.length === 0,
         },
       ]);
@@ -209,7 +217,7 @@ function AddressFormSheet({
     control,
     handleSubmit,
     formState: { errors },
-  } = useForm<AddressValues>({
+  } = useForm<AddressInput, unknown, AddressValues>({
     resolver: zodResolver(addressSchema),
     defaultValues: {
       label: address?.label ?? '',
@@ -283,15 +291,11 @@ function AddressFormSheet({
               <Controller
                 control={control}
                 name="city"
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <Input
-                    label="Ville"
+                render={({ field: { onChange, value } }) => (
+                  <CitySelect
                     value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
+                    onChange={onChange}
                     error={errors.city?.message}
-                    autoCapitalize="words"
-                    textContentType="addressCity"
                   />
                 )}
               />
@@ -307,6 +311,7 @@ function AddressFormSheet({
                     error={errors.postalCode?.message}
                     autoCapitalize="characters"
                     textContentType="postalCode"
+                    helperText="Doit correspondre à la ville choisie."
                   />
                 )}
               />

@@ -1,3 +1,4 @@
+import { fsaOf } from '@/data/cities';
 import { defaultDeliveryAddress } from '@/data/seed/addresses';
 import { orderAddresses } from '@/data/seed/orders';
 import { vendors } from '@/data/seed/vendors';
@@ -18,6 +19,11 @@ import type { LatLng } from './geo';
  * neighbourhood, which is the precision a "2,4 km" label actually claims.
  * Anything outside the seeded FSAs falls back to the centre of its city, and
  * anything outside those cities to the centre of the region.
+ *
+ * That last fallback used to be the only thing standing between a typo and a
+ * silently wrong distance; it is now a backstop rather than a load-bearing
+ * default, because `lib/validation/address.ts` rejects a city the platform does
+ * not serve and a postal code that does not belong to the city chosen.
  */
 
 interface Sample {
@@ -32,10 +38,6 @@ const samples: Sample[] = [
   ...orderAddresses,
   defaultDeliveryAddress,
 ];
-
-function fsaOf(postalCode: string): string {
-  return postalCode.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
-}
 
 function centroid(points: Sample[]): LatLng {
   return {

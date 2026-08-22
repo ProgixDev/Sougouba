@@ -1,5 +1,12 @@
 import { couriers as seedCouriers } from '../seed/couriers';
-import type { Courier, CourierStatus, ID, VehicleType } from '../types';
+import type {
+  Courier,
+  CourierInsurance,
+  CourierPayout,
+  CourierStatus,
+  ID,
+  VehicleType,
+} from '../types';
 import { delay } from '../utils/delay';
 import { generateId } from '../utils/ids';
 import { hashString, mulberry32 } from '../utils/random';
@@ -15,7 +22,12 @@ const table = createPersistedTable<Courier>('sougouba-mock-couriers', seedCourie
 
 /** Copies out, so callers can't mutate the table by holding a reference. */
 function snapshot(courier: Courier): Courier {
-  return { ...courier, base: { ...courier.base } };
+  return {
+    ...courier,
+    base: { ...courier.base },
+    ...(courier.insurance ? { insurance: { ...courier.insurance } } : {}),
+    ...(courier.payout ? { payout: { ...courier.payout } } : {}),
+  };
 }
 
 export async function getCourierById(id: ID): Promise<Courier | undefined> {
@@ -54,7 +66,11 @@ export interface CourierApplication {
   phone: string;
   vehicle: VehicleType;
   plate?: string;
+  licenceNumber?: string;
+  insurance?: CourierInsurance;
+  payout?: CourierPayout;
   city: string;
+  postalCode?: string;
   base: { lat: number; lng: number };
   photoUrl?: string;
 }
@@ -76,7 +92,11 @@ export async function submitApplication(input: CourierApplication): Promise<Cour
     phone: input.phone,
     vehicle: input.vehicle,
     ...(input.plate ? { plate: input.plate } : {}),
+    ...(input.licenceNumber ? { licenceNumber: input.licenceNumber } : {}),
+    ...(input.insurance ? { insurance: { ...input.insurance } } : {}),
+    ...(input.payout ? { payout: { ...input.payout } } : {}),
     city: input.city,
+    ...(input.postalCode ? { postalCode: input.postalCode } : {}),
     base: input.base,
     // A new courier has no history. Showing "4,8 ★" before the first run would
     // be inventing a reputation.

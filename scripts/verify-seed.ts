@@ -1,11 +1,14 @@
 import { BASE_FARE_CAD, PER_KM_CAD } from '../data/courierPay';
 import { deliveryPin } from '../data/delivery';
+import { DELIVERY_TIERS, deliveryFeeFor } from '../data/deliveryPricing';
 import { GST_RATE, QST_RATE, taxesOn, orderTotal } from '../data/taxes';
 import { couriers } from '../data/seed/couriers';
 import { orders } from '../data/seed/orders';
 import { vendors } from '../data/seed/vendors';
 import { products } from '../data/seed/products';
 import { users } from '../data/seed/users';
+import { isPostalCodeInCity, isServedCity } from '../data/cities';
+import { distanceKm } from '../data/utils/geo';
 
 let bad = 0;
 const fail = (m: string) => { console.log('  FAIL', m); bad++; };
@@ -30,8 +33,15 @@ for (const o of orders) {
   const tot = Math.round((o.subtotalCad + gst + qst + o.deliveryFeeCad) * 100) / 100;
   if (Math.abs(tot - o.totalCad) > 0.005) fail(`${o.id}: total ${o.totalCad} != ${tot}`);
 
-  const vendorFee = vendors.find(v => v.id === o.vendorId)!.deliveryFeeCad;
-  if (o.deliveryFeeCad !== vendorFee) fail(`${o.id}: fee ${o.deliveryFeeCad} != vendor ${vendorFee}`);
+  // The shop no longer prices the run; the grid does. Recomputed from the raw
+  // distance rather than through `deliveryFeeBetween`, so the assertion fails if
+  // the rule changes shape rather than only if a number drifts.
+  const shop = vendors.find(v => v.id === o.vendorId)!;
+  const km = distanceKm(shop.address, o.deliveryAddress);
+  const gridFee = deliveryFeeFor(km);
+  if (o.deliveryFeeCad !== gridFee) {
+    fail(`${o.id}: fee ${o.deliveryFeeCad} != grid ${gridFee} at ${km.toFixed(2)} km`);
+  }
 
   for (const it of o.items) {
     const p = productById.get(it.productId);
@@ -136,6 +146,38 @@ for (const v of vendors) {
   }
   if (!withDelivery.some((o) => o.delivery!.tipCad > 0)) fail('nobody in the seed ever tipped');
   console.log(`deliveries: ${withDelivery.length} across ${used.size} couriers`);
+}
+
+// Every seeded address has to satisfy the rule the forms now enforce. A seed
+// row the app itself would reject is a demo that contradicts its own validation.
+{
+  const seeded = [
+    ...vendors.map((v) => ({ where: v.id, ...v.address })),
+    ...orders.map((o) => ({ where: o.id, ...o.deliveryAddress })),
+    ...couriers.map((c) => ({ where: c.id, city: c.city, postalCode: '' })),
+  ];
+  for (const a of seeded) {
+    if (!isServedCity(a.city)) fail(`${a.where}: ${a.city} is not a served city`);
+    if (a.postalCode && !isPostalCodeInCity(a.postalCode, a.city)) {
+      fail(`${a.where}: ${a.postalCode} is not in ${a.city}`);
+    }
+  }
+}
+
+// The grid itself, before anything priced against it means much: bands have to
+// climb and the last one has to be open-ended, or `deliveryFeeFor` silently
+// falls through to the wrong tier for a long run.
+{
+  let previousKm = 0;
+  let previousFee = 0;
+  for (const tier of DELIVERY_TIERS) {
+    if (tier.maxKm <= previousKm) fail(`grid: band ${tier.maxKm} km does not climb`);
+    if (tier.feeCad < previousFee) fail(`grid: fee ${tier.feeCad} falls at ${tier.maxKm} km`);
+    previousKm = tier.maxKm;
+    previousFee = tier.feeCad;
+  }
+  if (DELIVERY_TIERS.at(-1)!.maxKm !== Infinity) fail('grid: last band is not open-ended');
+  if (deliveryFeeFor(-1) !== DELIVERY_TIERS[0].feeCad) fail('grid: negative distance is not free');
 }
 
 const perVendor: Record<string, number> = {};

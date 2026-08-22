@@ -626,6 +626,98 @@ A dev-only LogBox warning toast appears at the foot of the screen; it does not g
 through `console.warn` (a temporary interceptor caught nothing) and does not
 reach the unified log, and LogBox does not exist in a release build.
 
+## Client feedback round — août 2026
+
+Seven items off a demo, across all three roles. Two of them changed rules rather
+than wording, and three of the "just rename it" items turned out to be labels
+that were lying about what the code did.
+
+**Delivery is priced by the platform now, not by the shop.** `Vendor.deliveryFeeCad`
+is gone — the field, the ten seeded values, the signup input, the schema entry
+and every display of it. `data/deliveryPricing.ts` (sibling of `taxes.ts` and
+`courierPay.ts`, in `data/` for the same reason) holds five distance bands and
+`deliveryFeeFor` / `deliveryFeeBetween`. `useCartDetails` measures shop → shopper
+and prices it; `createOrder` re-derives the fee server-side the way it already
+re-derived tax, so the client no longer gets to name its own delivery charge;
+`buildOrder` prices seeded orders the same way and `verify-seed`'s old "fee ==
+the shop's fee" invariant became "fee == the grid at this distance". Shop cards
+say "dès 2,99 $" until an address is known, then the real number; the cart line
+reads "Livraison (3,4 km)". `Order.deliveryFeeCad` stays — a receipt must keep
+what was charged. ⚠️ **Courier pay (`data/courierPay.ts`, 3,50 $ + 0,90 $/km) now
+out-earns the grid on long runs. The two barèmes need arbitrating together —
+flagged to the client, not changed.**
+
+**Cash on delivery is gone from the shopper's checkout.** It was only ever a
+local radio button — `Order` has no payment field, and nothing downstream ever
+saw it — so this is a UI removal, not a migration. Checkout now lists every saved
+card, and with none saved it shows an "Ajouter un moyen de paiement" prompt and
+the CTA routes there instead of placing the order.
+
+**Two home sections were renamed, and both renames forced real work.**
+"Populaires" sorted by whether an item carried a struck-through price; it is
+"Articles les + vendus" now, over `ordersApi.getTopProductIds` (units sold across
+every shop, cancelled excluded), falling back to the deals order only when the
+catalogue has no sales to rank. "Commerces près de vous" listed *every* shop by
+announced ETA; it is "Restaurants près de chez vous", filtered on
+`vendorType === 'restaurant'` and sorted by real distance from the shopper's
+address — the same measure `vertical/[type]` uses, so a restaurant does not move
+between the two screens.
+
+**City is a closed list, and the postal code has to agree with it.** Three forms
+had three copies of `min(2, 'Ville requise')` and three postal-code regexes, one
+of which had already drifted. `data/cities.ts` holds the served cities and their
+FSAs; `lib/validation/address.ts` is the single `citySchema` + `postalCodeSchema`
++ cross-check the three now import; `data/api/geo.ts` is the async twin for
+anything wanting the round trip (`CitySelect` reads its options there). The
+postal code is normalised in the schema, so the hand-rolled reformat in the
+address book is gone and the courier and shop forms get it too. **Note for the
+client: a city cannot auto-fill a postal code — a city holds hundreds. The
+guarantee is the other direction.** Montréal deliberately accepts the
+Montréal-Nord FSAs: the borough is Montréal, and rejecting someone who wrote the
+city they live in is a validator being wrong on principle. `verify-seed` now
+fails if any seeded address would be rejected by the app's own rule.
+
+**Nutrition is opt-in.** Four `requiredNumber` fields meant a merchant could not
+save a sack of rice. `Product.nutrition` is optional, the form hides the section
+behind an "Ajouter les valeurs nutritionnelles" switch (the `En vente` /
+`Certifié halal` card pattern), and a `superRefine` requires all four only once
+it is ticked — half a block would draw a four-column strip with holes in it.
+`NutritionRow` is not rendered at all when a product declares none.
+
+**Both signup journeys end on a confirmation screen.** They finished on a bare
+`router.back()`, which drops the applicant onto the gate screen with nothing
+saying the file was sent — a form that succeeded, read as one that failed.
+`components/onboarding/ApplicationSubmitted.tsx` is shared by
+`/(business)/signup-confirmed` and `/(courier)/signup-confirmed`; both are
+reached with `replace`, so a filled-in form cannot be stepped back into and
+submitted twice.
+
+**Courier: moto, assurance, banque — and a bug that would have eaten all of it.**
+`scooter` keeps its stored value (it keys `VEHICLE_SPEED_KMH` and sits in every
+seeded row) and is labelled "Moto" everywhere a human reads it; the glyph is
+lucide's `Motorbike`. Insurance (insurer, policy, MM/AAAA expiry, rejected if
+lapsed) is required of any motorised vehicle, replacing the helper line that
+promised it would be asked for "à la validation". "Institution financière" as
+free text became `bankId` against `data/banks.ts` — eleven institutions with
+their institution numbers, plus `other` with a manual name — through a new
+`components/ui/SelectField.tsx` (the long-list counterpart to `CitySelect`).
+⚠️ **`app/(courier)/signup.tsx` never forwarded `values.payout` or
+`licenceNumber` to the API.** The payout step validated a bank account nothing
+stored, and the new insurance fields would have vanished the same way.
+`CourierApplication` and `Courier` gained `licenceNumber`, `insurance`, `payout`
+and `postalCode`, and the courier profile shows them.
+
+**Deferred:** "modifier aide et informations (ci-dessus)" — the client's message
+referenced something not included with it. `app/(customer)/account/about.tsx` is
+untouched pending that detail.
+
+**New files:** `data/deliveryPricing.ts`, `data/cities.ts`, `data/banks.ts`,
+`data/api/geo.ts`, `lib/deliveryAddress.ts`, `lib/validation/address.ts`,
+`components/ui/CitySelect.tsx`, `components/ui/SelectField.tsx`,
+`components/business/DeliveryGrid.tsx`,
+`components/onboarding/ApplicationSubmitted.tsx`, and the two `signup-confirmed`
+screens.
+
 ## Key user feedback / preferences to remember
 
 1. **Wants visibly premium/rich UI by default** — but the CTA-button episode proved the ceiling is "confident + flat + one subtle depth cue," not "gradient + gloss + glow stacked." When in doubt, do less, more precisely.

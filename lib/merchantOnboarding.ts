@@ -19,7 +19,7 @@ export const MERCHANT_SIGNUP_STEPS = [
   },
   {
     title: 'Adresse et livraison',
-    body: 'Où vous êtes, vos frais de livraison et le délai que vous annoncez à vos clients.',
+    body: 'Où vous êtes et le délai que vous annoncez à vos clients. Les frais de livraison sont fixés par Sougouba selon la distance.',
   },
   {
     title: 'Documents et validation',

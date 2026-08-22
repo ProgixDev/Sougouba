@@ -6,6 +6,7 @@ import { ShopSignupForm, type ShopSignupValues } from '@/components/business';
 import { BackHeader, Text } from '@/components/ui';
 import { vendorsApi } from '@/data/api';
 import { coordinatesFor } from '@/lib/postalGeo';
+import { routes } from '@/lib/routes';
 import { useSessionStore } from '@/store/useSessionStore';
 
 /**
@@ -16,16 +17,18 @@ import { useSessionStore } from '@/store/useSessionStore';
  * did not change is that the shop lands `pending` and a human clears it before
  * it appears to a single shopper.
  *
- * On submit it does not navigate anywhere clever: `useOwnerVendor` re-reads on
- * focus and the tabs swap from "inscrivez votre boutique" to "demande en
- * attente" on their own.
+ * On submit it `replace`s itself with the confirmation screen rather than
+ * returning: the tabs behind do swap themselves from "inscrivez votre boutique"
+ * to "demande en attente" (`useOwnerVendor` re-reads on focus), but being
+ * silently dropped back onto them reads as a form that failed. `replace`, not
+ * `push`, so a filled-in form cannot be stepped back into and submitted twice.
  */
 export default function ShopSignupScreen() {
   const user = useSessionStore((s) => s.user);
 
   async function submit(values: ShopSignupValues) {
     if (!user) return;
-    const { street, city, postalCode, deliveryFeeCad, deliveryEtaMin } = values.address;
+    const { street, city, postalCode, deliveryEtaMin } = values.address;
     await vendorsApi.submitShopApplication({
       ownerId: user.id,
       name: values.identity.name,
@@ -44,7 +47,6 @@ export default function ShopSignupScreen() {
         ...coordinatesFor(postalCode, city),
         isDefault: true,
       },
-      deliveryFeeCad: Number(deliveryFeeCad),
       deliveryEtaMin: Number(deliveryEtaMin),
       registration: {
         neq: values.documents.neq,
@@ -55,7 +57,7 @@ export default function ShopSignupScreen() {
           : {}),
       },
     });
-    router.back();
+    router.replace(routes.businessSignupConfirmed);
   }
 
   return (

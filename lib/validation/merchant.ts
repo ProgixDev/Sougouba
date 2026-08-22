@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { citySchema, postalCodeSchema, refinePostalCodeCity } from './address';
+
 /**
  * A shop's registration file, in three steps.
  *
@@ -9,6 +11,9 @@ import { z } from 'zod';
  * Numeric fields are strings and coerced here — RN text inputs have no number
  * type, and holding them as numbers means fighting `NaN` on every keystroke
  * while the field is mid-edit. Same call `lib/validation/product.ts` makes.
+ *
+ * There is deliberately no delivery-fee field: the shop does not price the run.
+ * See `data/deliveryPricing.ts`.
  */
 
 export const shopIdentitySchema = z.object({
@@ -23,29 +28,18 @@ export const shopIdentitySchema = z.object({
 });
 export type ShopIdentityValues = z.infer<typeof shopIdentitySchema>;
 
-const decimal = (message: string) =>
-  z
-    .string()
-    .trim()
-    .min(1, message)
-    // Comma or point: a Québec merchant types "3,99" and is not wrong.
-    .transform((v) => v.replace(',', '.'))
-    .refine((v) => /^\d+(\.\d{1,2})?$/.test(v), message);
-
-export const shopAddressSchema = z.object({
-  street: z.string().trim().min(4, 'Adresse requise'),
-  city: z.string().trim().min(2, 'Ville requise'),
-  postalCode: z
-    .string()
-    .trim()
-    .regex(/^[A-Za-z]\d[A-Za-z][ ]?\d[A-Za-z]\d$/, 'Code postal invalide (ex. H2S 3K9)'),
-  deliveryFeeCad: decimal('Frais de livraison requis'),
-  deliveryEtaMin: z
-    .string()
-    .trim()
-    .regex(/^\d{1,3}$/, 'Délai en minutes')
-    .refine((v) => Number(v) >= 10 && Number(v) <= 180, 'Entre 10 et 180 minutes'),
-});
+export const shopAddressSchema = z
+  .object({
+    street: z.string().trim().min(4, 'Adresse requise'),
+    city: citySchema,
+    postalCode: postalCodeSchema,
+    deliveryEtaMin: z
+      .string()
+      .trim()
+      .regex(/^\d{1,3}$/, 'Délai en minutes')
+      .refine((v) => Number(v) >= 10 && Number(v) <= 180, 'Entre 10 et 180 minutes'),
+  })
+  .superRefine(refinePostalCodeCity);
 export type ShopAddressInput = z.input<typeof shopAddressSchema>;
 export type ShopAddressValues = z.infer<typeof shopAddressSchema>;
 

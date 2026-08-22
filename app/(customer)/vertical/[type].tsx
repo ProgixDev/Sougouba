@@ -7,10 +7,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { VendorCard } from '@/components/customer';
 import { Chip, EmptyState, Reveal, Skeleton, Text } from '@/components/ui';
 import { vendorsApi } from '@/data/api';
-import { defaultDeliveryAddress } from '@/data/seed/addresses';
 import type { Vendor, VendorType } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
+import { deliveryAddressFor } from '@/lib/deliveryAddress';
 import { distanceKm } from '@/lib/geo';
 import { dynamicRoutes, routes } from '@/lib/routes';
 import { shopDay } from '@/lib/shopHours';
@@ -65,9 +65,9 @@ export default function VerticalScreen() {
   }, [vertical]);
 
   // Where the shopper actually takes delivery, so the distances are theirs and
-  // not the city's. An account with no address of its own falls back to the same
-  // seeded one the checkout quotes against, rather than showing no distance.
-  const origin = user?.addresses.find((a) => a.isDefault) ?? user?.addresses[0] ?? defaultDeliveryAddress;
+  // not the city's. Same helper the cart prices against — a shop listed at
+  // 3,4 km must not quote its delivery from somewhere else.
+  const origin = useMemo(() => deliveryAddressFor(user), [user]);
 
   const listed = useMemo(() => {
     const kept = vendors.filter((vendor) => {

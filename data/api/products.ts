@@ -12,7 +12,11 @@ const table = createPersistedTable<Product>('sougouba-mock-products', seedProduc
 
 /** Copies out, so callers can't mutate the catalogue by holding a reference. */
 function snapshot(product: Product): Product {
-  return { ...product, nutrition: { ...product.nutrition }, tags: [...product.tags] };
+  return {
+    ...product,
+    ...(product.nutrition ? { nutrition: { ...product.nutrition } } : {}),
+    tags: [...product.tags],
+  };
 }
 
 export async function getProducts(): Promise<Product[]> {

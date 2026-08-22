@@ -1,5 +1,6 @@
 import { courierEarnings } from '../courierPay';
 import { deliveryPin, legDurationMin } from '../delivery';
+import { deliveryFeeBetween } from '../deliveryPricing';
 import { defaultDeliveryAddress } from '../seed/addresses';
 import { buildOrder, orderAddresses, orders as seedOrders, type OrderSpec } from '../seed/orders';
 import { products as seedProducts } from '../seed/products';
@@ -24,6 +25,7 @@ import { delay } from '../utils/delay';
 import { generateId } from '../utils/ids';
 import { distanceKm } from '../utils/geo';
 import { createPersistedTable } from '../utils/persistedTable';
+import { getVendorById } from './vendors';
 import { hashString, mulberry32 } from '../utils/random';
 import { localIsoAt, localMinutesAgo } from '../utils/time';
 
@@ -87,7 +89,6 @@ export async function createOrder(input: {
   customerName?: string;
   vendorId: ID;
   items: OrderItem[];
-  deliveryFeeCad: number;
   deliveryAddress: Address;
   createdAt: string;
 }): Promise<Order> {
@@ -96,7 +97,13 @@ export async function createOrder(input: {
   const subtotalCad = roundCad(input.items.reduce((sum, item) => sum + item.unitPriceCad * item.qty, 0));
   // Recomputed here rather than accepted from the caller: the checkout quotes a
   // total, but what the order is worth is the backend's answer, not the screen's.
+  // The delivery fee joined that rule when it stopped being a number the shop
+  // typed and became a function of the distance — which this side can measure
+  // for itself, so there is no reason to take the client's word for it.
   const taxes = taxesOn(subtotalCad);
+  const vendor = await getVendorById(input.vendorId);
+  if (!vendor) throw new Error(`Commande impossible : boutique ${input.vendorId} introuvable`);
+  const deliveryFeeCad = deliveryFeeBetween(vendor.address, input.deliveryAddress);
   const order: Order = {
     id: generateId('ord'),
     customerId: input.customerId,
@@ -106,8 +113,8 @@ export async function createOrder(input: {
     status: 'pending',
     subtotalCad,
     ...taxes,
-    deliveryFeeCad: input.deliveryFeeCad,
-    totalCad: orderTotal(subtotalCad, taxes, input.deliveryFeeCad),
+    deliveryFeeCad,
+    totalCad: orderTotal(subtotalCad, taxes, deliveryFeeCad),
     deliveryAddress: input.deliveryAddress,
     createdAt: input.createdAt,
     statusHistory: [{ status: 'pending', at: input.createdAt }],
@@ -528,6 +535,35 @@ export async function reportCourierIssue(
   order.courierIssue = issue;
   await table.save(order.id);
   return snapshot(order);
+}
+
+/**
+ * The catalogue's best sellers, platform-wide.
+ *
+ * The home screen used to head this section "Populaires" over a list sorted by
+ * whether the item happened to carry a struck-through price — a deals rail
+ * wearing a popularity label. The client asked for "Articles les + vendus", so
+ * it is now counted: units sold across every shop, cancelled orders excluded,
+ * because a cancelled order sold nothing.
+ *
+ * Ids rather than products, the way `getVendorStats.topProductIds` returns them
+ * — orders hold a snapshot of the name and price at the time, and the caller
+ * wants today's catalogue row, not that snapshot.
+ */
+export async function getTopProductIds(limit = 6): Promise<ID[]> {
+  await table.ready;
+  await delay();
+  const qtyByProduct = new Map<ID, number>();
+  for (const order of table.rows()) {
+    if (order.status === 'cancelled') continue;
+    for (const item of order.items) {
+      qtyByProduct.set(item.productId, (qtyByProduct.get(item.productId) ?? 0) + item.qty);
+    }
+  }
+  return [...qtyByProduct.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([productId]) => productId);
 }
 
 export interface VendorStats {

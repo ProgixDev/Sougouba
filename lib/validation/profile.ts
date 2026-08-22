@@ -1,24 +1,23 @@
 import { z } from 'zod';
 
+import { citySchema, postalCodeSchema, refinePostalCodeCity } from './address';
+
 export const profileSchema = z.object({
   fullName: z.string().trim().min(2, 'Nom complet requis'),
   email: z.string().trim().min(1, 'Adresse courriel requise').email('Adresse courriel invalide'),
 });
 export type ProfileValues = z.infer<typeof profileSchema>;
 
-/** Canada Post format, with or without the conventional space: H1X 1G8 / H1X1G8. */
-const postalCode = z
-  .string()
-  .trim()
-  .regex(/^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/, 'Code postal invalide (ex. H1X 1G8)');
-
-export const addressSchema = z.object({
-  label: z.string().trim().min(1, 'Nom requis (ex. Domicile)'),
-  street: z.string().trim().min(4, 'Adresse requise'),
-  city: z.string().trim().min(2, 'Ville requise'),
-  postalCode,
-});
-export type AddressValues = z.infer<typeof addressSchema>;
+export const addressSchema = z
+  .object({
+    label: z.string().trim().min(1, 'Nom requis (ex. Domicile)'),
+    street: z.string().trim().min(4, 'Adresse requise'),
+    city: citySchema,
+    postalCode: postalCodeSchema,
+  })
+  .superRefine(refinePostalCodeCity);
+export type AddressInput = z.input<typeof addressSchema>;
+export type AddressValues = z.output<typeof addressSchema>;
 
 export const paymentSchema = z.object({
   holder: z.string().trim().min(2, 'Nom du titulaire requis'),

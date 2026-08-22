@@ -1,5 +1,6 @@
 import { courierEarnings } from '../courierPay';
 import { deliveryPin, legDurationMin } from '../delivery';
+import { deliveryFeeBetween } from '../deliveryPricing';
 import { orderTotal, roundCad, taxesOn } from '../taxes';
 import type {
   Address,
@@ -465,9 +466,12 @@ export function buildOrder(spec: OrderSpec): Order {
   if (!vendor) throw new Error(`Seed order ${spec.id} references unknown vendor ${spec.vendorId}`);
 
   const subtotalCad = roundCad(items.reduce((sum, i) => sum + i.unitPriceCad * i.qty, 0));
-  const deliveryFeeCad = vendor.deliveryFeeCad;
   const taxes = taxesOn(subtotalCad);
   const deliveryAddress = typeof spec.address === 'string' ? addresses[spec.address] : spec.address;
+  // Priced the way a live order is priced — the shop no longer carries a fee of
+  // its own, so a seeded order that copied one would be the only place in the
+  // app where the grid did not apply.
+  const deliveryFeeCad = deliveryFeeBetween(vendor.address, deliveryAddress);
   const delivery = buildDelivery(spec, vendor, deliveryAddress);
 
   return {

@@ -6,6 +6,8 @@ import { CourierSignupForm, type CourierSignupValues } from '@/components/courie
 import { BackHeader, Text } from '@/components/ui';
 import { couriersApi } from '@/data/api';
 import { coordinatesFor } from '@/lib/postalGeo';
+import { routes } from '@/lib/routes';
+import { isMotorised } from '@/lib/validation/courier';
 import { useSessionStore } from '@/store/useSessionStore';
 
 /**
@@ -16,28 +18,52 @@ import { useSessionStore } from '@/store/useSessionStore';
  * merchant path is the ending: the file lands in the admin queue with status
  * `pending` and waits on a human (CDC addendum v1.1, §04).
  *
- * On submit it does not navigate: `useCourierProfile` re-reads the file when the
- * tabs regain focus and `CourierGate` swaps from "complétez votre dossier" to
- * "dossier en attente" on its own. Going back is enough.
+ * On submit it `replace`s itself with the confirmation screen. `CourierGate`
+ * does swap from "complétez votre dossier" to "dossier en attente" on its own
+ * (`useCourierProfile` re-reads on focus), but being returned to it without a
+ * word reads as a form that failed rather than one that was sent.
  */
 export default function CourierSignupScreen() {
   const user = useSessionStore((s) => s.user);
 
   async function submit(values: CourierSignupValues) {
     if (!user) return;
+    const { identity, vehicle, payout } = values;
+    // Everything the three steps collected, not just the first two. The licence
+    // number and the whole payout step used to be validated and then dropped on
+    // the floor here — the courier answered questions nothing ever stored, and
+    // the insurance added at the client's request would have gone the same way.
+    const motorised = isMotorised(vehicle.vehicle);
     await couriersApi.submitApplication({
       userId: user.id,
-      fullName: values.identity.fullName,
-      phone: values.identity.phone,
-      vehicle: values.vehicle.vehicle,
-      ...(values.vehicle.plate ? { plate: values.vehicle.plate } : {}),
-      city: values.identity.city,
+      fullName: identity.fullName,
+      phone: identity.phone,
+      vehicle: vehicle.vehicle,
+      ...(motorised && vehicle.plate ? { plate: vehicle.plate } : {}),
+      ...(motorised && vehicle.licenceNumber ? { licenceNumber: vehicle.licenceNumber } : {}),
+      ...(motorised && vehicle.insurerName && vehicle.insurancePolicy && vehicle.insuranceExpiry
+        ? {
+            insurance: {
+              insurerName: vehicle.insurerName,
+              policyNumber: vehicle.insurancePolicy,
+              expiry: vehicle.insuranceExpiry,
+            },
+          }
+        : {}),
+      payout: {
+        bankId: payout.bankId,
+        ...(payout.bankNameOther ? { bankNameOther: payout.bankNameOther } : {}),
+        transit: payout.transit,
+        account: payout.account,
+      },
+      city: identity.city,
+      postalCode: identity.postalCode,
       // The postal code is the only location the form asks for, and a courier
       // ranked from `0,0` would be somewhere off the coast of Africa. The same
       // offline geocoder the address book uses turns it into a real centroid.
-      base: coordinatesFor(values.identity.postalCode, values.identity.city),
+      base: coordinatesFor(identity.postalCode, identity.city),
     });
-    router.back();
+    router.replace(routes.courierSignupConfirmed);
   }
 
   return (

@@ -1,4 +1,4 @@
-import { Bike, Car, MessageSquare, Phone, Star, Truck } from 'lucide-react-native';
+import { Bike, Car, MessageSquare, Motorbike, Phone, Star } from 'lucide-react-native';
 import { Linking, Pressable, View } from 'react-native';
 
 import { Avatar, Text } from '@/components/ui';
@@ -17,7 +17,7 @@ export interface CourierTrackingCardProps {
 
 const VEHICLE_ICONS: Record<VehicleType, typeof Bike> = {
   bike: Bike,
-  scooter: Truck,
+  scooter: Motorbike,
   car: Car,
 };
 
