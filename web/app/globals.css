@@ -1,0 +1,305 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Semantic tokens, mirroring the app's global.css so the two surfaces cannot
+ * drift. Values are RGB triplets so Tailwind's <alpha-value> works.
+ *
+ * Two deliberate corrections carried over from the app's own contrast work:
+ *   secondary is terracotta-600, not 500 — white on 500 is 3.61:1 and fails AA.
+ *   muted-foreground is neutral-600, not 500 — 500 fails on every surface.
+ */
+:root {
+  --color-background: 250 249 247;
+  --color-foreground: 41 37 32;
+  --color-card: 255 255 255;
+  --color-card-foreground: 41 37 32;
+  --color-primary: 36 107 71;
+  --color-primary-foreground: 255 255 255;
+  --color-secondary: 191 81 34;
+  --color-secondary-foreground: 255 255 255;
+  --color-accent: 216 154 30;
+  --color-accent-foreground: 41 37 32;
+  --color-muted: 240 238 234;
+  --color-muted-foreground: 110 102 92;
+  --color-border: 226 222 215;
+  --color-border-strong: 169 161 150;
+  --color-destructive: 220 38 38;
+  --color-destructive-foreground: 255 255 255;
+  --color-success: 47 158 92;
+  /*
+   * Text-safe pairs. mustard-500 is 2.45:1 on white and success is 3.41:1 —
+   * both are fill colours, not ink. Using them as text or as a glyph on a light
+   * ground fails AA, which is the same lesson the app recorded: keep the accent
+   * on the fill, carry emphasis by weight, never by colour alone.
+   */
+  --color-success-strong: 31 122 68;
+  --color-accent-strong: 142 96 19;
+  --color-ring: 36 107 71;
+}
+
+/* A tonal derivation, not an inversion — forest-tinted near-blacks. */
+.dark {
+  --color-background: 11 23 18;
+  --color-foreground: 243 239 230;
+  --color-card: 19 36 32;
+  --color-card-foreground: 243 239 230;
+  --color-primary: 130 190 156;
+  --color-primary-foreground: 23 20 15;
+  --color-secondary: 230 125 72;
+  --color-secondary-foreground: 23 20 15;
+  --color-accent: 228 178 51;
+  --color-accent-foreground: 23 20 15;
+  --color-muted: 27 48 42;
+  --color-muted-foreground: 169 161 150;
+  --color-border: 36 56 47;
+  --color-border-strong: 69 107 89;
+  --color-destructive: 248 113 113;
+  --color-destructive-foreground: 23 20 15;
+  --color-success: 74 222 128;
+  /* On the dark card both fills already clear AA as ink, so they are unchanged. */
+  --color-success-strong: 74 222 128;
+  --color-accent-strong: 228 178 51;
+  --color-ring: 130 190 156;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    /* 17px base. 16 is the floor for mobile; this copy is French and runs long. */
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  /* Never removed. 2px, always the ring token. */
+  :focus-visible {
+    outline: 2px solid rgb(var(--color-ring));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  ::selection {
+    background: rgb(var(--color-primary) / 0.18);
+  }
+  /* Prices, taxes, distances and counters must not reflow as digits change. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+}
+
+@layer utilities {
+  /*
+   * Bricolage is variable on three axes and almost nobody uses more than one.
+   * `opsz` should track the rendered size so the letterforms are drawn for it
+   * rather than scaled; `wdth` narrows long French headlines so they hold their
+   * size instead of shrinking. These are the only place those axes are set.
+   */
+  .opsz-12 { font-variation-settings: 'opsz' 12; }
+  .opsz-20 { font-variation-settings: 'opsz' 20; }
+  .opsz-32 { font-variation-settings: 'opsz' 32; }
+  .opsz-48 { font-variation-settings: 'opsz' 48; }
+  .opsz-96 { font-variation-settings: 'opsz' 96; }
+  .display-hero { font-variation-settings: 'opsz' 96, 'wdth' 88; }
+  .display-title { font-variation-settings: 'opsz' 48, 'wdth' 94; }
+}
+
+@layer components {
+  /*
+   * Scroll reveals, CSS-driven rather than JS-driven — for three reasons.
+   *
+   * 1. No-JS safety. A motion library's `initial` prop is serialised into the SSR
+   *    HTML as inline `opacity:0`, so with scripting off the content never
+   *    appears. Here the hidden state is scoped to `.js`, a class only ever added
+   *    by script, so no script means no hiding.
+   * 2. Reduced motion. The media query below overrides the hidden state outright,
+   *    so content is present immediately rather than waiting on an observer.
+   * 3. Weight. Reveals and the woven band are the two things on nearly every
+   *    section; doing them in CSS keeps the animation library off the critical
+   *    path, for the scroll-scrubbed sections that actually need it.
+   */
+  .js .reveal:not(.is-in) {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  .reveal {
+    transition:
+      opacity 380ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+  }
+
+  /*
+   * Hero entrance: the headline lines and the basket layers.
+   *
+   * Driven by a class, not by React state in an inline style. State-driven inline
+   * styles serialise into the SSR HTML as `opacity:0`, so with scripting off the
+   * hero never appears — the same trap the reveals fell into. Scoping the hidden
+   * state to `.js` means no script, no hiding.
+   */
+  .js .hero-line:not(.is-lit) {
+    opacity: 0;
+    transform: translateY(105%);
+  }
+  .hero-line {
+    transition:
+      opacity 560ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 560ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+  }
+  .js .basket-item:not(.is-lit) {
+    opacity: 0;
+    transform: translateY(-24px) scale(0.93);
+  }
+  .js .basket-vessel:not(.is-lit) {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  .basket-item,
+  .basket-vessel {
+    transition:
+      opacity 380ms ease-out,
+      transform 620ms cubic-bezier(0.2, 1.1, 0.36, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+    will-change: transform;
+  }
+
+  /*
+   * The signal arcs. Each scales out from the dot at the bottom of the mark, so
+   * the growth reads as propagation rather than as three shapes appearing.
+   * The settled state then pulses once every four seconds — one slow beat, not a
+   * loop that competes with the copy.
+   */
+  .signal-arcs path {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    opacity: 0;
+    transform: scale(0.45);
+    transition:
+      opacity 420ms ease-out,
+      transform 520ms cubic-bezier(0.2, 1.1, 0.36, 1);
+  }
+  .signal-arcs.is-lit path {
+    opacity: 1;
+    transform: scale(1);
+  }
+  .signal-arcs.is-lit {
+    animation: signal-pulse 4s ease-in-out 1.6s infinite;
+  }
+  @keyframes signal-pulse {
+    0%, 82%, 100% { opacity: 1; }
+    88% { opacity: 0.55; }
+  }
+
+  /*
+   * Ken Burns drift, from the app's onboarding slides: 16s, scale to 1.14,
+   * +/-18px vertical, alternating direction so two cards never move in lockstep.
+   */
+  .kenburns {
+    will-change: transform;
+    animation: kenburns-a 16s ease-in-out infinite alternate;
+  }
+  .kenburns-b { animation-name: kenburns-b; }
+  @keyframes kenburns-a {
+    from { transform: scale(1) translateY(0); }
+    to { transform: scale(1.14) translateY(-18px); }
+  }
+  @keyframes kenburns-b {
+    from { transform: scale(1) translateY(0); }
+    to { transform: scale(1.14) translateY(18px); }
+  }
+
+  /*
+   * The courier's sonar ring: opacity .34 -> 0, scale .5 -> 1, 2000ms, linear, no
+   * reverse. Rendered only while the run is in progress — the app is explicit
+   * that a pulse on a stationary courier claims movement that is not happening.
+   */
+  .sonar {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: sonar 2000ms linear infinite;
+  }
+  @keyframes sonar {
+    from { opacity: 0.34; transform: scale(0.5); }
+    to { opacity: 0; transform: scale(1); }
+  }
+
+  /* Receipt lines tick in one at a time, so the total lands last. */
+  .js .receipt-line:not([data-in]) {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  .receipt-line {
+    transition:
+      opacity 320ms ease-out,
+      transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+  }
+
+  /*
+   * Neighbourhood marquee. Masked at both edges rather than hard-clipped: a name
+   * cut mid-word at the container edge reads as a typo, a fade reads as motion.
+   * Paused on hover so a name can actually be read.
+   */
+  .hero-marquee {
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 56px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 56px), transparent);
+  }
+  .hero-marquee-track {
+    animation: marquee 40s linear infinite;
+  }
+  .hero-marquee:hover .hero-marquee-track {
+    animation-play-state: paused;
+  }
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  /* The woven band weaves itself in, 24ms per triangle, capped at 400ms. */
+  .js .band-shape:not(.is-in) {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  .band-shape {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition:
+      opacity 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Content is present, not merely un-animated. */
+  .js .reveal:not(.is-in),
+  .js .band-shape:not(.is-in),
+  .js .receipt-line:not([data-in]),
+  .js .hero-line:not(.is-lit),
+  .js .basket-item:not(.is-lit),
+  .js .basket-vessel:not(.is-lit),
+  .signal-arcs path {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .hero-marquee-track,
+  .signal-arcs.is-lit,
+  .kenburns,
+  .sonar {
+    animation: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

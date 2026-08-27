@@ -1,0 +1,136 @@
+{
+  "photos": {
+    "spices": {
+      "alt": "Étals d’épices au souk : piment moulu, safran et pigments en coupes ouvertes",
+      "aspect": "2560/1440",
+      "intrinsic": [
+        2560,
+        1440
+      ],
+      "credit": "Pexels — https://www.pexels.com/photo/35185310/",
+      "widths": [
+        768,
+        1280,
+        1920,
+        2560
+      ]
+    },
+    "market": {
+      "alt": "Rayons d’épicerie : bocaux en verre, conserves et une balance en laiton",
+      "aspect": "2560/1440",
+      "intrinsic": [
+        2560,
+        1440
+      ],
+      "credit": "Pexels — https://www.pexels.com/photo/5490824/",
+      "widths": [
+        768,
+        1280,
+        1920,
+        2560
+      ]
+    },
+    "shopping": {
+      "alt": "Étal de marché : cageots de légumes et une main choisissant des œufs fermiers",
+      "aspect": "1600/2000",
+      "intrinsic": [
+        1600,
+        2000
+      ],
+      "credit": "Pexels — https://www.pexels.com/photo/32162465/",
+      "widths": [
+        480,
+        800,
+        1200,
+        1600
+      ]
+    },
+    "table": {
+      "alt": "Plat de couscous servi, photographié de près en lumière basse",
+      "aspect": "1600/2000",
+      "intrinsic": [
+        1600,
+        2000
+      ],
+      "credit": "Pexels — https://www.pexels.com/photo/21531369/",
+      "widths": [
+        480,
+        800,
+        1200,
+        1600
+      ]
+    }
+  },
+  "vendors": {
+    "vnd_boucherie_sahel": {
+      "aspect": "1/1",
+      "widths": [
+        320,
+        640
+      ]
+    },
+    "vnd_boulangerie_tanit": {
+      "aspect": "1/1",
+      "widths": [
+        320,
+        640
+      ]
+    },
+    "vnd_douceurs_maghreb": {
+      "aspect": "1/1",
+      "widths": [
+        320,
+        640
+      ]
+    },
+    "vnd_epicerie_atlas": {
+      "aspect": "1/1",
+      "widths": [
+        320,
+        640
+      ]
+    },
+    "vnd_kilimandjaro": {
+      "aspect": "1/1",
+      "widths": [
+        320,
+        640
+      ]
+    },
+    "vnd_mama_adjoa": {
+      "aspect": "1/1",
+      "widths": [
+        320,
+        640
+      ]
+    },
+    "vnd_marche_bamako": {
+      "aspect": "1/1",
+      "widths": [
+        320,
+        640
+      ]
+    },
+    "vnd_saveurs_dakar": {
+      "aspect": "1/1",
+      "widths": [
+        320,
+        640
+      ]
+    },
+    "vnd_souk_medina": {
+      "aspect": "1/1",
+      "widths": [
+        320,
+        640
+      ]
+    },
+    "vnd_teranga": {
+      "aspect": "1/1",
+      "widths": [
+        320,
+        640
+      ]
+    }
+  }
+}

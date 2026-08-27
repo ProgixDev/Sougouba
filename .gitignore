@@ -44,3 +44,11 @@ yarn-error.*
 /ios
 /android
 .image-cache/
+
+# web (landing page)
+web/node_modules/
+web/.next/
+web/out/
+web/next-env.d.ts
+web/tsconfig.tsbuildinfo
+web/public/img/_master/

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 24" width="192" height="24" preserveAspectRatio="none">
+  <!-- dark · tileable at 192x24 (8:1). Geometry: web/lib/band.ts -->
+  <path data-i="-1" fill="#82BE9C" d="M -14.13 0.93 L 14.13 0.93 L 0.00 21.91 Z"/>
+  <ellipse data-i="-1" cx="0.00" cy="10.08" rx="3.2" ry="3.9" fill="#123626"/>
+  <path data-i="0" fill="#E67D48" d="M 1.87 23.07 L 30.13 23.07 L 16.00 2.09 Z"/>
+  <path data-i="1" fill="#82BE9C" d="M 17.87 0.93 L 46.13 0.93 L 32.00 21.91 Z"/>
+  <ellipse data-i="1" cx="32.00" cy="10.08" rx="3.2" ry="3.9" fill="#0A2018"/>
+  <path data-i="2" fill="#E67D48" d="M 33.87 23.07 L 62.13 23.07 L 48.00 2.09 Z"/>
+  <path data-i="3" fill="#82BE9C" d="M 49.87 0.93 L 78.13 0.93 L 64.00 21.91 Z"/>
+  <ellipse data-i="3" cx="64.00" cy="10.08" rx="3.2" ry="3.9" fill="#17422E"/>
+  <path data-i="4" fill="#E67D48" d="M 65.87 23.07 L 94.13 23.07 L 80.00 2.09 Z"/>
+  <path data-i="5" fill="#82BE9C" d="M 81.87 0.93 L 110.13 0.93 L 96.00 21.91 Z"/>
+  <ellipse data-i="5" cx="96.00" cy="10.08" rx="3.2" ry="3.9" fill="#123626"/>
+  <path data-i="6" fill="#E4B233" d="M 97.87 23.07 L 126.13 23.07 L 112.00 2.09 Z"/>
+  <path data-i="7" fill="#82BE9C" d="M 113.87 0.93 L 142.13 0.93 L 128.00 21.91 Z"/>
+  <ellipse data-i="7" cx="128.00" cy="10.08" rx="3.2" ry="3.9" fill="#0A2018"/>
+  <path data-i="8" fill="#E67D48" d="M 129.87 23.07 L 158.13 23.07 L 144.00 2.09 Z"/>
+  <path data-i="9" fill="#82BE9C" d="M 145.87 0.93 L 174.13 0.93 L 160.00 21.91 Z"/>
+  <ellipse data-i="9" cx="160.00" cy="10.08" rx="3.2" ry="3.9" fill="#17422E"/>
+  <path data-i="10" fill="#E67D48" d="M 161.87 23.07 L 190.13 23.07 L 176.00 2.09 Z"/>
+  <path data-i="11" fill="#82BE9C" d="M 177.87 0.93 L 206.13 0.93 L 192.00 21.91 Z"/>
+  <ellipse data-i="11" cx="192.00" cy="10.08" rx="3.2" ry="3.9" fill="#123626"/>
+  <path data-i="12" fill="#E67D48" d="M 193.87 23.07 L 222.13 23.07 L 208.00 2.09 Z"/>
+</svg>
