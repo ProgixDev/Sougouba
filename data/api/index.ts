@@ -5,3 +5,4 @@ export * as ordersApi from './orders';
 export * as couriersApi from './couriers';
 export * as authApi from './auth';
 export * as geoApi from './geo';
+export * as loyaltyApi from './loyalty';

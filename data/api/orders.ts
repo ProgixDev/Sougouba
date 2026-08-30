@@ -1,6 +1,7 @@
 import { courierEarnings } from '../courierPay';
 import { deliveryPin, legDurationMin } from '../delivery';
 import { deliveryFeeBetween } from '../deliveryPricing';
+import { maxRedeemablePoints, pointsToDiscountCad } from '../loyalty';
 import { defaultDeliveryAddress } from '../seed/addresses';
 import { buildOrder, orderAddresses, orders as seedOrders, type OrderSpec } from '../seed/orders';
 import { products as seedProducts } from '../seed/products';
@@ -26,6 +27,7 @@ import { generateId } from '../utils/ids';
 import { distanceKm } from '../utils/geo';
 import { createPersistedTable } from '../utils/persistedTable';
 import { getVendorById } from './vendors';
+import * as loyaltyApi from './loyalty';
 import { hashString, mulberry32 } from '../utils/random';
 import { localIsoAt, localMinutesAgo } from '../utils/time';
 
@@ -91,6 +93,8 @@ export async function createOrder(input: {
   items: OrderItem[];
   deliveryAddress: Address;
   createdAt: string;
+  /** Points the shopper asked to redeem at checkout — clamped below, never trusted as-is. */
+  redeemPoints?: number;
 }): Promise<Order> {
   await table.ready;
   await delay(500, 900);
@@ -104,6 +108,18 @@ export async function createOrder(input: {
   const vendor = await getVendorById(input.vendorId);
   if (!vendor) throw new Error(`Commande impossible : boutique ${input.vendorId} introuvable`);
   const deliveryFeeCad = deliveryFeeBetween(vendor.address, input.deliveryAddress);
+
+  // Points redemption gets the same treatment: the checkout screen shows a
+  // preview of what a shopper *could* spend, but what actually clears is
+  // computed here against their real balance and the brief's 20 % cap
+  // ("Utilisation — Maximum 20 % du sous-total"), and only ever against the
+  // subtotal — never the tax or delivery lines this order also carries.
+  const balance = input.redeemPoints ? await loyaltyApi.getBalance(input.customerId) : 0;
+  const pointsRedeemed = input.redeemPoints
+    ? maxRedeemablePoints(subtotalCad, Math.min(input.redeemPoints, balance))
+    : 0;
+  const pointsDiscountCad = pointsRedeemed > 0 ? pointsToDiscountCad(pointsRedeemed) : 0;
+
   const order: Order = {
     id: generateId('ord'),
     customerId: input.customerId,
@@ -114,12 +130,16 @@ export async function createOrder(input: {
     subtotalCad,
     ...taxes,
     deliveryFeeCad,
-    totalCad: orderTotal(subtotalCad, taxes, deliveryFeeCad),
+    ...(pointsRedeemed > 0 ? { pointsRedeemed, pointsDiscountCad } : {}),
+    totalCad: roundCad(orderTotal(subtotalCad, taxes, deliveryFeeCad) - pointsDiscountCad),
     deliveryAddress: input.deliveryAddress,
     createdAt: input.createdAt,
     statusHistory: [{ status: 'pending', at: input.createdAt }],
   };
   await table.add(order);
+  if (pointsRedeemed > 0) {
+    await loyaltyApi.debitForRedemption(input.customerId, pointsRedeemed, order.id);
+  }
   return snapshot(order);
 }
 
@@ -238,6 +258,32 @@ export async function ensureDemoOrders(customerId: ID, customerName: string, add
     await table.add(order);
   }
   return created;
+}
+
+/**
+ * Give an account's *existing* delivered orders the points they would have
+ * earned along the way.
+ *
+ * Points Sougouba shipped after the order history it applies to already
+ * existed — the four seeded shoppers and their 45 days of generated orders,
+ * plus whatever `ensureDemoOrders` gave a fresh account. None of those rows
+ * ever passed through `completeDelivery`, so none of them were ever credited.
+ * Rather than hand-write a second, parallel points history to match, this
+ * replays the real one: every delivered order this customer has, oldest
+ * first, through the same `creditForDeliveredOrder` the live delivery flow
+ * uses. Idempotent by construction — `creditForDeliveredOrder` is idempotent
+ * per order, so calling this on every launch costs nothing once the first
+ * pass has run.
+ */
+export async function ensureLoyaltyBackfill(customerId: ID): Promise<void> {
+  await table.ready;
+  const delivered = table
+    .rows()
+    .filter((o) => o.customerId === customerId && o.status === 'delivered')
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  for (let i = 0; i < delivered.length; i++) {
+    await loyaltyApi.creditForDeliveredOrder(snapshot(delivered[i]), { isFirstDeliveredOrder: i === 0 });
+  }
 }
 
 // ── the delivery side ───────────────────────────────────────────────────────
@@ -511,6 +557,14 @@ export async function completeDelivery(
   order.status = 'delivered';
   order.statusHistory.push({ status: 'delivered', at });
   await table.save(order.id);
+
+  // Points Sougouba credits "après livraison réussie" and nowhere earlier —
+  // this is the one place in the app an order actually becomes delivered.
+  const isFirstDeliveredOrder = !table
+    .rows()
+    .some((o) => o.customerId === order.customerId && o.id !== order.id && o.status === 'delivered');
+  await loyaltyApi.creditForDeliveredOrder(snapshot(order), { isFirstDeliveredOrder });
+
   return snapshot(order);
 }
 

@@ -270,6 +270,15 @@ export interface Order {
    * re-priced tomorrow and a receipt must still say what was charged.
    */
   deliveryFeeCad: number;
+  /**
+   * Points spent at checkout and what they were worth, snapshot the same way
+   * `deliveryFeeCad` is: the rules in `data/loyalty.ts` can change tomorrow,
+   * but a receipt must still say what was actually redeemed. Both absent on an
+   * order that redeemed nothing — not zeroed, so a list can tell "redeemed
+   * none" from "redemption didn't exist yet" if that ever matters.
+   */
+  pointsRedeemed?: number;
+  pointsDiscountCad?: number;
   totalCad: number;
   deliveryAddress: Address;
   createdAt: string;
@@ -423,4 +432,40 @@ export interface User {
   favoriteProductIds: ID[];
   favoriteVendorIds: ID[];
   addresses: Address[];
+  /**
+   * Id of the customer whose referral code was entered at sign-up. Set once,
+   * at account creation, and never rewritten — see `data/loyalty.ts` for what
+   * it takes to turn this into a reward.
+   */
+  referredBy?: ID;
+}
+
+/**
+ * Why a Points Sougouba balance moved (client brief, août 2026, "Portefeuille
+ * Points Sougouba"). `order_refunded` exists for a reversal path nothing in
+ * the app can trigger yet — see `reverseForOrder` in `data/api/loyalty.ts`.
+ */
+export type LoyaltyReason =
+  | 'order_delivered'
+  | 'referral_referrer'
+  | 'referral_referred'
+  | 'redeemed'
+  | 'order_refunded';
+
+/**
+ * One line of a shopper's points ledger. `points` is signed — positive for an
+ * earn, negative for a redemption or a reversal — so the balance is always
+ * just a sum, the same way `Order.totalCad` is a sum of signed lines rather
+ * than a value tracked separately from what produced it.
+ */
+export interface LoyaltyTransaction {
+  id: ID;
+  customerId: ID;
+  points: number;
+  reason: LoyaltyReason;
+  /** Absent for a manual adjustment — every earn, redemption and referral traces back to one. */
+  orderId?: ID;
+  createdAt: string;
+  /** Only an earn expires. Absent means the points never age out — a redemption's -100 has no shelf life. */
+  expiresAt?: string;
 }

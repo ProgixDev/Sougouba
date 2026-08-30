@@ -1,12 +1,14 @@
-import { router } from 'expo-router';
-import { CreditCard, MapPin, PlusCircle, Store } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { useFocusEffect, router } from 'expo-router';
+import { CreditCard, MapPin, PlusCircle, Sparkles, Store } from 'lucide-react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Pressable, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BackHeader, Button, PriceSummary, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
-import { ordersApi } from '@/data/api';
+import { ordersApi, loyaltyApi } from '@/data/api';
+import { maxRedeemablePoints, pointsToDiscountCad } from '@/data/loyalty';
+import { roundCad } from '@/data/taxes';
 import type { OrderItem } from '@/data/types';
 import { useCartDetails } from '@/hooks/useCartDetails';
 import { deliveryAddressFor } from '@/lib/deliveryAddress';
@@ -59,6 +61,34 @@ export default function CheckoutScreen() {
   // copies of this rule would price one journey and deliver another.
   const address = deliveryAddressFor(user);
 
+  // Points Sougouba. `redeemablePoints` is a preview only — the same 20 % cap
+  // (`maxRedeemablePoints`) is recomputed and enforced for real inside
+  // `ordersApi.createOrder`, against the balance the mock backend measures at
+  // that moment, not the one this screen fetched a few seconds ago.
+  const [pointsBalance, setPointsBalance] = useState(0);
+  const [usePoints, setUsePoints] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      let active = true;
+      // Backfilled defensively rather than trusted to have finished already:
+      // `useDemoSeed` kicks this off once per session at the (customer) layout
+      // root, but checkout can be the very first screen focused after sign-in.
+      ordersApi
+        .ensureLoyaltyBackfill(user.id)
+        .then(() => loyaltyApi.getBalance(user.id))
+        .then((balance) => {
+          if (active) setPointsBalance(balance);
+        });
+      return () => {
+        active = false;
+      };
+    }, [user])
+  );
+  const redeemablePoints = maxRedeemablePoints(subtotalCad, pointsBalance);
+  const pointsDiscountCad = usePoints ? pointsToDiscountCad(redeemablePoints) : 0;
+  const discountedTotalCad = roundCad(totalCad - pointsDiscountCad);
+
   async function placeOrder() {
     if (!user || !vendor || !card || lines.length === 0) return;
     setError(null);
@@ -83,6 +113,7 @@ export default function CheckoutScreen() {
         items,
         deliveryAddress: address,
         createdAt: new Date().toISOString(),
+        redeemPoints: usePoints ? redeemablePoints : undefined,
       });
 
       clearCart();
@@ -197,6 +228,33 @@ export default function CheckoutScreen() {
             </View>
           </Section>
 
+          {pointsBalance > 0 ? (
+            <Section title="Points Sougouba">
+              <View className="flex-row items-center gap-3">
+                <View className="w-10 h-10 items-center justify-center rounded-full bg-primary/10">
+                  <Sparkles size={18} color={colors.primary} strokeWidth={2} />
+                </View>
+                <View className="flex-1 gap-0.5 pr-2">
+                  <Text variant="caption" weight="bold">
+                    Utiliser mes points
+                  </Text>
+                  <Text variant="caption" tone="muted" className="text-[12px] leading-[16px]">
+                    {redeemablePoints > 0
+                      ? `${pointsBalance} points disponibles — jusqu’à ${formatCad(pointsToDiscountCad(redeemablePoints))} de réduction sur cette commande.`
+                      : `${pointsBalance} points disponibles — pas encore assez pour une réduction sur ce panier.`}
+                  </Text>
+                </View>
+                <Switch
+                  value={usePoints}
+                  onValueChange={setUsePoints}
+                  disabled={redeemablePoints <= 0}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  accessibilityLabel="Utiliser mes points Sougouba"
+                />
+              </View>
+            </Section>
+          ) : null}
+
           <View className="rounded-2xl bg-card p-4">
             <PriceSummary
               subtotalCad={subtotalCad}
@@ -204,7 +262,8 @@ export default function CheckoutScreen() {
               qstCad={qstCad}
               deliveryFeeCad={deliveryFeeCad}
               deliveryDistanceKm={deliveryDistanceKm}
-              totalCad={totalCad}
+              pointsDiscountCad={pointsDiscountCad}
+              totalCad={discountedTotalCad}
             />
           </View>
 
@@ -218,7 +277,7 @@ export default function CheckoutScreen() {
 
       <View className="px-5 pt-3 border-t border-border bg-card">
         <Button
-          label={card ? `Confirmer — ${formatCad(totalCad)}` : 'Ajouter un moyen de paiement'}
+          label={card ? `Confirmer — ${formatCad(discountedTotalCad)}` : 'Ajouter un moyen de paiement'}
           variant="cta"
           size="lg"
           fullWidth

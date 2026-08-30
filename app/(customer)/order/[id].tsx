@@ -1,21 +1,22 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { MapPin, MessageSquareWarning, ReceiptText, Store } from 'lucide-react-native';
+import { MapPin, MessageSquareWarning, ReceiptText, Sparkles, Store } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CourierTrackingCard, DisputeSheet, OrderStatusTimeline } from '@/components/customer';
 import { DeliveryMap } from '@/components/map';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useDeliveryProgress } from '@/hooks/useDeliveryProgress';
-import { Badge, BackHeader, Button, EmptyState, PriceSummary, Skeleton, Text } from '@/components/ui';
-import { couriersApi, ordersApi, vendorsApi } from '@/data/api';
+import { Badge, BackHeader, Button, EmptyState, PriceSummary, Reveal, Skeleton, Text } from '@/components/ui';
+import { couriersApi, loyaltyApi, ordersApi, vendorsApi } from '@/data/api';
 import type { Courier, DisputeReason, Order, Vendor } from '@/data/types';
 import { formatCad, formatDate, formatTime } from '@/lib/format';
 import { canOpenDispute, disputeReasonLabel } from '@/lib/disputes';
 import { isActiveStatus, orderStatusMeta } from '@/lib/orderStatus';
 import { routes } from '@/lib/routes';
 import { orderReference } from '@/lib/orderRef';
+import { shadows } from '@/theme/shadows';
 
 export default function OrderDetailScreen() {
   const colors = useThemeColors();
@@ -30,6 +31,17 @@ export default function OrderDetailScreen() {
   // between fetches; this only has to catch *status* changes — a pickup, a
   // delivery — which is why eight seconds is plenty.
   const progress = useDeliveryProgress(order, vendor, courier);
+
+  // "Votre commande est livrée : vous avez gagné 45 points" (client brief) —
+  // there is no push notification pipeline in this prototype (see
+  // `account/notifications.tsx`), so this is the honest version of it: a
+  // banner that appears the moment *this screen* observes the order cross into
+  // `delivered`, not on every visit to an order that already was. `null` on
+  // the first render of a freshly loaded order, on purpose — a shopper opening
+  // an old, already-delivered order should not be told they just earned points
+  // for it again.
+  const previousStatusRef = useRef<Order['status'] | null>(null);
+  const [pointsEarned, setPointsEarned] = useState<number | null>(null);
 
   const activeRef = useRef(true);
 
@@ -73,6 +85,16 @@ export default function OrderDetailScreen() {
     }, [polling, load])
   );
 
+  useEffect(() => {
+    if (!order) return;
+    const justDelivered = previousStatusRef.current !== null && previousStatusRef.current !== 'delivered';
+    previousStatusRef.current = order.status;
+    if (!justDelivered || order.status !== 'delivered') return;
+    loyaltyApi.getTransactionForOrder(order.id).then((tx) => {
+      if (tx) setPointsEarned(tx.points);
+    });
+  }, [order]);
+
   if (!loading && !order) {
     return (
       <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
@@ -104,6 +126,33 @@ export default function OrderDetailScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <BackHeader title={order ? `Commande ${orderReference(order)}` : 'Commande'} />
+
+      {pointsEarned !== null ? (
+        <Reveal className="px-5 pb-1">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Vous avez gagné ${pointsEarned} points Sougouba`}
+            onPress={() => {
+              setPointsEarned(null);
+              router.push(routes.accountPoints);
+            }}
+            className="flex-row items-center gap-3 rounded-2xl bg-card p-4 active:opacity-80"
+            style={shadows.floating}
+          >
+            <View className="w-10 h-10 items-center justify-center rounded-full bg-primary/10">
+              <Sparkles size={18} color={colors.primary} strokeWidth={2} />
+            </View>
+            <View className="flex-1">
+              <Text variant="caption" weight="bold">
+                Commande livrée
+              </Text>
+              <Text variant="caption" tone="muted" className="text-[12px]">
+                Vous avez gagné {pointsEarned} points Sougouba.
+              </Text>
+            </View>
+          </Pressable>
+        </Reveal>
+      ) : null}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
         {loading || !order ? (
@@ -251,6 +300,7 @@ export default function OrderDetailScreen() {
                   gstCad={order.gstCad}
                   qstCad={order.qstCad}
                   deliveryFeeCad={order.deliveryFeeCad}
+                  pointsDiscountCad={order.pointsDiscountCad}
                   totalCad={order.totalCad}
                 />
               </View>

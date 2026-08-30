@@ -1,5 +1,6 @@
+import { referralCodeFor } from '../loyalty';
 import { users as seedUsers } from '../seed/users';
-import type { User, UserRole } from '../types';
+import type { ID, User, UserRole } from '../types';
 import { delay } from '../utils/delay';
 import { generateId } from '../utils/ids';
 import { createPersistedTable } from '../utils/persistedTable';
@@ -23,6 +24,12 @@ function findByEmail(email: string): User | undefined {
   return table.rows().find((u) => u.email.toLowerCase() === normalized);
 }
 
+/** The code's own id lives nowhere — it is derived, so resolving one back to an account means recomputing it per row. */
+function findByReferralCode(code: string): User | undefined {
+  const normalized = code.trim().toUpperCase();
+  return table.rows().find((u) => referralCodeFor(u.id) === normalized);
+}
+
 export class AuthError extends Error {}
 
 export async function mockSignIn(email: string, _password: string): Promise<User> {
@@ -35,12 +42,26 @@ export async function mockSignIn(email: string, _password: string): Promise<User
   return snapshot(user);
 }
 
-export async function mockSignUp(fullName: string, email: string, _password: string): Promise<User> {
+/**
+ * `referralCode` is optional and best-effort: an unknown or malformed code is
+ * silently ignored rather than blocking the account. A referral is a bonus for
+ * both sides, not a gate on signing up — Points Sougouba's own anti-fraud rule
+ * only kicks in later, when the reward would actually be paid out (see
+ * `creditForDeliveredOrder` in `data/api/loyalty.ts`), so there is nothing to
+ * enforce here yet.
+ */
+export async function mockSignUp(
+  fullName: string,
+  email: string,
+  _password: string,
+  referralCode?: string
+): Promise<User> {
   await table.ready;
   await delay(500, 900);
   if (findByEmail(email)) {
     throw new AuthError('Un compte existe déjà avec cette adresse courriel.');
   }
+  const referrer = referralCode?.trim() ? findByReferralCode(referralCode) : undefined;
   const user: User = {
     id: generateId('usr'),
     fullName: fullName.trim(),
@@ -50,6 +71,7 @@ export async function mockSignUp(fullName: string, email: string, _password: str
     favoriteProductIds: [],
     favoriteVendorIds: [],
     addresses: [],
+    ...(referrer ? { referredBy: referrer.id } : {}),
   };
   await table.add(user);
   return snapshot(user);
@@ -99,6 +121,13 @@ export async function mockAttachCourier(userId: string, courierId: string): Prom
   user.courierId = courierId;
   await table.save(user.id);
   return snapshot(user);
+}
+
+/** Read-only lookup by id — `data/api/loyalty.ts` needs the referring account, not the session's own copy. */
+export async function mockGetUserById(id: ID): Promise<User | undefined> {
+  await table.ready;
+  const user = table.rows().find((u) => u.id === id);
+  return user ? snapshot(user) : undefined;
 }
 
 export async function mockOAuthContinue(provider: 'google' | 'apple'): Promise<User> {

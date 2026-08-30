@@ -97,6 +97,16 @@ export default function OrderConfirmedScreen() {
                 {formatCad(order.totalCad)}
               </Text>
             </View>
+            {order.pointsDiscountCad ? (
+              <View className="flex-row items-center justify-between">
+                <Text variant="caption" tone="muted">
+                  Points utilisés
+                </Text>
+                <Text variant="caption" weight="bold" tone="primary">
+                  {order.pointsRedeemed} pts · -{formatCad(order.pointsDiscountCad)}
+                </Text>
+              </View>
+            ) : null}
             {vendor ? (
               <View className="flex-row items-center justify-between">
                 <Text variant="caption" tone="muted">

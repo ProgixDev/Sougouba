@@ -15,6 +15,8 @@ export interface PriceSummaryProps {
    * arbitrary.
    */
   deliveryDistanceKm?: number;
+  /** What Points Sougouba took off, if the shopper redeemed any — see `data/loyalty.ts`. Omit or 0 to hide the line. */
+  pointsDiscountCad?: number;
   totalCad: number;
 }
 
@@ -38,6 +40,7 @@ export function PriceSummary({
   qstCad,
   deliveryFeeCad,
   deliveryDistanceKm,
+  pointsDiscountCad,
   totalCad,
 }: PriceSummaryProps) {
   return (
@@ -58,6 +61,8 @@ export function PriceSummary({
         value={deliveryFeeCad}
       />
 
+      {pointsDiscountCad ? <Line label="Points Sougouba" value={-pointsDiscountCad} tier="discount" /> : null}
+
       <View className="h-px bg-border mt-1.5" />
 
       <Line label="Total" value={totalCad} tier="total" />
@@ -72,10 +77,11 @@ function Line({
 }: {
   label: string;
   value: number;
-  tier?: 'base' | 'minor' | 'total';
+  tier?: 'base' | 'minor' | 'discount' | 'total';
 }) {
   const amount = formatCad(value);
   const minor = tier === 'minor';
+  const discount = tier === 'discount';
 
   return (
     <View
@@ -85,8 +91,8 @@ function Line({
     >
       <Text
         variant="caption"
-        tone={tier === 'total' ? 'default' : 'muted'}
-        weight={tier === 'total' ? 'bold' : 'regular'}
+        tone={tier === 'total' ? 'default' : discount ? 'primary' : 'muted'}
+        weight={tier === 'total' ? 'bold' : discount ? 'semibold' : 'regular'}
         className={minor ? 'text-[13px]' : undefined}
       >
         {label}
@@ -102,7 +108,7 @@ function Line({
         <Text
           variant="caption"
           weight={minor ? 'regular' : 'semibold'}
-          tone={minor ? 'muted' : 'default'}
+          tone={minor ? 'muted' : discount ? 'primary' : 'default'}
           className={minor ? 'text-[13px]' : undefined}
           style={tabular}
         >

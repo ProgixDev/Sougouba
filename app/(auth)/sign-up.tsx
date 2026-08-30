@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link } from 'expo-router';
-import { Lock, Mail, User } from 'lucide-react-native';
+import { Gift, Lock, Mail, User } from 'lucide-react-native';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
@@ -26,13 +26,18 @@ export default function SignUpScreen() {
     resolver: zodResolver(signUpSchema),
     // Without these, RHF hands `undefined` to TextInput and the field flips
     // from uncontrolled to controlled on the first keystroke.
-    defaultValues: { fullName: '', email: '', password: '' },
+    defaultValues: { fullName: '', email: '', password: '', referralCode: '' },
   });
 
   async function onSubmit(values: SignUpValues) {
     setFormError(null);
     try {
-      const user = await authApi.mockSignUp(values.fullName, values.email, values.password);
+      const user = await authApi.mockSignUp(
+        values.fullName,
+        values.email,
+        values.password,
+        values.referralCode
+      );
       signUp(user);
     } catch (e) {
       setFormError(e instanceof AuthError ? e.message : 'Une erreur est survenue.');
@@ -119,6 +124,22 @@ export default function SignUpScreen() {
                   error={errors.password?.message}
                   helperText={errors.password ? undefined : 'Minimum 6 caractères'}
                   required
+                />
+              )}
+            />
+            <Controller
+              control={control}
+              name="referralCode"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <Input
+                  label="Code de parrainage"
+                  icon={Gift}
+                  autoCapitalize="characters"
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  error={errors.referralCode?.message}
+                  helperText="Optionnel — un ami qui vous a invité y gagne aussi des points."
                 />
               )}
             />

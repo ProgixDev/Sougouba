@@ -26,6 +26,12 @@ const DEMO_CART: { vendorId: ID; productIds: { id: ID; qty: number }[] } = {
  * That makes the whole thing idempotent without a separate "already seeded"
  * flag, and it means a shopper who deliberately empties their cart never finds
  * it refilled on the next launch, because by then the orders exist.
+ *
+ * Also backfills Points Sougouba from whatever order history the account ends
+ * up with — the four seeded shoppers' included, not only a fresh signup's —
+ * so the loyalty program has something to show without a second, hand-written
+ * points history to keep in sync with the orders one. See
+ * `ordersApi.ensureLoyaltyBackfill`.
  */
 export function useDemoSeed() {
   const user = useSessionStore((s) => s.user);
@@ -44,9 +50,17 @@ export function useDemoSeed() {
         user.fullName,
         user.addresses.find((a) => a.isDefault) ?? user.addresses[0]
       );
+      if (cancelled) return;
+
+      // Runs whether or not this call created anything — the seeded shoppers
+      // never go through `ensureDemoOrders` at all, but still need their
+      // existing history turned into points the first time this fires.
+      await ordersApi.ensureLoyaltyBackfill(user.id);
+      if (cancelled) return;
+
       // Nothing created means this account already had history — leave the cart
       // exactly as the shopper left it.
-      if (cancelled || created.length === 0) return;
+      if (created.length === 0) return;
 
       const cart = useCartStore.getState();
       if (cart.items.length > 0) return;

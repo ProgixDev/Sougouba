@@ -1,10 +1,11 @@
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import {
   Bell,
   ChevronRight,
   CreditCard,
+  Gift,
   Heart,
   Info,
   LogOut,
@@ -12,13 +13,16 @@ import {
   Moon,
   Pencil,
   ReceiptText,
+  Sparkles,
   Sun,
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
+import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { ProfileHeader } from '@/components/customer';
 import { Reveal, Text } from '@/components/ui';
+import { loyaltyApi, ordersApi } from '@/data/api';
 import { useColorScheme, useThemeColors } from '@/hooks/useColorScheme';
 import { useCustomerStats } from '@/hooks/useCustomerStats';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
@@ -47,6 +51,23 @@ export default function CustomerProfileScreen() {
 
   const addressCount = user?.addresses.length ?? 0;
   const activeNotifications = Object.values(notifications).filter(Boolean).length;
+
+  const [pointsBalance, setPointsBalance] = useState(0);
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      let active = true;
+      ordersApi
+        .ensureLoyaltyBackfill(user.id)
+        .then(() => loyaltyApi.getBalance(user.id))
+        .then((balance) => {
+          if (active) setPointsBalance(balance);
+        });
+      return () => {
+        active = false;
+      };
+    }, [user])
+  );
 
   async function pickPhoto() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -109,6 +130,32 @@ export default function CustomerProfileScreen() {
             </Text>
           </Pressable>
         </Reveal>
+
+        <Reveal delay={130}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${pointsBalance} points Sougouba — voir mon solde`}
+            onPress={() => router.push(routes.accountPoints)}
+            className="mx-5 mt-3 flex-row items-center gap-3 rounded-[20px] bg-primary/10 p-4 active:opacity-80"
+          >
+            <View className="w-10 h-10 items-center justify-center rounded-full bg-card">
+              <Sparkles size={18} color={colors.primary} strokeWidth={2} />
+            </View>
+            <View className="flex-1">
+              <Text variant="caption" weight="bold" tone="primary">
+                {pointsBalance} points Sougouba
+              </Text>
+              <Text variant="caption" tone="muted" className="text-[12px]">
+                Voir mon solde et mon historique
+              </Text>
+            </View>
+            <ChevronRight size={17} color={colors.primary} strokeWidth={2} />
+          </Pressable>
+        </Reveal>
+
+        <Section title="Récompenses" delay={145}>
+          <NavRow icon={Gift} label="Parrainer un proche" onPress={() => router.push(routes.accountRefer)} />
+        </Section>
 
         <Section title="Mes achats" delay={160}>
           <NavRow

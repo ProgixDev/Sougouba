@@ -62,7 +62,8 @@
     "verify:seed": "npx --yes tsx scripts/verify-seed.ts",
     "typecheck": "tsc --noEmit",
     "verify:logic": "npx --yes tsx scripts/verify-logic.ts",
-    "verify": "npm run typecheck && npm run verify:seed && npm run verify:logic && npm run verify:contrast",
+    "verify:loyalty": "npx --yes tsx scripts/verify-loyalty.ts",
+    "verify": "npm run typecheck && npm run verify:seed && npm run verify:logic && npm run verify:loyalty && npm run verify:contrast",
     "verify:contrast": "npx --yes tsx scripts/verify-contrast.ts"
   },
   "private": true,
