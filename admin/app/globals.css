@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Semantic tokens, mirroring theme/colors.ts and web/app/globals.css so all
+ * three surfaces (mobile, marketing site, admin) cannot drift apart. Values
+ * are RGB triplets so Tailwind's <alpha-value> works.
+ */
+:root {
+  --color-background: 250 249 247;
+  --color-foreground: 41 37 32;
+  --color-card: 255 255 255;
+  --color-card-foreground: 41 37 32;
+  --color-primary: 36 107 71;
+  --color-primary-foreground: 255 255 255;
+  --color-secondary: 191 81 34;
+  --color-secondary-foreground: 255 255 255;
+  --color-accent: 216 154 30;
+  --color-accent-foreground: 41 37 32;
+  --color-muted: 240 238 234;
+  --color-muted-foreground: 110 102 92;
+  --color-border: 226 222 215;
+  --color-border-strong: 169 161 150;
+  --color-destructive: 220 38 38;
+  --color-destructive-foreground: 255 255 255;
+  --color-success: 47 158 92;
+  --color-success-strong: 31 122 68;
+  --color-accent-strong: 142 96 19;
+  --color-ring: 36 107 71;
+}
+
+/* A tonal derivation, not an inversion — forest-tinted near-blacks. */
+.dark {
+  --color-background: 11 23 18;
+  --color-foreground: 243 239 230;
+  --color-card: 19 36 32;
+  --color-card-foreground: 243 239 230;
+  --color-primary: 130 190 156;
+  --color-primary-foreground: 23 20 15;
+  --color-secondary: 230 125 72;
+  --color-secondary-foreground: 23 20 15;
+  --color-accent: 228 178 51;
+  --color-accent-foreground: 23 20 15;
+  --color-muted: 27 48 42;
+  --color-muted-foreground: 169 161 150;
+  --color-border: 36 56 47;
+  --color-border-strong: 69 107 89;
+  --color-destructive: 248 113 113;
+  --color-destructive-foreground: 23 20 15;
+  --color-success: 74 222 128;
+  --color-success-strong: 74 222 128;
+  --color-accent-strong: 228 178 51;
+  --color-ring: 130 190 156;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    /* A data-dense internal tool: 15px base, tighter than the marketing site's 17px. */
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  :focus-visible {
+    outline: 2px solid rgb(var(--color-ring));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  ::selection {
+    background: rgb(var(--color-primary) / 0.18);
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

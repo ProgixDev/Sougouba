@@ -1,0 +1,153 @@
+'use client';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { ArrowUp, ArrowDown, ChevronsUpDown, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
+import { cn } from '@/lib/cn';
+import { TableSkeleton } from './Skeleton';
+import { EmptyState } from './EmptyState';
+
+export interface Column<T> {
+  key: string;
+  header: string;
+  sortable?: boolean;
+  sortValue?: (row: T) => string | number;
+  render: (row: T) => ReactNode;
+  className?: string;
+}
+
+interface DataTableProps<T> {
+  columns: Column<T>[];
+  rows: T[];
+  keyField: (row: T) => string;
+  onRowClick?: (row: T) => void;
+  loading?: boolean;
+  emptyIcon: LucideIcon;
+  emptyTitle: string;
+  emptyDescription?: string;
+  /** Rows per page — a plain few-hundred-row table doesn't need virtualization, just paging. */
+  pageSize?: number;
+}
+
+export function DataTable<T>({
+  columns,
+  rows,
+  keyField,
+  onRowClick,
+  loading,
+  emptyIcon,
+  emptyTitle,
+  emptyDescription,
+  pageSize = 20,
+}: DataTableProps<T>) {
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
+  const [page, setPage] = useState(1);
+
+  const sorted = useMemo(() => {
+    if (!sort) return rows;
+    const col = columns.find((c) => c.key === sort.key);
+    if (!col?.sortValue) return rows;
+    const copy = [...rows];
+    copy.sort((a, b) => {
+      const av = col.sortValue!(a);
+      const bv = col.sortValue!(b);
+      const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv));
+      return sort.dir === 'asc' ? cmp : -cmp;
+    });
+    return copy;
+  }, [rows, sort, columns]);
+
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
+  // Reset to page 1 whenever the underlying result set changes (a new filter/search/sort
+  // can leave `page` pointing past the end of a much shorter list).
+  useEffect(() => {
+    setPage(1);
+  }, [rows, sort]);
+  const clampedPage = Math.min(page, pageCount);
+  const pageRows = sorted.slice((clampedPage - 1) * pageSize, clampedPage * pageSize);
+
+  if (loading) return <TableSkeleton cols={columns.length} />;
+  if (rows.length === 0) return <EmptyState icon={emptyIcon} title={emptyTitle} description={emptyDescription} />;
+
+  return (
+    <div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] border-collapse font-sans text-[0.8125rem]">
+          <thead>
+            <tr className="border-b border-border">
+              {columns.map((col) => {
+                const active = sort?.key === col.key;
+                return (
+                  <th
+                    key={col.key}
+                    scope="col"
+                    aria-sort={active ? (sort!.dir === 'asc' ? 'ascending' : 'descending') : col.sortable ? 'none' : undefined}
+                    className={cn('px-5 py-3 text-left font-semibold text-muted-foreground', col.className)}
+                  >
+                    {col.sortable ? (
+                      <button
+                        type="button"
+                        className="inline-flex cursor-pointer items-center gap-1 hover:text-foreground"
+                        onClick={() =>
+                          setSort((s) =>
+                            s?.key === col.key ? { key: col.key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key: col.key, dir: 'asc' }
+                          )
+                        }
+                      >
+                        {col.header}
+                        {active ? sort!.dir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} /> : <ChevronsUpDown size={13} className="opacity-40" />}
+                      </button>
+                    ) : (
+                      col.header
+                    )}
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {pageRows.map((row) => (
+              <tr
+                key={keyField(row)}
+                onClick={() => onRowClick?.(row)}
+                className={cn('border-b border-border last:border-0', onRowClick && 'cursor-pointer hover:bg-muted')}
+              >
+                {columns.map((col) => (
+                  <td key={col.key} className={cn('px-5 py-3.5 align-middle', col.className)}>
+                    {col.render(row)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {pageCount > 1 && (
+        <div className="flex items-center justify-between border-t border-border px-5 py-3">
+          <span className="font-sans text-[0.75rem] text-muted-foreground">
+            {sorted.length} résultats · page {clampedPage} sur {pageCount}
+          </span>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              aria-label="Page précédente"
+              disabled={clampedPage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              type="button"
+              aria-label="Page suivante"
+              disabled={clampedPage >= pageCount}
+              onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+              className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
