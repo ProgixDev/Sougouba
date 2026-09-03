@@ -3,6 +3,55 @@
 Read this first in a fresh session. Full plan and rationale: `docs/BACKEND-BUILD-PHASES.md`
 in the mobile repo (`sougouba/`) — this file only tracks what's actually built here.
 
+## Migration state — all applied, verified 2026-09-03
+
+**Every migration is applied to the live Supabase project** (`wyjkaiquugoblvvzpjnq`),
+and the live schema matches the schema files. Checked, not assumed:
+
+| | |
+|---|---|
+| Migrations applied (`supabase_migrations.schema_migrations`) | 31 |
+| Migration files in `drizzle/` | 30 (`0000`–`0029`) |
+| Tables in `public` | 31, and **all 31 have RLS enabled** |
+| RLS policies | 48 |
+| `private.*` helper functions | 7 |
+| Storage buckets | 6 |
+| `drizzle-kit generate` | "No schema changes" — schema files match the snapshot |
+| Live vs. schema files | identical table set and column counts, table by table |
+
+`auth.users` is the one table declared in `src/db/schema/auth.ts` that is *not*
+ours and never migrated by us — it is a stub so the `profiles.id` foreign key
+compiles. It lives in the `auth` schema, so it is correctly absent from the
+`public` count above.
+
+### The one thing that does not line up: 31 applied vs. 30 files
+
+Supabase has a migration with no file behind it —
+`20260903022631 align_review_fk_constraint_names`, applied right after
+`application_review_columns`. It renamed the two review foreign keys to the
+names `drizzle-kit` generates.
+
+**This is not schema drift, and it does not need fixing.** Local
+`0023_application_review.sql` creates those constraints with the *final* names
+directly, so replaying the committed migrations onto an empty database reaches
+the identical end state in one step instead of two — verified: the live
+database carries `vendors_reviewed_by_profiles_id_fk` and
+`couriers_reviewed_by_profiles_id_fk` and no constraint under any older name.
+
+What it does mean is that **the two migration histories are not row-for-row
+comparable**, which will matter the first time someone diffs this project
+against staging and finds an extra row. Deliberately not "fixed" by adding a
+matching local file: that file would do nothing on a fresh database and would
+exist only to make two ledgers agree about the past.
+
+### CI's drift check does not cover this
+
+`.github/workflows/ci.yml` runs `drizzle-kit generate` and fails on an
+uncommitted diff. That compares **schema files → snapshot**. It cannot see a
+statement applied straight to the database with no file behind it, which is
+exactly how the row above came to exist. The check that catches that class is a
+live introspection diff, and it needs a working `DATABASE_URL` — see below.
+
 ## Phase 0 — done (2026-08-30)
 
 **Stack, as scaffolded**: NestJS 12 on Fastify (`@nestjs/platform-fastify`), TypeScript
