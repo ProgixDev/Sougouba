@@ -5,10 +5,7 @@ import { Sidebar, type SidebarCounts } from '@/components/layout/Sidebar';
 import { Topbar } from '@/components/layout/Topbar';
 import { ToastProvider } from '@/components/Toast';
 import { getSession, type AdminSession } from '@/lib/auth';
-import { listVendors } from '@/lib/api/vendors';
-import { listCouriers } from '@/lib/api/couriers';
-import { listDisputes } from '@/lib/api/disputes';
-import { listCourierIssues } from '@/lib/api/courierIssues';
+import { getQueueCounts } from '@/lib/api/stats';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -30,31 +27,36 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, []);
 
   useEffect(() => {
-    const s = getSession();
-    if (!s) {
-      router.replace('/login');
-      return;
-    }
-    setSession(s);
+    let active = true;
+    getSession().then((s) => {
+      if (!active) return;
+      if (!s) {
+        router.replace('/login');
+        return;
+      }
+      setSession(s);
+    });
+    return () => {
+      active = false;
+    };
   }, [router]);
 
   useEffect(() => {
     if (!session) return;
-    async function loadCounts() {
-      const [vendors, couriers, disputes, issues] = await Promise.all([
-        listVendors('pending'),
-        listCouriers('pending'),
-        listDisputes('open'),
-        listCourierIssues('open'),
-      ]);
-      setCounts({
-        pendingMerchants: vendors.length,
-        pendingCouriers: couriers.length,
-        openDisputes: disputes.length,
-        openCourierIssues: issues.length,
-      });
-    }
-    loadCounts();
+    let active = true;
+    // One request, not four. This used to fire `listVendors`/`listCouriers`/
+    // `listDisputes`/`listCourierIssues` in parallel and count the arrays —
+    // which meant downloading four full lists to render four numbers, and
+    // would have under-counted the moment those lists were paginated.
+    // `GET /admin/stats` computes all of them server-side.
+    getQueueCounts()
+      .then((c) => active && setCounts(c))
+      // A badge count is decoration; a failure here must not take the whole
+      // dashboard shell down with it.
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
     // Re-fetched on every navigation too, so an approve/resolve action on a detail
     // page is reflected the moment the admin moves elsewhere — the badges are a
     // convenience count, not a live subscription.

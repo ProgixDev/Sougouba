@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { DataTable, type Column } from '@/components/data/DataTable';
-import { listOrders } from '@/lib/api/orders';
+import { listMerchantOrders } from '@/lib/api/merchantOrders';
 import { getMerchantSession } from '@/lib/merchantAuth';
 import { orderStatusMeta } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
@@ -32,7 +32,7 @@ export default function MerchantOrdersPage() {
   useEffect(() => {
     const session = getMerchantSession();
     if (!session) return;
-    listOrders({ vendorId: session.vendorId }).then(setOrders);
+    listMerchantOrders({ vendorId: session.vendorId }).then(setOrders);
   }, []);
 
   const rows = useMemo(() => {

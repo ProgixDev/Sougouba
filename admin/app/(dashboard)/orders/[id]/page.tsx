@@ -9,21 +9,26 @@ import { Text } from '@/components/ui/Text';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { Skeleton } from '@/components/data/Skeleton';
 import { getOrder } from '@/lib/api/orders';
-import { getVendor } from '@/lib/api/vendors';
 import { orderStatusMeta, DISPUTE_REASON_LABELS, COURIER_ISSUE_REASON_LABELS } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
-import type { Order, Vendor } from '@/lib/types';
+import type { AdminOrderDetail } from '@/lib/types';
 
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [order, setOrder] = useState<Order | null | undefined>(undefined);
-  const [vendor, setVendor] = useState<Vendor | null>(null);
+  const [order, setOrder] = useState<AdminOrderDetail | null | undefined>(undefined);
 
   useEffect(() => {
-    getOrder(id).then(async (o) => {
-      setOrder(o ?? null);
-      if (o) setVendor((await getVendor(o.vendorId)) ?? null);
-    });
+    let active = true;
+    // The vendor is embedded in the detail response now — this used to fire a
+    // second, dependent request for the shop's name once the order arrived.
+    getOrder(id)
+      .then((o) => active && setOrder(o))
+      // Null renders "introuvable"; without a rejection path a failed request
+      // left the skeleton spinning forever.
+      .catch(() => active && setOrder(null));
+    return () => {
+      active = false;
+    };
   }, [id]);
 
   if (order === undefined) {
@@ -46,18 +51,18 @@ export default function OrderDetailPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <Breadcrumbs items={[{ label: 'Commandes', href: '/orders' }, { label: `#${order.id}` }]} />
+      <Breadcrumbs items={[{ label: 'Commandes', href: '/orders' }, { label: `#${order.id.slice(0, 8)}` }]} />
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
             <Text as="h1" variant="display">
-              Commande #{order.id}
+              Commande #{order.id.slice(0, 8)}
             </Text>
             <StatusBadge label={meta.label} tone={meta.tone} />
           </div>
           <Text variant="body" tone="muted" className="mt-1">
-            {order.customerName ?? 'Client'} · {vendor?.name ?? order.vendorId} · {formatDateTime(order.createdAt)}
+            {order.customerName ?? 'Client'} · {order.vendor.name} · {formatDateTime(order.createdAt)}
           </Text>
         </div>
       </div>
@@ -79,17 +84,17 @@ export default function OrderDetailPage() {
                   </Text>
                 </div>
                 <Text variant="body" className="tabular font-semibold">
-                  {formatCad(item.qty * item.unitPriceCad)}
+                  {formatCad(item.lineTotalCad)}
                 </Text>
               </div>
             ))}
           </div>
           <div className="mt-4 flex flex-col gap-1.5 border-t border-border pt-4">
-            <Row label="Sous-total" value={formatCad(order.subtotalCad)} />
-            <Row label="TPS" value={formatCad(order.gstCad)} />
-            <Row label="TVQ" value={formatCad(order.qstCad)} />
-            <Row label="Livraison" value={formatCad(order.deliveryFeeCad)} />
-            <Row label="Total" value={formatCad(order.totalCad)} strong />
+            <Row label="Sous-total" value={formatCad(order.totals.subtotalCad)} />
+            <Row label="TPS" value={formatCad(order.totals.gstCad)} />
+            <Row label="TVQ" value={formatCad(order.totals.qstCad)} />
+            <Row label="Livraison" value={formatCad(order.totals.deliveryFeeCad)} />
+            <Row label="Total" value={formatCad(order.totals.totalCad)} strong />
           </div>
         </Card>
 

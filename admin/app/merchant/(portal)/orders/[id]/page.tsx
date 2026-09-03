@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { Skeleton } from '@/components/data/Skeleton';
-import { getOrder } from '@/lib/api/orders';
+import { getMerchantOrder } from '@/lib/api/merchantOrders';
 import { getMerchantSession } from '@/lib/merchantAuth';
 import { orderStatusMeta, DISPUTE_REASON_LABELS, COURIER_ISSUE_REASON_LABELS } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
@@ -19,7 +19,7 @@ export default function MerchantOrderDetailPage() {
 
   useEffect(() => {
     const session = getMerchantSession();
-    getOrder(id).then((o) => {
+    getMerchantOrder(id).then((o) => {
       // Scoped to this shop's own orders — a merchant should never see another shop's order.
       setOrder(o && session && o.vendorId === session.vendorId ? o : null);
     });

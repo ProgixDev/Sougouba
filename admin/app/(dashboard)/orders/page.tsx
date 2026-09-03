@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Package, Search } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -7,10 +7,10 @@ import { Text } from '@/components/ui/Text';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { DataTable, type Column } from '@/components/data/DataTable';
 import { listOrders } from '@/lib/api/orders';
-import { listVendors } from '@/lib/api/vendors';
+import { useToast } from '@/components/Toast';
 import { orderStatusMeta } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
-import type { Order, OrderStatus, Vendor } from '@/lib/types';
+import type { AdminOrderListItem, OrderStatus } from '@/lib/types';
 
 const STATUS_OPTIONS: { value: OrderStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'Tous les statuts' },
@@ -25,35 +25,46 @@ const STATUS_OPTIONS: { value: OrderStatus | 'all'; label: string }[] = [
 
 export default function OrdersPage() {
   const router = useRouter();
-  const [orders, setOrders] = useState<Order[] | null>(null);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const toast = useToast();
+  const [rows, setRows] = useState<AdminOrderListItem[] | null>(null);
   const [status, setStatus] = useState<OrderStatus | 'all'>('all');
   const [search, setSearch] = useState('');
 
+  // Debounced, because this now reaches the network on every keystroke and the
+  // API allows 120 requests a minute per account.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   useEffect(() => {
-    listOrders().then(setOrders);
-    listVendors().then(setVendors);
-  }, []);
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-  const vendorName = useMemo(() => {
-    const map = new Map(vendors.map((v) => [v.id, v.name]));
-    return (id: string) => map.get(id) ?? id;
-  }, [vendors]);
+  useEffect(() => {
+    let active = true;
+    // Back to the skeleton while the new filter loads, rather than showing the
+    // previous filter's rows as though they were the answer.
+    setRows(null);
+    listOrders({
+      status: status === 'all' ? undefined : status,
+      search: debouncedSearch,
+      limit: 100,
+    })
+      .then((page) => active && setRows(page.items))
+      .catch((error: unknown) => {
+        if (!active) return;
+        // Without this the skeleton spins forever on any failure — the mock
+        // could not reject, so no call site had a rejection path.
+        setRows([]);
+        toast('error', error instanceof Error ? error.message : 'Chargement impossible.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [status, debouncedSearch, toast]);
 
-  const rows = useMemo(() => {
-    let list = orders ?? [];
-    if (status !== 'all') list = list.filter((o) => o.status === status);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((o) => o.id.toLowerCase().includes(q) || (o.customerName ?? '').toLowerCase().includes(q));
-    }
-    return list;
-  }, [orders, status, search]);
-
-  const columns: Column<Order>[] = [
-    { key: 'id', header: 'Commande', render: (o) => <Text variant="body" className="font-semibold">#{o.id}</Text> },
+  const columns: Column<AdminOrderListItem>[] = [
+    { key: 'id', header: 'Commande', render: (o) => <Text variant="body" className="font-semibold">#{o.id.slice(0, 8)}</Text> },
     { key: 'customer', header: 'Client', sortable: true, sortValue: (o) => o.customerName ?? '', render: (o) => <Text variant="body">{o.customerName ?? '—'}</Text> },
-    { key: 'vendor', header: 'Commerce', render: (o) => <Text variant="body">{vendorName(o.vendorId)}</Text> },
+    { key: 'vendor', header: 'Commerce', render: (o) => <Text variant="body">{o.vendorName}</Text> },
     {
       key: 'createdAt',
       header: 'Date',
@@ -124,10 +135,10 @@ export default function OrdersPage() {
       <Card elevated>
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={rows ?? []}
           keyField={(o) => o.id}
           onRowClick={(o) => router.push(`/orders/${o.id}`)}
-          loading={orders === null}
+          loading={rows === null}
           emptyIcon={Package}
           emptyTitle="Aucune commande"
           emptyDescription="Aucune commande ne correspond à ce filtre pour le moment."

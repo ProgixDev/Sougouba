@@ -9,7 +9,7 @@ import { StatusBadge } from '@/components/data/StatusBadge';
 import { Skeleton } from '@/components/data/Skeleton';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { getVendorOverview, type VendorOverviewStats } from '@/lib/api/stats';
-import { listOrders } from '@/lib/api/orders';
+import { listMerchantOrders } from '@/lib/api/merchantOrders';
 import { getMerchantSession } from '@/lib/merchantAuth';
 import { orderStatusMeta } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
@@ -24,7 +24,7 @@ export default function MerchantOverviewPage() {
     const session = getMerchantSession();
     if (!session) return;
     getVendorOverview(session.vendorId, 30).then(setStats);
-    listOrders({ vendorId: session.vendorId }).then((orders) => setRecent(orders.slice(0, 6)));
+    listMerchantOrders({ vendorId: session.vendorId }).then((orders) => setRecent(orders.slice(0, 6)));
   }, []);
 
   return (

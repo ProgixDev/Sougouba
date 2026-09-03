@@ -1,32 +1,34 @@
-import type { Order, OrderStatus, ID } from '../types';
-import { loadTable, delay } from './storage';
-import { getSeed } from './seed';
-
-const TABLE_KEY = 'sougouba-admin-orders';
-
-function table(): Order[] {
-  return loadTable(TABLE_KEY, getSeed().orders);
-}
+import { apiGet, apiGetOrNull, type Page } from './client';
+import type { AdminOrderDetail, AdminOrderListItem, ID, OrderStatus } from '../types';
 
 export interface OrderFilters {
   status?: OrderStatus;
   vendorId?: ID;
   search?: string;
+  limit?: number;
+  offset?: number;
 }
 
-export async function listOrders(filters: OrderFilters = {}): Promise<Order[]> {
-  await delay();
-  let rows = table();
-  if (filters.status) rows = rows.filter((o) => o.status === filters.status);
-  if (filters.vendorId) rows = rows.filter((o) => o.vendorId === filters.vendorId);
-  if (filters.search) {
-    const q = filters.search.toLowerCase();
-    rows = rows.filter((o) => o.id.toLowerCase().includes(q) || (o.customerName ?? '').toLowerCase().includes(q));
-  }
-  return rows;
+/**
+ * Orders across the whole platform.
+ *
+ * ⚠️ **Filtering happens on the server now.** The mock ignored these arguments
+ * — the page called `listOrders()` with nothing and re-filtered the full array
+ * in a `useMemo`. That worked because every order was already in the browser.
+ * With a paginated endpoint it would silently filter one page and present the
+ * result as the whole answer, so the filters must be passed down.
+ */
+export async function listOrders(filters: OrderFilters = {}): Promise<Page<AdminOrderListItem>> {
+  return apiGet<Page<AdminOrderListItem>>('/admin/orders', {
+    status: filters.status,
+    vendorId: filters.vendorId,
+    search: filters.search?.trim() || undefined,
+    limit: filters.limit,
+    offset: filters.offset,
+  });
 }
 
-export async function getOrder(id: ID): Promise<Order | undefined> {
-  await delay(150, 300);
-  return table().find((o) => o.id === id);
+/** Null for an id that does not exist — a detail page renders "introuvable", not an error. */
+export async function getOrder(id: ID): Promise<AdminOrderDetail | null> {
+  return apiGetOrNull<AdminOrderDetail>(`/admin/orders/${id}`);
 }
