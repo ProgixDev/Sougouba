@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test
+
+      # Fails the build if `src/db/schema/*` was edited without running
+      # `drizzle-kit generate` — a migration file committed out of sync with
+      # the schema it's supposed to produce is a bug caught here, not in
+      # a later `drizzle-kit migrate` against a real database.
+      - name: Check for uncommitted schema drift
+        run: |
+          npx drizzle-kit generate --name ci_drift_check
+          if ! git diff --quiet -- drizzle/; then
+            echo "::error::src/db/schema/* changed without a matching migration being generated and committed. Run 'npx drizzle-kit generate' and commit the result."
+            git diff -- drizzle/
+            exit 1
+          fi

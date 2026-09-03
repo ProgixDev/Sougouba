@@ -1,0 +1,142 @@
+import { z } from 'zod';
+
+import { paginationSchema } from '../../catalog/dto/query.dto.js';
+
+export const disputeQuerySchema = paginationSchema.extend({
+  status: z.enum(['open', 'answered', 'resolved', 'rejected']).optional(),
+  /** The triage default: everything still waiting on a human. */
+  openOnly: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+});
+
+export type DisputeQuery = z.infer<typeof disputeQuerySchema>;
+
+/**
+ * Settling a dispute.
+ *
+ * `resolved` means the shopper was right (in whole or in part); `rejected`
+ * means the order stands as delivered. Both are terminal, and both require a
+ * note — a dispute closed with no reasoning is one nobody can defend three
+ * months later when the merchant asks why they were charged back.
+ */
+export const resolveDisputeSchema = z
+  .object({
+    outcome: z.enum(['resolved', 'rejected'], { message: 'Issue requise' }),
+    note: z.string().trim().min(5, 'Expliquez la décision').max(2000),
+    /**
+     * Optional refund, in dollars. Absent means "decision recorded, no money
+     * moves" — which is a real outcome: a merchant may make it right directly,
+     * or the complaint may be upheld without a monetary remedy.
+     */
+    refundAmountCad: z.number().positive().max(99_999_999.99).optional(),
+  })
+  .superRefine((values, ctx) => {
+    if (values.outcome === 'rejected' && values.refundAmountCad !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['refundAmountCad'],
+        message: 'Un litige rejeté ne peut pas être remboursé',
+      });
+    }
+  });
+
+export type ResolveDisputeInput = z.infer<typeof resolveDisputeSchema>;
+
+export const courierIssueQuerySchema = paginationSchema.extend({
+  status: z.enum(['open', 'resolved']).optional(),
+});
+
+export type CourierIssueQuery = z.infer<typeof courierIssueQuerySchema>;
+
+export const resolveCourierIssueSchema = z.object({
+  note: z.string().trim().min(5, 'Expliquez la résolution').max(2000),
+});
+
+export type ResolveCourierIssueInput = z.infer<typeof resolveCourierIssueSchema>;
+
+/** A courier reports what stopped a delivery. Ported from the mock's `reportCourierIssue`. */
+export const reportCourierIssueSchema = z.object({
+  reason: z.enum(['customer_absent', 'wrong_address', 'access_problem', 'shop_not_ready', 'order_incomplete', 'other'], {
+    message: 'Choisissez un motif',
+  }),
+  message: z.string().trim().min(5, 'Décrivez le problème').max(2000),
+});
+
+export type ReportCourierIssueInput = z.infer<typeof reportCourierIssueSchema>;
+
+// ── approval queues ─────────────────────────────────────────────────────────
+
+const applicationStatusSchema = z.enum(['pending', 'approved', 'suspended', 'rejected']);
+
+export const reviewQuerySchema = paginationSchema.extend({
+  status: applicationStatusSchema.optional(),
+});
+
+export type ReviewQuery = z.infer<typeof reviewQuerySchema>;
+
+/**
+ * The note behind a decision.
+ *
+ * Optional on an approval — "yes" needs no explanation — and **required** on a
+ * rejection or suspension, enforced at the route rather than here, because the
+ * two share this schema and only the destination knows which it is. A merchant
+ * told only "rejected" has nothing to fix and nothing to appeal.
+ */
+export const reviewDecisionSchema = z.object({
+  reason: z.string().trim().min(5, 'Expliquez la décision').max(2000).optional(),
+});
+
+export type ReviewDecisionInput = z.infer<typeof reviewDecisionSchema>;
+
+export const userQuerySchema = paginationSchema.extend({
+  role: z.enum(['customer', 'business', 'courier', 'admin']).optional(),
+});
+
+export type UserQuery = z.infer<typeof userQuerySchema>;
+
+// ── platform settings ───────────────────────────────────────────────────────
+
+/**
+ * The rates the client brief puts under an administrator's control ("modifier
+ * les règles"), plus the CDC's monetization figures.
+ *
+ * Every field is optional — this is a patch, and an admin turning on a
+ * double-points day should not have to resend the commission rate. Each carries
+ * the bound its column actually holds, so an impossible value is a 400 rather
+ * than a Postgres overflow.
+ */
+export const updateSettingsSchema = z
+  .object({
+    pointsPerCad: z.number().min(0).max(9999.99).optional(),
+    pointsPerCadRedeemed: z.number().min(1, 'Au moins 1 point par dollar').max(9999.99).optional(),
+    maxRedemptionShare: z.number().min(0).max(1, 'Une part, entre 0 et 1').optional(),
+    pointsExpiryMonths: z.number().int().min(1).max(120).optional(),
+    referralRewardPoints: z.number().int().min(0).max(1_000_000).optional(),
+    referralMinFirstOrderCad: z.number().min(0).max(99_999_999.99).optional(),
+    doublePointsActive: z.boolean().optional(),
+    /** Null clears a bound — an open-ended promotion, or one with no start. */
+    doublePointsStartsAt: z.coerce.date().nullable().optional(),
+    doublePointsEndsAt: z.coerce.date().nullable().optional(),
+    /** CDC §05: 12 % commission + 70 $/month, cumulative. */
+    commissionRate: z.number().min(0).max(1, 'Un taux, entre 0 et 1').optional(),
+    monthlySubscriptionCad: z.number().min(0).max(99_999_999.99).optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, 'Aucun champ à modifier')
+  .refine(
+    (v) => !(v.doublePointsStartsAt && v.doublePointsEndsAt) || v.doublePointsStartsAt < v.doublePointsEndsAt,
+    { message: 'La fin doit suivre le début', path: ['doublePointsEndsAt'] }
+  );
+
+export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
+
+/**
+ * A refund granted outside a dispute — an order cancelled after payment, a
+ * merchant who could not fulfil, the sold-out-mid-checkout case
+ * `OrdersService.place` logs.
+ */
+export const refundOrderSchema = z.object({
+  /** Absent refunds the whole order total. */
+  amountCad: z.number().positive().max(99_999_999.99).optional(),
+  reason: z.string().trim().min(5, 'Motif requis').max(500),
+});
+
+export type RefundOrderInput = z.infer<typeof refundOrderSchema>;

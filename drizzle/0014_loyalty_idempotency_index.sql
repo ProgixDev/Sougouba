@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "loyalty_one_movement_per_order_reason" ON "loyalty_transactions" USING btree ("order_id","reason") WHERE "loyalty_transactions"."order_id" is not null;

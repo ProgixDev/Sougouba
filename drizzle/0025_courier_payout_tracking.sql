@@ -1,0 +1,2 @@
+ALTER TABLE "order_deliveries" ADD COLUMN "paid_out_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "order_deliveries" ADD COLUMN "stripe_transfer_id" text;CREATE INDEX "order_deliveries_unpaid_idx" ON "order_deliveries" USING btree ("courier_id") WHERE "order_deliveries"."paid_out_at" is null and "order_deliveries"."delivered_at" is not null;

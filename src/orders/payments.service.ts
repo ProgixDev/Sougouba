@@ -1,0 +1,277 @@
+import { BadRequestException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import Stripe from 'stripe';
+
+import type { Env } from '../config/env.js';
+
+/**
+ * Stripe, and the one rule that matters: **the client never tells this API that
+ * a payment succeeded.** It hands over a PaymentIntent id; the API asks Stripe.
+ *
+ * Everything else here follows from that. The intent is created server-side for
+ * a server-computed amount, so there is no number the client could have chosen;
+ * it is re-fetched at order time and checked for status, amount, currency and
+ * owner, so a succeeded intent for 1 $ cannot buy a 100 $ basket, and one
+ * belonging to another shopper cannot be replayed at all.
+ *
+ * Unconfigured behaviour matches `GeoService`'s: a clear 503 naming the missing
+ * variable, never a silent success. An API that pretends to take payments is
+ * worse than one that admits it cannot.
+ */
+@Injectable()
+export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
+  private readonly stripe: Stripe | null;
+
+  constructor(private readonly config: ConfigService<Env, true>) {
+    const key = this.config.get('STRIPE_SECRET_KEY', { infer: true });
+    // Constructed once: the SDK holds a connection pool, and building one per
+    // request is the standard way to make Stripe calls slow for no reason.
+    this.stripe = key ? new Stripe(key) : null;
+  }
+
+  get isConfigured(): boolean {
+    return this.stripe !== null;
+  }
+
+  private client(): Stripe {
+    if (!this.stripe) {
+      throw new ServiceUnavailableException(
+        'Payments are not configured — STRIPE_SECRET_KEY is unset (see docs/BACKEND-BUILD-PHASES.md, Phase 3).'
+      );
+    }
+    return this.stripe;
+  }
+
+  /**
+   * Create the intent the app's payment sheet confirms.
+   *
+   * `amountCents` is the server's own total. The order is *not* created here —
+   * an intent may be abandoned, may fail, may sit unconfirmed forever, and a
+   * row written now would be an order nobody paid for. The order is written
+   * once, later, against a succeeded intent.
+   *
+   * `customerId` goes into metadata so `assertPaidBy` can refuse a valid intent
+   * belonging to somebody else. Metadata is the right home for it: it is
+   * returned on every retrieve, it is visible in the Stripe dashboard when
+   * someone is reconciling a payment by hand, and it costs no extra call.
+   */
+  async createIntent(input: {
+    amountCents: number;
+    customerId: string;
+    vendorId: string;
+    /**
+     * Phase 7's commission split. When the merchant has finished Connect
+     * onboarding, the payment is a **destination charge**: Stripe moves the
+     * whole amount, keeps `applicationFeeCents` on the platform's balance and
+     * settles the rest to the merchant automatically.
+     *
+     * Omitted when they have not onboarded — the money then sits on the
+     * platform balance and is settled manually. Charging a fee toward an
+     * account that cannot receive it would fail the whole payment, which would
+     * mean an approved shop could not sell until its banking was finished.
+     */
+    split?: { connectAccountId: string; applicationFeeCents: number };
+  }): Promise<{ paymentIntentId: string; clientSecret: string; amountCents: number }> {
+    const intent = await this.client().paymentIntents.create({
+      amount: input.amountCents,
+      currency: 'cad',
+      // Apple Pay and Google Pay ride on the card rail and need no separate
+      // method here — the devis lists all three, and this covers all three.
+      automatic_payment_methods: { enabled: true },
+      metadata: { customerId: input.customerId, vendorId: input.vendorId },
+      ...(input.split
+        ? {
+            application_fee_amount: input.split.applicationFeeCents,
+            transfer_data: { destination: input.split.connectAccountId },
+          }
+        : {}),
+    });
+
+    if (!intent.client_secret) {
+      // Should not happen on a freshly created intent, but a null here would
+      // otherwise reach the app as a payment sheet that cannot open.
+      throw new ServiceUnavailableException('Stripe returned an intent with no client secret');
+    }
+
+    return { paymentIntentId: intent.id, clientSecret: intent.client_secret, amountCents: intent.amount };
+  }
+
+  /**
+   * The gate `POST /orders` passes before it writes anything.
+   *
+   * Four checks, each closing a different hole:
+   * - **status** — anything but `succeeded` means the money did not move.
+   *   `requires_capture` is deliberately refused too: an authorised-but-uncaptured
+   *   payment can still fail at capture, and an order created on one would be
+   *   food dispatched against a payment that never completed.
+   * - **amount** — the intent was created for the server's total, but a client
+   *   could hand back the id of a *different*, cheaper intent it also owns.
+   *   Re-checking against the freshly recomputed total is what makes that
+   *   pointless.
+   * - **currency** — a CAD total settled in a weaker currency would clear every
+   *   numeric check while paying a fraction of the price.
+   * - **owner** — an intent id is not a secret between users; without this,
+   *   one shopper's paid intent could be replayed by another.
+   */
+  async assertPaidBy(paymentIntentId: string, expected: { amountCents: number; customerId: string }): Promise<void> {
+    let intent: Stripe.PaymentIntent;
+    try {
+      intent = await this.client().paymentIntents.retrieve(paymentIntentId);
+    } catch (error) {
+      // Never echo Stripe's message back — it distinguishes "no such intent"
+      // from "belongs to another account", which is an id-probing oracle.
+      this.logger.warn(`PaymentIntent ${paymentIntentId} could not be retrieved: ${String(error)}`);
+      throw new BadRequestException('Payment could not be verified');
+    }
+
+    if (intent.status !== 'succeeded') {
+      throw new BadRequestException(`Payment has not completed (status: ${intent.status})`);
+    }
+    if (intent.amount_received !== expected.amountCents) {
+      this.logger.warn(
+        `PaymentIntent ${paymentIntentId} paid ${intent.amount_received} but the order prices at ${expected.amountCents}`
+      );
+      throw new BadRequestException('Payment amount does not match the order total');
+    }
+    if (intent.currency !== 'cad') {
+      throw new BadRequestException(`Payment is in ${intent.currency}, not CAD`);
+    }
+    if (intent.metadata?.customerId !== expected.customerId) {
+      this.logger.warn(`PaymentIntent ${paymentIntentId} belongs to another customer`);
+      throw new BadRequestException('Payment could not be verified');
+    }
+  }
+
+  // ── Connect (Phase 7) ─────────────────────────────────────────────────────
+
+  /**
+   * Create an Express account for a merchant or a courier.
+   *
+   * **Express, not Custom**: Stripe hosts the onboarding, collects the bank
+   * details and owns the identity verification. Custom would put all of that on
+   * this API — which is precisely the PII this project has spent Phase 5 and 7
+   * refusing to hold.
+   */
+  async createConnectAccount(subject: { kind: 'vendor' | 'courier'; id: string; name: string }): Promise<string> {
+    const account = await this.client().accounts.create({
+      type: 'express',
+      country: 'CA',
+      // Both are paid out, neither is charged directly — the platform takes the
+      // payment and splits it (`application_fee_amount`), so `card_payments` is
+      // not requested here.
+      capabilities: { transfers: { requested: true } },
+      business_type: subject.kind === 'courier' ? 'individual' : undefined,
+      metadata: { sougoubaKind: subject.kind, sougoubaId: subject.id, name: subject.name },
+    });
+    this.logger.log(`Created Connect account ${account.id} for ${subject.kind} ${subject.id}`);
+    return account.id;
+  }
+
+  /**
+   * A one-time onboarding URL.
+   *
+   * Short-lived by Stripe's design, which is why this is generated per request
+   * rather than stored: a saved link is a link that has expired by the time
+   * someone clicks it.
+   */
+  async createAccountLink(accountId: string, returnUrl: string, refreshUrl: string): Promise<string> {
+    const link = await this.client().accountLinks.create({
+      account: accountId,
+      type: 'account_onboarding',
+      return_url: returnUrl,
+      refresh_url: refreshUrl,
+    });
+    return link.url;
+  }
+
+  /** What Stripe currently believes about an account — the truth behind our cached status. */
+  async getConnectAccount(accountId: string) {
+    const account = await this.client().accounts.retrieve(accountId);
+    return {
+      detailsSubmitted: account.details_submitted ?? false,
+      chargesEnabled: account.charges_enabled ?? false,
+      payoutsEnabled: account.payouts_enabled ?? false,
+    };
+  }
+
+  /**
+   * Pay a courier, or settle a merchant's balance.
+   *
+   * A `Transfer` rather than a `Payout`: the money moves from the platform's
+   * Stripe balance to the connected account, and Stripe then pays it out to
+   * their bank on its own schedule. Doing it the other way round would mean the
+   * platform holding and disbursing funds itself.
+   *
+   * `idempotencyKey` is not optional in practice — a payout job that retries
+   * without one pays twice, and this is the one call in the codebase where that
+   * is real money leaving.
+   */
+  async transfer(input: {
+    accountId: string;
+    amountCents: number;
+    idempotencyKey: string;
+    description: string;
+  }): Promise<string> {
+    const transfer = await this.client().transfers.create(
+      {
+        amount: input.amountCents,
+        currency: 'cad',
+        destination: input.accountId,
+        description: input.description,
+      },
+      { idempotencyKey: input.idempotencyKey }
+    );
+    this.logger.log(`Transferred ${input.amountCents} to ${input.accountId} → ${transfer.id}`);
+    return transfer.id;
+  }
+
+  /**
+   * Send money back. Returns Stripe's refund id.
+   *
+   * Deliberately not swallowing failures: the caller writes the order's refund
+   * record only once this resolves, so a throw here leaves the order unrefunded
+   * — which is the honest state — rather than marked refunded against a payment
+   * Stripe declined to reverse.
+   *
+   * A `charge_already_refunded` from Stripe surfaces as a plain error too. That
+   * means the database and Stripe disagree, which is worth a human looking at
+   * rather than a silent success.
+   */
+  async refund(paymentIntentId: string, amountCents: number): Promise<string> {
+    const refund = await this.client().refunds.create({
+      payment_intent: paymentIntentId,
+      amount: amountCents,
+      // Stripe's own reason vocabulary is three fixed values and none of them
+      // fit "an administrator upheld a dispute". The real reason is stored on
+      // the order; this keeps the Stripe dashboard honest about who asked.
+      reason: 'requested_by_customer',
+    });
+    this.logger.log(`Refunded ${amountCents} on ${paymentIntentId} → ${refund.id} (${refund.status})`);
+    return refund.id;
+  }
+
+  /**
+   * Verify a webhook's signature and return the event.
+   *
+   * The raw body is required, unparsed: the signature is computed over the exact
+   * bytes Stripe sent, so anything that re-serialises the JSON first (key order,
+   * whitespace, unicode escaping) invalidates it. Without this check the webhook
+   * endpoint is an unauthenticated, internet-facing "mark this paid" button.
+   */
+  constructEvent(rawBody: Buffer | string, signature: string | undefined): Stripe.Event {
+    const secret = this.config.get('STRIPE_WEBHOOK_SECRET', { infer: true });
+    if (!secret) {
+      throw new ServiceUnavailableException('Webhooks are not configured — STRIPE_WEBHOOK_SECRET is unset.');
+    }
+    if (!signature) {
+      throw new BadRequestException('Missing Stripe-Signature header');
+    }
+    try {
+      return this.client().webhooks.constructEvent(rawBody, signature, secret);
+    } catch (error) {
+      this.logger.warn(`Rejected a webhook with a bad signature: ${String(error)}`);
+      throw new BadRequestException('Invalid webhook signature');
+    }
+  }
+}
