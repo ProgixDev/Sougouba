@@ -14,6 +14,10 @@
  *
  * What it is NOT is legal advice. Before launch it needs:
  *   1. the ⟦bracketed⟧ facts below filled in — only the client has them;
+ *      (the Supabase hosting region was one of them, and is now answered:
+ *      eu-west-1, Ireland — confirmed against the live pooler, not assumed.
+ *      §8 says so plainly, because "hors du Québec" is a disclosure the law
+ *      requires rather than a detail to leave vague.)
  *   2. a Quebec lawyer's pass, in particular on §15 of the terms (limitation of
  *      liability against the Loi sur la protection du consommateur) and on the
  *      Loi 25 obligations in the privacy policy;
@@ -232,8 +236,9 @@ export const privacy: LegalDoc = {
       id: 'hors-quebec',
       title: '8. La communication hors du Québec',
       blocks: [
-        p("Nos serveurs de base de données sont situés ⟦région d'hébergement Supabase — à confirmer⟧. Stripe, Mapbox et Google traitent une partie des renseignements à l'extérieur du Canada."),
-        p("La loi québécoise exige qu'avant de communiquer des renseignements personnels à l'extérieur du Québec, nous évaluions si le régime du pays destinataire leur accorde une protection adéquate, et que cette évaluation soit consignée. ⟦Évaluation des facteurs relatifs à la vie privée à réaliser avant le lancement.⟧"),
+        p("Nos serveurs de base de données sont situés en Irlande (région AWS eu-west-1). Stripe, Mapbox et Google traitent également une partie des renseignements à l'extérieur du Canada."),
+        p("Vos renseignements ne sont donc pas conservés au Québec, ni au Canada. Ils relèvent du droit européen de la protection des données, qui impose des obligations au moins équivalentes à celles du Québec — mais la loi québécoise exige que nous le disions, et non que nous le supposions."),
+        p("Avant de communiquer des renseignements personnels à l'extérieur du Québec, la loi nous impose d'évaluer si le régime du pays destinataire leur accorde une protection adéquate, et de consigner cette évaluation. ⟦Évaluation des facteurs relatifs à la vie privée : à réaliser avant le lancement.⟧"),
       ],
     },
     {
