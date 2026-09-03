@@ -141,18 +141,33 @@ project, static checks have never once caught the bug that mattered.** Full
 detail and what is verified vs. merely written is in `sougouba-api/PROGRESS.md` —
 this file stays the phase-by-phase plan, that one is the build log.
 
-**Waiting on**: a real `DATABASE_URL` and `MAPBOX_SECRET_TOKEN` (the MCP
-connection used so far doesn't expose either secret by design), a **Stripe
-test-mode key** (Phase 3's code is written and booted but no PaymentIntent has
-ever been created — its review gate cannot be walked without one), a deploy
-target decision, Stripe account + Connect platform setup, the remaining open
-questions in §"Confirm before Phase 0" below, and — per the devis — Apple
-Developer / Google Play Console accounts the client owns (not blocking API work,
-but blocking store publishing in Phase 10).
+**Waiting on**: a real `DATABASE_URL` (see below), a **Stripe test-mode key**
+(Phase 3's code is written and booted but no PaymentIntent has ever been
+created — its review gate cannot be walked without one), a deploy target
+decision, Stripe account + Connect platform setup, the remaining open questions
+in §"Confirm before Phase 0" below, and — per the devis — Apple Developer /
+Google Play Console accounts the client owns (not blocking API work, but
+blocking store publishing in Phase 10).
 
-On `DATABASE_URL` specifically: `.env` currently holds
-`postgresql://postgres:…@127.0.0.1:5432/postgres` — a local-dev placeholder, not
-the Supabase pooled connection. The app boots, maps 91 routes and resolves its
+`MAPBOX_SECRET_TOKEN` has come **off** this list (2026-09-03). It never needed
+obtaining from anyone: the mobile repo's own `.env` already carries an `sk.`
+token as `RNMAPBOX_MAPS_DOWNLOAD_TOKEN`, and it geocodes. `POST
+/geo/coordinates` now answers with real coordinates for Montréal and Laval and
+refuses Toronto — the first endpoint on this API verified end-to-end against a
+real external service rather than through the MCP connection. One caveat
+recorded in `.env.example`: that token is nominally the *downloads* token for
+the native SDK build, so one secret is doing two jobs and rotating it for the
+mobile build would silently stop server-side geocoding. A dedicated server
+token before launch.
+
+On `DATABASE_URL` specifically: `.env` holds
+`postgresql://postgres:…@127.0.0.1:5432/postgres` — a placeholder in **both**
+host and password, checked rather than assumed. Nothing listens on 127.0.0.1:5432
+or :54322 on this machine, there is no Supabase CLI, no `supabase/` directory
+and no Docker, so that host reaches nothing; and the password it carries was
+tried against the real pooler and rejected (`28P01`), so it is not the Supabase
+one either. The connection string to use is in `.env.example` — only the
+password is missing, and it comes from Supabase → Project Settings → Database. The app boots, maps 91 routes and resolves its
 whole module graph against it, but `/health/db` returns 500 and the dispatch
 scheduler logs a connection failure every five seconds. **No query the API
 issues has ever reached a database.** Everything verified so far was proved
