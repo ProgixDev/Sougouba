@@ -41,11 +41,14 @@ export const site = {
 };
 
 export const nav = {
+  // Root-relative, not bare fragments: the nav and the footer also render on
+  // /conditions and /confidentialite, where "#comment" points at nothing.
+  // On the home page "/#comment" is still just an in-page jump.
   links: [
-    { href: '#comment', label: 'Comment ça marche' },
-    { href: '#commerces', label: 'Commerces' },
-    { href: '#partenaire', label: 'Devenir partenaire' },
-    { href: '#livreurs', label: 'Livreurs' },
+    { href: '/#comment', label: 'Comment ça marche' },
+    { href: '/#commerces', label: 'Commerces' },
+    { href: '/#partenaire', label: 'Devenir partenaire' },
+    { href: '/#livreurs', label: 'Livreurs' },
   ],
   cta: 'Inscrire ma boutique',
   skipToContent: 'Aller au contenu',
@@ -253,10 +256,19 @@ export const finalCta = {
 
 export const footer = {
   columns: [
-    { title: 'Sougouba', links: [{ label: 'Comment ça marche', href: '#comment' }, { label: 'Commerces', href: '#commerces' }, { label: 'La note', href: '#note' }] },
-    { title: 'Commerçants', links: [{ label: 'Devenir partenaire', href: '#partenaire' }, { label: 'Tarifs', href: '#partenaire' }] },
-    { title: 'Livreurs', links: [{ label: 'Devenir livreur', href: '#livreurs' }, { label: 'Gains', href: '#livreurs' }] },
+    { title: 'Sougouba', links: [{ label: 'Comment ça marche', href: '/#comment' }, { label: 'Commerces', href: '/#commerces' }, { label: 'La note', href: '/#note' }] },
+    { title: 'Commerçants', links: [{ label: 'Devenir partenaire', href: '/#partenaire' }, { label: 'Tarifs', href: '/#partenaire' }] },
+    { title: 'Livreurs', links: [{ label: 'Devenir livreur', href: '/#livreurs' }, { label: 'Gains', href: '/#livreurs' }] },
     { title: 'Soutien', links: [{ label: site.support, href: `mailto:${site.support}` }] },
+  ],
+  /**
+   * The two documents that must exist before launch, because a footer that
+   * links to nothing is worse than a footer that links to a draft.
+   * Copy lives in `lib/legal.ts`; these are only the labels.
+   */
+  legal: [
+    { label: "Conditions d'utilisation", href: '/conditions' },
+    { label: 'Politique de confidentialité', href: '/confidentialite' },
   ],
   /** Recorded in docs/PROGRESS.md. Confirm the wording with the client before launch. */
   meaning: 'Sougouba — « le grand marché », en bambara.',

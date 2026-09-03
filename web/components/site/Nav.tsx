@@ -72,7 +72,8 @@ export function Nav() {
 
         <div className="ml-auto flex items-center gap-3 lg:ml-0">
           <ThemeToggle onDark={onDark} />
-          <Button href="#partenaire" variant="cta" size="sm" className="hidden sm:inline-flex">
+          {/* Root-relative: the nav also renders on the legal pages. */}
+          <Button href="/#partenaire" variant="cta" size="sm" className="hidden sm:inline-flex">
             {nav.cta}
           </Button>
         </div>

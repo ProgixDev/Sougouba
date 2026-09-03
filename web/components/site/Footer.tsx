@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { WovenBand } from '@/components/ui';
 import { footer, site } from '@/lib/content';
 
@@ -34,10 +35,24 @@ export function Footer() {
             <img src="/brand/wordmark-dark.svg" alt={site.name} className="h-6 w-auto" />
             <p className="mt-4 max-w-[40ch] font-sans text-[0.875rem] text-forest-300">{footer.meaning}</p>
           </div>
-          <div className="space-y-1 font-sans text-[0.8125rem] text-forest-300 sm:text-right">
-            <p>© {new Date().getFullYear()} {site.name}. {footer.rights}</p>
-            <p>{footer.builtBy}</p>
-            <p>{footer.credits}</p>
+          <div className="space-y-3 font-sans text-[0.8125rem] text-forest-300 sm:text-right">
+            <ul className="flex flex-wrap gap-x-5 gap-y-2 sm:justify-end">
+              {footer.legal.map((l) => (
+                <li key={l.href}>
+                  <Link
+                    href={l.href}
+                    className="text-forest-100/85 underline-offset-4 transition-colors hover:text-white hover:underline"
+                  >
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <div className="space-y-1">
+              <p>© {new Date().getFullYear()} {site.name}. {footer.rights}</p>
+              <p>{footer.builtBy}</p>
+              <p>{footer.credits}</p>
+            </div>
           </div>
         </div>
       </div>
