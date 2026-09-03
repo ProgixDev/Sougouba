@@ -44,19 +44,44 @@ export const Family = {
 export type FamilyName = keyof typeof Family;
 
 /**
- * `5eed00FF-0000-4000-8000-NNNNNNNNNNNN` — sortable within a family, stable
- * across runs, and unmistakable in a table viewer.
+ * `5eedHHHH-0FFF-4000-8000-NNNNNNNNNNNN` — stable across runs, unmistakable in
+ * a table viewer, and **visually distinct in the first eight characters**.
+ *
+ * That last property is not cosmetic. The dashboard displays an order as
+ * `#${id.slice(0, 8)}` everywhere, because a full uuid is unreadable in a
+ * table. An earlier version of this put the *family* in those characters, so
+ * every seeded order rendered as `#5eed0006` — identical in the list, in the
+ * detail heading, and in every search result. Real uuids are random there; the
+ * fixtures have to vary there too or they misrepresent the thing they stand in
+ * for.
+ *
+ * So chars 5-8 carry a hash of (family, index) purely for legibility.
+ * Uniqueness still comes from the index in the final group, and the family
+ * moves to the second group to keep families from colliding.
  */
 export function seedId(family: number, n: number): string {
-  if (!Number.isInteger(family) || family < 0 || family > 0xff) {
+  if (!Number.isInteger(family) || family < 0 || family > 0xfff) {
     throw new RangeError(`seed family out of range: ${family}`);
   }
   if (!Number.isInteger(n) || n < 0 || n > 0xffffffffffff) {
     throw new RangeError(`seed index out of range: ${n}`);
   }
-  const fam = family.toString(16).padStart(4, '0');
+  const label = mix16(family, n).toString(16).padStart(4, '0');
+  const fam = family.toString(16).padStart(3, '0');
   const tail = n.toString(16).padStart(12, '0');
-  return `${NAMESPACE}${fam}-0000-4000-8000-${tail}`;
+  return `${NAMESPACE}${label}-0${fam}-4000-8000-${tail}`;
+}
+
+/**
+ * A small deterministic mix down to 16 bits. Only ever used for the readable
+ * portion above — collisions here are harmless, since two ids differing only
+ * in this field still differ in the index group.
+ */
+function mix16(family: number, n: number): number {
+  let h = 2166136261 ^ family;
+  h = Math.imul(h ^ (n & 0xffff), 16777619);
+  h = Math.imul(h ^ (n >>> 16), 16777619);
+  return (h ^ (h >>> 16)) & 0xffff;
 }
 
 /**

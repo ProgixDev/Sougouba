@@ -61,14 +61,24 @@ describe('seedId', () => {
     expect(seedId(Family.Vendor, 3)).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   });
 
-  it('sorts within a family in index order, so seeded rows read predictably', () => {
-    const ids = [seedId(Family.Order, 2), seedId(Family.Order, 10), seedId(Family.Order, 1)];
-    expect([...ids].sort()).toEqual([seedId(Family.Order, 1), seedId(Family.Order, 2), seedId(Family.Order, 10)]);
+  it('varies in the first eight characters — what the dashboard actually displays', () => {
+    // The dashboard renders `#${id.slice(0, 8)}`. When the family lived in
+    // those characters every seeded order showed as `#5eed0006`, identical in
+    // the list, the detail heading and every search hit. Real uuids are random
+    // there; fixtures must be too, or they misrepresent what they stand in for.
+    const shown = new Set(Array.from({ length: 250 }, (_, i) => seedId(Family.Order, i).slice(0, 8)));
+    expect(shown.size).toBeGreaterThan(200);
+  });
+
+  it('still marks every id as seeded despite that variation', () => {
+    for (let i = 0; i < 250; i += 1) expect(isSeedId(seedId(Family.Order, i))).toBe(true);
   });
 
   it('refuses an out-of-range family or index rather than emitting a malformed uuid', () => {
     expect(() => seedId(-1, 0)).toThrow();
-    expect(() => seedId(0x100, 0)).toThrow();
+    // The family occupies three hex digits, so 0xfff is the last valid one.
+    expect(seedId(0xfff, 0)).toContain('-0fff-');
+    expect(() => seedId(0x1000, 0)).toThrow();
     expect(() => seedId(Family.Order, -1)).toThrow();
     expect(() => seedId(Family.Order, 1.5)).toThrow();
   });
