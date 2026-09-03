@@ -63,11 +63,11 @@ and `devis-contract-scope` for the condensed facts pulled from the two PDFs.
 | 0 · Foundations & infra | **Done** (2026-08-30) — see `sougouba-api/PROGRESS.md` |
 | 1 · Identity & accounts | **Done** (2026-08-30) — API side only; mobile app not yet wired to real Supabase Auth |
 | 2 · Catalog | **Done** (2026-09-03) — API side only; mobile app not yet wired |
-| 3 · Cart → checkout → orders → payments | **Code complete** (2026-09-03) — Stripe paths unverified, no test key yet |
+| 3 · Cart → checkout → orders → payments | **Stripe paths verified** (2026-09-03) — `npm run verify:stripe`, 12/12 against live test mode. The order-writing half still needs a `DATABASE_URL` |
 | 4 · Loyalty, referrals & coupons | **Done** (2026-09-03) — coupon *rules* still assumed, not confirmed |
 | 5 · Courier, dispatch & live tracking | **Done** (2026-09-03) — straight-line ETAs until Mapbox Directions; scheduler is single-instance |
 | 6 · Disputes & courier issues | **Done** (2026-09-03) — incl. the `admin` role and refunds |
-| 7 · Money: merchant billing & courier payouts (Stripe Connect) | **Written** (2026-09-03) — no Stripe call has ever run; needs a test key |
+| 7 · Money: merchant billing & courier payouts (Stripe Connect) | **Written** (2026-09-03) — still unexercised, but the blocker is now precise: **Connect is not enabled on the Stripe account**, so `accounts.create` is refused. Switch it on at dashboard.stripe.com/connect and re-run `verify:stripe` |
 | 8 · Admin back-office API | **Done** (2026-09-03) — API only, as planned; audit log landed same day (`0028`) |
 | 9 · Notifications & AI support assistant | Not started |
 | 10 · Hardening, observability & launch | **Started** (2026-09-03) — rate limiting done, column-grant audit closed; logging/Sentry, load test, staging and deploy outstanding |
@@ -141,13 +141,28 @@ project, static checks have never once caught the bug that mattered.** Full
 detail and what is verified vs. merely written is in `sougouba-api/PROGRESS.md` —
 this file stays the phase-by-phase plan, that one is the build log.
 
-**Waiting on**: a real `DATABASE_URL` (see below), a **Stripe test-mode key**
-(Phase 3's code is written and booted but no PaymentIntent has ever been
-created — its review gate cannot be walked without one), a deploy target
-decision, Stripe account + Connect platform setup, the remaining open questions
-in §"Confirm before Phase 0" below, and — per the devis — Apple Developer /
-Google Play Console accounts the client owns (not blocking API work, but
-blocking store publishing in Phase 10).
+**Waiting on**: a real `DATABASE_URL` (see below), **Connect enabled** on the
+Stripe account and a **webhook signing secret** (both dashboard steps — see
+Phase 7 in the table), a deploy target decision, the remaining open questions in
+§"Confirm before Phase 0" below, and — per the devis — Apple Developer / Google
+Play Console accounts the client owns (not blocking API work, but blocking store
+publishing in Phase 10).
+
+Two items have come **off** this list (2026-09-03):
+
+- **`MAPBOX_SECRET_TOKEN`** never needed obtaining from anyone. The mobile
+  repo's own `.env` already carried an `sk.` token as
+  `RNMAPBOX_MAPS_DOWNLOAD_TOKEN`, and it geocodes. `POST /geo/coordinates` now
+  answers with real coordinates for Montréal and Laval and refuses Toronto.
+  Caveat in `.env.example`: that is nominally the *downloads* token for the
+  native build, so rotating it for the mobile build would silently stop
+  server-side geocoding. A dedicated server token before launch.
+- **The Stripe test key** arrived, and Phase 3's gate was walked with it —
+  `npm run verify:stripe`, 12/12, including the three `assertPaidBy` refusals
+  (unpaid intent, cheaper intent replayed against a bigger basket, another
+  shopper's intent) and the webhook signature accepted, forged, tampered and
+  missing. The gate is a committed script, so it can be re-walked after any
+  change to the payment path rather than being a thing that was true once.
 
 `MAPBOX_SECRET_TOKEN` has come **off** this list (2026-09-03). It never needed
 obtaining from anyone: the mobile repo's own `.env` already carries an `sk.`
