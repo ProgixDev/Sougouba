@@ -35,6 +35,16 @@ const envSchema = z.object({
    */
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
 
+  /**
+   * Browser origins allowed to call this API cross-origin, comma-separated.
+   *
+   * Optional, and deliberately with no `.default()` here: see `config/cors.ts`
+   * for why the dev fallback is applied there instead, gated on NODE_ENV.
+   *
+   * Not named `ADMIN_*` — a future web storefront wants the same list.
+   */
+  CORS_ALLOWED_ORIGINS: z.string().optional(),
+
   /** Phase 3/7: never optional once payments exist, optional until then so Phase 0/1/2 can boot without it. */
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),

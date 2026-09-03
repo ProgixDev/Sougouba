@@ -32,4 +32,13 @@ describe('validateEnv', () => {
   it('rejects an unknown NODE_ENV rather than silently accepting it', () => {
     expect(() => validateEnv({ ...validBase, NODE_ENV: 'staging' })).toThrow();
   });
+
+  it('leaves CORS_ALLOWED_ORIGINS undefined when unset — the dev fallback lives in config/cors.ts, not here', () => {
+    expect(validateEnv(validBase).CORS_ALLOWED_ORIGINS).toBeUndefined();
+  });
+
+  it('passes CORS_ALLOWED_ORIGINS through verbatim, leaving the parsing to config/cors.ts', () => {
+    const raw = 'https://a.example, https://b.example/';
+    expect(validateEnv({ ...validBase, CORS_ALLOWED_ORIGINS: raw }).CORS_ALLOWED_ORIGINS).toBe(raw);
+  });
 });

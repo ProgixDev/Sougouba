@@ -7,6 +7,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module.js';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
 import { budgetFor, isExempt, tooManyRequests, trackerFor } from './common/rate-limit.js';
+import { corsOptionsFrom } from './config/cors.js';
 import type { Env } from './config/env.js';
 
 async function bootstrap() {
@@ -24,6 +25,38 @@ async function bootstrap() {
   );
 
   const config = app.get(ConfigService<Env, true>);
+
+  /**
+   * CORS, so the admin dashboard (a separate Next.js app on :4320) can reach
+   * this API from a browser at all. Allowlist and rationale in `config/cors.ts`.
+   *
+   * ⚠️ Two ordering rules, both load-bearing:
+   *
+   * 1. **Before `app.listen()`.** On Fastify — unlike Express — `enableCors`
+   *    registers a plugin, and plugins can only be added before the instance is
+   *    ready. There is no separate `app.init()` here, so `listen()` is the
+   *    deadline.
+   *
+   * 2. **Before the `await app.register(rateLimit, …)` below**, which is why
+   *    this sits above it rather than next to the other global setup further
+   *    down. `enableCors` is fire-and-forget (it does not await the plugin),
+   *    but awaiting a Fastify registration triggers `ready()` and locks hook
+   *    order in — registration order. CORS first means `@fastify/cors`'s
+   *    `onRequest` hook answers a preflight with a 204 before the rate limiter
+   *    ever sees it, so preflights don't burn the /admin budget. Reversed, a
+   *    429 would be sent *without* `Access-Control-Allow-Origin` and the
+   *    browser would report an opaque CORS failure instead of a rate limit —
+   *    the worst debugging experience available.
+   *
+   * `@fastify/cors` needs no install: `@nestjs/platform-fastify` declares it as
+   * a direct dependency, and `FastifyAdapter.enableCors` just registers it.
+   */
+  app.enableCors(
+    corsOptionsFrom({
+      CORS_ALLOWED_ORIGINS: config.get('CORS_ALLOWED_ORIGINS', { infer: true }),
+      NODE_ENV: config.get('NODE_ENV', { infer: true }),
+    })
+  );
 
   /**
    * Rate limiting, per-route budgets from `common/rate-limit.ts`.
