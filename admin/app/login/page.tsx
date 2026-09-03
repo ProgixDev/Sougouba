@@ -18,19 +18,25 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (getSession()) router.replace('/');
+    let active = true;
+    getSession().then((s) => {
+      if (active && s) router.replace('/');
+    });
+    return () => {
+      active = false;
+    };
   }, [router]);
 
-  function onSubmit(e: FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(undefined);
-    setTimeout(() => {
-      const result = signIn(email, password);
-      setBusy(false);
-      if (result.ok) router.replace('/');
-      else setError(result.error);
-    }, 350);
+    // The mock wrapped a synchronous string compare in a 350 ms setTimeout to
+    // fake latency. This is the real request that replaced it.
+    const result = await signIn(email, password);
+    setBusy(false);
+    if (result.ok) router.replace('/');
+    else setError(result.error);
   }
 
   return (

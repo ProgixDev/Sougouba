@@ -1,13 +1,28 @@
 'use client';
 
+import { supabase } from './supabase';
+
 /**
- * Mock admin session — a stand-in for real Supabase-Auth-with-an-`admin`-role,
- * which is a Phase 8 backend concern (see docs/BACKEND-BUILD-PHASES.md). This
- * is a frontend prototype's login gate, not a security boundary.
+ * The administrator's session — real Supabase Auth.
+ *
+ * This replaced a hardcoded string comparison against `admin@sougouba.ca` that
+ * wrote a session object straight into localStorage. That was a login *screen*,
+ * not a login: anyone could set the key by hand, and it produced no credential,
+ * so no API call could have been authorised by it.
+ *
+ * Now `signIn` gets a real access token, and the API verifies it against the
+ * Supabase project's JWKS on every request before checking that the account's
+ * `profiles.role` is still `admin`. Note where authority lives: **the gate is
+ * the API's, not this file's.** Everything here is a convenience for rendering —
+ * hiding the sidebar from a signed-out visitor is courtesy, and a non-admin who
+ * forced their way to a dashboard route would still get a 403 from every call
+ * the page made.
+ *
+ * The exported surface is deliberately unchanged from the mock — same names,
+ * same shapes — so `app/login/page.tsx`, the dashboard layout and `Topbar`
+ * needed almost no edits. The one real difference is that `getSession` and
+ * `signIn` are now genuinely asynchronous.
  */
-const SESSION_KEY = 'sougouba-admin-session';
-const DEMO_EMAIL = 'admin@sougouba.ca';
-const DEMO_PASSWORD = 'sougouba-admin';
 
 export interface AdminSession {
   email: string;
@@ -15,28 +30,48 @@ export interface AdminSession {
   signedInAt: string;
 }
 
-export function getSession(): AdminSession | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.localStorage.getItem(SESSION_KEY);
-    return raw ? (JSON.parse(raw) as AdminSession) : null;
-  } catch {
-    return null;
-  }
+/** Supabase stores `full_name` in user metadata; the seed sets it at creation. */
+function sessionFrom(user: { email?: string; user_metadata?: Record<string, unknown> }, signedInAt: string): AdminSession {
+  const name = typeof user.user_metadata?.full_name === 'string' ? user.user_metadata.full_name : (user.email ?? 'Administrateur');
+  return { email: user.email ?? '', name, signedInAt };
 }
 
-export function signIn(email: string, password: string): { ok: true; session: AdminSession } | { ok: false; error: string } {
-  if (email.trim().toLowerCase() !== DEMO_EMAIL || password !== DEMO_PASSWORD) {
+/**
+ * The current session, or null.
+ *
+ * Async because Supabase reads the persisted session and silently refreshes an
+ * expired access token — the mock could answer synchronously from localStorage
+ * because it never had a token to keep alive. Every caller already ran this
+ * inside a `useEffect`, so awaiting it changed no component's structure.
+ */
+export async function getSession(): Promise<AdminSession | null> {
+  const { data } = await supabase().auth.getSession();
+  if (!data.session) return null;
+  return sessionFrom(data.session.user, new Date(data.session.user.last_sign_in_at ?? Date.now()).toISOString());
+}
+
+export async function signIn(
+  email: string,
+  password: string
+): Promise<{ ok: true; session: AdminSession } | { ok: false; error: string }> {
+  const { data, error } = await supabase().auth.signInWithPassword({ email: email.trim(), password });
+
+  if (error || !data.session) {
+    // Supabase's own message is English and leaks whether the address exists;
+    // both reasons to replace it with one line that says neither.
     return { ok: false, error: 'Identifiants invalides.' };
   }
-  const session: AdminSession = { email: DEMO_EMAIL, name: 'Salif Sogodogo', signedInAt: new Date().toISOString() };
-  window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  return { ok: true, session };
+
+  return { ok: true, session: sessionFrom(data.session.user, new Date().toISOString()) };
 }
 
-export function signOut(): void {
-  if (typeof window === 'undefined') return;
-  window.localStorage.removeItem(SESSION_KEY);
+export async function signOut(): Promise<void> {
+  await supabase().auth.signOut();
 }
 
-export const DEMO_CREDENTIALS = { email: DEMO_EMAIL, password: DEMO_PASSWORD };
+/**
+ * Shown on the login card. These are the credentials `npm run db:seed` creates
+ * in the API repo — a real Supabase account, not a bypass, so changing this
+ * constant alone grants nothing.
+ */
+export const DEMO_CREDENTIALS = { email: 'admin@sougouba.ca', password: 'sougouba-admin' };

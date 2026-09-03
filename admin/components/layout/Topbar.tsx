@@ -39,8 +39,11 @@ export function Topbar({ session, title, onOpenMenu }: { session: AdminSession |
         <button
           type="button"
           aria-label="Se déconnecter"
-          onClick={() => {
-            signOut();
+          onClick={async () => {
+            // Awaited so the token is actually revoked before we navigate —
+            // firing and forgetting can leave a refreshable session behind if
+            // the route change tears the request down mid-flight.
+            await signOut();
             router.push('/login');
           }}
           className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
