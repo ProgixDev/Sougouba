@@ -1,0 +1,46 @@
+-- A product must sit in an aisle of its own shop. Until now only the API said so.
+--
+-- Found the way `0009` and `0022` were found — by running the attack, not by
+-- reading the policy. A merchant holding an ordinary Supabase session can reach
+-- PostgREST directly and insert into their *own* shop while pointing
+-- `section_id` at a competitor's aisle:
+--
+--     insert into products (vendor_id, category_id, section_id, name, ...)
+--     values (<my shop>, <any category>, <their aisle>, 'Sonde', ...)
+--
+-- Verified against this database inside a rolled-back transaction: the insert
+-- succeeded, and the row came back carrying a `vendor_id` and a `section_id`
+-- belonging to two different merchants.
+--
+-- Section ids are not secret — `vendor_sections_select_visible` hands them to
+-- anonymous readers, because a storefront lists its aisles. And
+-- `ProductsService.filters` narrows on `section_id` alone, independently of
+-- `vendor_id`, so the planted row is served *inside the other shop's aisle*,
+-- under a name and a price its owner never set.
+--
+-- `products_write_own`'s WITH CHECK pins `vendor_id`, so this is not a
+-- cross-tenant *write*: the attacker can only file rows under themselves. It is
+-- a cross-tenant *display*, and the shop being defaced cannot clear it — the
+-- row is not theirs to delete.
+--
+-- `ProductsService.assertOwnedRefs` already refuses exactly this, and refuses
+-- it correctly. That is the point. A guard in the service layer covers the API
+-- path and says nothing about the PostgREST path the mobile app already holds a
+-- session for — the same wrong-shape-of-gate `0009` describes.
+--
+-- A composite foreign key beats a column revoke here. Revoking
+-- `update (section_id)` would leave INSERT open, which is how the attack lands,
+-- and would take legitimate re-shelving away from merchants. This makes the
+-- mismatched row unrepresentable instead — for the API, for PostgREST, and for
+-- whatever writes this table next.
+
+-- A referenced column list has to be unique. `id` alone already is, so this
+-- constrains no data; it exists purely to be pointed at.
+ALTER TABLE "vendor_sections" ADD CONSTRAINT "vendor_sections_id_vendor_id_key" UNIQUE("id","vendor_id");
+--> statement-breakpoint
+ALTER TABLE "products" DROP CONSTRAINT "products_section_id_vendor_sections_id_fk";
+--> statement-breakpoint
+-- NO ACTION on both sides, matching the single-column key it replaces:
+-- `VendorsService.removeSection` re-shelves a section's products before
+-- deleting it, and a vendor deletion cascades both tables from `vendors`.
+ALTER TABLE "products" ADD CONSTRAINT "products_section_id_vendor_id_fk" FOREIGN KEY ("section_id","vendor_id") REFERENCES "public"."vendor_sections"("id","vendor_id") ON DELETE no action ON UPDATE no action;

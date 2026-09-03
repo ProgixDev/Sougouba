@@ -3,6 +3,7 @@ import {
   type AnyPgColumn,
   boolean,
   doublePrecision,
+  foreignKey,
   index,
   integer,
   numeric,
@@ -12,6 +13,7 @@ import {
   smallint,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -123,7 +125,15 @@ export const vendorSections = pgTable(
     nameFr: text('name_fr').notNull(),
     position: integer('position').notNull().default(0),
   },
-  (t) => [index('vendor_sections_vendor_id_idx').on(t.vendorId)]
+  (t) => [
+    index('vendor_sections_vendor_id_idx').on(t.vendorId),
+    /**
+     * Redundant against the primary key, and there only so `products` can point
+     * a composite foreign key at it — a referenced column list has to be
+     * unique. See the `products` table below for what that buys.
+     */
+    unique('vendor_sections_id_vendor_id_key').on(t.id, t.vendorId),
+  ]
 );
 
 export const vendorHours = pgTable(
@@ -167,8 +177,11 @@ export const products = pgTable(
     vendorId: uuid('vendor_id').notNull().references(() => vendors.id, { onDelete: 'cascade' }),
     /** Platform taxonomy — what search and the home grid filter on. */
     categoryId: uuid('category_id').notNull().references(() => categories.id),
-    /** Which of the vendor's own `vendor_sections` this sits under. */
-    sectionId: uuid('section_id').notNull().references(() => vendorSections.id),
+    /**
+     * Which of the vendor's own `vendor_sections` this sits under — "own" being
+     * enforced by the composite foreign key below, not by this column alone.
+     */
+    sectionId: uuid('section_id').notNull(),
     name: text('name').notNull(),
     description: text('description').notNull(),
     priceCad: numeric('price_cad', { precision: 10, scale: 2 }).notNull(),
@@ -187,6 +200,28 @@ export const products = pgTable(
   (t) => [
     index('products_vendor_id_idx').on(t.vendorId),
     index('products_category_id_idx').on(t.categoryId),
+    /**
+     * `(section_id, vendor_id)` rather than `section_id` alone: a product must
+     * sit in an aisle of *its own* shop.
+     *
+     * Found by attack, the way `0009` and `0022` were. A merchant holding an
+     * ordinary Supabase session could insert into their own shop while pointing
+     * `section_id` at a competitor's aisle — section ids are public, since the
+     * storefront lists them to anonymous readers. `GET /products?sectionId=`
+     * filters on the section alone, so the planted row is served inside the
+     * other shop's aisle, at a price its owner never set.
+     *
+     * `ProductsService.assertOwnedRefs` already refuses this, and refuses it
+     * correctly — which is the whole point: that guard only covers the API, and
+     * the mobile app holds a Supabase session that can reach PostgREST without
+     * passing through it. This is the same guarantee stated where it cannot be
+     * bypassed.
+     */
+    foreignKey({
+      columns: [t.sectionId, t.vendorId],
+      foreignColumns: [vendorSections.id, vendorSections.vendorId],
+      name: 'products_section_id_vendor_id_fk',
+    }),
   ]
 );
 
