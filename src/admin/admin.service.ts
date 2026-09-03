@@ -68,6 +68,9 @@ export class AdminService {
     // merchant has answered is still open business — the platform has not
     // decided anything yet.
     if (query.openOnly) conditions.push(inArray(disputes.status, ['open', 'answered']));
+    // Used by `disputeDetail` so one projection serves both the queue and the
+    // detail page — see there.
+    if (query.orderId) conditions.push(eq(disputes.orderId, query.orderId));
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     const [rows, [counted]] = await Promise.all([
@@ -114,6 +117,22 @@ export class AdminService {
       limit: query.limit,
       offset: query.offset,
     };
+  }
+
+  /**
+   * One dispute, keyed by its order.
+   *
+   * Deliberately the same projection `listDisputes` returns rather than a
+   * richer one: the detail page and the queue row show the same facts, and two
+   * shapes for one entity is how they drift. Anything more — the basket, the
+   * delivery, the status trail — is already a `GET /admin/orders/:id` away, and
+   * the page links there.
+   */
+  async disputeDetail(orderId: string) {
+    const page = await this.listDisputes({ limit: 1, offset: 0, orderId });
+    const [row] = page.items;
+    if (!row) throw new NotFoundException('No dispute on this order');
+    return row;
   }
 
   /**
@@ -190,8 +209,19 @@ export class AdminService {
 
   // ── courier issues ────────────────────────────────────────────────────────
 
+  /** Same projection as the queue, for the same reason as `disputeDetail`. */
+  async courierIssueDetail(orderId: string) {
+    const page = await this.listCourierIssues({ limit: 1, offset: 0, orderId });
+    const [row] = page.items;
+    if (!row) throw new NotFoundException('No courier issue on this order');
+    return row;
+  }
+
   async listCourierIssues(query: CourierIssueQuery): Promise<Page<unknown>> {
-    const where = query.status ? eq(courierIssues.status, query.status) : undefined;
+    const conditions: SQL[] = [];
+    if (query.status) conditions.push(eq(courierIssues.status, query.status));
+    if (query.orderId) conditions.push(eq(courierIssues.orderId, query.orderId));
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     const [rows, [counted]] = await Promise.all([
       this.db
@@ -206,10 +236,19 @@ export class AdminService {
           deliveryAddressStreet: orders.deliveryAddressStreet,
           deliveryAddressCity: orders.deliveryAddressCity,
           vendorName: vendors.name,
+          // Joined through the delivery, since a courier issue is keyed by
+          // order. Null when the report predates an assignment — rare, but a
+          // shop-not-ready report can be filed before anyone accepts the run.
+          courierId: orderDeliveries.courierId,
+          courierName: couriers.fullName,
         })
         .from(courierIssues)
         .innerJoin(orders, eq(orders.id, courierIssues.orderId))
         .innerJoin(vendors, eq(vendors.id, orders.vendorId))
+        // Left, both of them: an issue can be reported before a courier is
+        // assigned, and an issue screen with no courier is still a valid one.
+        .leftJoin(orderDeliveries, eq(orderDeliveries.orderId, courierIssues.orderId))
+        .leftJoin(couriers, eq(couriers.id, orderDeliveries.courierId))
         .where(where)
         .orderBy(courierIssues.at)
         .limit(query.limit)

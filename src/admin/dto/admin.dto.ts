@@ -39,6 +39,8 @@ export type OverviewQuery = z.infer<typeof overviewQuerySchema>;
 
 export const disputeQuerySchema = paginationSchema.extend({
   status: z.enum(['open', 'answered', 'resolved', 'rejected']).optional(),
+  /** Internal — `disputeDetail` narrows the queue query to one order. */
+  orderId: z.string().uuid().optional(),
   /** The triage default: everything still waiting on a human. */
   openOnly: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
 });
@@ -78,6 +80,8 @@ export type ResolveDisputeInput = z.infer<typeof resolveDisputeSchema>;
 
 export const courierIssueQuerySchema = paginationSchema.extend({
   status: z.enum(['open', 'resolved']).optional(),
+  /** Internal — `courierIssueDetail` narrows the queue query to one order. */
+  orderId: z.string().uuid().optional(),
 });
 
 export type CourierIssueQuery = z.infer<typeof courierIssueQuerySchema>;

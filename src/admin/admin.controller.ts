@@ -115,6 +115,11 @@ export class AdminController {
     return this.admin.listDisputes(query);
   }
 
+  @Get('disputes/:orderId')
+  dispute(@Param('orderId', ParseUUIDPipe) orderId: string) {
+    return this.admin.disputeDetail(orderId);
+  }
+
   @Patch('disputes/:orderId/resolve')
   resolveDispute(
     @CurrentUser() adminId: string,
@@ -129,6 +134,11 @@ export class AdminController {
   @Get('courier-issues')
   courierIssues(@Query(new ZodValidationPipe(courierIssueQuerySchema)) query: CourierIssueQuery) {
     return this.admin.listCourierIssues(query);
+  }
+
+  @Get('courier-issues/:orderId')
+  courierIssue(@Param('orderId', ParseUUIDPipe) orderId: string) {
+    return this.admin.courierIssueDetail(orderId);
   }
 
   @Patch('courier-issues/:orderId/resolve')
