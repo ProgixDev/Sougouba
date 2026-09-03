@@ -7,9 +7,10 @@ import { Text } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
 import { DataTable, type Column } from '@/components/data/DataTable';
 import { listUsers } from '@/lib/api/users';
-import type { User, UserRole } from '@/lib/types';
+import { useToast } from '@/components/Toast';
+import type { AdminUserListItem, UserRole } from '@/lib/types';
 
-const ROLE_LABELS: Record<string, string> = { customer: 'Client', business: 'Commerçant', courier: 'Livreur' };
+const ROLE_LABELS: Record<string, string> = { customer: 'Client', business: 'Commerçant', courier: 'Livreur', admin: 'Administrateur' };
 const ROLE_TABS: { key: UserRole | 'all'; label: string }[] = [
   { key: 'all', label: 'Tous' },
   { key: 'customer', label: 'Clients' },
@@ -19,25 +20,37 @@ const ROLE_TABS: { key: UserRole | 'all'; label: string }[] = [
 
 export default function UsersPage() {
   const router = useRouter();
-  const [all, setAll] = useState<User[] | null>(null);
+  const toast = useToast();
+  const [rows, setRows] = useState<AdminUserListItem[] | null>(null);
   const [role, setRole] = useState<UserRole | 'all'>('all');
   const [search, setSearch] = useState('');
 
+  // Debounced — this reaches the network per keystroke now, and the /admin
+  // budget is 120 requests a minute.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   useEffect(() => {
-    listUsers().then(setAll);
-  }, []);
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-  const rows = useMemo(() => {
-    let list = all ?? [];
-    if (role !== 'all') list = list.filter((u) => u.role === role);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((u) => u.fullName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
-    }
-    return list;
-  }, [all, role, search]);
+  useEffect(() => {
+    let active = true;
+    setRows(null);
+    // Role and search filter server-side. Searching by email only works at all
+    // because the API joins `auth.users` — `profiles` does not carry it.
+    listUsers({ role: role === 'all' ? undefined : role, search: debouncedSearch })
+      .then((items) => active && setRows(items))
+      .catch((error: unknown) => {
+        if (!active) return;
+        setRows([]);
+        toast('error', error instanceof Error ? error.message : 'Chargement impossible.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [role, debouncedSearch, toast]);
 
-  const columns: Column<User>[] = [
+  const columns: Column<AdminUserListItem>[] = [
     {
       key: 'fullName',
       header: 'Nom',
@@ -49,7 +62,7 @@ export default function UsersPage() {
         </Text>
       ),
     },
-    { key: 'email', header: 'Courriel', render: (u) => <Text variant="body" tone="muted">{u.email}</Text> },
+    { key: 'email', header: 'Courriel', render: (u) => <Text variant="body" tone="muted">{u.email ?? '—'}</Text> },
     {
       key: 'role',
       header: 'Rôle',
@@ -105,10 +118,10 @@ export default function UsersPage() {
       <Card elevated>
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={rows ?? []}
           keyField={(u) => u.id}
           onRowClick={(u) => router.push(`/users/${u.id}`)}
-          loading={all === null}
+          loading={rows === null}
           emptyIcon={UsersIcon}
           emptyTitle="Aucun utilisateur"
           emptyDescription="Aucun utilisateur ne correspond à ce filtre pour le moment."

@@ -1,24 +1,27 @@
-import type { User, UserRole, ID } from '../types';
-import { delay } from './storage';
-import { getSeed } from './seed';
+import { apiGet, apiGetOrNull, type Page } from './client';
+import type { AdminUserDetail, AdminUserListItem, ID, UserRole } from '../types';
 
 export interface UserFilters {
-  role?: UserRole;
+  role?: UserRole | 'admin';
   search?: string;
 }
 
-export async function listUsers(filters: UserFilters = {}): Promise<User[]> {
-  await delay();
-  let rows = getSeed().users;
-  if (filters.role) rows = rows.filter((u) => u.role === filters.role);
-  if (filters.search) {
-    const q = filters.search.toLowerCase();
-    rows = rows.filter((u) => u.fullName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
-  }
-  return rows;
+/**
+ * The account directory.
+ *
+ * `email` comes from `auth.users`, joined server-side — it is not on
+ * `profiles`, and the mock could only offer it because its users were
+ * invented. Search runs server-side over name and email.
+ */
+export async function listUsers(filters: UserFilters = {}, limit = 100): Promise<AdminUserListItem[]> {
+  const page = await apiGet<Page<AdminUserListItem>>('/admin/users', {
+    role: filters.role,
+    search: filters.search?.trim() || undefined,
+    limit,
+  });
+  return page.items;
 }
 
-export async function getUser(id: ID): Promise<User | undefined> {
-  await delay(150, 300);
-  return getSeed().users.find((u) => u.id === id);
+export async function getUser(id: ID): Promise<AdminUserDetail | null> {
+  return apiGetOrNull<AdminUserDetail>(`/admin/users/${id}`);
 }

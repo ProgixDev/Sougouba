@@ -31,8 +31,8 @@ export default function DisputesPage() {
   const rows = useMemo(() => (tab === 'all' ? all ?? [] : (all ?? []).filter((d) => d.status === tab)), [all, tab]);
 
   const columns: Column<AdminDispute>[] = [
-    { key: 'orderId', header: 'Commande', render: (d) => <Text variant="body" className="font-semibold">#{d.orderId}</Text> },
-    { key: 'customerName', header: 'Client', render: (d) => <Text variant="body">{d.customerName}</Text> },
+    { key: 'orderId', header: 'Commande', render: (d) => <Text variant="body" className="font-semibold">#{d.orderId.slice(0, 8)}</Text> },
+    { key: 'customerName', header: 'Client', render: (d) => <Text variant="body">{d.customerName ?? '—'}</Text> },
     { key: 'vendorName', header: 'Commerce', render: (d) => <Text variant="body">{d.vendorName}</Text> },
     { key: 'reason', header: 'Motif', render: (d) => <Text variant="body">{DISPUTE_REASON_LABELS[d.reason]}</Text> },
     {
@@ -85,8 +85,8 @@ export default function DisputesPage() {
         <DataTable
           columns={columns}
           rows={rows}
-          keyField={(d) => d.id}
-          onRowClick={(d) => router.push(`/disputes/${d.id}`)}
+          keyField={(d) => d.orderId}
+          onRowClick={(d) => router.push(`/disputes/${d.orderId}`)}
           loading={all === null}
           emptyIcon={MessageCircleWarning}
           emptyTitle="Aucun litige"

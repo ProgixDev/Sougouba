@@ -10,24 +10,27 @@ import { StatusBadge } from '@/components/data/StatusBadge';
 import { Skeleton } from '@/components/data/Skeleton';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
-import { getCourier, getCourierNote, approveCourier, rejectCourier } from '@/lib/api/couriers';
+import { getCourier, approveCourier, rejectCourier, suspendCourier } from '@/lib/api/couriers';
 import { courierStatusMeta, VEHICLE_LABELS } from '@/lib/statusMeta';
 import { formatDate } from '@/lib/format';
-import type { Courier } from '@/lib/types';
+import type { AdminCourierDetail } from '@/lib/types';
 
 export default function CourierDetailPage() {
   const { id } = useParams<{ id: string }>();
   const toast = useToast();
 
-  const [courier, setCourier] = useState<Courier | null | undefined>(undefined);
-  const [note, setNote] = useState<string | undefined>();
+  const [courier, setCourier] = useState<AdminCourierDetail | null | undefined>(undefined);
   const [dialog, setDialog] = useState<'reject' | 'suspend' | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function load() {
-    const [c, n] = await Promise.all([getCourier(id), getCourierNote(id)]);
-    setCourier(c ?? null);
-    setNote(n);
+    // The decision reason is `statusReason` on the row now, not a separate
+    // localStorage notes map.
+    try {
+      setCourier(await getCourier(id));
+    } catch {
+      setCourier(null);
+    }
   }
 
   useEffect(() => {
@@ -55,18 +58,28 @@ export default function CourierDetailPage() {
 
   async function handleApprove() {
     setBusy(true);
-    await approveCourier(courier!.id);
+    try {
+      await approveCourier(courier!.id);
+      toast('success', `${courier!.fullName} a été approuvé.`);
+    } catch (error) {
+      toast('error', error instanceof Error ? error.message : 'Décision impossible.');
+    }
     setBusy(false);
-    toast('success', `${courier!.fullName} a été approuvé.`);
     load();
   }
 
-  async function handleReject(reason?: string) {
+  /** Reject and suspend are distinct calls — see the merchant page for why. */
+  async function handleDecision(reason?: string) {
+    const rejecting = dialog === 'reject';
     setBusy(true);
-    await rejectCourier(courier!.id, reason ?? '');
+    try {
+      await (rejecting ? rejectCourier(courier!.id, reason ?? '') : suspendCourier(courier!.id, reason ?? ''));
+      toast('info', `${courier!.fullName} a été ${rejecting ? 'refusé' : 'suspendu'}.`);
+    } catch (error) {
+      toast('error', error instanceof Error ? error.message : 'Décision impossible.');
+    }
     setBusy(false);
     setDialog(null);
-    toast('info', `${courier!.fullName} a été ${courier!.status === 'pending' ? 'refusé' : 'suspendu'}.`);
     load();
   }
 
@@ -87,7 +100,7 @@ export default function CourierDetailPage() {
           </Text>
         </div>
         <div className="flex gap-2.5">
-          {courier.status !== 'approved' && (
+          {courier.status !== 'approved' && courier.status !== 'rejected' && (
             <Button variant="primary" onClick={handleApprove} disabled={busy}>
               <CheckCircle2 size={16} /> Approuver
             </Button>
@@ -105,13 +118,13 @@ export default function CourierDetailPage() {
         </div>
       </div>
 
-      {note && (
+      {courier.statusReason && (
         <Card elevated={false} className="border-destructive/30 bg-destructive/5 p-4">
           <Text variant="label" tone="destructive">
             Motif du refus / de la suspension
           </Text>
           <Text variant="body" className="mt-1">
-            {note}
+            {courier.statusReason}
           </Text>
         </Card>
       )}
@@ -165,7 +178,7 @@ export default function CourierDetailPage() {
         requireReason
         reasonLabel="Motif"
         busy={busy}
-        onConfirm={handleReject}
+        onConfirm={handleDecision}
         onCancel={() => setDialog(null)}
       />
     </div>

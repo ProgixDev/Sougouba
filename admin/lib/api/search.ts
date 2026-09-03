@@ -1,5 +1,4 @@
-import { getSeed } from './seed';
-import { delay } from './storage';
+import { apiGet } from './client';
 
 export interface SearchResult {
   type: 'vendor' | 'courier' | 'order' | 'user';
@@ -10,48 +9,41 @@ export interface SearchResult {
 }
 
 export const TYPE_LABELS: Record<SearchResult['type'], string> = {
-  vendor: 'Commerçant',
-  courier: 'Livreur',
-  order: 'Commande',
-  user: 'Utilisateur',
+  vendor: 'Commerces',
+  courier: 'Livreurs',
+  order: 'Commandes',
+  user: 'Utilisateurs',
 };
 
-/** Global search across the platform's core entities, for the topbar search box. */
+/**
+ * Route for each result type.
+ *
+ * Built here rather than returned by the API: these are this app's URLs, and
+ * the API has no business knowing that a vendor lives at `/merchants/:id`.
+ */
+const HREF: Record<SearchResult['type'], (id: string) => string> = {
+  vendor: (id) => `/merchants/${id}`,
+  courier: (id) => `/couriers/${id}`,
+  order: (id) => `/orders/${id}`,
+  user: (id) => `/users/${id}`,
+};
+
+/**
+ * Cross-entity search.
+ *
+ * ⚠️ Callers must debounce. `GlobalSearch` fires on every keystroke and the
+ * `/admin` budget is 120 requests per minute per account — a fast typist would
+ * exhaust it in a sentence. The right fix is a delay on the caller, not a
+ * bigger budget.
+ *
+ * Under two characters this returns `[]` without a request; the API rejects
+ * such a query anyway, and there is no reason to spend a round trip finding
+ * that out.
+ */
 export async function searchAll(query: string): Promise<SearchResult[]> {
-  const q = query.trim().toLowerCase();
+  const q = query.trim();
   if (q.length < 2) return [];
-  await delay(80, 160);
 
-  const { vendors, couriers, orders, users } = getSeed();
-  const results: SearchResult[] = [];
-
-  for (const v of vendors) {
-    if (v.name.toLowerCase().includes(q) || v.city.toLowerCase().includes(q)) {
-      results.push({ type: 'vendor', id: v.id, label: v.name, sublabel: v.city, href: `/merchants/${v.id}` });
-    }
-    if (results.filter((r) => r.type === 'vendor').length >= 5) break;
-  }
-
-  for (const c of couriers) {
-    if (c.fullName.toLowerCase().includes(q) || c.city.toLowerCase().includes(q)) {
-      results.push({ type: 'courier', id: c.id, label: c.fullName, sublabel: c.city, href: `/couriers/${c.id}` });
-    }
-    if (results.filter((r) => r.type === 'courier').length >= 5) break;
-  }
-
-  for (const o of orders) {
-    if (o.id.toLowerCase().includes(q) || (o.customerName ?? '').toLowerCase().includes(q)) {
-      results.push({ type: 'order', id: o.id, label: `#${o.id}`, sublabel: o.customerName ?? '—', href: `/orders/${o.id}` });
-    }
-    if (results.filter((r) => r.type === 'order').length >= 5) break;
-  }
-
-  for (const u of users) {
-    if (u.fullName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)) {
-      results.push({ type: 'user', id: u.id, label: u.fullName, sublabel: u.email, href: `/users/${u.id}` });
-    }
-    if (results.filter((r) => r.type === 'user').length >= 5) break;
-  }
-
-  return results;
+  const hits = await apiGet<Omit<SearchResult, 'href'>[]>('/admin/search', { q });
+  return hits.map((hit) => ({ ...hit, href: HREF[hit.type](hit.id) }));
 }

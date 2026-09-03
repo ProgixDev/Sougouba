@@ -9,6 +9,7 @@ import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { Skeleton } from '@/components/data/Skeleton';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
 import { getCourierIssue, resolveCourierIssue } from '@/lib/api/courierIssues';
 import { courierIssueStatusMeta, COURIER_ISSUE_REASON_LABELS } from '@/lib/statusMeta';
@@ -20,6 +21,7 @@ export default function CourierIssueDetailPage() {
   const toast = useToast();
   const [issue, setIssue] = useState<AdminCourierIssue | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
+  const [dialog, setDialog] = useState(false);
 
   async function load() {
     setIssue((await getCourierIssue(id)) ?? null);
@@ -48,17 +50,21 @@ export default function CourierIssueDetailPage() {
 
   const meta = courierIssueStatusMeta(issue.status);
 
-  async function handleResolve() {
+  async function handleResolve(note?: string) {
     setBusy(true);
-    await resolveCourierIssue(issue!.id);
+    // The note is mandatory server-side (min 5 chars) and is appended to the
+    // report, so whoever reads it later sees what was actually done. The mock's
+    // version recorded nothing at all.
+    await resolveCourierIssue(issue!.orderId, note ?? '');
     setBusy(false);
+    setDialog(false);
     toast('success', 'Incident marqué comme résolu.');
     load();
   }
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <Breadcrumbs items={[{ label: 'Incidents livreurs', href: '/courier-issues' }, { label: `#${issue.orderId}` }]} />
+      <Breadcrumbs items={[{ label: 'Incidents livreurs', href: '/courier-issues' }, { label: `#${issue.orderId.slice(0, 8)}` }]} />
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -69,14 +75,14 @@ export default function CourierIssueDetailPage() {
             <StatusBadge label={meta.label} tone={meta.tone} />
           </div>
           <Text variant="body" tone="muted" className="mt-1">
-            {issue.courierName} · {issue.vendorName} ·{' '}
+            {issue.courierName ?? 'Livreur non assigné'} · {issue.vendorName} ·{' '}
             <Link href={`/orders/${issue.orderId}`} className="text-primary hover:underline">
-              Commande #{issue.orderId}
+              Commande #{issue.orderId.slice(0, 8)}
             </Link>
           </Text>
         </div>
         {issue.status === 'open' && (
-          <Button variant="primary" onClick={handleResolve} disabled={busy}>
+          <Button variant="primary" onClick={() => setDialog(true)} disabled={busy}>
             <CheckCircle2 size={16} /> Marquer résolu
           </Button>
         )}
@@ -88,7 +94,7 @@ export default function CourierIssueDetailPage() {
         </Text>
         <div className="rounded-lg bg-destructive/5 p-3">
           <div className="mb-1 flex items-center justify-between">
-            <Text variant="label">{issue.courierName}</Text>
+            <Text variant="label">{issue.courierName ?? 'Livreur non assigné'}</Text>
             <Text variant="caption" tone="muted">
               {formatDateTime(issue.at)}
             </Text>
@@ -101,6 +107,18 @@ export default function CourierIssueDetailPage() {
           </Text>
         )}
       </Card>
+      <ConfirmDialog
+        open={dialog}
+        title="Marquer cet incident comme résolu ?"
+        description="Expliquez ce qui a été fait — la note est ajoutée au rapport et reste consultable."
+        confirmLabel="Marquer résolu"
+        tone="primary"
+        requireReason
+        reasonLabel="Note de résolution"
+        busy={busy}
+        onConfirm={handleResolve}
+        onCancel={() => setDialog(false)}
+      />
     </div>
   );
 }

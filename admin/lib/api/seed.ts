@@ -10,8 +10,6 @@ import type {
   OrderStatusEvent,
   User,
   Address,
-  AdminDispute,
-  AdminCourierIssue,
   DisputeReason,
   CourierIssueReason,
 } from '../types';
@@ -206,13 +204,22 @@ function statusHistoryFor(finalStatus: OrderStatus, createdAt: Date): OrderStatu
   return events;
 }
 
+/**
+ * What the mock still provides, and only for the **merchant portal** — the
+ * super-admin surface reads the real API now.
+ *
+ * The admin-only `disputes` and `courierIssues` collections are gone with it.
+ * They existed to feed the back office's arbitration queues, which are served
+ * by `GET /admin/disputes` and `GET /admin/courier-issues`; keeping a second,
+ * differently-shaped copy here would only be something to drift. An order's own
+ * `dispute`/`courierIssue` fields remain, because those belong to the mobile
+ * `Order` type the portal renders.
+ */
 export interface Seed {
   vendors: Vendor[];
   couriers: Courier[];
   users: User[];
   orders: Order[];
-  disputes: AdminDispute[];
-  courierIssues: AdminCourierIssue[];
 }
 
 let cached: Seed | null = null;
@@ -230,8 +237,6 @@ export function getSeed(): Seed {
 
   const rng = mulberry32(hashString('sougouba-admin-seed-v1'));
   const orders: Order[] = [];
-  const disputes: AdminDispute[] = [];
-  const courierIssues: AdminCourierIssue[] = [];
 
   let orderSeq = 0;
   const now = Date.now();
@@ -313,19 +318,6 @@ export function getSeed(): Seed {
           };
           const at = new Date(createdAt.getTime() + 35 * 60000).toISOString();
           order.courierIssue = { reason, message: messages[reason], at };
-          courierIssues.push({
-            id: `ci_${order.id}`,
-            orderId: order.id,
-            courierId: courier.id,
-            courierName: courier.fullName,
-            vendorId: vendor.id,
-            vendorName: vendor.name,
-            reason,
-            message: messages[reason],
-            at,
-            status: rng() < 0.55 ? 'resolved' : 'open',
-            ...(rng() < 0.55 ? { resolvedAt: new Date(createdAt.getTime() + 3 * 3600000).toISOString() } : {}),
-          });
         }
       }
 
@@ -348,22 +340,6 @@ export function getSeed(): Seed {
           status: adminStatus === 'open' ? 'open' : 'answered',
           ...(merchantReply ? { merchantReply, answeredAt: new Date(createdAt.getTime() + 5 * 3600000).toISOString() } : {}),
         };
-        disputes.push({
-          id: `dp_${order.id}`,
-          orderId: order.id,
-          vendorId: vendor.id,
-          vendorName: vendor.name,
-          customerId: customer.id,
-          customerName: customer.fullName,
-          reason,
-          message: messages[reason],
-          openedAt,
-          status: adminStatus,
-          ...(merchantReply ? { merchantReply, answeredAt: new Date(createdAt.getTime() + 5 * 3600000).toISOString() } : {}),
-          ...(adminStatus === 'resolved' || adminStatus === 'rejected'
-            ? { resolutionNote: adminStatus === 'resolved' ? 'Remboursement partiel accordé au client.' : 'Réclamation jugée non fondée après vérification.', resolvedAt: new Date(createdAt.getTime() + 26 * 3600000).toISOString() }
-            : {}),
-        });
       }
 
       orders.push(order);
@@ -371,9 +347,7 @@ export function getSeed(): Seed {
   }
 
   orders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  disputes.sort((a, b) => new Date(a.openedAt).getTime() - new Date(b.openedAt).getTime());
-  courierIssues.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 
-  cached = { vendors, couriers, users, orders, disputes, courierIssues };
+  cached = { vendors, couriers, users, orders };
   return cached;
 }

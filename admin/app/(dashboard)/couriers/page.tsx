@@ -9,18 +9,21 @@ import { DataTable, type Column } from '@/components/data/DataTable';
 import { listCouriers } from '@/lib/api/couriers';
 import { courierStatusMeta, VEHICLE_LABELS } from '@/lib/statusMeta';
 import { formatDate } from '@/lib/format';
-import type { Courier, CourierStatus } from '@/lib/types';
+import type { AdminCourierListItem, AdminCourierStatus } from '@/lib/types';
 
-const TABS: { key: CourierStatus; label: string }[] = [
+const TABS: { key: AdminCourierStatus; label: string }[] = [
   { key: 'pending', label: 'En attente' },
   { key: 'approved', label: 'Approuvés' },
   { key: 'suspended', label: 'Suspendus' },
+  // Terminal in the API, and invisible in the mock, which folded it into
+  // "suspended" — every refused application was hidden from the back office.
+  { key: 'rejected', label: 'Refusés' },
 ];
 
 export default function CouriersPage() {
   const router = useRouter();
-  const [all, setAll] = useState<Courier[] | null>(null);
-  const [tab, setTab] = useState<CourierStatus>('pending');
+  const [all, setAll] = useState<AdminCourierListItem[] | null>(null);
+  const [tab, setTab] = useState<AdminCourierStatus>('pending');
   const [search, setSearch] = useState('');
 
   useEffect(() => {
@@ -28,7 +31,7 @@ export default function CouriersPage() {
   }, []);
 
   const counts = useMemo(() => {
-    const base = { pending: 0, approved: 0, suspended: 0 };
+    const base: Record<string, number> = { pending: 0, approved: 0, suspended: 0, rejected: 0 };
     for (const c of all ?? []) base[c.status] += 1;
     return base;
   }, [all]);
@@ -42,7 +45,7 @@ export default function CouriersPage() {
     return list;
   }, [all, tab, search]);
 
-  const columns: Column<Courier>[] = [
+  const columns: Column<AdminCourierListItem>[] = [
     {
       key: 'fullName',
       header: 'Livreur',

@@ -45,7 +45,9 @@ import type {
   CourierStatus,
   DisputeReason,
   ID,
+  LatLng,
   OrderStatus,
+  UserRole,
   VehicleType,
   VendorStatus,
   VendorType,
@@ -53,37 +55,51 @@ import type {
 
 export type AdminDisputeStatus = 'open' | 'answered' | 'resolved' | 'rejected';
 
+/**
+ * A dispute, as `GET /admin/disputes` returns it.
+ *
+ * **Keyed by `orderId`** — the `disputes` table's primary key is the order, so
+ * there is no separate `id`; the mock invented one. The resolution note is
+ * written into `merchantReply` rather than a `resolutionNote` field of its own,
+ * which is why that field is gone too.
+ */
 export interface AdminDispute {
-  id: ID;
   orderId: ID;
-  vendorId: ID;
-  vendorName: string;
-  customerId: ID;
-  customerName: string;
   reason: DisputeReason;
   message: string;
-  openedAt: string;
   status: AdminDisputeStatus;
-  merchantReply?: string;
-  answeredAt?: string;
-  resolutionNote?: string;
-  resolvedAt?: string;
+  openedAt: string;
+  merchantReply: string | null;
+  answeredAt: string | null;
+  resolvedAt: string | null;
+  /** Order context, joined server-side so the queue needs no second request. */
+  orderTotalCad: number;
+  orderStatus: OrderStatus;
+  orderCreatedAt: string;
+  refundedAt: string | null;
+  refundAmountCad: number | null;
+  customerName: string | null;
+  vendorName: string;
 }
 
 export type CourierIssueStatus = 'open' | 'resolved';
 
+/** Keyed by `orderId` for the same reason as `AdminDispute`. */
 export interface AdminCourierIssue {
-  id: ID;
   orderId: ID;
-  courierId: ID;
-  courierName: string;
-  vendorId: ID;
-  vendorName: string;
   reason: CourierIssueReason;
   message: string;
   at: string;
   status: CourierIssueStatus;
-  resolvedAt?: string;
+  resolvedAt: string | null;
+  /** Order context, joined server-side. */
+  orderStatus: OrderStatus;
+  deliveryAddressStreet: string;
+  deliveryAddressCity: string;
+  vendorName: string;
+  /** Null when the issue was reported before a courier accepted the run. */
+  courierId: ID | null;
+  courierName: string | null;
 }
 
 /**
@@ -183,6 +199,167 @@ export interface AdminOrderDetail {
     resolvedAt: string | null;
   } | null;
   courierIssue: { reason: CourierIssueReason; message: string; at: string; status: CourierIssueStatus; resolvedAt: string | null } | null;
+}
+
+/** One row of `GET /admin/vendors` — the approval queue. */
+export interface AdminVendorListItem {
+  id: ID;
+  name: string;
+  slug: string;
+  vendorType: VendorType;
+  city: string;
+  addressStreet: string;
+  addressPostalCode: string;
+  status: AdminVendorStatus;
+  /** Why it was rejected or suspended. Replaces the mock's separate notes map. */
+  statusReason: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  ownerName: string;
+  /** Registration paperwork — null for a shop predating the flow. */
+  neq: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+  mapaqNumber: string | null;
+  submittedAt: string | null;
+}
+
+/** `GET /admin/vendors/:id`. */
+export interface AdminVendorDetail {
+  id: ID;
+  slug: string;
+  name: string;
+  vendorType: VendorType;
+  specialtyFr: string;
+  logoUrl: string | null;
+  coverUrl: string | null;
+  city: string;
+  neighborhood: string;
+  address: { street: string; city: string; postalCode: string; lat: number; lng: number };
+  rating: number;
+  reviewCount: number;
+  deliveryEtaMin: number;
+  isHalalCertified: boolean;
+  status: AdminVendorStatus;
+  statusReason: string | null;
+  reviewedAt: string | null;
+  reviewer: { id: ID; fullName: string } | null;
+  owner: { id: ID; fullName: string; email: string | null; avatarUrl: string | null; memberSince: string };
+  registration: {
+    neq: string;
+    contactName: string;
+    contactPhone: string;
+    mapaqNumber: string | null;
+    submittedAt: string | null;
+    /** Paths in a private bucket — not renderable without a signed URL, which does not exist yet. */
+    documents: { kind: 'id' | 'business_number' | 'mapaq'; path: string }[];
+  } | null;
+  categories: { id: ID; slug: string; nameFr: string }[];
+  hours: { day: number; open: string; close: string; closed: boolean }[];
+  sections: { id: ID; nameFr: string; position: number }[];
+  stats: { productCount: number; orderCount: number; revenueCad: number; lastOrderAt: string | null; openDisputes: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One row of `GET /admin/couriers`. */
+export interface AdminCourierListItem {
+  id: ID;
+  fullName: string;
+  phone: string;
+  vehicle: VehicleType;
+  plate: string | null;
+  licenceNumber: string | null;
+  city: string;
+  status: AdminCourierStatus;
+  statusReason: string | null;
+  reviewedAt: string | null;
+  isOnline: boolean;
+  deliveryCount: number;
+  joinedAt: string;
+  insurerName: string | null;
+  policyNumber: string | null;
+  /** Text in `MM/AAAA` form, not a date. */
+  insuranceExpiry: string | null;
+}
+
+/** `GET /admin/couriers/:id`. */
+export interface AdminCourierDetail {
+  id: ID;
+  userId: ID;
+  fullName: string;
+  photoUrl: string | null;
+  phone: string;
+  vehicle: VehicleType;
+  plate: string | null;
+  licenceNumber: string | null;
+  city: string;
+  postalCode: string | null;
+  base: LatLng;
+  rating: number;
+  deliveryCount: number;
+  status: AdminCourierStatus;
+  statusReason: string | null;
+  reviewedAt: string | null;
+  reviewer: { id: ID; fullName: string } | null;
+  isOnline: boolean;
+  lastSeenAt: string | null;
+  joinedAt: string;
+  account: { id: ID; fullName: string; email: string | null; avatarUrl: string | null; memberSince: string };
+  /** Null for a bike courier — insurance is not required for one. */
+  insurance: { insurerName: string; policyNumber: string; expiry: string } | null;
+  /**
+   * ⚠️ A Stripe Connect account, **not** bank details. The mobile app's
+   * `CourierPayout` (`{ bankId, transit, account }`) has no equivalent here —
+   * the database deliberately holds no account numbers.
+   */
+  payout: { stripeConnectAccountId: string | null; status: string; updatedAt: string | null } | null;
+  stats: {
+    runCount: number;
+    deliveredCount: number;
+    earningsTotalCad: number;
+    unpaidCad: number;
+    tipsTotalCad: number;
+    avgDistanceKm: number;
+    lastDeliveredAt: string | null;
+    openIssues: number;
+  };
+}
+
+/** One row of `GET /admin/users`. */
+export interface AdminUserListItem {
+  id: ID;
+  fullName: string;
+  /** From `auth.users`, joined server-side. Null for a phone-only signup. */
+  email: string | null;
+  role: UserRole | 'admin' | null;
+  memberSince: string;
+  vendorId: ID | null;
+  courierId: ID | null;
+  lastSignInAt: string | null;
+}
+
+/** `GET /admin/users/:id`. */
+export interface AdminUserDetail {
+  id: ID;
+  fullName: string;
+  email: string | null;
+  avatarUrl: string | null;
+  memberSince: string;
+  role: UserRole | 'admin' | null;
+  auth: { emailConfirmedAt: string | null; lastSignInAt: string | null; phone: string | null; bannedUntil: string | null };
+  vendor: { id: ID; name: string; slug: string; status: AdminVendorStatus; vendorType: VendorType } | null;
+  courier: { id: ID; fullName: string; status: AdminCourierStatus; vehicle: VehicleType; isOnline: boolean } | null;
+  referredBy: { id: ID; fullName: string } | null;
+  referralCount: number;
+  addresses: { id: ID; label: string; street: string; city: string; postalCode: string; lat: number; lng: number; isDefault: boolean }[];
+  activity: {
+    /** Excludes cancelled orders; `recentOrders` below does not. */
+    orderCount: number;
+    lifetimeSpendCad: number;
+    lastOrderAt: string | null;
+    recentOrders: { id: ID; status: OrderStatus; totalCad: number; createdAt: string; vendorName: string }[];
+  };
 }
 
 export interface PlatformSettings {

@@ -1,7 +1,13 @@
 import type { BadgeTone } from '@/components/ui';
-import type { VendorStatus, CourierStatus, OrderStatus, AdminDisputeStatus, CourierIssueStatus } from './types';
+import type { AdminVendorStatus, AdminCourierStatus, OrderStatus, AdminDisputeStatus, CourierIssueStatus } from './types';
 
-export function vendorStatusMeta(status: VendorStatus): { label: string; tone: BadgeTone } {
+/**
+ * These switches are exhaustive with no `default`, which is the point: a status
+ * the API can return but this app has no label for is a compile error, not a
+ * blank badge. Adding `rejected` here was exactly that — the API distinguishes
+ * a refused application from a suspended one, and the mock never could.
+ */
+export function vendorStatusMeta(status: AdminVendorStatus): { label: string; tone: BadgeTone } {
   switch (status) {
     case 'pending':
       return { label: 'En attente', tone: 'warning' };
@@ -9,10 +15,14 @@ export function vendorStatusMeta(status: VendorStatus): { label: string; tone: B
       return { label: 'Approuvé', tone: 'success' };
     case 'suspended':
       return { label: 'Suspendu', tone: 'destructive' };
+    // Terminal, unlike a suspension — worth a distinct label so a reviewer can
+    // see at a glance that there is no way back from this one.
+    case 'rejected':
+      return { label: 'Refusé', tone: 'destructive' };
   }
 }
 
-export function courierStatusMeta(status: CourierStatus): { label: string; tone: BadgeTone } {
+export function courierStatusMeta(status: AdminCourierStatus): { label: string; tone: BadgeTone } {
   return vendorStatusMeta(status);
 }
 

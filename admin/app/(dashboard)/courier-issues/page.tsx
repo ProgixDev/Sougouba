@@ -30,7 +30,7 @@ export default function CourierIssuesPage() {
 
   const columns: Column<AdminCourierIssue>[] = [
     { key: 'orderId', header: 'Commande', render: (i) => <Text variant="body" className="font-semibold">#{i.orderId}</Text> },
-    { key: 'courierName', header: 'Livreur', render: (i) => <Text variant="body">{i.courierName}</Text> },
+    { key: 'courierName', header: 'Livreur', render: (i) => <Text variant="body">{i.courierName ?? '—'}</Text> },
     { key: 'vendorName', header: 'Commerce', render: (i) => <Text variant="body">{i.vendorName}</Text> },
     { key: 'reason', header: 'Motif', render: (i) => <Text variant="body">{COURIER_ISSUE_REASON_LABELS[i.reason]}</Text> },
     {
@@ -83,8 +83,8 @@ export default function CourierIssuesPage() {
         <DataTable
           columns={columns}
           rows={rows}
-          keyField={(i) => i.id}
-          onRowClick={(i) => router.push(`/courier-issues/${i.id}`)}
+          keyField={(i) => i.orderId}
+          onRowClick={(i) => router.push(`/courier-issues/${i.orderId}`)}
           loading={all === null}
           emptyIcon={TriangleAlert}
           emptyTitle="Aucun incident"

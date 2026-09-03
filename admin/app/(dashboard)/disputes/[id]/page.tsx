@@ -53,7 +53,7 @@ export default function DisputeDetailPage() {
 
   async function handleResolve(note?: string) {
     setBusy(true);
-    await resolveDispute(dispute!.id, note ?? '', dialog!);
+    await resolveDispute(dispute!.orderId, note ?? '', dialog!);
     setBusy(false);
     setDialog(null);
     toast('success', `Litige marqué comme ${dialog === 'resolved' ? 'résolu' : 'rejeté'}.`);
@@ -62,7 +62,7 @@ export default function DisputeDetailPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <Breadcrumbs items={[{ label: 'Litiges', href: '/disputes' }, { label: `#${dispute.orderId}` }]} />
+      <Breadcrumbs items={[{ label: 'Litiges', href: '/disputes' }, { label: `#${dispute.orderId.slice(0, 8)}` }]} />
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -98,8 +98,8 @@ export default function DisputeDetailPage() {
         <div className="flex flex-col gap-3">
           <ThreadMessage author="Client" at={dispute.openedAt} message={dispute.message} />
           {dispute.merchantReply && <ThreadMessage author="Commerçant" at={dispute.answeredAt!} message={dispute.merchantReply} muted />}
-          {settled && dispute.resolutionNote && (
-            <ThreadMessage author="Administrateur — décision" at={dispute.resolvedAt!} message={dispute.resolutionNote} accent />
+          {settled && dispute.merchantReply && (
+            <ThreadMessage author="Administrateur — décision" at={dispute.resolvedAt!} message={dispute.merchantReply} accent />
           )}
         </div>
       </Card>

@@ -9,18 +9,21 @@ import { DataTable, type Column } from '@/components/data/DataTable';
 import { listVendors } from '@/lib/api/vendors';
 import { vendorStatusMeta } from '@/lib/statusMeta';
 import { formatDate } from '@/lib/format';
-import type { Vendor, VendorStatus } from '@/lib/types';
+import type { AdminVendorListItem, AdminVendorStatus } from '@/lib/types';
 
-const TABS: { key: VendorStatus; label: string }[] = [
+const TABS: { key: AdminVendorStatus; label: string }[] = [
   { key: 'pending', label: 'En attente' },
   { key: 'approved', label: 'Approuvés' },
   { key: 'suspended', label: 'Suspendus' },
+  // `rejected` is its own terminal state in the API — the mock folded it into
+  // "suspended", which hid every refused application from the back office.
+  { key: 'rejected', label: 'Refusés' },
 ];
 
 export default function MerchantsPage() {
   const router = useRouter();
-  const [all, setAll] = useState<Vendor[] | null>(null);
-  const [tab, setTab] = useState<VendorStatus>('pending');
+  const [all, setAll] = useState<AdminVendorListItem[] | null>(null);
+  const [tab, setTab] = useState<AdminVendorStatus>('pending');
   const [search, setSearch] = useState('');
 
   useEffect(() => {
@@ -28,7 +31,7 @@ export default function MerchantsPage() {
   }, []);
 
   const counts = useMemo(() => {
-    const base = { pending: 0, approved: 0, suspended: 0 };
+    const base: Record<string, number> = { pending: 0, approved: 0, suspended: 0, rejected: 0 };
     for (const v of all ?? []) base[v.status] += 1;
     return base;
   }, [all]);
@@ -42,7 +45,7 @@ export default function MerchantsPage() {
     return list;
   }, [all, tab, search]);
 
-  const columns: Column<Vendor>[] = [
+  const columns: Column<AdminVendorListItem>[] = [
     {
       key: 'name',
       header: 'Commerce',
@@ -54,7 +57,7 @@ export default function MerchantsPage() {
             {v.name}
           </Text>
           <Text variant="caption" tone="muted">
-            {v.specialtyFr}
+            {v.ownerName}
           </Text>
         </div>
       ),
@@ -69,10 +72,10 @@ export default function MerchantsPage() {
       key: 'submitted',
       header: 'Soumis',
       sortable: true,
-      sortValue: (v) => v.registration?.submittedAt ?? '',
+      sortValue: (v) => v.submittedAt ?? '',
       render: (v) => (
         <Text variant="body" tone="muted">
-          {v.registration ? formatDate(v.registration.submittedAt) : '—'}
+          {v.submittedAt ? formatDate(v.submittedAt) : '—'}
         </Text>
       ),
     },

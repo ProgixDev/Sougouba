@@ -10,16 +10,24 @@ import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/data/Skeleton';
 import { getUser } from '@/lib/api/users';
 import { formatDate } from '@/lib/format';
-import type { User } from '@/lib/types';
+import type { AdminUserDetail } from '@/lib/types';
 
-const ROLE_LABELS: Record<string, string> = { customer: 'Client', business: 'Commerçant', courier: 'Livreur' };
+const ROLE_LABELS: Record<string, string> = { customer: 'Client', business: 'Commerçant', courier: 'Livreur', admin: 'Administrateur' };
 
 export default function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [user, setUser] = useState<User | null | undefined>(undefined);
+  const [user, setUser] = useState<AdminUserDetail | null | undefined>(undefined);
 
   useEffect(() => {
-    getUser(id).then((u) => setUser(u ?? null));
+    let active = true;
+    getUser(id)
+      .then((u) => active && setUser(u))
+      // Null renders "introuvable"; without this a failed request leaves the
+      // skeleton spinning.
+      .catch(() => active && setUser(null));
+    return () => {
+      active = false;
+    };
   }, [id]);
 
   if (user === undefined) {
@@ -60,7 +68,7 @@ export default function UserDetailPage() {
             Coordonnées
           </Text>
           <dl className="flex flex-col gap-4">
-            <Field label="Courriel" value={user.email} icon={Mail} />
+            <Field label="Courriel" value={user.email ?? '—'} icon={Mail} />
             {user.memberSince && <Field label="Membre depuis" value={formatDate(user.memberSince)} icon={Star} />}
           </dl>
         </Card>
@@ -69,13 +77,13 @@ export default function UserDetailPage() {
           <Text variant="subtitle" className="mb-4">
             Rattachement
           </Text>
-          {user.vendorId ? (
-            <Link href={`/merchants/${user.vendorId}`} className="font-sans text-[0.875rem] font-semibold text-primary hover:underline">
-              Voir la fiche commerce →
+          {user.vendor ? (
+            <Link href={`/merchants/${user.vendor.id}`} className="font-sans text-[0.875rem] font-semibold text-primary hover:underline">
+              {user.vendor.name} →
             </Link>
-          ) : user.courierId ? (
-            <Link href={`/couriers/${user.courierId}`} className="font-sans text-[0.875rem] font-semibold text-primary hover:underline">
-              Voir la fiche livreur →
+          ) : user.courier ? (
+            <Link href={`/couriers/${user.courier.id}`} className="font-sans text-[0.875rem] font-semibold text-primary hover:underline">
+              {user.courier.fullName} →
             </Link>
           ) : (
             <div className="flex flex-col gap-4">

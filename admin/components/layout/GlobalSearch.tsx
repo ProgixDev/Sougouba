@@ -21,16 +21,34 @@ export function GlobalSearch() {
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * Debounced by 250 ms.
+   *
+   * This used to run the mock on every keystroke, which cost nothing because
+   * the data was already in memory. It is a network request now, and the API
+   * allows 120 requests a minute per account — a fast typist would exhaust that
+   * budget in a couple of sentences and start getting 429s on every screen, not
+   * just this one. Debouncing here is the fix; raising the budget would only
+   * move the cliff.
+   */
   useEffect(() => {
     let active = true;
-    searchAll(query).then((r) => {
-      if (active) {
-        setResults(r);
-        setActiveIndex(0);
-      }
-    });
+    const timer = setTimeout(() => {
+      searchAll(query)
+        .then((r) => {
+          if (!active) return;
+          setResults(r);
+          setActiveIndex(0);
+        })
+        // A failed search should quietly show nothing rather than throw an
+        // unhandled rejection out of a dropdown the user may already have
+        // closed.
+        .catch(() => active && setResults([]));
+    }, 250);
+
     return () => {
       active = false;
+      clearTimeout(timer);
     };
   }, [query]);
 

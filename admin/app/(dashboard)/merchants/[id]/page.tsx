@@ -10,24 +10,28 @@ import { StatusBadge } from '@/components/data/StatusBadge';
 import { Skeleton } from '@/components/data/Skeleton';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
-import { getVendor, getVendorNote, approveVendor, rejectVendor } from '@/lib/api/vendors';
+import { getVendor, approveVendor, rejectVendor, suspendVendor } from '@/lib/api/vendors';
 import { vendorStatusMeta } from '@/lib/statusMeta';
 import { formatDate } from '@/lib/format';
-import type { Vendor } from '@/lib/types';
+import type { AdminVendorDetail } from '@/lib/types';
 
 export default function MerchantDetailPage() {
   const { id } = useParams<{ id: string }>();
   const toast = useToast();
 
-  const [vendor, setVendor] = useState<Vendor | null | undefined>(undefined);
-  const [note, setNote] = useState<string | undefined>();
+  const [vendor, setVendor] = useState<AdminVendorDetail | null | undefined>(undefined);
   const [dialog, setDialog] = useState<'reject' | 'suspend' | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function load() {
-    const [v, n] = await Promise.all([getVendor(id), getVendorNote(id)]);
-    setVendor(v ?? null);
-    setNote(n);
+    // One request, not two. The rejection/suspension reason used to live in a
+    // separate localStorage map (`getVendorNote`); it is `statusReason` on the
+    // row now.
+    try {
+      setVendor(await getVendor(id));
+    } catch {
+      setVendor(null);
+    }
   }
 
   useEffect(() => {
@@ -55,18 +59,35 @@ export default function MerchantDetailPage() {
 
   async function handleApprove() {
     setBusy(true);
-    await approveVendor(vendor!.id);
+    try {
+      await approveVendor(vendor!.id);
+      toast('success', `${vendor!.name} a été approuvé.`);
+    } catch (error) {
+      // A 400 here usually means another administrator decided this file while
+      // it was open — refetching shows the decision rather than an error the
+      // reviewer can do nothing about.
+      toast('error', error instanceof Error ? error.message : 'Décision impossible.');
+    }
     setBusy(false);
-    toast('success', `${vendor!.name} a été approuvé.`);
     load();
   }
 
-  async function handleReject(reason?: string) {
+  /**
+   * Reject and suspend are genuinely different calls now. The mock sent both to
+   * `rejectVendor`, which set `suspended` either way — so a refused application
+   * and a shop pulled from the platform were indistinguishable afterwards.
+   */
+  async function handleDecision(reason?: string) {
+    const rejecting = dialog === 'reject';
     setBusy(true);
-    await rejectVendor(vendor!.id, reason ?? '');
+    try {
+      await (rejecting ? rejectVendor(vendor!.id, reason ?? '') : suspendVendor(vendor!.id, reason ?? ''));
+      toast('info', `${vendor!.name} a été ${rejecting ? 'refusé' : 'suspendu'}.`);
+    } catch (error) {
+      toast('error', error instanceof Error ? error.message : 'Décision impossible.');
+    }
     setBusy(false);
     setDialog(null);
-    toast('info', `${vendor!.name} a été ${vendor!.status === 'pending' ? 'refusé' : 'suspendu'}.`);
     load();
   }
 
@@ -87,7 +108,7 @@ export default function MerchantDetailPage() {
           </Text>
         </div>
         <div className="flex gap-2.5">
-          {vendor.status !== 'approved' && (
+          {vendor.status !== 'approved' && vendor.status !== 'rejected' && (
             <Button variant="primary" onClick={handleApprove} disabled={busy}>
               <CheckCircle2 size={16} /> Approuver
             </Button>
@@ -105,13 +126,13 @@ export default function MerchantDetailPage() {
         </div>
       </div>
 
-      {note && (
+      {vendor.statusReason && (
         <Card elevated={false} className="border-destructive/30 bg-destructive/5 p-4">
           <Text variant="label" tone="destructive">
             Motif du refus / de la suspension
           </Text>
           <Text variant="body" className="mt-1">
-            {note}
+            {vendor.statusReason}
           </Text>
         </Card>
       )}
@@ -127,7 +148,7 @@ export default function MerchantDetailPage() {
               <Field label="Personne responsable" value={vendor.registration.contactName} icon={FileText} />
               <Field label="Téléphone" value={vendor.registration.contactPhone} icon={Phone} />
               {vendor.registration.mapaqNumber && <Field label="Permis MAPAQ" value={vendor.registration.mapaqNumber} icon={FileText} />}
-              <Field label="Soumis le" value={formatDate(vendor.registration.submittedAt)} icon={FileText} />
+              {vendor.registration.submittedAt && <Field label="Soumis le" value={formatDate(vendor.registration.submittedAt)} icon={FileText} />}
             </dl>
           ) : (
             <Text variant="body" tone="muted">
@@ -162,7 +183,7 @@ export default function MerchantDetailPage() {
         requireReason
         reasonLabel="Motif"
         busy={busy}
-        onConfirm={handleReject}
+        onConfirm={handleDecision}
         onCancel={() => setDialog(null)}
       />
     </div>

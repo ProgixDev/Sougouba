@@ -1,55 +1,46 @@
-import type { Vendor, VendorStatus, ID } from '../types';
-import { loadTable, saveTable, loadValue, saveValue, delay } from './storage';
-import { getSeed } from './seed';
+import { apiGet, apiGetOrNull, apiPost, type Page } from './client';
+import type { AdminVendorDetail, AdminVendorListItem, AdminVendorStatus, ID } from '../types';
 
-const TABLE_KEY = 'sougouba-admin-vendors';
-const NOTES_KEY = 'sougouba-admin-vendor-notes';
-
-function table(): Vendor[] {
-  return loadTable(TABLE_KEY, getSeed().vendors);
-}
-function notes(): Record<ID, string> {
-  return loadValue(NOTES_KEY, {} as Record<ID, string>);
-}
-
-export async function listVendors(status?: VendorStatus): Promise<Vendor[]> {
-  await delay();
-  const rows = table();
-  return status ? rows.filter((v) => v.status === status) : rows;
-}
-
-export async function getVendor(id: ID): Promise<Vendor | undefined> {
-  await delay(150, 300);
-  return table().find((v) => v.id === id);
+/**
+ * The merchant approval queue.
+ *
+ * Two behaviours changed with the real API, both of which the mock got wrong:
+ *
+ * - **`rejected` is a distinct state.** The mock's `rejectVendor` set
+ *   `status: 'suspended'`, because `data/types.ts` has no `rejected` — the
+ *   mobile app has no back office and never needed the distinction. They are
+ *   not the same decision: rejection is terminal (a rejected file cannot later
+ *   be approved), suspension is reversible.
+ * - **The rejection reason is a column, not a side table.** `getVendorNote`
+ *   and the `sougouba-admin-vendor-notes` localStorage map are gone;
+ *   `statusReason` comes back on the row.
+ */
+export async function listVendors(status?: AdminVendorStatus, limit = 100): Promise<AdminVendorListItem[]> {
+  const page = await apiGet<Page<AdminVendorListItem>>('/admin/vendors', { status, limit });
+  return page.items;
 }
 
-export async function getVendorNote(id: ID): Promise<string | undefined> {
-  return notes()[id];
+export async function getVendor(id: ID): Promise<AdminVendorDetail | null> {
+  return apiGetOrNull<AdminVendorDetail>(`/admin/vendors/${id}`);
 }
 
-export async function approveVendor(id: ID): Promise<Vendor | undefined> {
-  await delay(300, 550);
-  const rows = table();
-  const vendor = rows.find((v) => v.id === id);
-  if (!vendor) return undefined;
-  vendor.status = 'approved';
-  saveTable(TABLE_KEY, rows);
-  return vendor;
+/** No reason required — an approval needs no explanation, unlike the two below. */
+export async function approveVendor(id: ID): Promise<void> {
+  await apiPost(`/admin/vendors/${id}/approve`, {});
 }
 
-export async function rejectVendor(id: ID, reason: string): Promise<Vendor | undefined> {
-  await delay(300, 550);
-  const rows = table();
-  const vendor = rows.find((v) => v.id === id);
-  if (!vendor) return undefined;
-  vendor.status = 'suspended';
-  saveTable(TABLE_KEY, rows);
-  const n = notes();
-  n[id] = reason;
-  saveValue(NOTES_KEY, n);
-  return vendor;
+/**
+ * Terminal. The API refuses to approve a rejected file afterwards, so this is
+ * the decision that cannot be walked back.
+ *
+ * `reason` is mandatory server-side (minimum 5 characters) — a file closed
+ * with no reasoning is one nobody can defend later.
+ */
+export async function rejectVendor(id: ID, reason: string): Promise<void> {
+  await apiPost(`/admin/vendors/${id}/reject`, { reason });
 }
 
-export async function suspendVendor(id: ID, reason: string): Promise<Vendor | undefined> {
-  return rejectVendor(id, reason);
+/** Reversible: a suspended shop can be approved again once the cause is resolved. */
+export async function suspendVendor(id: ID, reason: string): Promise<void> {
+  await apiPost(`/admin/vendors/${id}/suspend`, { reason });
 }
