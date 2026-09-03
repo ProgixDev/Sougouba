@@ -1,18 +1,28 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, inArray, lt, ne, or, sql, type SQL } from 'drizzle-orm';
 
 import type { Page } from '../catalog/dto/query.dto.js';
+import { containsPattern, escapeLikePattern } from '../common/sql/like.js';
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
-import { courierIssues, couriers, disputes, orders, profiles, vendors } from '../db/schema/index.js';
+import { courierIssues, couriers, disputes, orderDeliveries, orders, profiles, vendors } from '../db/schema/index.js';
+import {
+  num,
+  numOrNull,
+  type AdminOrderDetail,
+  type AdminOrderListItem,
+  type AdminOverviewStats,
+} from './dto/admin-detail.dto.js';
 import type {
   CourierIssueQuery,
   DisputeQuery,
+  OrderListQuery,
   ResolveCourierIssueInput,
   ResolveDisputeInput,
 } from './dto/admin.dto.js';
 import { AuditService } from './audit.service.js';
 import { RefundsService } from './refunds.service.js';
+import { deltaPct, overviewWindow, round2, type OverviewRange } from './stats-window.js';
 
 /**
  * The back office's arbitration surface — CDC addendum §04's "gestion des
@@ -252,7 +262,16 @@ export class AdminService {
         couriersPending: sql<number>`(select count(*) from ${couriers} where status = 'pending')::int`,
         couriersApproved: sql<number>`(select count(*) from ${couriers} where status = 'approved')::int`,
         couriersOnline: sql<number>`(select count(*) from ${couriers} where is_online = true and status = 'approved')::int`,
-        ordersToday: sql<number>`(select count(*) from ${orders} where created_at >= date_trunc('day', now() at time zone 'America/Montreal'))::int`,
+        // ⚠️ Was `date_trunc('day', now() at time zone 'America/Montreal')`,
+        // which is wrong and was quietly over-counting. `now() at time zone
+        // 'America/Montreal'` converts a timestamptz to a *naive* timestamp
+        // holding Montreal wall-clock; truncating gives naive Montreal
+        // midnight; comparing that against a timestamptz column casts it back
+        // using the session zone (UTC). So "today" began at 00:00 UTC of
+        // Montreal's date — four or five hours early — and swept in the
+        // previous Montreal evening's orders. Converting back explicitly is
+        // what makes it the instant the Montreal day actually starts.
+        ordersToday: sql<number>`(select count(*) from ${orders} where created_at >= ((now() at time zone 'America/Montreal')::date)::timestamp at time zone 'America/Montreal')::int`,
         ordersActive: sql<number>`(select count(*) from ${orders} where status not in ('delivered','cancelled'))::int`,
         // The number that actually needs watching: packed, paid for, and
         // nobody carrying it.
@@ -269,22 +288,370 @@ export class AdminService {
     return row;
   }
 
-  /** Recent orders, unscoped — the back office sees every shop. */
-  async recentOrders(limit: number, offset: number) {
-    return this.db
-      .select({
-        id: orders.id,
-        status: orders.status,
-        totalCad: orders.totalCad,
-        createdAt: orders.createdAt,
-        customerName: orders.customerName,
-        vendorName: vendors.name,
-        refundedAt: orders.refundedAt,
-      })
-      .from(orders)
-      .innerJoin(vendors, eq(vendors.id, orders.vendorId))
-      .orderBy(desc(orders.createdAt), desc(orders.id))
-      .limit(limit)
-      .offset(offset);
+  /**
+   * Orders, unscoped — the back office sees every shop.
+   *
+   * ⚠️ **Breaking change, 2026-09-03.** This was `recentOrders()`, returning a
+   * bare array with `totalCad` as the raw `numeric` string. It now returns the
+   * same `Page<T>` envelope every other list on this controller returns, with
+   * money as numbers. Two reasons it was worth breaking:
+   *
+   *   - A bare array carries no `total`, so a paginated table cannot render a
+   *     page count. Every other admin list already had one; leaving this the
+   *     exception guaranteed someone would special-case it badly.
+   *   - `totalCad` as a string is a live bug, not a style preference — a
+   *     column the dashboard sorts on collates as text, putting `$9.00` above
+   *     `$85.00`.
+   *
+   * Safe to break because the only consumer is the admin dashboard, which was
+   * still running entirely on its own localStorage mock and had never called
+   * this route. Deliberately no `?envelope=false` escape hatch: it would be
+   * permanent.
+   */
+  async listOrders(query: OrderListQuery): Promise<Page<AdminOrderListItem>> {
+    const conditions: SQL[] = [];
+    if (query.status) conditions.push(eq(orders.status, query.status));
+    if (query.vendorId) conditions.push(eq(orders.vendorId, query.vendorId));
+    if (query.search) {
+      const pattern = containsPattern(query.search);
+      conditions.push(
+        or(
+          ilike(orders.customerName, pattern),
+          ilike(vendors.name, pattern),
+          // Real ids are uuids and the dashboard displays the first 8
+          // characters, so a *prefix* is what someone pastes back — and a
+          // prefix is the only id match an index can ever serve. `ILIKE
+          // '%…%'` on a uuid cast to text is a guaranteed full scan.
+          sql`${orders.id}::text like ${escapeLikePattern(query.search.toLowerCase()) + '%'}`
+        )!
+      );
+    }
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [rows, [counted]] = await Promise.all([
+      this.db
+        .select({
+          id: orders.id,
+          status: orders.status,
+          createdAt: orders.createdAt,
+          subtotalCad: orders.subtotalCad,
+          totalCad: orders.totalCad,
+          customerId: orders.customerId,
+          customerName: orders.customerName,
+          vendorId: orders.vendorId,
+          vendorName: vendors.name,
+          vendorType: vendors.vendorType,
+          courierName: couriers.fullName,
+          refundedAt: orders.refundedAt,
+          refundAmountCad: orders.refundAmountCad,
+          // Both relations are 1:1 on `order_id`, so these left joins add a
+          // flag without fanning the row out. They are what lets the table
+          // badge a problem order without an N+1 per page.
+          hasDispute: sql<boolean>`${disputes.orderId} is not null`,
+          hasCourierIssue: sql<boolean>`${courierIssues.orderId} is not null`,
+        })
+        .from(orders)
+        .innerJoin(vendors, eq(vendors.id, orders.vendorId))
+        .leftJoin(orderDeliveries, eq(orderDeliveries.orderId, orders.id))
+        .leftJoin(couriers, eq(couriers.id, orderDeliveries.courierId))
+        .leftJoin(disputes, eq(disputes.orderId, orders.id))
+        .leftJoin(courierIssues, eq(courierIssues.orderId, orders.id))
+        .where(where)
+        // The `id` tiebreak is what keeps pagination stable when two orders
+        // share a `created_at` — without it a row can appear on two pages, or
+        // on neither.
+        .orderBy(desc(orders.createdAt), desc(orders.id))
+        .limit(query.limit)
+        .offset(query.offset),
+      this.db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(orders)
+        // Repeated because `search` filters on `vendors.name` — the count must
+        // see the same rows the page does, or the page count lies.
+        .innerJoin(vendors, eq(vendors.id, orders.vendorId))
+        .where(where),
+    ]);
+
+    return {
+      items: rows.map((r) => ({
+        ...r,
+        subtotalCad: num(r.subtotalCad),
+        totalCad: num(r.totalCad),
+        refundAmountCad: numOrNull(r.refundAmountCad),
+      })),
+      total: counted?.total ?? 0,
+      limit: query.limit,
+      offset: query.offset,
+    };
+  }
+
+  /**
+   * The dashboard's landing page: money, momentum, and the queues, for a
+   * chosen window.
+   *
+   * Cancelled orders are excluded from every metric here — they represent no
+   * business having happened, and counting them would flatter every figure.
+   * Refunded ones are counted at full value, with `refundedCad` reported
+   * alongside; see `AdminOverviewStats`.
+   */
+  async overview(range: OverviewRange): Promise<AdminOverviewStats> {
+    const window = overviewWindow(range, new Date());
+    const { curStart, curEnd, prevStart, days } = window;
+
+    // ⚠️ Raw `sql` templates must be handed ISO **strings**, not `Date`s.
+    // Operators like `gte(orders.createdAt, …)` know the column and run the
+    // value through its type mapper; a `${date}` interpolated into a bare
+    // template does not, so postgres.js receives a `Date` it cannot serialise
+    // and the whole query fails with `ERR_INVALID_ARG_TYPE` — a Node error,
+    // nowhere near the SQL, and easy to misread as a syntax problem.
+    // Postgres infers `timestamptz` for the parameter from the comparison.
+    const curStartIso = curStart.toISOString();
+    const curEndIso = curEnd.toISOString();
+
+    const [totals, series, topVendors, byVertical, queues] = await Promise.all([
+      // One pass over both windows. `filter` splits current from previous
+      // without scanning the table twice, and the commission rate is read in
+      // SQL so the multiplication stays exact `numeric` arithmetic rather than
+      // round-tripping through a float.
+      this.db
+        .select({
+          gmvCad: sql<number>`round(coalesce(sum(${orders.totalCad}) filter (where ${orders.createdAt} >= ${curStartIso}), 0), 2)::float8`,
+          prevGmvCad: sql<number>`round(coalesce(sum(${orders.totalCad}) filter (where ${orders.createdAt} < ${curStartIso}), 0), 2)::float8`,
+          orderCount: sql<number>`(count(*) filter (where ${orders.createdAt} >= ${curStartIso}))::int`,
+          prevOrderCount: sql<number>`(count(*) filter (where ${orders.createdAt} < ${curStartIso}))::int`,
+          commissionRevenueCad: sql<number>`round(
+            coalesce(sum(${orders.subtotalCad}) filter (where ${orders.createdAt} >= ${curStartIso}), 0)
+            * (select commission_rate from platform_settings where id = 1), 2)::float8`,
+          refundedCad: sql<number>`round(coalesce(sum(${orders.refundAmountCad}) filter (where ${orders.createdAt} >= ${curStartIso}), 0), 2)::float8`,
+        })
+        .from(orders)
+        .where(and(ne(orders.status, 'cancelled'), gte(orders.createdAt, prevStart), lt(orders.createdAt, curEnd))),
+
+      // `generate_series` LEFT JOIN so a day with no orders is a zero, not a
+      // missing point — a line chart that skips days draws a lie.
+      //
+      // The `created_at` bounds are repeated inside the JOIN condition on
+      // purpose: without them the join scans every order ever placed and only
+      // then discards the ones outside the window.
+      this.db.execute(sql`
+        select to_char(d.day, 'YYYY-MM-DD')                    as date,
+               round(coalesce(sum(o.total_cad), 0), 2)::float8 as gmv,
+               count(o.id)::int                                as orders
+        from generate_series(${days[0]}::date, ${days[days.length - 1]}::date, interval '1 day') as d(day)
+        left join orders o
+          on (o.created_at at time zone 'America/Montreal')::date = d.day::date
+         and o.status <> 'cancelled'
+         and o.created_at >= ${curStartIso}
+         and o.created_at <  ${curEndIso}
+        group by d.day
+        order by d.day
+      `),
+
+      this.db
+        .select({
+          vendorId: vendors.id,
+          name: vendors.name,
+          vendorType: vendors.vendorType,
+          revenueCad: sql<number>`round(coalesce(sum(${orders.totalCad}), 0), 2)::float8`,
+          orderCount: sql<number>`count(*)::int`,
+        })
+        .from(orders)
+        .innerJoin(vendors, eq(vendors.id, orders.vendorId))
+        .where(and(ne(orders.status, 'cancelled'), gte(orders.createdAt, curStart), lt(orders.createdAt, curEnd)))
+        .groupBy(vendors.id, vendors.name, vendors.vendorType)
+        .orderBy(sql`sum(${orders.totalCad}) desc`)
+        .limit(6),
+
+      this.db
+        .select({ vertical: vendors.vendorType, orders: sql<number>`count(*)::int` })
+        .from(orders)
+        .innerJoin(vendors, eq(vendors.id, orders.vendorId))
+        .where(and(ne(orders.status, 'cancelled'), gte(orders.createdAt, curStart), lt(orders.createdAt, curEnd)))
+        .groupBy(vendors.vendorType),
+
+      this.stats(),
+    ]);
+
+    const t = totals[0];
+    const gmvCad = t?.gmvCad ?? 0;
+    const orderCount = t?.orderCount ?? 0;
+
+    const seriesRows = [...series] as { date: string; gmv: number; orders: number }[];
+    // A silent off-by-one here would misalign every bar with its label, so it
+    // is asserted rather than hoped for. `generate_series` over `::date` is
+    // DST-immune; over `timestamptz` it is not, which is why the cast matters.
+    if (seriesRows.length !== range) {
+      throw new Error(`Overview series returned ${seriesRows.length} buckets for a ${range}-day range`);
+    }
+
+    const verticalCounts = new Map(byVertical.map((r) => [r.vertical, r.orders]));
+
+    return {
+      range,
+      from: curStart.toISOString(),
+      to: curEnd.toISOString(),
+
+      gmvCad,
+      gmvDeltaPct: deltaPct(gmvCad, t?.prevGmvCad ?? 0),
+      orderCount,
+      orderDeltaPct: deltaPct(orderCount, t?.prevOrderCount ?? 0),
+      commissionRevenueCad: t?.commissionRevenueCad ?? 0,
+      refundedCad: t?.refundedCad ?? 0,
+      averageOrderValueCad: orderCount === 0 ? 0 : round2(gmvCad / orderCount),
+
+      series: seriesRows,
+      topVendors,
+      // Both verticals always present, backfilled with 0 — otherwise the chart
+      // grows and shrinks a category as the range changes.
+      ordersByVertical: (['grocery', 'restaurant'] as const).map((vertical) => ({
+        vertical,
+        orders: verticalCounts.get(vertical) ?? 0,
+      })),
+
+      queues,
+    };
+  }
+
+  /**
+   * One order, whole — the arbitration view. Everything a human needs to decide
+   * a dispute without opening a second screen: what was bought, what was
+   * charged, who carried it, and what each party has said.
+   *
+   * Uses Drizzle's **relational** query builder (`db.query.*`) rather than the
+   * explicit `.select()` builder the rest of this file uses. That is
+   * deliberate, and it is the one place here it earns the inconsistency: six
+   * hand-written left joins would fan the item rows against the status-history
+   * rows into a cartesian product that then has to be de-duplicated in TS —
+   * exactly the bug the relational builder exists to prevent. `createDbClient`
+   * already passes `{ schema }` to `drizzle()`, so the relations are available.
+   */
+  async orderDetail(id: string): Promise<AdminOrderDetail> {
+    const row = await this.db.query.orders.findFirst({
+      where: eq(orders.id, id),
+      with: {
+        vendor: {
+          columns: { id: true, name: true, slug: true, vendorType: true, city: true, addressStreet: true, addressPostalCode: true },
+        },
+        customer: { columns: { id: true, fullName: true, avatarUrl: true, memberSince: true } },
+        items: true,
+        // A timeline read backwards is not a timeline.
+        statusHistory: { orderBy: (h, { asc }) => [asc(h.at)] },
+        dispute: true,
+        courierIssue: true,
+        delivery: {
+          with: {
+            courier: { columns: { id: true, fullName: true, phone: true, vehicle: true } },
+            proof: true,
+          },
+        },
+      },
+    });
+
+    if (!row) throw new NotFoundException('Order not found');
+
+    return {
+      id: row.id,
+      status: row.status,
+      createdAt: row.createdAt,
+      stripePaymentIntentId: row.stripePaymentIntentId,
+
+      customer: row.customer ?? null,
+      customerName: row.customerName,
+
+      vendor: row.vendor,
+
+      items: row.items.map((item) => ({
+        id: item.id,
+        productId: item.productId,
+        name: item.name,
+        qty: item.qty,
+        unitPriceCad: num(item.unitPriceCad),
+        // Computed here so every reader agrees: the client multiplying a
+        // string price by a quantity is how a receipt starts disagreeing with
+        // its own total.
+        lineTotalCad: Math.round(num(item.unitPriceCad) * item.qty * 100) / 100,
+      })),
+
+      totals: {
+        subtotalCad: num(row.subtotalCad),
+        gstCad: num(row.gstCad),
+        qstCad: num(row.qstCad),
+        deliveryFeeCad: num(row.deliveryFeeCad),
+        pointsRedeemed: row.pointsRedeemed,
+        pointsDiscountCad: numOrNull(row.pointsDiscountCad),
+        couponCode: row.couponCode,
+        couponDiscountCad: numOrNull(row.couponDiscountCad),
+        totalCad: num(row.totalCad),
+      },
+
+      // Null rather than a zeroed object: "never refunded" and "refunded $0"
+      // are different facts and the UI renders them differently.
+      refund:
+        row.refundedAt === null
+          ? null
+          : {
+              refundedAt: row.refundedAt,
+              refundAmountCad: numOrNull(row.refundAmountCad),
+              stripeRefundId: row.stripeRefundId,
+              refundReason: row.refundReason,
+            },
+
+      deliveryAddress: {
+        label: row.deliveryAddressLabel,
+        street: row.deliveryAddressStreet,
+        city: row.deliveryAddressCity,
+        postalCode: row.deliveryAddressPostalCode,
+        lat: row.deliveryAddressLat,
+        lng: row.deliveryAddressLng,
+      },
+
+      statusHistory: row.statusHistory.map((h) => ({ status: h.status, at: h.at })),
+
+      delivery: row.delivery
+        ? {
+            courier: row.delivery.courier ?? null,
+            acceptedAt: row.delivery.acceptedAt,
+            pickedUpAt: row.delivery.pickedUpAt,
+            deliveredAt: row.delivery.deliveredAt,
+            pickupEtaMin: row.delivery.pickupEtaMin,
+            dropoffEtaMin: row.delivery.dropoffEtaMin,
+            distanceKm: num(row.delivery.distanceKm),
+            tipCad: num(row.delivery.tipCad),
+            earningsCad: num(row.delivery.earningsCad),
+            paidOutAt: row.delivery.paidOutAt,
+            proof: row.delivery.proof
+              ? {
+                  method: row.delivery.proof.method,
+                  imagePath: row.delivery.proof.imagePath,
+                  note: row.delivery.proof.note,
+                  at: row.delivery.proof.at,
+                }
+              : null,
+            // `pin` is intentionally dropped here — see AdminOrderDetail.
+          }
+        : null,
+
+      dispute: row.dispute
+        ? {
+            reason: row.dispute.reason,
+            message: row.dispute.message,
+            openedAt: row.dispute.openedAt,
+            status: row.dispute.status,
+            merchantReply: row.dispute.merchantReply,
+            answeredAt: row.dispute.answeredAt,
+            resolvedAt: row.dispute.resolvedAt,
+          }
+        : null,
+
+      courierIssue: row.courierIssue
+        ? {
+            reason: row.courierIssue.reason,
+            message: row.courierIssue.message,
+            at: row.courierIssue.at,
+            status: row.courierIssue.status,
+            resolvedAt: row.courierIssue.resolvedAt,
+          }
+        : null,
+    };
   }
 }

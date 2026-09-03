@@ -1,11 +1,9 @@
 import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { z } from 'zod';
 
 import { AdminGuard } from '../auth/admin.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { SupabaseAuthGuard } from '../auth/supabase-auth.guard.js';
-import { paginationSchema } from '../catalog/dto/query.dto.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import { SettingsService } from '../loyalty/settings.service.js';
 import { AdminService } from './admin.service.js';
@@ -15,6 +13,8 @@ import {
   auditQuerySchema,
   courierIssueQuerySchema,
   disputeQuerySchema,
+  orderListQuerySchema,
+  overviewQuerySchema,
   refundOrderSchema,
   resolveCourierIssueSchema,
   resolveDisputeSchema,
@@ -25,6 +25,8 @@ import {
   type AuditQuery,
   type CourierIssueQuery,
   type DisputeQuery,
+  type OrderListQuery,
+  type OverviewQuery,
   type RefundOrderInput,
   type ResolveCourierIssueInput,
   type ResolveDisputeInput,
@@ -34,8 +36,6 @@ import {
   type UserQuery,
 } from './dto/admin.dto.js';
 import { RefundsService } from './refunds.service.js';
-
-type Pagination = z.infer<typeof paginationSchema>;
 
 /**
  * A rejection or suspension without a stated reason is refused.
@@ -76,9 +76,24 @@ export class AdminController {
     return this.admin.stats();
   }
 
+  /**
+   * Declared alongside `GET stats` rather than nested under it: find-my-way
+   * resolves the static segment `overview` before any parameter, so the two
+   * cannot shadow each other regardless of declaration order.
+   */
+  @Get('stats/overview')
+  overview(@Query(new ZodValidationPipe(overviewQuerySchema)) query: OverviewQuery) {
+    return this.admin.overview(query.range);
+  }
+
   @Get('orders')
-  orders(@Query(new ZodValidationPipe(paginationSchema)) query: Pagination) {
-    return this.admin.recentOrders(query.limit, query.offset);
+  orders(@Query(new ZodValidationPipe(orderListQuerySchema)) query: OrderListQuery) {
+    return this.admin.listOrders(query);
+  }
+
+  @Get('orders/:id')
+  order(@Param('id', ParseUUIDPipe) id: string) {
+    return this.admin.orderDetail(id);
   }
 
   // ── disputes ──────────────────────────────────────────────────────────────

@@ -243,3 +243,26 @@ export const orderDeliveriesRelations = relations(orderDeliveries, ({ one }) => 
   courier: one(couriers, { fields: [orderDeliveries.courierId], references: [couriers.id] }),
   proof: one(deliveryProofs, { fields: [orderDeliveries.orderId], references: [deliveryProofs.orderId] }),
 }));
+
+/**
+ * The other half of `ordersRelations`'s two `many()` declarations.
+ *
+ * A `many()` on its own is not enough for Drizzle's relational query builder:
+ * it carries no columns, so the join has to be read off the matching `one()`
+ * on the child. Without these, `db.query.orders.findFirst({ with: { items:
+ * true } })` fails at runtime with "There is not enough information to infer
+ * relation orders.items" — and only at runtime, since `many()` type-checks
+ * happily on its own.
+ *
+ * Declared here and not in a migration: `relations()` is TypeScript metadata
+ * that never reaches the database. The foreign keys these describe already
+ * exist on the tables above, so `drizzle-kit generate` emits nothing for them.
+ */
+export const orderItemsRelations = relations(orderItems, ({ one }) => ({
+  order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }),
+  product: one(products, { fields: [orderItems.productId], references: [products.id] }),
+}));
+
+export const orderStatusHistoryRelations = relations(orderStatusHistory, ({ one }) => ({
+  order: one(orders, { fields: [orderStatusHistory.orderId], references: [orders.id] }),
+}));

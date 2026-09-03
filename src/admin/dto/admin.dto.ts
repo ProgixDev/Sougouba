@@ -2,6 +2,41 @@ import { z } from 'zod';
 
 import { paginationSchema } from '../../catalog/dto/query.dto.js';
 
+/**
+ * `GET /admin/orders`.
+ *
+ * The filters exist so the back office can narrow server-side. The mock the
+ * dashboard runs on today fetches every order and filters in a `useMemo` —
+ * fine over 250 seeded rows, and wrong the moment the list is paginated, since
+ * the client would then be filtering one page and calling it the result.
+ */
+export const orderListQuerySchema = paginationSchema.extend({
+  status: z
+    .enum(['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled'])
+    .optional(),
+  vendorId: z.string().uuid().optional(),
+  /** Matches an order id prefix, the customer's name, or the shop's name. */
+  search: z.string().trim().min(1).max(100).optional(),
+});
+
+export type OrderListQuery = z.infer<typeof orderListQuerySchema>;
+
+/**
+ * `GET /admin/stats/overview`.
+ *
+ * An enum rather than a bounded number: the three ranges are the three the
+ * dashboard offers, and each one costs a full scan of the orders table. Letting
+ * a caller ask for 3650 days would be a denial-of-service with a query string.
+ */
+export const overviewQuerySchema = z.object({
+  range: z
+    .enum(['7', '30', '90'])
+    .default('30')
+    .transform((v) => Number(v) as 7 | 30 | 90),
+});
+
+export type OverviewQuery = z.infer<typeof overviewQuerySchema>;
+
 export const disputeQuerySchema = paginationSchema.extend({
   status: z.enum(['open', 'answered', 'resolved', 'rejected']).optional(),
   /** The triage default: everything still waiting on a human. */
