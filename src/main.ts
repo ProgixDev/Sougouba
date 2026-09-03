@@ -1,3 +1,4 @@
+import rateLimit from '@fastify/rate-limit';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
@@ -5,6 +6,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 import { AppModule } from './app.module.js';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
+import { budgetFor, isExempt, tooManyRequests, trackerFor } from './common/rate-limit.js';
 import type { Env } from './config/env.js';
 
 async function bootstrap() {
@@ -22,6 +24,35 @@ async function bootstrap() {
   );
 
   const config = app.get(ConfigService<Env, true>);
+
+  /**
+   * Rate limiting, per-route budgets from `common/rate-limit.ts`.
+   *
+   * Registered here rather than as a Nest guard because the policy is about
+   * routes and cost, not about who is calling — and because this way it runs in
+   * Fastify's `onRequest` hook, ahead of body parsing and ahead of the auth
+   * guard's JWT verification. A flood should be refused before it makes the
+   * server do work, which is the entire point.
+   *
+   * That ordering is also why the bucket key reads the token's `sub` without
+   * verifying it — see `trackerFor`.
+   */
+  await app.register(rateLimit, {
+    global: true,
+    max: (request) => budgetFor(request.url).max,
+    timeWindow: (request) => budgetFor(request.url).windowMs,
+    keyGenerator: trackerFor,
+    allowList: (request) => isExempt(request.url),
+    errorResponseBuilder: (request, context) => tooManyRequests(request, context),
+    // Sent on every response, not only on a 429: a client that can see its own
+    // budget draining can back off before it is refused.
+    addHeaders: {
+      'x-ratelimit-limit': true,
+      'x-ratelimit-remaining': true,
+      'x-ratelimit-reset': true,
+      'retry-after': true,
+    },
+  });
 
   app.useGlobalFilters(new HttpExceptionFilter());
   // No global `ValidationPipe` — this project standardized on Zod
