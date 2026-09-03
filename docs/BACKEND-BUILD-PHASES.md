@@ -68,9 +68,9 @@ and `devis-contract-scope` for the condensed facts pulled from the two PDFs.
 | 5 · Courier, dispatch & live tracking | **Done** (2026-09-03) — straight-line ETAs until Mapbox Directions; scheduler is single-instance |
 | 6 · Disputes & courier issues | **Done** (2026-09-03) — incl. the `admin` role and refunds |
 | 7 · Money: merchant billing & courier payouts (Stripe Connect) | **Written** (2026-09-03) — no Stripe call has ever run; needs a test key |
-| 8 · Admin back-office API | **Done** (2026-09-03) — API only, as planned; no audit log yet |
+| 8 · Admin back-office API | **Done** (2026-09-03) — API only, as planned; audit log landed same day (`0028`) |
 | 9 · Notifications & AI support assistant | Not started |
-| 10 · Hardening, observability & launch | Not started |
+| 10 · Hardening, observability & launch | **Started** (2026-09-03) — rate limiting done, column-grant audit closed; logging/Sentry, load test, staging and deploy outstanding |
 
 Repo: `sougouba-api/` (sibling to this one) — NestJS + Fastify, all 30 tables live
 in Supabase project `wyjkaiquugoblvvzpjnq`, Storage buckets created, CI wired.
@@ -104,10 +104,37 @@ have:
   screen; critical the moment Phase 6 gave admins dispute resolution and Stripe
   refunds. Fixed with column grants (`drizzle/0022`) and re-verified by
   re-running the attack.
+- **The class again, third time, a different shape** (`drizzle/0027`) — a
+  merchant could insert into their *own* shop while pointing `section_id` at a
+  competitor's aisle. Section ids are public (the storefront lists them to
+  anonymous readers) and `GET /products?sectionId=` filters on the section
+  independently of the vendor, so the planted row is served inside the other
+  shop's aisle at a price its owner never set and cannot delete.
+  `ProductsService.assertOwnedRefs` refuses this *correctly* — and that is the
+  point: it guards the API and says nothing about PostgREST. Closed with a
+  composite foreign key `(section_id, vendor_id)`, which beats a column revoke
+  here because a revoke leaves INSERT open (how the attack lands) and takes
+  legitimate re-shelving away from merchants.
+- **Rate limiting** (Phase 10) — the 429 came back as a **500**.
+  `@fastify/rate-limit` throws a plain `Error` with a `statusCode` property,
+  which Fastify's own handler understands and this project's catch-all
+  `HttpExceptionFilter` does not. The budget was enforced and the status was a
+  lie; a client cannot back off from a 500.
 
 The recurrence is the point: **RLS scopes rows and cannot scope columns, and
 Supabase's default grants make every column writable.** Any table where a policy
 is the only gate has this bug. Audit column grants alongside every new policy.
+
+`0027` extends the rule one step: it is not only about *columns*. Wherever a
+service method enforces a relationship between two columns — "this section
+belongs to this vendor" — the database has to enforce it too, or the guarantee
+holds only for callers who come through the API. Prefer a composite foreign key
+or a check constraint over a service-layer assertion, and keep both.
+
+The column-grant audit that `0024` began was re-verified live on 2026-09-03 and
+holds: every write grant for `anon`/`authenticated` across couriers, orders,
+deliveries, disputes, loyalty, coupons and payouts is zero, and only `profiles`
+and `vendors` carry column-scoped UPDATE, each matching its migration exactly.
 
 The pattern is consistent enough to be worth stating as a rule: **on this
 project, static checks have never once caught the bug that mattered.** Full
@@ -122,6 +149,16 @@ target decision, Stripe account + Connect platform setup, the remaining open
 questions in §"Confirm before Phase 0" below, and — per the devis — Apple
 Developer / Google Play Console accounts the client owns (not blocking API work,
 but blocking store publishing in Phase 10).
+
+On `DATABASE_URL` specifically: `.env` currently holds
+`postgresql://postgres:…@127.0.0.1:5432/postgres` — a local-dev placeholder, not
+the Supabase pooled connection. The app boots, maps 91 routes and resolves its
+whole module graph against it, but `/health/db` returns 500 and the dispatch
+scheduler logs a connection failure every five seconds. **No query the API
+issues has ever reached a database.** Everything verified so far was proved
+against the live Supabase project over the MCP connection instead — including
+the exact SQL Drizzle compiles for a given call, which is how `0028`'s insert
+was checked without one.
 
 **Also still true after three phases of API work**: the mobile app is not wired
 to any of it. Every screen still reads the mock `data/api/*` layer. The cutover
@@ -744,9 +781,29 @@ Progix will handle, and safe to run with real money and real user data.
   service-role key, or OpenAI key ever reachable from the mobile bundle — only the
   Supabase anon key and Stripe publishable key are client-side, exactly mirroring
   how `lib/mapbox.ts` already documents the public/secret token split).
-- Rate limiting (Fastify's rate-limit plugin) — especially the geocoding, AI
-  assistant, and dispatch-accept endpoints, which are the ones with a real
-  external cost or a race condition to protect.
+- ~~Rate limiting~~ **Done** (2026-09-03). `@fastify/rate-limit`, budgets in one
+  table in `common/rate-limit.ts`: `/geo` 20/min (Mapbox bills per call),
+  `/courier/offers` 20/min (contended write), `/support` 15/min (paid model
+  calls, budgeted before the endpoint exists), `/orders` 40/min, `/admin`
+  120/min, everything else 300/min. `/health` and `/webhooks/stripe` are exempt
+  — a load balancer must not be able to rate-limit itself out of existence, and
+  a dropped `payment_intent` event is an order paid for and never created.
+  Buckets key on the user id where there is a bearer token and the IP only
+  otherwise, because mobile carriers NAT thousands of subscribers behind one
+  address. **Not `@nestjs/throttler`**: its current release peers on
+  `@nestjs/common` ^7–^11 and this project is on 12.
+  ⚠️ In-memory, so per instance — two processes double every budget. Same
+  single-instance caveat as the dispatch scheduler; this is the number that
+  finally justifies the Redis line in the devis's stack list.
+- **An admin audit log** — not in the original scope for this phase, added here
+  because Phase 8 shipped without one. `admin_audit_log` (`0028`) records actor,
+  action, subject, written reason and a `{field: {from, to}}` diff for all ten
+  mutating admin routes, each **inside the same transaction as the change**.
+  Append-only by trigger rather than by grant: the API connects as the table
+  owner, so a revoke against itself is ignored, and an audit log the audited
+  application can rewrite is not evidence of anything. `audit.spec.ts` reads
+  Nest's own route metadata and asserts one audited action per mutating route,
+  so a future admin route with no `audit.record` call fails the build.
 - Structured logging + error tracking (Sentry or equivalent) wired to both the API
   and, ideally, correlated with the mobile app's own crash reporting.
 - Load-test the two hot paths that matter most: catalog browse (many reads,
@@ -768,10 +825,12 @@ against the staging environment, by someone who did not build it.
 ## Outstanding, and why
 
 - **Redis** appears in the devis's original stack list (cache) but nothing in this
-  plan requires it yet — every read path above is either cheap enough for Postgres
-  directly or infrequent enough not to need a cache tier. Add it opportunistically
-  (session/rate-limit store, catalog cache) if Phase 10's load testing says so,
-  not speculatively before there's a number to justify it.
+  plan required it until now — every read path above is either cheap enough for
+  Postgres directly or infrequent enough not to need a cache tier. It now has
+  its first real justification, and it is not the cache: **rate limiting is
+  in-memory and therefore per instance**, so the moment a second API process
+  exists every budget doubles. That is the number that decides it. A catalog
+  cache still needs a profile before it earns its keep.
 - **Coupons and the AI assistant are the two least-specified features in the whole
   contract** — both get a named phase (4 and 9) but both need a real scoping
   conversation with the client before that phase's estimate means anything. Don't

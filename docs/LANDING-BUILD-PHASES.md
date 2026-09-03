@@ -95,7 +95,25 @@ itself has both CTAs above the fold.
 - **First-load JS is 122 kB against a 120 kB budget.** Two over, all of it the
   React/Next baseline (103 kB shared). Not worth contorting the code for; noted
   rather than hidden.
-- **Legal pages do not exist.** The footer must not link to nothing before launch.
+- ~~**Legal pages do not exist.**~~ **Written** (2026-09-03).
+  `/conditions` and `/confidentialite`, copy in `lib/legal.ts`, rendered by
+  `components/legal/LegalDocument.tsx`, both linked from the footer. Written
+  from what the app and the API actually do — TPS/TVQ on the same base, the
+  distance-banded delivery fee set by the platform rather than the shop, the
+  single-shop cart, 12 % + 70 $/month, Stripe never handing us a card number,
+  the courier GPS lifecycle, RLS as the access boundary — plus the Quebec
+  framing (a named privacy officer, the Law 25 rights, the CAI as recourse, the
+  outside-Quebec assessment, the incident register).
+  **Two things still gate them.** Nine facts only the client has are marked
+  `⟦…⟧` and render as an amber `<mark>` rather than being invented: legal
+  entity, head-office address, NEQ, privacy officer, Supabase region, GPS and
+  proof-of-delivery retention periods, and the no-answer and post-acceptance
+  cancellation policies. And `REVIEWED = false` until a Quebec lawyer has
+  passed — while false both pages carry a draft banner, are served `noindex`,
+  and stay out of the sitemap. Flip that one boolean to publish.
+  Two of those placeholders are engineering work, not client input: nothing
+  currently purges `courier_locations` or `delivery_proofs`, so a stated
+  retention period would be a claim no code enforces.
 - **App screenshots come from the 22 August Release build**, which predates the
   delivery-pricing and courier-routing commits. Good enough to review; recapture
   before launch with `node scripts/seed-sim.mjs <udid> <role>`.
