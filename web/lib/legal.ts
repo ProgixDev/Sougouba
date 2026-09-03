@@ -13,11 +13,21 @@
  * describes a behaviour the code does not have.
  *
  * What it is NOT is legal advice. Before launch it needs:
- *   1. the ⟦bracketed⟧ facts below filled in — only the client has them;
- *      (the Supabase hosting region was one of them, and is now answered:
- *      eu-west-1, Ireland — confirmed against the live pooler, not assumed.
- *      §8 says so plainly, because "hors du Québec" is a disclosure the law
- *      requires rather than a detail to leave vague.)
+ *   1. the ⟦bracketed⟧ facts below filled in — the rest are the client's to
+ *      answer. Three have been answered since this was written, and none of
+ *      them was ever really a question for the client:
+ *        · the Supabase hosting region — eu-west-1, Ireland, confirmed against
+ *          the live pooler rather than assumed. §8 says so plainly, because
+ *          "hors du Québec" is a disclosure the law requires and not a detail
+ *          to leave vague.
+ *        · the two retention periods. They were marked "à décider" because
+ *          nothing purged either table, and a published period that no code
+ *          enforces is not a policy — it is a claim. `RetentionService` and
+ *          migration `0029` are that code; §5 and §9 now state 30 days for the
+ *          GPS trail and a year for delivery proofs because those are the
+ *          numbers a nightly job actually applies, read from `platform_settings`
+ *          so the published figure and the enforced one cannot drift apart.
+ *          Changing them is an audited admin action.
  *   2. a Quebec lawyer's pass, in particular on §15 of the terms (limitation of
  *      liability against the Loi sur la protection du consommateur) and on the
  *      Loi 25 obligations in the privacy policy;
@@ -192,7 +202,7 @@ export const privacy: LegalDoc = {
         h3('Si vous livrez'),
         p("Pendant qu'une course est en cours, l'application transmet votre position à intervalles réguliers. Elle sert à trois choses et à rien d'autre : montrer au client où en est sa commande, choisir le livreur le plus proche lorsqu'une course est offerte, et établir la distance qui détermine votre rémunération."),
         p("La transmission s'arrête lorsque vous vous mettez hors service. Elle ne reprend pas d'elle-même."),
-        p("Les positions transmises sont conservées ⟦durée de conservation des positions GPS — à décider, puis à faire appliquer par une purge automatique⟧, puis supprimées."),
+        p("Les positions transmises sont conservées 30 jours, puis supprimées automatiquement chaque nuit. Ce n'est pas une intention : une tâche planifiée les efface, et le délai est celui que le service applique réellement."),
         p("Votre position n'est jamais montrée au client en dehors d'une course qui lui est destinée, ni au commerce."),
       ],
     },
@@ -252,8 +262,11 @@ export const privacy: LegalDoc = {
             ['Compte et profil', "Tant que le compte existe, puis 12 mois"],
             ['Commandes et factures', "6 ans après la fin de l'exercice financier, comme l'exigent les lois fiscales fédérale et québécoise"],
             ['Mouvements de points de fidélité', "Tant que le compte existe"],
-            ['Positions GPS des livreurs', '⟦à décider — voir section 5⟧'],
-            ['Preuves de livraison', '⟦à décider⟧'],
+            ['Positions GPS des livreurs', '30 jours après leur enregistrement'],
+            [
+              'Preuves de livraison',
+              "1 an. Une preuve rattachée à un litige encore ouvert n'est jamais supprimée tant qu'il n'est pas tranché : c'est la pièce qui répond à « la commande n'est jamais arrivée ».",
+            ],
             ["Documents d'inscription des commerces et des livreurs", "Pendant la relation, puis ⟦à décider⟧"],
             ['Signalements et litiges', '3 ans après la clôture'],
             ['Registre des incidents de confidentialité', '5 ans, comme la loi l\'exige'],
