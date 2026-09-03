@@ -119,6 +119,18 @@ export const updateSettingsSchema = z
     /** CDC §05: 12 % commission + 70 $/month, cumulative. */
     commissionRate: z.number().min(0).max(1, 'Un taux, entre 0 et 1').optional(),
     monthlySubscriptionCad: z.number().min(0).max(99_999_999.99).optional(),
+    /**
+     * Retention periods, in days. Editable because the privacy policy publishes
+     * them: a number the client cannot change without a migration is a number
+     * that goes stale and turns a published policy into a lie.
+     *
+     * Floored at 1, not 0. Zero reads as "delete on sight", which breaks live
+     * tracking for the GPS trail and destroys a delivery proof the moment it is
+     * created — neither is a retention period, and both are easier to type by
+     * accident than to notice afterwards.
+     */
+    courierLocationRetentionDays: z.number().int().min(1).max(3650).optional(),
+    deliveryProofRetentionDays: z.number().int().min(1).max(3650).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, 'Aucun champ à modifier')
   .refine(

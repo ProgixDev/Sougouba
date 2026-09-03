@@ -1,0 +1,2 @@
+ALTER TABLE "platform_settings" ADD COLUMN "courier_location_retention_days" integer DEFAULT 30 NOT NULL;--> statement-breakpoint
+ALTER TABLE "platform_settings" ADD COLUMN "delivery_proof_retention_days" integer DEFAULT 365 NOT NULL;

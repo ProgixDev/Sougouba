@@ -116,6 +116,12 @@ export class SettingsService {
           ...(patch.monthlySubscriptionCad !== undefined
             ? { monthlySubscriptionCad: String(patch.monthlySubscriptionCad) }
             : {}),
+          ...(patch.courierLocationRetentionDays !== undefined
+            ? { courierLocationRetentionDays: patch.courierLocationRetentionDays }
+            : {}),
+          ...(patch.deliveryProofRetentionDays !== undefined
+            ? { deliveryProofRetentionDays: patch.deliveryProofRetentionDays }
+            : {}),
           updatedAt: new Date(),
         })
         .where(eq(platformSettings.id, 1))

@@ -41,6 +41,31 @@ export const platformSettings = pgTable(
     /** CDC §05 — 12% commission + $70/month, cumulative. */
     commissionRate: numeric('commission_rate', { precision: 4, scale: 3 }).notNull().default('0.12'),
     monthlySubscriptionCad: numeric('monthly_subscription_cad', { precision: 10, scale: 2 }).notNull().default('70'),
+    /**
+     * How long a courier's GPS trail is kept after it is recorded.
+     *
+     * Settings rather than a constant for the same reason the loyalty rates are:
+     * the privacy policy has to state a number, and a number the client cannot
+     * change without a migration is a number that will go stale and turn the
+     * policy into a lie. Changing it is audited like every other setting.
+     *
+     * 30 days by default. The trail's three jobs are all short-lived — showing
+     * the shopper a moving pin, ranking the nearest courier, and measuring the
+     * distance that sets the pay — and the last of those is already frozen onto
+     * `order_deliveries` at delivery. What is left is a minute-by-minute record
+     * of where a named person went, which is the most sensitive thing this
+     * database holds and the one with the least reason to persist.
+     */
+    courierLocationRetentionDays: integer('courier_location_retention_days').notNull().default(30),
+    /**
+     * How long a signature or delivery photo is kept.
+     *
+     * A year, and longer than the GPS trail on purpose: this is the evidence
+     * that answers "it never arrived", so it has to outlive the window in which
+     * someone can say that. A proof attached to an unresolved dispute is never
+     * purged regardless of age — see `RetentionService`.
+     */
+    deliveryProofRetentionDays: integer('delivery_proof_retention_days').notNull().default(365),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [check('platform_settings_singleton', sql`${t.id} = 1`)]

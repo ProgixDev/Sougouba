@@ -24,6 +24,17 @@ const envSchema = z.object({
    */
   SUPABASE_URL: z.string().url('SUPABASE_URL is required from Phase 1 — Supabase project settings → API.'),
 
+  /**
+   * Storage admin access, for the retention purge only.
+   *
+   * Optional: without it the purge still clears the GPS trail and any proof
+   * with no file, and refuses — loudly — to delete a proof row whose image it
+   * cannot remove from the bucket. See `RetentionService`.
+   *
+   * Never reachable from the mobile bundle. This is the service-role key.
+   */
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+
   /** Phase 3/7: never optional once payments exist, optional until then so Phase 0/1/2 can boot without it. */
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),

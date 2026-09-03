@@ -204,6 +204,13 @@
       "when": 1788442817343,
       "tag": "0028_admin_audit_log",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1788448730923,
+      "tag": "0029_retention_periods",
+      "breakpoints": true
     }
   ]
 }
