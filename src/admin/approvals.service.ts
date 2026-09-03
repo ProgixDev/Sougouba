@@ -5,9 +5,22 @@ import type { Page } from '../catalog/dto/query.dto.js';
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
 import { courierInsurance, couriers, profiles, vendorRegistrations, vendors } from '../db/schema/index.js';
+import { AuditService, type AdminAction } from './audit.service.js';
 import type { ReviewDecisionInput, ReviewQuery } from './dto/admin.dto.js';
 
 export type ApplicationStatus = 'pending' | 'approved' | 'suspended' | 'rejected';
+
+/**
+ * Where a decision can land. `pending` is absent because nothing returns to it
+ * — `ALLOWED_TRANSITIONS` says so at runtime, and this says so at compile time.
+ */
+export type ReviewDecision = Exclude<ApplicationStatus, 'pending'>;
+
+/** Which audited action each destination is. Keyed so a new status cannot be added without naming its verb. */
+export const AUDIT_ACTION_FOR: Record<'vendor' | 'courier', Record<ReviewDecision, AdminAction>> = {
+  vendor: { approved: 'vendor.approve', rejected: 'vendor.reject', suspended: 'vendor.suspend' },
+  courier: { approved: 'courier.approve', rejected: 'courier.reject', suspended: 'courier.suspend' },
+};
 
 /**
  * Which decisions are available from where.
@@ -55,7 +68,10 @@ export function assertDecision(from: ApplicationStatus, to: ApplicationStatus): 
 export class ApprovalsService {
   private readonly logger = new Logger(ApprovalsService.name);
 
-  constructor(@Inject(DB) private readonly db: Db) {}
+  constructor(
+    @Inject(DB) private readonly db: Db,
+    private readonly audit: AuditService
+  ) {}
 
   // ── merchants ─────────────────────────────────────────────────────────────
 
@@ -100,7 +116,7 @@ export class ApprovalsService {
     return { items: rows, total: counted?.total ?? 0, limit: query.limit, offset: query.offset };
   }
 
-  async decideVendor(adminId: string, vendorId: string, to: ApplicationStatus, input: ReviewDecisionInput) {
+  async decideVendor(adminId: string, vendorId: string, to: ReviewDecision, input: ReviewDecisionInput) {
     const [vendor] = await this.db
       .select({ id: vendors.id, status: vendors.status, name: vendors.name })
       .from(vendors)
@@ -109,19 +125,41 @@ export class ApprovalsService {
     if (!vendor) throw new NotFoundException('Vendor not found');
     assertDecision(vendor.status, to);
 
-    const [updated] = await this.db
-      .update(vendors)
-      .set({
-        status: to,
-        statusReason: input.reason ?? null,
-        reviewedBy: adminId,
-        reviewedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(vendors.id, vendorId), eq(vendors.status, vendor.status)))
-      .returning();
-    // The status changed under us — two administrators working the same queue.
-    if (!updated) throw new BadRequestException('This file was decided by someone else while you were reviewing it');
+    // The decision and its audit entry commit together or not at all — an
+    // approval nobody is recorded as having made is the gap `admin_audit_log`
+    // exists to close, and an entry for a decision that rolled back is worse.
+    const updated = await this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(vendors)
+        .set({
+          status: to,
+          statusReason: input.reason ?? null,
+          reviewedBy: adminId,
+          reviewedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(vendors.id, vendorId), eq(vendors.status, vendor.status)))
+        .returning();
+      // The status changed under us — two administrators working the same queue.
+      if (!row) throw new BadRequestException('This file was decided by someone else while you were reviewing it');
+
+      await this.audit.record(
+        {
+          actorId: adminId,
+          action: AUDIT_ACTION_FOR.vendor[to],
+          subjectType: 'vendor',
+          subjectId: vendorId,
+          subjectLabel: vendor.name,
+          reason: input.reason ?? null,
+          // The transition itself, not just the destination: "suspended" alone
+          // does not say whether a live shop was pulled or a queue was cleared.
+          changes: { status: { from: vendor.status, to } },
+        },
+        tx
+      );
+
+      return row;
+    });
 
     this.logger.log(`Admin ${adminId} moved vendor ${vendorId} ("${vendor.name}") from ${vendor.status} to ${to}`);
     return updated;
@@ -164,7 +202,7 @@ export class ApprovalsService {
     return { items: rows, total: counted?.total ?? 0, limit: query.limit, offset: query.offset };
   }
 
-  async decideCourier(adminId: string, courierId: string, to: ApplicationStatus, input: ReviewDecisionInput) {
+  async decideCourier(adminId: string, courierId: string, to: ReviewDecision, input: ReviewDecisionInput) {
     const [courier] = await this.db
       .select({ id: couriers.id, status: couriers.status, fullName: couriers.fullName })
       .from(couriers)
@@ -173,21 +211,38 @@ export class ApprovalsService {
     if (!courier) throw new NotFoundException('Courier not found');
     assertDecision(courier.status, to);
 
-    const [updated] = await this.db
-      .update(couriers)
-      .set({
-        status: to,
-        statusReason: input.reason ?? null,
-        reviewedBy: adminId,
-        reviewedAt: new Date(),
-        // Losing approval takes them off shift in the same write. Otherwise a
-        // suspended courier stays in the dispatch pool until they happen to
-        // toggle it themselves — which a suspended courier has no reason to do.
-        ...(to === 'approved' ? {} : { isOnline: false }),
-      })
-      .where(and(eq(couriers.id, courierId), eq(couriers.status, courier.status)))
-      .returning();
-    if (!updated) throw new BadRequestException('This file was decided by someone else while you were reviewing it');
+    const updated = await this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(couriers)
+        .set({
+          status: to,
+          statusReason: input.reason ?? null,
+          reviewedBy: adminId,
+          reviewedAt: new Date(),
+          // Losing approval takes them off shift in the same write. Otherwise a
+          // suspended courier stays in the dispatch pool until they happen to
+          // toggle it themselves — which a suspended courier has no reason to do.
+          ...(to === 'approved' ? {} : { isOnline: false }),
+        })
+        .where(and(eq(couriers.id, courierId), eq(couriers.status, courier.status)))
+        .returning();
+      if (!row) throw new BadRequestException('This file was decided by someone else while you were reviewing it');
+
+      await this.audit.record(
+        {
+          actorId: adminId,
+          action: AUDIT_ACTION_FOR.courier[to],
+          subjectType: 'courier',
+          subjectId: courierId,
+          subjectLabel: courier.fullName,
+          reason: input.reason ?? null,
+          changes: { status: { from: courier.status, to } },
+        },
+        tx
+      );
+
+      return row;
+    });
 
     this.logger.log(`Admin ${adminId} moved courier ${courierId} ("${courier.fullName}") from ${courier.status} to ${to}`);
     return updated;

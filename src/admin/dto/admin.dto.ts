@@ -140,3 +140,27 @@ export const refundOrderSchema = z.object({
 });
 
 export type RefundOrderInput = z.infer<typeof refundOrderSchema>;
+
+// ── audit log ───────────────────────────────────────────────────────────────
+
+/**
+ * Reading the trail.
+ *
+ * `subjectId` without `subjectType` is allowed and useful — uuids are unique
+ * across the tables here, so "everything that ever touched this id" answers the
+ * question without the reader having to know which kind of thing it is.
+ *
+ * The dates are coerced rather than parsed as strings: a filter that silently
+ * matches nothing because `?since=2026-09-01` arrived as text is worse than a
+ * 400.
+ */
+export const auditQuerySchema = paginationSchema.extend({
+  action: z.string().trim().min(1).max(60).optional(),
+  subjectType: z.enum(['vendor', 'courier', 'order', 'dispute', 'courier_issue', 'settings']).optional(),
+  subjectId: z.string().uuid().optional(),
+  actorId: z.string().uuid().optional(),
+  since: z.coerce.date().optional(),
+  until: z.coerce.date().optional(),
+});
+
+export type AuditQuery = z.infer<typeof auditQuerySchema>;

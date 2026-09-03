@@ -11,6 +11,7 @@ import type {
   ResolveCourierIssueInput,
   ResolveDisputeInput,
 } from './dto/admin.dto.js';
+import { AuditService } from './audit.service.js';
 import { RefundsService } from './refunds.service.js';
 
 /**
@@ -29,7 +30,8 @@ import { RefundsService } from './refunds.service.js';
 export class AdminService {
   constructor(
     @Inject(DB) private readonly db: Db,
-    private readonly refunds: RefundsService
+    private readonly refunds: RefundsService,
+    private readonly audit: AuditService
   ) {}
 
   // ── disputes ──────────────────────────────────────────────────────────────
@@ -115,18 +117,42 @@ export class AdminService {
       });
     }
 
-    await this.db
-      .update(disputes)
-      .set({
-        status: input.outcome,
-        resolvedBy: adminId,
-        resolvedAt: new Date(),
-        // Appended rather than overwriting the merchant's reply: a dispute is a
-        // conversation, and the shopper's original words plus the merchant's
-        // answer are the two things nobody should be able to rewrite.
-        merchantReply: input.note,
-      })
-      .where(eq(disputes.orderId, orderId));
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(disputes)
+        .set({
+          status: input.outcome,
+          resolvedBy: adminId,
+          resolvedAt: new Date(),
+          // Appended rather than overwriting the merchant's reply: a dispute is a
+          // conversation, and the shopper's original words plus the merchant's
+          // answer are the two things nobody should be able to rewrite.
+          merchantReply: input.note,
+        })
+        .where(eq(disputes.orderId, orderId));
+
+      await this.audit.record(
+        {
+          actorId: adminId,
+          action: 'dispute.resolve',
+          subjectType: 'dispute',
+          // Keyed by order, because that is what a dispute is keyed by here and
+          // what a reader will have in hand.
+          subjectId: orderId,
+          reason: input.note,
+          changes: {
+            status: { from: dispute.status, to: input.outcome },
+            // Recorded here as well as under `order.refund` above: the two are
+            // separate decisions and a dispute read on its own should not have
+            // to go looking for whether money moved.
+            ...(input.refundAmountCad !== undefined
+              ? { refundAmountCad: { from: null, to: input.refundAmountCad } }
+              : {}),
+          },
+        },
+        tx
+      );
+    });
 
     return this.disputeFor(orderId);
   }
@@ -179,18 +205,33 @@ export class AdminService {
    * with the courier, not that the delivery happened.
    */
   async resolveCourierIssue(adminId: string, orderId: string, input: ResolveCourierIssueInput) {
-    const updated = await this.db
-      .update(courierIssues)
-      .set({
-        status: 'resolved',
-        resolvedBy: adminId,
-        resolvedAt: new Date(),
-        message: sql`${courierIssues.message} || E'\n\n— Résolution: ' || ${input.note}`,
-      })
-      .where(and(eq(courierIssues.orderId, orderId), eq(courierIssues.status, 'open')))
-      .returning();
-    if (updated.length === 0) throw new NotFoundException('No open courier issue on this order');
-    return updated[0];
+    return this.db.transaction(async (tx) => {
+      const updated = await tx
+        .update(courierIssues)
+        .set({
+          status: 'resolved',
+          resolvedBy: adminId,
+          resolvedAt: new Date(),
+          message: sql`${courierIssues.message} || E'\n\n— Résolution: ' || ${input.note}`,
+        })
+        .where(and(eq(courierIssues.orderId, orderId), eq(courierIssues.status, 'open')))
+        .returning();
+      if (updated.length === 0) throw new NotFoundException('No open courier issue on this order');
+
+      await this.audit.record(
+        {
+          actorId: adminId,
+          action: 'courier_issue.resolve',
+          subjectType: 'courier_issue',
+          subjectId: orderId,
+          reason: input.note,
+          changes: { status: { from: 'open', to: 'resolved' } },
+        },
+        tx
+      );
+
+      return updated[0];
+    });
   }
 
   // ── supervision ───────────────────────────────────────────────────────────

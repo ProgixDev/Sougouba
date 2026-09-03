@@ -10,7 +10,9 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import { SettingsService } from '../loyalty/settings.service.js';
 import { AdminService } from './admin.service.js';
 import { ApprovalsService } from './approvals.service.js';
+import { AuditService } from './audit.service.js';
 import {
+  auditQuerySchema,
   courierIssueQuerySchema,
   disputeQuerySchema,
   refundOrderSchema,
@@ -20,6 +22,7 @@ import {
   reviewQuerySchema,
   updateSettingsSchema,
   userQuerySchema,
+  type AuditQuery,
   type CourierIssueQuery,
   type DisputeQuery,
   type RefundOrderInput,
@@ -64,7 +67,8 @@ export class AdminController {
     private readonly admin: AdminService,
     private readonly refunds: RefundsService,
     private readonly approvals: ApprovalsService,
-    private readonly platformSettings: SettingsService
+    private readonly platformSettings: SettingsService,
+    private readonly audit: AuditService
   ) {}
 
   @Get('stats')
@@ -195,8 +199,25 @@ export class AdminController {
    * office. This is that button.
    */
   @Patch('settings')
-  updateSettings(@Body(new ZodValidationPipe(updateSettingsSchema)) body: UpdateSettingsInput) {
-    return this.platformSettings.update(body);
+  updateSettings(
+    @CurrentUser() adminId: string,
+    @Body(new ZodValidationPipe(updateSettingsSchema)) body: UpdateSettingsInput
+  ) {
+    return this.platformSettings.update(adminId, body);
+  }
+
+  // ── audit trail ───────────────────────────────────────────────────────────
+
+  /**
+   * Who did what, and when.
+   *
+   * Read-only by design and append-only in the database — there is no route to
+   * amend or delete an entry, and a trigger refuses both even for the role the
+   * API connects as. See `admin_audit_log` in `db/schema/admin.ts`.
+   */
+  @Get('audit-log')
+  auditLog(@Query(new ZodValidationPipe(auditQuerySchema)) query: AuditQuery) {
+    return this.audit.list(query);
   }
 
   // ── money ─────────────────────────────────────────────────────────────────

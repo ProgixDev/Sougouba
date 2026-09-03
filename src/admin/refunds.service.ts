@@ -7,6 +7,7 @@ import { orders } from '../db/schema/index.js';
 import { LoyaltyService } from '../loyalty/loyalty.service.js';
 import { PaymentsService } from '../orders/payments.service.js';
 import { roundCad, toStripeAmount } from '../orders/pricing.js';
+import { AuditService } from './audit.service.js';
 
 type DbOrTx = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
 
@@ -33,7 +34,8 @@ export class RefundsService {
   constructor(
     @Inject(DB) private readonly db: Db,
     private readonly payments: PaymentsService,
-    private readonly loyalty: LoyaltyService
+    private readonly loyalty: LoyaltyService,
+    private readonly audit: AuditService
   ) {}
 
   /**
@@ -91,6 +93,26 @@ export class RefundsService {
         .where(eq(orders.id, orderId));
 
       await this.reversePoints(tx, orderId);
+
+      // In the same transaction as the record of the refund, for the reason the
+      // whole table exists — but note it cannot cover the Stripe call, which
+      // already happened above and cannot be rolled back. If this transaction
+      // fails, the loud log below is still the trail, and the ordering note at
+      // the top of this class explains why Stripe has to go first anyway.
+      await this.audit.record(
+        {
+          actorId: adminId,
+          action: 'order.refund',
+          subjectType: 'order',
+          subjectId: orderId,
+          reason: input.reason,
+          changes: {
+            refundAmountCad: { from: null, to: amountCad },
+            stripeRefundId: { from: null, to: stripeRefundId },
+          },
+        },
+        tx
+      );
     });
 
     this.logger.log(`Admin ${adminId} refunded ${amountCad} CAD on order ${orderId} (stripe: ${stripeRefundId ?? 'none'})`);

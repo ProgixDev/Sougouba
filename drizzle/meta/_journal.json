@@ -197,6 +197,13 @@
       "when": 1788441436088,
       "tag": "0027_products_section_belongs_to_vendor",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788442817343,
+      "tag": "0028_admin_audit_log",
+      "breakpoints": true
     }
   ]
 }

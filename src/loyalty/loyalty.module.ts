@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { AuditModule } from '../admin/audit.module.js';
 import { CouponsService } from './coupons.service.js';
 import { LoyaltyController } from './loyalty.controller.js';
 import { LoyaltyService } from './loyalty.service.js';
@@ -14,6 +15,8 @@ import { SettingsService } from './settings.service.js';
  * with them — the rates it serves are what the pricing rules read.
  */
 @Module({
+  // For `SettingsService`, which records who changed a rate. See `AuditModule`.
+  imports: [AuditModule],
   controllers: [LoyaltyController],
   providers: [LoyaltyService, CouponsService, SettingsService],
   exports: [LoyaltyService, CouponsService, SettingsService],

@@ -5,6 +5,7 @@ import { OrdersModule } from '../orders/orders.module.js';
 import { AdminController } from './admin.controller.js';
 import { AdminService } from './admin.service.js';
 import { ApprovalsService } from './approvals.service.js';
+import { AuditModule } from './audit.module.js';
 import { RefundsService } from './refunds.service.js';
 
 /**
@@ -18,7 +19,7 @@ import { RefundsService } from './refunds.service.js';
  * reversal a refund triggers.
  */
 @Module({
-  imports: [OrdersModule, LoyaltyModule],
+  imports: [OrdersModule, LoyaltyModule, AuditModule],
   controllers: [AdminController],
   providers: [AdminService, RefundsService, ApprovalsService],
   exports: [RefundsService],
