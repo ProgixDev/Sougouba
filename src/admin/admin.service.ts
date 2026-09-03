@@ -3,6 +3,7 @@ import { and, desc, eq, gte, ilike, inArray, lt, ne, or, sql, type SQL } from 'd
 
 import type { Page } from '../catalog/dto/query.dto.js';
 import { containsPattern, escapeLikePattern } from '../common/sql/like.js';
+import { authUsersReadonly } from '../db/auth-users.readonly.js';
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
 import { courierIssues, couriers, disputes, orderDeliveries, orders, profiles, vendors } from '../db/schema/index.js';
@@ -12,8 +13,10 @@ import {
   type AdminOrderDetail,
   type AdminOrderListItem,
   type AdminOverviewStats,
+  type AdminSearchResult,
 } from './dto/admin-detail.dto.js';
 import type {
+  AdminSearchQuery,
   CourierIssueQuery,
   DisputeQuery,
   OrderListQuery,
@@ -23,6 +26,18 @@ import type {
 import { AuditService } from './audit.service.js';
 import { RefundsService } from './refunds.service.js';
 import { deltaPct, overviewWindow, round2, type OverviewRange } from './stats-window.js';
+
+/**
+ * True for a query made only of hex digits and dashes — someone pasting back a
+ * fragment of an order id rather than typing a name.
+ *
+ * Exported so a test can pin the branch: it decides between an indexable
+ * prefix match on the uuid and a name search, and getting it wrong turns a
+ * typeahead into a sequential scan of the orders table.
+ */
+export function looksLikeIdFragment(value: string): boolean {
+  return /^[0-9a-fA-F-]{2,}$/.test(value);
+}
 
 /**
  * The back office's arbitration surface — CDC addendum §04's "gestion des
@@ -383,6 +398,82 @@ export class AdminService {
       limit: query.limit,
       offset: query.offset,
     };
+  }
+
+  /**
+   * The back office's typeahead, across shops, couriers, orders and accounts.
+   *
+   * Returns a **bare array**, not a `Page<T>` — a typeahead has no pagination,
+   * and the envelope would be three fields of noise. This is the one endpoint
+   * here where that is right.
+   *
+   * Result order is vendors, couriers, orders, users, so a grouped renderer
+   * needs no sort of its own.
+   */
+  async search(query: AdminSearchQuery): Promise<AdminSearchResult[]> {
+    // Mandatory, and this is the endpoint most likely to receive a literal `%`:
+    // a bare `%${q}%` would match every row in all four tables.
+    const pattern = containsPattern(query.q);
+    const limit = query.perType;
+
+    const [vendorHits, courierHits, orderHits, userHits] = await Promise.all([
+      this.db
+        .select({ id: vendors.id, name: vendors.name, city: vendors.city, neighborhood: vendors.neighborhood })
+        .from(vendors)
+        .where(or(ilike(vendors.name, pattern), ilike(vendors.city, pattern), ilike(vendors.slug, pattern)))
+        .limit(limit),
+
+      this.db
+        .select({ id: couriers.id, fullName: couriers.fullName, city: couriers.city })
+        .from(couriers)
+        .where(or(ilike(couriers.fullName, pattern), ilike(couriers.city, pattern), ilike(couriers.phone, pattern)))
+        .limit(limit),
+
+      // Orders branch on what was typed. An id fragment is prefix-matched —
+      // that is what a paste of the truncated id the UI displays looks like,
+      // and a prefix is the only id match an index can serve. `ILIKE '%…%'` on
+      // a uuid cast to text is a guaranteed full scan.
+      this.db
+        .select({
+          id: orders.id,
+          customerName: orders.customerName,
+          vendorName: vendors.name,
+        })
+        .from(orders)
+        .innerJoin(vendors, eq(vendors.id, orders.vendorId))
+        .where(
+          looksLikeIdFragment(query.q)
+            ? sql`${orders.id}::text like ${escapeLikePattern(query.q.toLowerCase()) + '%'}`
+            : or(ilike(orders.customerName, pattern), ilike(vendors.name, pattern))
+        )
+        .orderBy(desc(orders.createdAt))
+        .limit(limit),
+
+      this.db
+        .select({ id: profiles.id, fullName: profiles.fullName, email: authUsersReadonly.email })
+        .from(profiles)
+        .leftJoin(authUsersReadonly, eq(authUsersReadonly.id, profiles.id))
+        .where(or(ilike(profiles.fullName, pattern), ilike(authUsersReadonly.email, pattern)))
+        .limit(limit),
+    ]);
+
+    return [
+      ...vendorHits.map((v) => ({
+        type: 'vendor' as const,
+        id: v.id,
+        label: v.name,
+        sublabel: `${v.city} · ${v.neighborhood}`,
+      })),
+      ...courierHits.map((c) => ({ type: 'courier' as const, id: c.id, label: c.fullName, sublabel: c.city })),
+      ...orderHits.map((o) => ({
+        type: 'order' as const,
+        id: o.id,
+        // Matches how the dashboard displays an order id everywhere else.
+        label: `#${o.id.slice(0, 8)}`,
+        sublabel: `${o.customerName ?? '—'} · ${o.vendorName}`,
+      })),
+      ...userHits.map((u) => ({ type: 'user' as const, id: u.id, label: u.fullName, sublabel: u.email ?? '—' })),
+    ];
   }
 
   /**

@@ -10,6 +10,7 @@ import { AdminService } from './admin.service.js';
 import { ApprovalsService } from './approvals.service.js';
 import { AuditService } from './audit.service.js';
 import {
+  adminSearchQuerySchema,
   auditQuerySchema,
   courierIssueQuerySchema,
   disputeQuerySchema,
@@ -22,6 +23,7 @@ import {
   reviewQuerySchema,
   updateSettingsSchema,
   userQuerySchema,
+  type AdminSearchQuery,
   type AuditQuery,
   type CourierIssueQuery,
   type DisputeQuery,
@@ -96,6 +98,16 @@ export class AdminController {
     return this.admin.orderDetail(id);
   }
 
+  /**
+   * Declared before any `@Get(':param')` on this controller — find-my-way
+   * prefers a static segment, but keeping the order explicit means a future
+   * parameterised route cannot quietly shadow it.
+   */
+  @Get('search')
+  search(@Query(new ZodValidationPipe(adminSearchQuerySchema)) query: AdminSearchQuery) {
+    return this.admin.search(query);
+  }
+
   // ── disputes ──────────────────────────────────────────────────────────────
 
   @Get('disputes')
@@ -135,6 +147,11 @@ export class AdminController {
     return this.approvals.listVendors(query);
   }
 
+  @Get('vendors/:id')
+  vendor(@Param('id', ParseUUIDPipe) id: string) {
+    return this.approvals.vendorDetail(id);
+  }
+
   @Post('vendors/:id/approve')
   approveVendor(
     @CurrentUser() adminId: string,
@@ -167,6 +184,11 @@ export class AdminController {
     return this.approvals.listCouriers(query);
   }
 
+  @Get('couriers/:id')
+  courier(@Param('id', ParseUUIDPipe) id: string) {
+    return this.approvals.courierDetail(id);
+  }
+
   @Post('couriers/:id/approve')
   approveCourier(
     @CurrentUser() adminId: string,
@@ -197,6 +219,11 @@ export class AdminController {
   @Get('users')
   users(@Query(new ZodValidationPipe(userQuerySchema)) query: UserQuery) {
     return this.approvals.listUsers(query);
+  }
+
+  @Get('users/:id')
+  user(@Param('id', ParseUUIDPipe) id: string) {
+    return this.approvals.userDetail(id);
   }
 
   // ── platform settings ─────────────────────────────────────────────────────

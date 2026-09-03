@@ -124,7 +124,22 @@ export type ReviewDecisionInput = z.infer<typeof reviewDecisionSchema>;
 
 export const userQuerySchema = paginationSchema.extend({
   role: z.enum(['customer', 'business', 'courier', 'admin']).optional(),
+  /** Matches a name or an email address. */
+  search: z.string().trim().min(1).max(100).optional(),
 });
+
+/**
+ * `GET /admin/search?q=` — the back office's typeahead.
+ *
+ * Two characters minimum, enforced here rather than trusting the client's own
+ * guard: a one-character query scans four tables to return noise.
+ */
+export const adminSearchQuerySchema = z.object({
+  q: z.string().trim().min(2, 'Au moins 2 caractères').max(100),
+  perType: z.coerce.number().int().positive().max(10).default(5),
+});
+
+export type AdminSearchQuery = z.infer<typeof adminSearchQuerySchema>;
 
 export type UserQuery = z.infer<typeof userQuerySchema>;
 

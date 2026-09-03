@@ -143,6 +143,177 @@ export interface AdminOrderDetail {
   courierIssue: { reason: string; message: string; at: Date; status: string; resolvedAt: Date | null } | null;
 }
 
+/** `GET /admin/vendors/:id` — the merchant file a reviewer decides on. */
+export interface AdminVendorDetail {
+  id: string;
+  slug: string;
+  name: string;
+  vendorType: string;
+  specialtyFr: string;
+  logoUrl: string | null;
+  coverUrl: string | null;
+  city: string;
+  neighborhood: string;
+  address: { street: string; city: string; postalCode: string; lat: number; lng: number };
+  rating: number;
+  reviewCount: number;
+  deliveryEtaMin: number;
+  isHalalCertified: boolean;
+
+  status: string;
+  statusReason: string | null;
+  reviewedAt: Date | null;
+  /** Null on a pending file — nobody has decided it yet. */
+  reviewer: { id: string; fullName: string } | null;
+
+  owner: { id: string; fullName: string; email: string | null; avatarUrl: string | null; memberSince: Date };
+
+  /**
+   * Null when the shop predates the registration flow.
+   *
+   * `documents[].path` points into the **private** `merchant-documents`
+   * bucket, so it is not directly renderable — it needs a signed URL, which is
+   * not built yet.
+   */
+  registration: {
+    neq: string;
+    contactName: string;
+    contactPhone: string;
+    mapaqNumber: string | null;
+    submittedAt: Date | null;
+    documents: { kind: 'id' | 'business_number' | 'mapaq'; path: string }[];
+  } | null;
+
+  categories: { id: string; slug: string; nameFr: string }[];
+  /** `day` is 0 = Sunday, matching JS `Date.getDay()`. */
+  hours: { day: number; open: string; close: string; closed: boolean }[];
+  sections: { id: string; nameFr: string; position: number }[];
+
+  stats: {
+    productCount: number;
+    /** Excludes cancelled orders. */
+    orderCount: number;
+    revenueCad: number;
+    lastOrderAt: Date | null;
+    openDisputes: number;
+  };
+
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** `GET /admin/couriers/:id`. */
+export interface AdminCourierDetail {
+  id: string;
+  userId: string;
+  fullName: string;
+  photoUrl: string | null;
+  phone: string;
+  vehicle: string;
+  plate: string | null;
+  licenceNumber: string | null;
+  city: string;
+  postalCode: string | null;
+  base: { lat: number; lng: number };
+  rating: number;
+  deliveryCount: number;
+
+  status: string;
+  statusReason: string | null;
+  reviewedAt: Date | null;
+  reviewer: { id: string; fullName: string } | null;
+  isOnline: boolean;
+  lastSeenAt: Date | null;
+  joinedAt: Date;
+
+  account: { id: string; fullName: string; email: string | null; avatarUrl: string | null; memberSince: Date };
+
+  /** Null for a bike courier — the schema does not require insurance for one. */
+  insurance: { insurerName: string; policyNumber: string; expiry: string } | null;
+
+  /**
+   * ⚠️ A Stripe Connect account, **not** bank details. This database
+   * deliberately holds no account or transit numbers; Stripe collects them
+   * during Connect onboarding.
+   */
+  // `updatedAt` is NOT NULL on the table but arrives nullable through the left
+  // join, and narrowing on a sibling field is not something TS can follow —
+  // typed as it actually is rather than asserted away.
+  payout: { stripeConnectAccountId: string | null; status: string; updatedAt: Date | null } | null;
+
+  stats: {
+    runCount: number;
+    deliveredCount: number;
+    earningsTotalCad: number;
+    /** Delivered but not yet paid out — the figure a payout run settles. */
+    unpaidCad: number;
+    tipsTotalCad: number;
+    avgDistanceKm: number;
+    lastDeliveredAt: Date | null;
+    openIssues: number;
+  };
+}
+
+/**
+ * One `GET /admin/search?q=` hit.
+ *
+ * No `href`: route shapes are the dashboard's business, and it already maps
+ * `type` to a path in one place.
+ */
+export interface AdminSearchResult {
+  type: 'vendor' | 'courier' | 'order' | 'user';
+  id: string;
+  label: string;
+  sublabel: string;
+}
+
+/**
+ * `GET /admin/users/:id`.
+ *
+ * ⚠️ The most sensitive read on this API — see `ApprovalsService.userDetail`.
+ */
+export interface AdminUserDetail {
+  id: string;
+  fullName: string;
+  /** Null for a phone-only signup, or if the auth row has gone. */
+  email: string | null;
+  avatarUrl: string | null;
+  memberSince: Date;
+  /** Null until the account picks one — `profiles.role` starts unset. */
+  role: string | null;
+
+  auth: {
+    emailConfirmedAt: Date | null;
+    lastSignInAt: Date | null;
+    phone: string | null;
+    bannedUntil: Date | null;
+  };
+
+  vendor: { id: string; name: string; slug: string; status: string; vendorType: string } | null;
+  courier: { id: string; fullName: string; status: string; vehicle: string; isOnline: boolean } | null;
+  referredBy: { id: string; fullName: string } | null;
+  referralCount: number;
+
+  addresses: {
+    id: string;
+    label: string;
+    street: string;
+    city: string;
+    postalCode: string;
+    lat: number;
+    lng: number;
+    isDefault: boolean;
+  }[];
+
+  activity: {
+    /** Excludes cancelled orders; the `recentOrders` list below does not. */
+    orderCount: number;
+    lifetimeSpendCad: number;
+    lastOrderAt: Date | null;
+    recentOrders: { id: string; status: string; totalCad: number; createdAt: Date; vendorName: string }[];
+  };
+}
+
 /**
  * `GET /admin/stats/overview?range=7|30|90`.
  *
