@@ -62,35 +62,72 @@ and `devis-contract-scope` for the condensed facts pulled from the two PDFs.
 |---|---|
 | 0 · Foundations & infra | **Done** (2026-08-30) — see `sougouba-api/PROGRESS.md` |
 | 1 · Identity & accounts | **Done** (2026-08-30) — API side only; mobile app not yet wired to real Supabase Auth |
-| 2 · Catalog | Not started |
-| 3 · Cart → checkout → orders → payments | Not started |
-| 4 · Loyalty, referrals & coupons | Not started |
-| 5 · Courier, dispatch & live tracking | Not started |
-| 6 · Disputes & courier issues | Not started |
-| 7 · Money: merchant billing & courier payouts (Stripe Connect) | Not started |
-| 8 · Admin back-office API | Not started |
+| 2 · Catalog | **Done** (2026-09-03) — API side only; mobile app not yet wired |
+| 3 · Cart → checkout → orders → payments | **Code complete** (2026-09-03) — Stripe paths unverified, no test key yet |
+| 4 · Loyalty, referrals & coupons | **Done** (2026-09-03) — coupon *rules* still assumed, not confirmed |
+| 5 · Courier, dispatch & live tracking | **Done** (2026-09-03) — straight-line ETAs until Mapbox Directions; scheduler is single-instance |
+| 6 · Disputes & courier issues | **Done** (2026-09-03) — incl. the `admin` role and refunds |
+| 7 · Money: merchant billing & courier payouts (Stripe Connect) | **Written** (2026-09-03) — no Stripe call has ever run; needs a test key |
+| 8 · Admin back-office API | **Done** (2026-09-03) — API only, as planned; no audit log yet |
 | 9 · Notifications & AI support assistant | Not started |
 | 10 · Hardening, observability & launch | Not started |
 
-Repo: `sougouba-api/` (sibling to this one) — NestJS + Fastify scaffold, all 30
-tables live in Supabase project `wyjkaiquugoblvvzpjnq`, Storage buckets created
-(including `avatars`, added mid-Phase-1), CI wired. Identity domain (`profiles`,
-`addresses`, favorites) has real RLS policies and a verified account-creation
-trigger; everything else still carries Phase 0's placeholder (RLS enabled, no
-policies). The app was genuinely **booted** end-to-end this phase (not just
-typechecked) against the real Supabase project's JWKS endpoint, on a placeholder
-`DATABASE_URL` — caught and fixed two real bugs (a missing Fastify Swagger
-dependency, a dead `class-validator` pipe) that no static check would have
-surfaced. Full detail and what's verified vs. just written is in
-`sougouba-api/PROGRESS.md` — this file stays the phase-by-phase plan, that one is
-the build log.
+Repo: `sougouba-api/` (sibling to this one) — NestJS + Fastify, all 30 tables live
+in Supabase project `wyjkaiquugoblvvzpjnq`, Storage buckets created, CI wired.
+The identity (`profiles`, `addresses`, favorites) and catalog (`vendors`,
+`products`, `categories`, sections, hours, registrations) domains have real RLS
+policies; everything else still carries Phase 0's placeholder (RLS enabled, no
+policies). `get_advisors(security)` reports zero WARN-level findings.
+
+Every phase so far has been genuinely **booted and exercised**, not just
+typechecked, and every single time that caught something no static check would
+have:
+
+- **Phase 1** — a missing Fastify Swagger dependency, and a dead
+  `class-validator` pipe wired to nothing.
+- **Phase 2** — a route-ordering bug (`/vendors/me` swallowed by `/vendors/:id`),
+  and a real **privilege escalation**: with only RLS in place a merchant could
+  self-approve their own shop over PostgREST, because RLS gates rows while
+  Supabase's default grants hand `authenticated` table-wide UPDATE on every
+  column. Fixed with column privileges (`drizzle/0009`), re-verified by re-running
+  the attack. A follow-up review pass then found **seven more** real defects,
+  including a cross-tenant inventory oracle and a `?q=%` that returned the whole
+  catalogue.
+- **Phase 4** — two bugs that `tsc` accepted: a Drizzle `insert().select()` that
+  would have thrown on *every* coupon redemption, and a usage limit that did not
+  limit anything (a counting subquery under READ COMMITTED lets two concurrent
+  checkouts both take the last unit — demonstrated against the real database,
+  then replaced with an atomic counter and re-verified).
+- **Phase 6** — the Phase 2 escalation again, on a table nobody re-audited:
+  **any signed-in user could `update profiles set role = 'admin'`** over
+  PostgREST and become an administrator. Harmless while `role` only chose a home
+  screen; critical the moment Phase 6 gave admins dispute resolution and Stripe
+  refunds. Fixed with column grants (`drizzle/0022`) and re-verified by
+  re-running the attack.
+
+The recurrence is the point: **RLS scopes rows and cannot scope columns, and
+Supabase's default grants make every column writable.** Any table where a policy
+is the only gate has this bug. Audit column grants alongside every new policy.
+
+The pattern is consistent enough to be worth stating as a rule: **on this
+project, static checks have never once caught the bug that mattered.** Full
+detail and what is verified vs. merely written is in `sougouba-api/PROGRESS.md` —
+this file stays the phase-by-phase plan, that one is the build log.
 
 **Waiting on**: a real `DATABASE_URL` and `MAPBOX_SECRET_TOKEN` (the MCP
-connection used so far doesn't expose either secret by design), a deploy target
-decision, Stripe account + Connect platform setup, the open questions in
-§"Confirm before Phase 0" below, and — per the devis — Apple Developer / Google
-Play Console accounts the client owns (not blocking API work,
+connection used so far doesn't expose either secret by design), a **Stripe
+test-mode key** (Phase 3's code is written and booted but no PaymentIntent has
+ever been created — its review gate cannot be walked without one), a deploy
+target decision, Stripe account + Connect platform setup, the remaining open
+questions in §"Confirm before Phase 0" below, and — per the devis — Apple
+Developer / Google Play Console accounts the client owns (not blocking API work,
 but blocking store publishing in Phase 10).
+
+**Also still true after three phases of API work**: the mobile app is not wired
+to any of it. Every screen still reads the mock `data/api/*` layer. The cutover
+is deliberately cheap by design (see "Frontend migration strategy" below), but
+it is real work that has not started, and no phase's review gate can be walked
+end-to-end from the app until it does.
 
 ---
 
@@ -232,20 +269,44 @@ to unwind later:
    `data/courierPay.ts` carry "confirm with the client" comments in the mock. Real
    rates before Phase 3/5 lock in a pricing service other things depend on.
 4. **Is the admin back-office in scope for this backend engagement, or does it get
-   its own separate frontend project later?** This plan writes Phase 8 as an API
-   surface only (no admin web UI) — confirm that's the right split before that
-   phase starts, since the devis lists the "back-office administrateur" web app as
-   part of the same original contract.
+   its own separate frontend project later?** Phase 8 shipped (2026-09-03) as an
+   **API surface only**, as this plan assumed. That assumption now looks right for
+   a second reason: a Next.js admin app already exists in this repo at `admin/`,
+   built against a localStorage mock deliberately shaped like these endpoints, so
+   the remaining work there is swapping its `admin/lib/api/*` for real fetches
+   rather than designing anything. **Still worth confirming who does that swap**,
+   since the devis prices the "back-office administrateur" as part of the same
+   contract and it is not part of the API repo.
 5. **AI support assistant scope** — the devis says "Assistant IA de support client
    (OpenAI GPT)" with no detail beyond that line. Needs a scoping pass (what
    questions it answers, whether it can read order state, escalation to a human)
    before Phase 9 can be estimated properly — it's currently the least-specified
    line in the whole contract.
-6. **Coupon rules** — "coupons promotionnels" has zero detail anywhere. Percentage
-   off? Fixed amount? Per-vendor or platform-wide? Stackable with loyalty points?
-   Needs the same kind of rules pass this session did for loyalty before Phase 4
-   can build it for real rather than guessing a shape.
-7. **Single-vendor vs. multi-vendor cart — a real divergence, not a wording
+6. **Coupon rules — BUILT ON ASSUMPTIONS 2026-09-03, still unconfirmed.** "Coupons
+   promotionnels" has zero detail anywhere, but Phase 4 built it rather than
+   deferring it again: the feature already slipped through the whole mobile
+   prototype once without anyone noticing it was in scope. The assumptions are
+   listed in full in `CouponsService`'s doc comment in the API repo, and each is
+   a one-line change if wrong. The ones worth putting to the client: discount
+   applies to the **subtotal only**; `percentage` means a percent (15 → 15 %);
+   **one coupon per order**; coupons **may** be combined with points, each
+   computed against the original subtotal with the sum capped at it; and
+   `usage_limit` counts across **all** customers, with no per-customer limit
+   (the table has no column for one — that shape should not be invented before
+   the rule is known).
+7. **Single-vendor vs. multi-vendor cart — RESOLVED 2026-09-03: one vendor per
+   order.** Confirmed with the client contact for this build; Phase 3's
+   `POST /orders` takes a single `vendorId` and produces one order, one
+   PaymentIntent, one delivery and one distance-band fee, matching the app as
+   built. The reading is that the devis's "multi-commerces" describes a platform
+   hosting many merchants rather than a cart mixing them — which is also how
+   every comparable courier marketplace works, since one order is one pickup.
+   **Worth re-confirming in writing with Salif Eric Sogodogo before launch**,
+   since the line item is his, and a literal reading would mean a parent
+   checkout-session table, per-shop delivery fees and partial-refund rules that
+   nothing below builds. The original analysis follows.
+
+   **Single-vendor vs. multi-vendor cart — a real divergence, not a wording
    nuance.** The devis's own budget line reads *"Panier & commandes
    multi-commerces"* (cart & **multi-vendor** orders, $800) — but the mobile app
    as built (`store/useCartStore.ts`, `VendorSwitchDialog`) deliberately enforces
