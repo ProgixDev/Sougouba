@@ -1,12 +1,13 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, desc, eq, gte, ilike, inArray, lt, ne, or, sql, type SQL } from 'drizzle-orm';
+import { ConflictException, Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import type { PostgrestError } from '@supabase/supabase-js';
 
 import type { Page } from '../catalog/dto/query.dto.js';
 import { containsPattern, escapeLikePattern } from '../common/sql/like.js';
-import { authUsersReadonly } from '../db/auth-users.readonly.js';
 import type { Db } from '../db/client.js';
+import { camelize } from '../db/case.js';
 import { DB } from '../db/db.module.js';
-import { courierIssues, couriers, disputes, orderDeliveries, orders, profiles, vendors } from '../db/schema/index.js';
+import { one } from '../db/embed.js';
+import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import {
   num,
   numOrNull,
@@ -62,58 +63,63 @@ export class AdminService {
   // ── disputes ──────────────────────────────────────────────────────────────
 
   async listDisputes(query: DisputeQuery): Promise<Page<unknown>> {
-    const conditions: SQL[] = [];
-    if (query.status) conditions.push(eq(disputes.status, query.status));
+    // The two inner joins become one embed. `!inner` matters: without it
+    // PostgREST left-joins, and a dispute whose order or shop had vanished
+    // would come back with nulls where the queue expects a shop name.
+    let q = this.db
+      .from('disputes')
+      .select(
+        `orderId:order_id, reason, message, status, openedAt:opened_at,
+         merchantReply:merchant_reply, answeredAt:answered_at, resolvedAt:resolved_at,
+         orders!inner(
+           orderTotalCad:total_cad, orderStatus:status, orderCreatedAt:created_at,
+           refundedAt:refunded_at, refundAmountCad:refund_amount_cad, customerName:customer_name,
+           vendors!inner(vendorName:name)
+         )`,
+        { count: 'exact' }
+      );
+
+    if (query.status) q = q.eq('status', query.status);
     // The triage default: everything still waiting on a human. A dispute the
     // merchant has answered is still open business — the platform has not
     // decided anything yet.
-    if (query.openOnly) conditions.push(inArray(disputes.status, ['open', 'answered']));
+    if (query.openOnly) q = q.in('status', ['open', 'answered']);
     // Used by `disputeDetail` so one projection serves both the queue and the
     // detail page — see there.
-    if (query.orderId) conditions.push(eq(disputes.orderId, query.orderId));
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    if (query.orderId) q = q.eq('order_id', query.orderId);
 
-    const [rows, [counted]] = await Promise.all([
-      this.db
-        .select({
-          orderId: disputes.orderId,
-          reason: disputes.reason,
-          message: disputes.message,
-          status: disputes.status,
-          openedAt: disputes.openedAt,
-          merchantReply: disputes.merchantReply,
-          answeredAt: disputes.answeredAt,
-          resolvedAt: disputes.resolvedAt,
-          orderTotalCad: orders.totalCad,
-          orderStatus: orders.status,
-          orderCreatedAt: orders.createdAt,
-          refundedAt: orders.refundedAt,
-          refundAmountCad: orders.refundAmountCad,
-          customerName: orders.customerName,
-          vendorName: vendors.name,
-        })
-        .from(disputes)
-        .innerJoin(orders, eq(orders.id, disputes.orderId))
-        .innerJoin(vendors, eq(vendors.id, orders.vendorId))
-        .where(where)
-        // Oldest first: a queue is worked from the front, and the dispute that
-        // has waited longest is the one whose shopper has waited longest.
-        .orderBy(disputes.openedAt)
-        .limit(query.limit)
-        .offset(query.offset),
-      this.db
-        .select({ total: sql<number>`count(*)::int` })
-        .from(disputes)
-        .where(where),
-    ]);
+    const { data, count, error } = await q
+      // Oldest first: a queue is worked from the front, and the dispute that
+      // has waited longest is the one whose shopper has waited longest.
+      .order('opened_at', { ascending: true })
+      .range(query.offset, query.offset + query.limit - 1);
+    if (error) throw unexpectedDbError(error);
 
     return {
-      items: rows.map((r) => ({
-        ...r,
-        orderTotalCad: Number(r.orderTotalCad),
-        refundAmountCad: r.refundAmountCad === null ? null : Number(r.refundAmountCad),
-      })),
-      total: counted?.total ?? 0,
+      // Flattened back to the shape the join produced, so the dashboard sees
+      // no difference between this and what it was already reading.
+      items: (data ?? []).map((r: any) => {
+        const order = one(r.orders);
+        const vendor = one(order?.vendors);
+        return {
+          orderId: r.orderId,
+          reason: r.reason,
+          message: r.message,
+          status: r.status,
+          openedAt: r.openedAt,
+          merchantReply: r.merchantReply,
+          answeredAt: r.answeredAt,
+          resolvedAt: r.resolvedAt,
+          orderTotalCad: Number(order?.orderTotalCad),
+          orderStatus: order?.orderStatus,
+          orderCreatedAt: order?.orderCreatedAt,
+          refundedAt: order?.refundedAt ?? null,
+          refundAmountCad: order?.refundAmountCad == null ? null : Number(order.refundAmountCad),
+          customerName: order?.customerName ?? null,
+          vendorName: vendor?.vendorName,
+        };
+      }),
+      total: count ?? 0,
       limit: query.limit,
       offset: query.offset,
     };
@@ -144,11 +150,9 @@ export class AdminService {
    * shopper has been told they were paid.
    */
   async resolveDispute(adminId: string, orderId: string, input: ResolveDisputeInput) {
-    const [dispute] = await this.db
-      .select({ orderId: disputes.orderId, status: disputes.status })
-      .from(disputes)
-      .where(eq(disputes.orderId, orderId))
-      .limit(1);
+    const dispute = await unwrap<{ orderId: string; status: string } | null>(
+      this.db.from('disputes').select('orderId:order_id, status').eq('order_id', orderId).maybeSingle()
+    );
     if (!dispute) throw new NotFoundException('No dispute on this order');
     if (dispute.status === 'resolved' || dispute.status === 'rejected') {
       throw new ConflictException(`This dispute is already ${dispute.status}`);
@@ -161,50 +165,43 @@ export class AdminService {
       });
     }
 
-    await this.db.transaction(async (tx) => {
-      await tx
-        .update(disputes)
-        .set({
-          status: input.outcome,
-          resolvedBy: adminId,
-          resolvedAt: new Date(),
-          // Appended rather than overwriting the merchant's reply: a dispute is a
-          // conversation, and the shopper's original words plus the merchant's
-          // answer are the two things nobody should be able to rewrite.
-          merchantReply: input.note,
-        })
-        .where(eq(disputes.orderId, orderId));
-
-      await this.audit.record(
-        {
-          actorId: adminId,
-          action: 'dispute.resolve',
-          subjectType: 'dispute',
-          // Keyed by order, because that is what a dispute is keyed by here and
-          // what a reader will have in hand.
-          subjectId: orderId,
-          reason: input.note,
-          changes: {
-            status: { from: dispute.status, to: input.outcome },
-            // Recorded here as well as under `order.refund` above: the two are
-            // separate decisions and a dispute read on its own should not have
-            // to go looking for whether money moved.
-            ...(input.refundAmountCad !== undefined
-              ? { refundAmountCad: { from: null, to: input.refundAmountCad } }
-              : {}),
-          },
+    // The status write and its audit entry land in one transaction, inside
+    // `admin_resolve_dispute`. `AuditService.record` used to be handed the
+    // caller's `tx` for exactly this reason: an audit entry for a change that
+    // rolled back is a lie, and a change that committed without its entry is
+    // the gap the table exists to close. There is no `tx` to pass over
+    // PostgREST, so the pair moved into SQL together.
+    await unwrapRpc<unknown>(
+      this.db.rpc('admin_resolve_dispute', {
+        p_admin_id: adminId,
+        p_order_id: orderId,
+        p_outcome: input.outcome,
+        p_note: input.note,
+        p_changes: {
+          status: { from: dispute.status, to: input.outcome },
+          // Recorded here as well as under `order.refund` above: the two are
+          // separate decisions and a dispute read on its own should not have
+          // to go looking for whether money moved.
+          ...(input.refundAmountCad !== undefined
+            ? { refundAmountCad: { from: null, to: input.refundAmountCad } }
+            : {}),
         },
-        tx
-      );
-    });
+      }),
+      (error) => {
+        if (error.code === NOT_FOUND) throw new NotFoundException(error.message);
+        throw unexpectedDbError(error);
+      }
+    );
 
     return this.disputeFor(orderId);
   }
 
   private async disputeFor(orderId: string) {
-    const [row] = await this.db.select().from(disputes).where(eq(disputes.orderId, orderId)).limit(1);
+    const row = await unwrap<Record<string, unknown> | null>(
+      this.db.from('disputes').select('*').eq('order_id', orderId).maybeSingle()
+    );
     if (!row) throw new NotFoundException('No dispute on this order');
-    return row;
+    return camelize(row);
   }
 
   // ── courier issues ────────────────────────────────────────────────────────
@@ -218,45 +215,60 @@ export class AdminService {
   }
 
   async listCourierIssues(query: CourierIssueQuery): Promise<Page<unknown>> {
-    const conditions: SQL[] = [];
-    if (query.status) conditions.push(eq(courierIssues.status, query.status));
-    if (query.orderId) conditions.push(eq(courierIssues.orderId, query.orderId));
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    // Same shape as `listDisputes`: the joins become embeds. `orders` and its
+    // `vendors` are `!inner`; the delivery and its courier are not, because an
+    // issue can be reported before a courier is assigned — a shop-not-ready
+    // report can be filed before anyone accepts the run — and an issue screen
+    // with no courier is still a valid one.
+    let q = this.db
+      .from('courier_issues')
+      .select(
+        `orderId:order_id, reason, message, status, at, resolvedAt:resolved_at,
+         orders!inner(
+           orderStatus:status,
+           deliveryAddressStreet:delivery_address_street,
+           deliveryAddressCity:delivery_address_city,
+           vendors!inner(vendorName:name),
+           order_deliveries(courierId:courier_id, couriers(courierName:full_name))
+         )`,
+        { count: 'exact' }
+      );
 
-    const [rows, [counted]] = await Promise.all([
-      this.db
-        .select({
-          orderId: courierIssues.orderId,
-          reason: courierIssues.reason,
-          message: courierIssues.message,
-          status: courierIssues.status,
-          at: courierIssues.at,
-          resolvedAt: courierIssues.resolvedAt,
-          orderStatus: orders.status,
-          deliveryAddressStreet: orders.deliveryAddressStreet,
-          deliveryAddressCity: orders.deliveryAddressCity,
-          vendorName: vendors.name,
+    if (query.status) q = q.eq('status', query.status);
+    if (query.orderId) q = q.eq('order_id', query.orderId);
+
+    const { data, count, error } = await q
+      .order('at', { ascending: true })
+      .range(query.offset, query.offset + query.limit - 1);
+    if (error) throw unexpectedDbError(error);
+
+    return {
+      items: (data ?? []).map((r: any) => {
+        const order = one<any>(r.orders);
+        const vendor = one<any>(order?.vendors);
+        const delivery = one<any>(order?.order_deliveries);
+        const courier = one<any>(delivery?.couriers);
+        return {
+          orderId: r.orderId,
+          reason: r.reason,
+          message: r.message,
+          status: r.status,
+          at: r.at,
+          resolvedAt: r.resolvedAt,
+          orderStatus: order?.orderStatus,
+          deliveryAddressStreet: order?.deliveryAddressStreet,
+          deliveryAddressCity: order?.deliveryAddressCity,
+          vendorName: vendor?.vendorName,
           // Joined through the delivery, since a courier issue is keyed by
-          // order. Null when the report predates an assignment — rare, but a
-          // shop-not-ready report can be filed before anyone accepts the run.
-          courierId: orderDeliveries.courierId,
-          courierName: couriers.fullName,
-        })
-        .from(courierIssues)
-        .innerJoin(orders, eq(orders.id, courierIssues.orderId))
-        .innerJoin(vendors, eq(vendors.id, orders.vendorId))
-        // Left, both of them: an issue can be reported before a courier is
-        // assigned, and an issue screen with no courier is still a valid one.
-        .leftJoin(orderDeliveries, eq(orderDeliveries.orderId, courierIssues.orderId))
-        .leftJoin(couriers, eq(couriers.id, orderDeliveries.courierId))
-        .where(where)
-        .orderBy(courierIssues.at)
-        .limit(query.limit)
-        .offset(query.offset),
-      this.db.select({ total: sql<number>`count(*)::int` }).from(courierIssues).where(where),
-    ]);
-
-    return { items: rows, total: counted?.total ?? 0, limit: query.limit, offset: query.offset };
+          // order. Null when the report predates an assignment.
+          courierId: delivery?.courierId ?? null,
+          courierName: courier?.courierName ?? null,
+        };
+      }),
+      total: count ?? 0,
+      limit: query.limit,
+      offset: query.offset,
+    };
   }
 
   /**
@@ -269,33 +281,21 @@ export class AdminService {
    * with the courier, not that the delivery happened.
    */
   async resolveCourierIssue(adminId: string, orderId: string, input: ResolveCourierIssueInput) {
-    return this.db.transaction(async (tx) => {
-      const updated = await tx
-        .update(courierIssues)
-        .set({
-          status: 'resolved',
-          resolvedBy: adminId,
-          resolvedAt: new Date(),
-          message: sql`${courierIssues.message} || E'\n\n— Résolution: ' || ${input.note}`,
-        })
-        .where(and(eq(courierIssues.orderId, orderId), eq(courierIssues.status, 'open')))
-        .returning();
-      if (updated.length === 0) throw new NotFoundException('No open courier issue on this order');
-
-      await this.audit.record(
-        {
-          actorId: adminId,
-          action: 'courier_issue.resolve',
-          subjectType: 'courier_issue',
-          subjectId: orderId,
-          reason: input.note,
-          changes: { status: { from: 'open', to: 'resolved' } },
-        },
-        tx
-      );
-
-      return updated[0];
-    });
+    // Same one-transaction guarantee as `resolveDispute`: the resolution and
+    // its audit entry, or neither. The note is appended to the courier's own
+    // message rather than replacing it — what they reported is evidence.
+    const row = await unwrapRpc<Record<string, unknown>>(
+      this.db.rpc('admin_resolve_courier_issue', {
+        p_admin_id: adminId,
+        p_order_id: orderId,
+        p_note: input.note,
+      }),
+      (error) => {
+        if (error.code === NOT_FOUND) throw new NotFoundException(error.message);
+        throw unexpectedDbError(error);
+      }
+    );
+    return camelize(row);
   }
 
   // ── supervision ───────────────────────────────────────────────────────────
@@ -309,37 +309,11 @@ export class AdminService {
    * queued, and how much is stuck.
    */
   async stats() {
-    const [row] = await this.db
-      .select({
-        vendorsPending: sql<number>`(select count(*) from ${vendors} where status = 'pending')::int`,
-        vendorsApproved: sql<number>`(select count(*) from ${vendors} where status = 'approved')::int`,
-        couriersPending: sql<number>`(select count(*) from ${couriers} where status = 'pending')::int`,
-        couriersApproved: sql<number>`(select count(*) from ${couriers} where status = 'approved')::int`,
-        couriersOnline: sql<number>`(select count(*) from ${couriers} where is_online = true and status = 'approved')::int`,
-        // ⚠️ Was `date_trunc('day', now() at time zone 'America/Montreal')`,
-        // which is wrong and was quietly over-counting. `now() at time zone
-        // 'America/Montreal'` converts a timestamptz to a *naive* timestamp
-        // holding Montreal wall-clock; truncating gives naive Montreal
-        // midnight; comparing that against a timestamptz column casts it back
-        // using the session zone (UTC). So "today" began at 00:00 UTC of
-        // Montreal's date — four or five hours early — and swept in the
-        // previous Montreal evening's orders. Converting back explicitly is
-        // what makes it the instant the Montreal day actually starts.
-        ordersToday: sql<number>`(select count(*) from ${orders} where created_at >= ((now() at time zone 'America/Montreal')::date)::timestamp at time zone 'America/Montreal')::int`,
-        ordersActive: sql<number>`(select count(*) from ${orders} where status not in ('delivered','cancelled'))::int`,
-        // The number that actually needs watching: packed, paid for, and
-        // nobody carrying it.
-        ordersUnassigned: sql<number>`(
-          select count(*) from ${orders} o
-          where o.status = 'ready'
-            and not exists (select 1 from order_deliveries d where d.order_id = o.id)
-        )::int`,
-        disputesOpen: sql<number>`(select count(*) from ${disputes} where status in ('open','answered'))::int`,
-        courierIssuesOpen: sql<number>`(select count(*) from ${courierIssues} where status = 'open')::int`,
-        customers: sql<number>`(select count(*) from ${profiles} where role = 'customer')::int`,
-      })
-      .from(sql`(select 1) as _`);
-    return row;
+    // Twelve scalar subqueries in one round trip. Rebuilt as PostgREST calls
+    // this would be twelve requests, and the Montreal-midnight boundary in
+    // `ordersToday` — which was a real over-count once — would have to be
+    // recomputed client-side against a moving target. See `admin_stats`.
+    return unwrap<Record<string, number>>(this.db.rpc('admin_stats'));
   }
 
   /**
@@ -363,80 +337,25 @@ export class AdminService {
    * permanent.
    */
   async listOrders(query: OrderListQuery): Promise<Page<AdminOrderListItem>> {
-    const conditions: SQL[] = [];
-    if (query.status) conditions.push(eq(orders.status, query.status));
-    if (query.vendorId) conditions.push(eq(orders.vendorId, query.vendorId));
-    if (query.search) {
-      const pattern = containsPattern(query.search);
-      conditions.push(
-        or(
-          ilike(orders.customerName, pattern),
-          ilike(vendors.name, pattern),
-          // Real ids are uuids and the dashboard displays the first 8
-          // characters, so a *prefix* is what someone pastes back — and a
-          // prefix is the only id match an index can ever serve. `ILIKE
-          // '%…%'` on a uuid cast to text is a guaranteed full scan.
-          sql`${orders.id}::text like ${escapeLikePattern(query.search.toLowerCase()) + '%'}`
-        )!
-      );
-    }
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    // An RPC because the filter spans a joined table (`vendors.name`) and
+    // prefix-matches the order id as text — PostgREST's `.or()` reaches
+    // neither. Escaping stays here: `containsPattern` is what stops a literal
+    // `%` matching the whole table.
+    const pattern = query.search ? containsPattern(query.search) : null;
+    const idPrefix = query.search ? escapeLikePattern(query.search.toLowerCase()) + '%' : null;
 
-    const [rows, [counted]] = await Promise.all([
-      this.db
-        .select({
-          id: orders.id,
-          status: orders.status,
-          createdAt: orders.createdAt,
-          subtotalCad: orders.subtotalCad,
-          totalCad: orders.totalCad,
-          customerId: orders.customerId,
-          customerName: orders.customerName,
-          vendorId: orders.vendorId,
-          vendorName: vendors.name,
-          vendorType: vendors.vendorType,
-          courierName: couriers.fullName,
-          refundedAt: orders.refundedAt,
-          refundAmountCad: orders.refundAmountCad,
-          // Both relations are 1:1 on `order_id`, so these left joins add a
-          // flag without fanning the row out. They are what lets the table
-          // badge a problem order without an N+1 per page.
-          hasDispute: sql<boolean>`${disputes.orderId} is not null`,
-          hasCourierIssue: sql<boolean>`${courierIssues.orderId} is not null`,
-        })
-        .from(orders)
-        .innerJoin(vendors, eq(vendors.id, orders.vendorId))
-        .leftJoin(orderDeliveries, eq(orderDeliveries.orderId, orders.id))
-        .leftJoin(couriers, eq(couriers.id, orderDeliveries.courierId))
-        .leftJoin(disputes, eq(disputes.orderId, orders.id))
-        .leftJoin(courierIssues, eq(courierIssues.orderId, orders.id))
-        .where(where)
-        // The `id` tiebreak is what keeps pagination stable when two orders
-        // share a `created_at` — without it a row can appear on two pages, or
-        // on neither.
-        .orderBy(desc(orders.createdAt), desc(orders.id))
-        .limit(query.limit)
-        .offset(query.offset),
-      this.db
-        .select({ total: sql<number>`count(*)::int` })
-        .from(orders)
-        // Repeated because `search` filters on `vendors.name` — the count must
-        // see the same rows the page does, or the page count lies.
-        .innerJoin(vendors, eq(vendors.id, orders.vendorId))
-        .where(where),
-    ]);
+    const page = await unwrap<{ items: AdminOrderListItem[]; total: number }>(
+      this.db.rpc('admin_list_orders', {
+        p_status: query.status ?? undefined,
+        p_vendor_id: query.vendorId ?? undefined,
+        p_search: pattern ?? undefined,
+        p_id_prefix: idPrefix ?? undefined,
+        p_limit: query.limit,
+        p_offset: query.offset,
+      })
+    );
 
-    return {
-      items: rows.map((r) => ({
-        ...r,
-        subtotalCad: num(r.subtotalCad),
-        totalCad: num(r.totalCad),
-        refundAmountCad: numOrNull(r.refundAmountCad),
-      })),
-      total: counted?.total ?? 0,
-      limit: query.limit,
-      offset: query.offset,
-    };
+    return { items: page.items, total: page.total, limit: query.limit, offset: query.offset };
   }
 
   /**
@@ -453,66 +372,21 @@ export class AdminService {
     // Mandatory, and this is the endpoint most likely to receive a literal `%`:
     // a bare `%${q}%` would match every row in all four tables.
     const pattern = containsPattern(query.q);
-    const limit = query.perType;
+    // An id fragment is prefix-matched — that is what a paste of the truncated
+    // id the UI displays looks like, and a prefix is the only id match an index
+    // can serve. `ilike '%…%'` on a uuid cast to text is a guaranteed full scan.
+    const idPrefix = looksLikeIdFragment(query.q) ? escapeLikePattern(query.q.toLowerCase()) + '%' : null;
 
-    const [vendorHits, courierHits, orderHits, userHits] = await Promise.all([
-      this.db
-        .select({ id: vendors.id, name: vendors.name, city: vendors.city, neighborhood: vendors.neighborhood })
-        .from(vendors)
-        .where(or(ilike(vendors.name, pattern), ilike(vendors.city, pattern), ilike(vendors.slug, pattern)))
-        .limit(limit),
-
-      this.db
-        .select({ id: couriers.id, fullName: couriers.fullName, city: couriers.city })
-        .from(couriers)
-        .where(or(ilike(couriers.fullName, pattern), ilike(couriers.city, pattern), ilike(couriers.phone, pattern)))
-        .limit(limit),
-
-      // Orders branch on what was typed. An id fragment is prefix-matched —
-      // that is what a paste of the truncated id the UI displays looks like,
-      // and a prefix is the only id match an index can serve. `ILIKE '%…%'` on
-      // a uuid cast to text is a guaranteed full scan.
-      this.db
-        .select({
-          id: orders.id,
-          customerName: orders.customerName,
-          vendorName: vendors.name,
-        })
-        .from(orders)
-        .innerJoin(vendors, eq(vendors.id, orders.vendorId))
-        .where(
-          looksLikeIdFragment(query.q)
-            ? sql`${orders.id}::text like ${escapeLikePattern(query.q.toLowerCase()) + '%'}`
-            : or(ilike(orders.customerName, pattern), ilike(vendors.name, pattern))
-        )
-        .orderBy(desc(orders.createdAt))
-        .limit(limit),
-
-      this.db
-        .select({ id: profiles.id, fullName: profiles.fullName, email: authUsersReadonly.email })
-        .from(profiles)
-        .leftJoin(authUsersReadonly, eq(authUsersReadonly.id, profiles.id))
-        .where(or(ilike(profiles.fullName, pattern), ilike(authUsersReadonly.email, pattern)))
-        .limit(limit),
-    ]);
-
-    return [
-      ...vendorHits.map((v) => ({
-        type: 'vendor' as const,
-        id: v.id,
-        label: v.name,
-        sublabel: `${v.city} · ${v.neighborhood}`,
-      })),
-      ...courierHits.map((c) => ({ type: 'courier' as const, id: c.id, label: c.fullName, sublabel: c.city })),
-      ...orderHits.map((o) => ({
-        type: 'order' as const,
-        id: o.id,
-        // Matches how the dashboard displays an order id everywhere else.
-        label: `#${o.id.slice(0, 8)}`,
-        sublabel: `${o.customerName ?? '—'} · ${o.vendorName}`,
-      })),
-      ...userHits.map((u) => ({ type: 'user' as const, id: u.id, label: u.fullName, sublabel: u.email ?? '—' })),
-    ];
+    // ⚠️ SECURITY DEFINER, because the account branch reads `auth.users` and
+    // only `postgres` holds SELECT there — the old Drizzle connection was
+    // `postgres` and this one is `service_role`. See the migration.
+    return unwrap<AdminSearchResult[]>(
+      this.db.rpc('admin_search', {
+        p_pattern: pattern,
+        p_id_prefix: idPrefix ?? undefined,
+        p_per_type: query.perType,
+      })
+    );
   }
 
   /**
@@ -525,88 +399,37 @@ export class AdminService {
    * alongside; see `AdminOverviewStats`.
    */
   async overview(range: OverviewRange): Promise<AdminOverviewStats> {
+    // `overviewWindow` stays the authority on what "the last N days" means in
+    // Montreal; the SQL is handed the bounds rather than recomputing them, so
+    // there is one calendar rather than two.
     const window = overviewWindow(range, new Date());
     const { curStart, curEnd, prevStart, days } = window;
 
-    // ⚠️ Raw `sql` templates must be handed ISO **strings**, not `Date`s.
-    // Operators like `gte(orders.createdAt, …)` know the column and run the
-    // value through its type mapper; a `${date}` interpolated into a bare
-    // template does not, so postgres.js receives a `Date` it cannot serialise
-    // and the whole query fails with `ERR_INVALID_ARG_TYPE` — a Node error,
-    // nowhere near the SQL, and easy to misread as a syntax problem.
-    // Postgres infers `timestamptz` for the parameter from the comparison.
-    const curStartIso = curStart.toISOString();
-    const curEndIso = curEnd.toISOString();
+    // One call. The aggregate is `filter (where …)` over two windows, a
+    // `generate_series` LEFT JOIN and a group-by ordered on a sum — none of
+    // which PostgREST can express, and which as separate requests would be a
+    // dozen round trips for one landing page.
+    const raw = await unwrap<{
+      totals: Record<string, number> | null;
+      series: { date: string; gmv: number; orders: number }[];
+      topVendors: { vendorId: string; name: string; vendorType: string; revenueCad: number; orderCount: number }[];
+      byVertical: Record<string, number>;
+      queues: Record<string, number>;
+    }>(
+      this.db.rpc('admin_overview', {
+        p_cur_start: curStart.toISOString(),
+        p_cur_end: curEnd.toISOString(),
+        p_prev_start: prevStart.toISOString(),
+        p_day_from: days[0],
+        p_day_to: days[days.length - 1],
+      })
+    );
 
-    const [totals, series, topVendors, byVertical, queues] = await Promise.all([
-      // One pass over both windows. `filter` splits current from previous
-      // without scanning the table twice, and the commission rate is read in
-      // SQL so the multiplication stays exact `numeric` arithmetic rather than
-      // round-tripping through a float.
-      this.db
-        .select({
-          gmvCad: sql<number>`round(coalesce(sum(${orders.totalCad}) filter (where ${orders.createdAt} >= ${curStartIso}), 0), 2)::float8`,
-          prevGmvCad: sql<number>`round(coalesce(sum(${orders.totalCad}) filter (where ${orders.createdAt} < ${curStartIso}), 0), 2)::float8`,
-          orderCount: sql<number>`(count(*) filter (where ${orders.createdAt} >= ${curStartIso}))::int`,
-          prevOrderCount: sql<number>`(count(*) filter (where ${orders.createdAt} < ${curStartIso}))::int`,
-          commissionRevenueCad: sql<number>`round(
-            coalesce(sum(${orders.subtotalCad}) filter (where ${orders.createdAt} >= ${curStartIso}), 0)
-            * (select commission_rate from platform_settings where id = 1), 2)::float8`,
-          refundedCad: sql<number>`round(coalesce(sum(${orders.refundAmountCad}) filter (where ${orders.createdAt} >= ${curStartIso}), 0), 2)::float8`,
-        })
-        .from(orders)
-        .where(and(ne(orders.status, 'cancelled'), gte(orders.createdAt, prevStart), lt(orders.createdAt, curEnd))),
+    const t = raw.totals ?? {};
+    const gmvCad = t.gmvCad ?? 0;
+    const orderCount = t.orderCount ?? 0;
+    const seriesRows = raw.series ?? [];
 
-      // `generate_series` LEFT JOIN so a day with no orders is a zero, not a
-      // missing point — a line chart that skips days draws a lie.
-      //
-      // The `created_at` bounds are repeated inside the JOIN condition on
-      // purpose: without them the join scans every order ever placed and only
-      // then discards the ones outside the window.
-      this.db.execute(sql`
-        select to_char(d.day, 'YYYY-MM-DD')                    as date,
-               round(coalesce(sum(o.total_cad), 0), 2)::float8 as gmv,
-               count(o.id)::int                                as orders
-        from generate_series(${days[0]}::date, ${days[days.length - 1]}::date, interval '1 day') as d(day)
-        left join orders o
-          on (o.created_at at time zone 'America/Montreal')::date = d.day::date
-         and o.status <> 'cancelled'
-         and o.created_at >= ${curStartIso}
-         and o.created_at <  ${curEndIso}
-        group by d.day
-        order by d.day
-      `),
-
-      this.db
-        .select({
-          vendorId: vendors.id,
-          name: vendors.name,
-          vendorType: vendors.vendorType,
-          revenueCad: sql<number>`round(coalesce(sum(${orders.totalCad}), 0), 2)::float8`,
-          orderCount: sql<number>`count(*)::int`,
-        })
-        .from(orders)
-        .innerJoin(vendors, eq(vendors.id, orders.vendorId))
-        .where(and(ne(orders.status, 'cancelled'), gte(orders.createdAt, curStart), lt(orders.createdAt, curEnd)))
-        .groupBy(vendors.id, vendors.name, vendors.vendorType)
-        .orderBy(sql`sum(${orders.totalCad}) desc`)
-        .limit(6),
-
-      this.db
-        .select({ vertical: vendors.vendorType, orders: sql<number>`count(*)::int` })
-        .from(orders)
-        .innerJoin(vendors, eq(vendors.id, orders.vendorId))
-        .where(and(ne(orders.status, 'cancelled'), gte(orders.createdAt, curStart), lt(orders.createdAt, curEnd)))
-        .groupBy(vendors.vendorType),
-
-      this.stats(),
-    ]);
-
-    const t = totals[0];
-    const gmvCad = t?.gmvCad ?? 0;
-    const orderCount = t?.orderCount ?? 0;
-
-    const seriesRows = [...series] as { date: string; gmv: number; orders: number }[];
     // A silent off-by-one here would misalign every bar with its label, so it
     // is asserted rather than hoped for. `generate_series` over `::date` is
     // DST-immune; over `timestamptz` it is not, which is why the cast matters.
@@ -614,32 +437,30 @@ export class AdminService {
       throw new Error(`Overview series returned ${seriesRows.length} buckets for a ${range}-day range`);
     }
 
-    const verticalCounts = new Map(byVertical.map((r) => [r.vertical, r.orders]));
-
     return {
       range,
       from: curStart.toISOString(),
       to: curEnd.toISOString(),
 
       gmvCad,
-      gmvDeltaPct: deltaPct(gmvCad, t?.prevGmvCad ?? 0),
+      gmvDeltaPct: deltaPct(gmvCad, t.prevGmvCad ?? 0),
       orderCount,
-      orderDeltaPct: deltaPct(orderCount, t?.prevOrderCount ?? 0),
-      commissionRevenueCad: t?.commissionRevenueCad ?? 0,
-      refundedCad: t?.refundedCad ?? 0,
+      orderDeltaPct: deltaPct(orderCount, t.prevOrderCount ?? 0),
+      commissionRevenueCad: t.commissionRevenueCad ?? 0,
+      refundedCad: t.refundedCad ?? 0,
       averageOrderValueCad: orderCount === 0 ? 0 : round2(gmvCad / orderCount),
 
       series: seriesRows,
-      topVendors,
+      topVendors: raw.topVendors ?? [],
       // Both verticals always present, backfilled with 0 — otherwise the chart
       // grows and shrinks a category as the range changes.
       ordersByVertical: (['grocery', 'restaurant'] as const).map((vertical) => ({
         vertical,
-        orders: verticalCounts.get(vertical) ?? 0,
+        orders: raw.byVertical?.[vertical] ?? 0,
       })),
 
-      queues,
-    };
+      queues: raw.queues,
+    } as AdminOverviewStats;
   }
 
   /**
@@ -656,28 +477,42 @@ export class AdminService {
    * already passes `{ schema }` to `drizzle()`, so the relations are available.
    */
   async orderDetail(id: string): Promise<AdminOrderDetail> {
-    const row = await this.db.query.orders.findFirst({
-      where: eq(orders.id, id),
-      with: {
-        vendor: {
-          columns: { id: true, name: true, slug: true, vendorType: true, city: true, addressStreet: true, addressPostalCode: true },
-        },
-        customer: { columns: { id: true, fullName: true, avatarUrl: true, memberSince: true } },
-        items: true,
+    // PostgREST embeds are the direct equivalent of the relational builder's
+    // `with`, and they solve the same problem it was chosen for: six hand-written
+    // left joins would fan the item rows against the status-history rows into a
+    // cartesian product needing de-duplication in TS.
+    const fetched = await unwrap<any>(
+      this.db
+        .from('orders')
+        .select(
+          `*,
+           vendor:vendors!inner(id, name, slug, vendorType:vendor_type, city,
+                                addressStreet:address_street, addressPostalCode:address_postal_code),
+           customer:profiles(id, fullName:full_name, avatarUrl:avatar_url, memberSince:member_since),
+           items:order_items(*),
+           statusHistory:order_status_history(status, at),
+           dispute:disputes(*),
+           courierIssue:courier_issues(*),
+           delivery:order_deliveries(*,
+             courier:couriers(id, fullName:full_name, phone, vehicle),
+             proof:delivery_proofs(*))`
+        )
+        .eq('id', id)
         // A timeline read backwards is not a timeline.
-        statusHistory: { orderBy: (h, { asc }) => [asc(h.at)] },
-        dispute: true,
-        courierIssue: true,
-        delivery: {
-          with: {
-            courier: { columns: { id: true, fullName: true, phone: true, vehicle: true } },
-            proof: true,
-          },
-        },
-      },
-    });
+        .order('at', { referencedTable: 'order_status_history', ascending: true })
+        .maybeSingle()
+    );
 
-    if (!row) throw new NotFoundException('Order not found');
+    if (!fetched) throw new NotFoundException('Order not found');
+    const row = camelize<any>(fetched);
+    // PostgREST decides an embed's cardinality from the schema's constraints,
+    // so a 1:1 relation may arrive as an object or a one-element array — see
+    // `db/embed.ts`.
+    const customer = one<any>(row.customer);
+    const vendor = one<any>(row.vendor);
+    const dispute = one<any>(row.dispute);
+    const courierIssue = one<any>(row.courierIssue);
+    const delivery = one<any>(row.delivery);
 
     return {
       id: row.id,
@@ -685,12 +520,12 @@ export class AdminService {
       createdAt: row.createdAt,
       stripePaymentIntentId: row.stripePaymentIntentId,
 
-      customer: row.customer ?? null,
+      customer: customer ?? null,
       customerName: row.customerName,
 
-      vendor: row.vendor,
+      vendor: vendor,
 
-      items: row.items.map((item) => ({
+      items: (row.items ?? []).map((item: any) => ({
         id: item.id,
         productId: item.productId,
         name: item.name,
@@ -735,53 +570,65 @@ export class AdminService {
         lng: row.deliveryAddressLng,
       },
 
-      statusHistory: row.statusHistory.map((h) => ({ status: h.status, at: h.at })),
+      statusHistory: (row.statusHistory ?? []).map((h: any) => ({ status: h.status, at: h.at })),
 
-      delivery: row.delivery
+      delivery: delivery
         ? {
-            courier: row.delivery.courier ?? null,
-            acceptedAt: row.delivery.acceptedAt,
-            pickedUpAt: row.delivery.pickedUpAt,
-            deliveredAt: row.delivery.deliveredAt,
-            pickupEtaMin: row.delivery.pickupEtaMin,
-            dropoffEtaMin: row.delivery.dropoffEtaMin,
-            distanceKm: num(row.delivery.distanceKm),
-            tipCad: num(row.delivery.tipCad),
-            earningsCad: num(row.delivery.earningsCad),
-            paidOutAt: row.delivery.paidOutAt,
-            proof: row.delivery.proof
+            courier: one<any>(delivery.courier) ?? null,
+            acceptedAt: delivery.acceptedAt,
+            pickedUpAt: delivery.pickedUpAt,
+            deliveredAt: delivery.deliveredAt,
+            pickupEtaMin: delivery.pickupEtaMin,
+            dropoffEtaMin: delivery.dropoffEtaMin,
+            distanceKm: num(delivery.distanceKm),
+            tipCad: num(delivery.tipCad),
+            earningsCad: num(delivery.earningsCad),
+            paidOutAt: delivery.paidOutAt,
+            proof: one<any>(delivery.proof)
               ? {
-                  method: row.delivery.proof.method,
-                  imagePath: row.delivery.proof.imagePath,
-                  note: row.delivery.proof.note,
-                  at: row.delivery.proof.at,
+                  method: one<any>(delivery.proof).method,
+                  imagePath: one<any>(delivery.proof).imagePath,
+                  note: one<any>(delivery.proof).note,
+                  at: one<any>(delivery.proof).at,
                 }
               : null,
             // `pin` is intentionally dropped here — see AdminOrderDetail.
           }
         : null,
 
-      dispute: row.dispute
+      dispute: dispute
         ? {
-            reason: row.dispute.reason,
-            message: row.dispute.message,
-            openedAt: row.dispute.openedAt,
-            status: row.dispute.status,
-            merchantReply: row.dispute.merchantReply,
-            answeredAt: row.dispute.answeredAt,
-            resolvedAt: row.dispute.resolvedAt,
+            reason: dispute.reason,
+            message: dispute.message,
+            openedAt: dispute.openedAt,
+            status: dispute.status,
+            merchantReply: dispute.merchantReply,
+            answeredAt: dispute.answeredAt,
+            resolvedAt: dispute.resolvedAt,
           }
         : null,
 
-      courierIssue: row.courierIssue
+      courierIssue: courierIssue
         ? {
-            reason: row.courierIssue.reason,
-            message: row.courierIssue.message,
-            at: row.courierIssue.at,
-            status: row.courierIssue.status,
-            resolvedAt: row.courierIssue.resolvedAt,
+            reason: courierIssue.reason,
+            message: courierIssue.message,
+            at: courierIssue.at,
+            status: courierIssue.status,
+            resolvedAt: courierIssue.resolvedAt,
           }
         : null,
     };
   }
+}
+
+/** `admin_resolve_dispute` / `admin_resolve_courier_issue` raise this when nothing matched. */
+const NOT_FOUND = 'SGB05';
+
+/**
+ * ⚠️ Never let `error.message` reach the client: PostgREST echoes constraint
+ * names, columns and sometimes offending values. The detail goes to the log.
+ */
+function unexpectedDbError(error: PostgrestError): Error {
+  console.error('[postgrest]', error.code, error.message, error.details ?? '', error.hint ?? '');
+  return new InternalServerErrorException('Database request failed');
 }

@@ -1530,6 +1530,76 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_list_orders: {
+        Args: {
+          p_id_prefix?: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_status?: string
+          p_vendor_id?: string
+        }
+        Returns: Json
+      }
+      admin_overview: {
+        Args: {
+          p_cur_end: string
+          p_cur_start: string
+          p_day_from: string
+          p_day_to: string
+          p_prev_start: string
+        }
+        Returns: Json
+      }
+      admin_resolve_courier_issue: {
+        Args: { p_admin_id: string; p_note: string; p_order_id: string }
+        Returns: {
+          at: string
+          message: string
+          order_id: string
+          reason: Database["public"]["Enums"]["courier_issue_reason"]
+          resolved_at: string | null
+          resolved_by: string | null
+          status: Database["public"]["Enums"]["courier_issue_status"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "courier_issues"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_resolve_dispute: {
+        Args: {
+          p_admin_id: string
+          p_changes: Json
+          p_note: string
+          p_order_id: string
+          p_outcome: string
+        }
+        Returns: {
+          answered_at: string | null
+          merchant_reply: string | null
+          message: string
+          opened_at: string
+          order_id: string
+          reason: Database["public"]["Enums"]["dispute_reason"]
+          resolved_at: string | null
+          resolved_by: string | null
+          status: Database["public"]["Enums"]["dispute_status"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "disputes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_search: {
+        Args: { p_id_prefix?: string; p_pattern: string; p_per_type?: number }
+        Returns: Json
+      }
+      admin_stats: { Args: never; Returns: Json }
       order_advance_status: {
         Args: { p_from: string; p_order_id: string; p_to: string }
         Returns: undefined

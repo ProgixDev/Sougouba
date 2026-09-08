@@ -1,14 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, gte, lte, sql, type SQL } from 'drizzle-orm';
 
 import type { Page } from '../catalog/dto/query.dto.js';
 import type { Db } from '../db/client.js';
+import { camelize } from '../db/case.js';
 import { DB } from '../db/db.module.js';
-import { adminAuditLog, profiles } from '../db/schema/index.js';
+import { unwrap } from '../db/unwrap.js';
 import type { AuditQuery } from './dto/admin.dto.js';
-
-/** Same shape the rest of the admin module uses to accept "the db, or a transaction on it". */
-type DbOrTx = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
 
 /**
  * Every action the back office can take, as one closed set.
@@ -116,60 +113,47 @@ function asIso(value: unknown): string {
 export class AuditService {
   constructor(@Inject(DB) private readonly db: Db) {}
 
-  async record(entry: AuditEntry, tx: DbOrTx = this.db): Promise<void> {
-    await tx.insert(adminAuditLog).values({
-      actorId: entry.actorId,
-      actorName: await this.actorName(entry.actorId, tx),
-      action: entry.action,
-      subjectType: entry.subjectType,
-      subjectId: entry.subjectId ?? null,
-      subjectLabel: entry.subjectLabel ?? null,
-      reason: entry.reason ?? null,
-      // An empty diff is stored as null rather than `{}`: "they saved the form
-      // and nothing moved" and "we recorded no detail" should not read alike.
-      changes: entry.changes && Object.keys(entry.changes).length > 0 ? entry.changes : null,
-    });
-  }
-
-  /**
-   * Snapshotted rather than joined at read time — see the table's own note. The
-   * fallback is the uuid, which is still an answer to "who": an administrator
-   * with no profile row cannot have passed `AdminGuard`, so in practice this
-   * only fires if the row is deleted between the guard and the write.
-   */
-  private async actorName(actorId: string, tx: DbOrTx): Promise<string> {
-    const [row] = await tx
-      .select({ fullName: profiles.fullName })
-      .from(profiles)
-      .where(eq(profiles.id, actorId))
-      .limit(1);
-    return row?.fullName ?? actorId;
-  }
+  // ⚠️ `record()` is gone, deliberately, and must not come back as a plain
+  // insert.
+  //
+  // It used to take the caller's transaction and run inside it, because an
+  // audit entry for a change that rolled back is a lie and a change that
+  // committed without its entry is the gap this table exists to close. There
+  // is no transaction to pass across PostgREST, so every audited action moved
+  // into a `plpgsql` function that writes the change and calls
+  // `private.admin_audit_write` in the same transaction.
+  //
+  // A `record()` here would be a second, *separate* HTTP request — exactly the
+  // split the original design refused. If a new admin action needs auditing,
+  // it needs a function, not a call to this class. `audit.spec.ts` still
+  // asserts one audited action per mutating route, so a route without one
+  // fails the build.
 
   async list(query: AuditQuery): Promise<Page<unknown>> {
-    const conditions: SQL[] = [];
-    if (query.action) conditions.push(eq(adminAuditLog.action, query.action));
-    if (query.subjectType) conditions.push(eq(adminAuditLog.subjectType, query.subjectType));
-    if (query.subjectId) conditions.push(eq(adminAuditLog.subjectId, query.subjectId));
-    if (query.actorId) conditions.push(eq(adminAuditLog.actorId, query.actorId));
-    if (query.since) conditions.push(gte(adminAuditLog.createdAt, query.since));
-    if (query.until) conditions.push(lte(adminAuditLog.createdAt, query.until));
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    let q = this.db.from('admin_audit_log').select('*', { count: 'exact' });
+    if (query.action) q = q.eq('action', query.action);
+    if (query.subjectType) q = q.eq('subject_type', query.subjectType);
+    if (query.subjectId) q = q.eq('subject_id', query.subjectId);
+    if (query.actorId) q = q.eq('actor_id', query.actorId);
+    if (query.since) q = q.gte('created_at', query.since.toISOString());
+    if (query.until) q = q.lte('created_at', query.until.toISOString());
 
-    const [items, [counted]] = await Promise.all([
-      this.db
-        .select()
-        .from(adminAuditLog)
-        .where(where)
-        // Newest first, then by id: `created_at` alone is not unique enough to
-        // page on, and two entries in the same millisecond would otherwise be
-        // free to swap between page 1 and page 2.
-        .orderBy(desc(adminAuditLog.createdAt), desc(adminAuditLog.id))
-        .limit(query.limit)
-        .offset(query.offset),
-      this.db.select({ total: sql<number>`count(*)::int` }).from(adminAuditLog).where(where),
-    ]);
+    const { data, count, error } = await q
+      // Newest first, then by id: `created_at` alone is not unique enough to
+      // page on, and two entries in the same millisecond would otherwise be
+      // free to swap between page 1 and page 2.
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(query.offset, query.offset + query.limit - 1);
+    if (error) throw new Error(`audit log read failed: ${error.code}`);
 
-    return { items, total: counted?.total ?? 0, limit: query.limit, offset: query.offset };
+    // `changes` is caller-authored JSON whose keys are column names by
+    // definition — `camelize` leaves it alone, see `db/case.ts`.
+    return {
+      items: camelize<unknown[]>(data ?? []),
+      total: count ?? 0,
+      limit: query.limit,
+      offset: query.offset,
+    };
   }
 }
