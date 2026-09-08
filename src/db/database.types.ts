@@ -1530,6 +1530,101 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_auth_users: {
+        Args: { p_ids: string[] }
+        Returns: {
+          banned_until: string
+          email: string
+          email_confirmed_at: string
+          id: string
+          last_sign_in_at: string
+          phone: string
+        }[]
+      }
+      admin_courier_stats: { Args: { p_courier_id: string }; Returns: Json }
+      admin_decide_courier: {
+        Args: {
+          p_action: string
+          p_admin_id: string
+          p_courier_id: string
+          p_from: string
+          p_label: string
+          p_reason: string
+          p_to: string
+        }
+        Returns: {
+          base_lat: number
+          base_lng: number
+          city: string
+          delivery_count: number
+          full_name: string
+          id: string
+          is_online: boolean
+          joined_at: string
+          last_seen_at: string | null
+          licence_number: string | null
+          phone: string
+          photo_url: string | null
+          plate: string | null
+          postal_code: string | null
+          rating: number
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["courier_status"]
+          status_reason: string | null
+          user_id: string
+          vehicle: Database["public"]["Enums"]["vehicle_type"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "couriers"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_decide_vendor: {
+        Args: {
+          p_action: string
+          p_admin_id: string
+          p_from: string
+          p_label: string
+          p_reason: string
+          p_to: string
+          p_vendor_id: string
+        }
+        Returns: {
+          address_lat: number
+          address_lng: number
+          address_postal_code: string
+          address_street: string
+          city: string
+          cover_url: string | null
+          created_at: string
+          delivery_eta_min: number
+          id: string
+          is_halal_certified: boolean
+          logo_url: string | null
+          name: string
+          neighborhood: string
+          owner_id: string
+          rating: number
+          review_count: number
+          reviewed_at: string | null
+          reviewed_by: string | null
+          slug: string
+          specialty_fr: string
+          status: Database["public"]["Enums"]["vendor_status"]
+          status_reason: string | null
+          updated_at: string
+          vendor_type: Database["public"]["Enums"]["vendor_type"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "vendors"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_list_orders: {
         Args: {
           p_id_prefix?: string
@@ -1538,6 +1633,15 @@ export type Database = {
           p_search?: string
           p_status?: string
           p_vendor_id?: string
+        }
+        Returns: Json
+      }
+      admin_list_users: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_pattern?: string
+          p_role?: string
         }
         Returns: Json
       }
@@ -1600,6 +1704,8 @@ export type Database = {
         Returns: Json
       }
       admin_stats: { Args: never; Returns: Json }
+      admin_user_activity: { Args: { p_profile_id: string }; Returns: Json }
+      admin_vendor_stats: { Args: { p_vendor_id: string }; Returns: Json }
       order_advance_status: {
         Args: { p_from: string; p_order_id: string; p_to: string }
         Returns: undefined

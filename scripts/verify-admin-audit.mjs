@@ -115,5 +115,52 @@ console.log('\na successful action writes both, in one transaction');
   }
 }
 
+// ── 4. the six review decisions ────────────────────────────────────────────
+// `admin_decide_vendor` re-checks the status the reviewer was shown, so two
+// administrators working the same queue cannot both decide one file. That
+// check and the audit entry are the same transaction.
+console.log('\na review decision: guarded on the status the reviewer saw');
+{
+  const vendor = (await db.from('vendors').select('id, name, status, status_reason').limit(1).single()).data;
+  const before = await auditCount();
+
+  // A stale `from` is what a second administrator's click looks like.
+  const { error: stale } = await db.rpc('admin_decide_vendor', {
+    p_admin_id: admin.id, p_vendor_id: vendor.id,
+    p_from: vendor.status === 'approved' ? 'pending' : 'approved',
+    p_to: 'suspended', p_reason: 'verification', p_action: 'vendor.suspend', p_label: vendor.name,
+  });
+  check('a decision against a stale status is refused', !!stale);
+  check('  …with SGB06', stale?.code === 'SGB06', stale?.code);
+  check('  …and writes no audit entry', (await auditCount()) === before, 'an entry was written for a refused decision');
+
+  // The real move, then put it back.
+  const to = vendor.status === 'suspended' ? 'approved' : 'suspended';
+  const { data: moved, error } = await db.rpc('admin_decide_vendor', {
+    p_admin_id: admin.id, p_vendor_id: vendor.id, p_from: vendor.status, p_to: to,
+    p_reason: 'verification run — see scripts/verify-admin-audit.mjs',
+    p_action: to === 'approved' ? 'vendor.approve' : 'vendor.suspend', p_label: vendor.name,
+  });
+  check('a decision against the current status is accepted', !error, error?.message);
+  check('  …and moved the vendor', moved?.status === to, moved?.status);
+  check('  …and wrote exactly one audit entry', (await auditCount()) === before + 1);
+
+  const entry = (
+    await db.from('admin_audit_log').select('*').eq('subject_id', vendor.id)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle()
+  ).data;
+  // The transition itself, not just the destination: "suspended" alone does
+  // not say whether a live shop was pulled or a queue was cleared.
+  check('  …recording the transition, not just the destination',
+    entry?.changes?.status?.from === vendor.status && entry?.changes?.status?.to === to,
+    JSON.stringify(entry?.changes));
+  check('  …labelled with the shop name', entry?.subject_label === vendor.name, entry?.subject_label);
+
+  await db.from('vendors')
+    .update({ status: vendor.status, status_reason: vendor.status_reason, reviewed_by: null, reviewed_at: null })
+    .eq('id', vendor.id);
+  console.log(`  ℹ vendor restored to "${vendor.status}"; its audit entry remains, as designed`);
+}
+
 console.log(`\n${failed === 0 ? '✅' : '❌'}  ${passed} passed, ${failed} failed\n`);
 process.exit(failed === 0 ? 0 : 1);

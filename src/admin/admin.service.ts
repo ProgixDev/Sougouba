@@ -24,7 +24,6 @@ import type {
   ResolveCourierIssueInput,
   ResolveDisputeInput,
 } from './dto/admin.dto.js';
-import { AuditService } from './audit.service.js';
 import { RefundsService } from './refunds.service.js';
 import { deltaPct, overviewWindow, round2, type OverviewRange } from './stats-window.js';
 
@@ -54,10 +53,12 @@ export function looksLikeIdFragment(value: string): boolean {
  */
 @Injectable()
 export class AdminService {
+  // No `AuditService` here any more: every audited action writes its own log
+  // entry inside the transaction that makes the change. Only the *read* side
+  // of the log is still a service, and only the controller needs it.
   constructor(
     @Inject(DB) private readonly db: Db,
-    private readonly refunds: RefundsService,
-    private readonly audit: AuditService
+    private readonly refunds: RefundsService
   ) {}
 
   // ── disputes ──────────────────────────────────────────────────────────────

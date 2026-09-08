@@ -1,28 +1,21 @@
-import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { and, asc, desc, eq, ilike, ne, or, sql, type SQL } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import type { PostgrestError } from '@supabase/supabase-js';
 
 import type { Page } from '../catalog/dto/query.dto.js';
 import { containsPattern } from '../common/sql/like.js';
-import { authUsersReadonly } from '../db/auth-users.readonly.js';
 import type { Db } from '../db/client.js';
+import { camelize } from '../db/case.js';
 import { DB } from '../db/db.module.js';
-import {
-  addresses,
-  categories,
-  courierInsurance,
-  courierPayouts,
-  couriers,
-  orderDeliveries,
-  orders,
-  profiles,
-  vendorCategories,
-  vendorHours,
-  vendorRegistrations,
-  vendorSections,
-  vendors,
-} from '../db/schema/index.js';
-import { AuditService, type AdminAction } from './audit.service.js';
+import { one } from '../db/embed.js';
+import { unwrap, unwrapRpc } from '../db/unwrap.js';
+import { type AdminAction } from './audit.service.js';
 import { num, type AdminCourierDetail, type AdminUserDetail, type AdminVendorDetail } from './dto/admin-detail.dto.js';
 import type { ReviewDecisionInput, ReviewQuery, UserQuery } from './dto/admin.dto.js';
 
@@ -86,52 +79,63 @@ export function assertDecision(from: ApplicationStatus, to: ApplicationStatus): 
 export class ApprovalsService {
   private readonly logger = new Logger(ApprovalsService.name);
 
-  constructor(
-    @Inject(DB) private readonly db: Db,
-    private readonly audit: AuditService
-  ) {}
+  constructor(@Inject(DB) private readonly db: Db) {}
 
   // ── merchants ─────────────────────────────────────────────────────────────
 
   async listVendors(query: ReviewQuery): Promise<Page<unknown>> {
-    const where: SQL | undefined = query.status ? eq(vendors.status, query.status) : undefined;
+    let q = this.db
+      .from('vendors')
+      .select(
+        `id, name, slug, vendorType:vendor_type, city,
+         addressStreet:address_street, addressPostalCode:address_postal_code,
+         status, statusReason:status_reason, reviewedAt:reviewed_at, createdAt:created_at,
+         profiles!inner(ownerName:full_name),
+         vendor_registrations(neq, contactName:contact_name, contactPhone:contact_phone,
+                              mapaqNumber:mapaq_number, submittedAt:submitted_at)`,
+        { count: 'exact' }
+      );
+    if (query.status) q = q.eq('status', query.status);
 
-    const [rows, [counted]] = await Promise.all([
-      this.db
-        .select({
-          id: vendors.id,
-          name: vendors.name,
-          slug: vendors.slug,
-          vendorType: vendors.vendorType,
-          city: vendors.city,
-          addressStreet: vendors.addressStreet,
-          addressPostalCode: vendors.addressPostalCode,
-          status: vendors.status,
-          statusReason: vendors.statusReason,
-          reviewedAt: vendors.reviewedAt,
-          createdAt: vendors.createdAt,
-          ownerName: profiles.fullName,
-          // The paperwork the CDC asks an administrator to actually read before
-          // deciding. Owner-only under RLS; readable here because the admin has
-          // its own policy (`0021`).
-          neq: vendorRegistrations.neq,
-          contactName: vendorRegistrations.contactName,
-          contactPhone: vendorRegistrations.contactPhone,
-          mapaqNumber: vendorRegistrations.mapaqNumber,
-          submittedAt: vendorRegistrations.submittedAt,
-        })
-        .from(vendors)
-        .innerJoin(profiles, eq(profiles.id, vendors.ownerId))
-        .leftJoin(vendorRegistrations, eq(vendorRegistrations.vendorId, vendors.id))
-        .where(where)
-        // Oldest application first — a queue is worked from the front.
-        .orderBy(asc(vendors.createdAt))
-        .limit(query.limit)
-        .offset(query.offset),
-      this.db.select({ total: sql<number>`count(*)::int` }).from(vendors).where(where),
-    ]);
+    const { data, count, error } = await q
+      // Oldest application first — a queue is worked from the front.
+      .order('created_at', { ascending: true })
+      .range(query.offset, query.offset + query.limit - 1);
+    if (error) throw unexpectedDbError(error);
 
-    return { items: rows, total: counted?.total ?? 0, limit: query.limit, offset: query.offset };
+    return {
+      // Flattened back to the shape the joins produced, so the dashboard is
+      // unaffected by the move.
+      items: (data ?? []).map((r: any) => {
+        const owner = one<any>(r.profiles);
+        // The paperwork the CDC asks an administrator to actually read before
+        // deciding. Owner-only under RLS; readable here because the admin has
+        // its own policy (`0021`).
+        const reg = one<any>(r.vendor_registrations);
+        return {
+          id: r.id,
+          name: r.name,
+          slug: r.slug,
+          vendorType: r.vendorType,
+          city: r.city,
+          addressStreet: r.addressStreet,
+          addressPostalCode: r.addressPostalCode,
+          status: r.status,
+          statusReason: r.statusReason,
+          reviewedAt: r.reviewedAt,
+          createdAt: r.createdAt,
+          ownerName: owner?.ownerName ?? null,
+          neq: reg?.neq ?? null,
+          contactName: reg?.contactName ?? null,
+          contactPhone: reg?.contactPhone ?? null,
+          mapaqNumber: reg?.mapaqNumber ?? null,
+          submittedAt: reg?.submittedAt ?? null,
+        };
+      }),
+      total: count ?? 0,
+      limit: query.limit,
+      offset: query.offset,
+    };
   }
 
   /**
@@ -146,92 +150,71 @@ export class ApprovalsService {
    * this change; the card should show a disabled control until it lands.
    */
   async vendorDetail(id: string): Promise<AdminVendorDetail> {
-    // `profiles` twice — the owner, and whoever reviewed the file.
-    const reviewer = alias(profiles, 'reviewer');
+    // `profiles` twice — the owner, and whoever reviewed the file — which
+    // PostgREST disambiguates by naming the foreign key rather than aliasing
+    // the table.
+    const fetched = await unwrap<any>(
+      this.db
+        .from('vendors')
+        .select(
+          `*,
+           owner:profiles!vendors_owner_id_profiles_id_fk(fullName:full_name, avatarUrl:avatar_url, memberSince:member_since),
+           reviewer:profiles!vendors_reviewed_by_profiles_id_fk(fullName:full_name),
+           registration:vendor_registrations(*)`
+        )
+        .eq('id', id)
+        .maybeSingle()
+    );
+    if (!fetched) throw new NotFoundException('Vendor not found');
 
-    const [base] = await this.db
-      .select({
-        id: vendors.id,
-        slug: vendors.slug,
-        name: vendors.name,
-        vendorType: vendors.vendorType,
-        specialtyFr: vendors.specialtyFr,
-        logoUrl: vendors.logoUrl,
-        coverUrl: vendors.coverUrl,
-        city: vendors.city,
-        neighborhood: vendors.neighborhood,
-        addressStreet: vendors.addressStreet,
-        addressPostalCode: vendors.addressPostalCode,
-        addressLat: vendors.addressLat,
-        addressLng: vendors.addressLng,
-        rating: vendors.rating,
-        reviewCount: vendors.reviewCount,
-        deliveryEtaMin: vendors.deliveryEtaMin,
-        isHalalCertified: vendors.isHalalCertified,
-        status: vendors.status,
-        statusReason: vendors.statusReason,
-        reviewedAt: vendors.reviewedAt,
-        createdAt: vendors.createdAt,
-        updatedAt: vendors.updatedAt,
-        ownerId: vendors.ownerId,
-        ownerName: profiles.fullName,
-        ownerEmail: authUsersReadonly.email,
-        ownerAvatarUrl: profiles.avatarUrl,
-        ownerMemberSince: profiles.memberSince,
-        reviewerId: vendors.reviewedBy,
-        reviewerName: reviewer.fullName,
-        neq: vendorRegistrations.neq,
-        contactName: vendorRegistrations.contactName,
-        contactPhone: vendorRegistrations.contactPhone,
-        mapaqNumber: vendorRegistrations.mapaqNumber,
-        submittedAt: vendorRegistrations.submittedAt,
-        idDocumentPath: vendorRegistrations.idDocumentPath,
-        businessNumberDocumentPath: vendorRegistrations.businessNumberDocumentPath,
-        mapaqDocumentPath: vendorRegistrations.mapaqDocumentPath,
-      })
-      .from(vendors)
-      .innerJoin(profiles, eq(profiles.id, vendors.ownerId))
-      .leftJoin(authUsersReadonly, eq(authUsersReadonly.id, vendors.ownerId))
-      // Left, not inner: a pending file has no reviewer yet.
-      .leftJoin(reviewer, eq(reviewer.id, vendors.reviewedBy))
-      // Left, not inner: `vendor_registrations` is 1:1-optional.
-      .leftJoin(vendorRegistrations, eq(vendorRegistrations.vendorId, vendors.id))
-      .where(eq(vendors.id, id))
-      .limit(1);
+    const row = camelize<any>(fetched);
+    const owner = one<any>(row.owner);
+    // Left, not inner: a pending file has no reviewer yet.
+    const reviewer = one<any>(row.reviewer);
+    // Left, not inner: `vendor_registrations` is 1:1-optional.
+    const reg = one<any>(row.registration);
 
-    if (!base) throw new NotFoundException('Vendor not found');
-
-    const [hours, sections, categoryRows, [stats]] = await Promise.all([
+    const [ownerAuth, hours, sections, categoryRows, stats] = await Promise.all([
+      // `auth.users` is reachable only through this one definer function now —
+      // `service_role` holds no SELECT on it. See the migration.
+      unwrap<{ id: string; email: string | null }[]>(
+        this.db.rpc('admin_auth_users', { p_ids: [row.ownerId] })
+      ),
       // `day` is 0 = Sunday, matching JS `Date.getDay()`.
-      this.db
-        .select({ day: vendorHours.day, open: vendorHours.open, close: vendorHours.close, closed: vendorHours.closed })
-        .from(vendorHours)
-        .where(eq(vendorHours.vendorId, id))
-        .orderBy(asc(vendorHours.day)),
-      this.db
-        .select({ id: vendorSections.id, nameFr: vendorSections.nameFr, position: vendorSections.position })
-        .from(vendorSections)
-        .where(eq(vendorSections.vendorId, id))
-        .orderBy(asc(vendorSections.position), asc(vendorSections.nameFr)),
-      this.db
-        .select({ id: categories.id, slug: categories.slug, nameFr: categories.nameFr })
-        .from(vendorCategories)
-        .innerJoin(categories, eq(categories.id, vendorCategories.categoryId))
-        .where(eq(vendorCategories.vendorId, id)),
-      this.db
-        .select({
-          productCount: sql<number>`(select count(*) from products where vendor_id = ${id})::int`,
-          orderCount: sql<number>`(select count(*) from orders where vendor_id = ${id} and status <> 'cancelled')::int`,
-          revenueCad: sql<number>`(select round(coalesce(sum(total_cad), 0), 2) from orders where vendor_id = ${id} and status <> 'cancelled')::float8`,
-          lastOrderAt: sql<Date | null>`(select max(created_at) from orders where vendor_id = ${id})`,
-          openDisputes: sql<number>`(
-            select count(*) from disputes d
-            join orders o on o.id = d.order_id
-            where o.vendor_id = ${id} and d.status in ('open','answered')
-          )::int`,
-        })
-        .from(sql`(select 1) as _`),
+      unwrap<any[]>(
+        this.db.from('vendor_hours').select('day, open, close, closed').eq('vendor_id', id).order('day', { ascending: true })
+      ),
+      unwrap<any[]>(
+        this.db
+          .from('vendor_sections')
+          .select('id, nameFr:name_fr, position')
+          .eq('vendor_id', id)
+          .order('position', { ascending: true })
+          .order('name_fr', { ascending: true })
+      ),
+      unwrap<any[]>(
+        this.db.from('vendor_categories').select('categories!inner(id, slug, nameFr:name_fr)').eq('vendor_id', id)
+      ).then((rows) => rows.map((r: any) => one<any>(r.categories)).filter(Boolean)),
+      unwrap<Record<string, any>>(this.db.rpc('admin_vendor_stats', { p_vendor_id: id })),
     ]);
+
+    const base = {
+      ...row,
+      ownerName: owner?.fullName ?? null,
+      ownerEmail: ownerAuth[0]?.email ?? null,
+      ownerAvatarUrl: owner?.avatarUrl ?? null,
+      ownerMemberSince: owner?.memberSince ?? null,
+      reviewerId: row.reviewedBy,
+      reviewerName: reviewer?.fullName ?? null,
+      neq: reg?.neq ?? null,
+      contactName: reg?.contactName ?? null,
+      contactPhone: reg?.contactPhone ?? null,
+      mapaqNumber: reg?.mapaqNumber ?? null,
+      submittedAt: reg?.submittedAt ?? null,
+      idDocumentPath: reg?.idDocumentPath ?? null,
+      businessNumberDocumentPath: reg?.businessNumberDocumentPath ?? null,
+      mapaqDocumentPath: reg?.mapaqDocumentPath ?? null,
+    };
 
     const documents = [
       { kind: 'id' as const, path: base.idDocumentPath },
@@ -298,89 +281,76 @@ export class ApprovalsService {
   }
 
   async decideVendor(adminId: string, vendorId: string, to: ReviewDecision, input: ReviewDecisionInput) {
-    const [vendor] = await this.db
-      .select({ id: vendors.id, status: vendors.status, name: vendors.name })
-      .from(vendors)
-      .where(eq(vendors.id, vendorId))
-      .limit(1);
+    const vendor = await unwrap<{ id: string; status: ApplicationStatus; name: string } | null>(
+      this.db.from('vendors').select('id, status, name').eq('id', vendorId).maybeSingle()
+    );
     if (!vendor) throw new NotFoundException('Vendor not found');
     assertDecision(vendor.status, to);
 
     // The decision and its audit entry commit together or not at all — an
     // approval nobody is recorded as having made is the gap `admin_audit_log`
     // exists to close, and an entry for a decision that rolled back is worse.
-    const updated = await this.db.transaction(async (tx) => {
-      const [row] = await tx
-        .update(vendors)
-        .set({
-          status: to,
-          statusReason: input.reason ?? null,
-          reviewedBy: adminId,
-          reviewedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(and(eq(vendors.id, vendorId), eq(vendors.status, vendor.status)))
-        .returning();
-      // The status changed under us — two administrators working the same queue.
-      if (!row) throw new BadRequestException('This file was decided by someone else while you were reviewing it');
-
-      await this.audit.record(
-        {
-          actorId: adminId,
-          action: AUDIT_ACTION_FOR.vendor[to],
-          subjectType: 'vendor',
-          subjectId: vendorId,
-          subjectLabel: vendor.name,
-          reason: input.reason ?? null,
-          // The transition itself, not just the destination: "suspended" alone
-          // does not say whether a live shop was pulled or a queue was cleared.
-          changes: { status: { from: vendor.status, to } },
-        },
-        tx
-      );
-
-      return row;
-    });
+    // `admin_decide_vendor` also re-checks the status it was given, so two
+    // administrators working the same queue cannot both decide one file.
+    const updated = await unwrapRpc<Record<string, unknown>>(
+      this.db.rpc('admin_decide_vendor', {
+        p_admin_id: adminId,
+        p_vendor_id: vendorId,
+        p_from: vendor.status,
+        p_to: to,
+        // Cast because the generated RPC types model every argument as
+        // non-null. `status_reason` is nullable and an approval with no note
+        // attached is a real state, not a missing value to invent one for.
+        p_reason: (input.reason ?? null) as string,
+        p_action: AUDIT_ACTION_FOR.vendor[to],
+        p_label: vendor.name,
+      }),
+      (error) => {
+        if (error.code === DECIDED_BY_SOMEONE_ELSE) throw new BadRequestException(error.message);
+        throw unexpectedDbError(error);
+      }
+    );
 
     this.logger.log(`Admin ${adminId} moved vendor ${vendorId} ("${vendor.name}") from ${vendor.status} to ${to}`);
-    return updated;
+    return camelize(updated);
   }
 
   // ── couriers ──────────────────────────────────────────────────────────────
 
   async listCouriers(query: ReviewQuery): Promise<Page<unknown>> {
-    const where: SQL | undefined = query.status ? eq(couriers.status, query.status) : undefined;
+    let q = this.db
+      .from('couriers')
+      .select(
+        `id, fullName:full_name, phone, vehicle, plate, licenceNumber:licence_number, city,
+         status, statusReason:status_reason, reviewedAt:reviewed_at, isOnline:is_online,
+         deliveryCount:delivery_count, joinedAt:joined_at,
+         courier_insurance(insurerName:insurer_name, policyNumber:policy_number, insuranceExpiry:expiry)`,
+        { count: 'exact' }
+      );
+    if (query.status) q = q.eq('status', query.status);
 
-    const [rows, [counted]] = await Promise.all([
-      this.db
-        .select({
-          id: couriers.id,
-          fullName: couriers.fullName,
-          phone: couriers.phone,
-          vehicle: couriers.vehicle,
-          plate: couriers.plate,
-          licenceNumber: couriers.licenceNumber,
-          city: couriers.city,
-          status: couriers.status,
-          statusReason: couriers.statusReason,
-          reviewedAt: couriers.reviewedAt,
-          isOnline: couriers.isOnline,
-          deliveryCount: couriers.deliveryCount,
-          joinedAt: couriers.joinedAt,
-          insurerName: courierInsurance.insurerName,
-          policyNumber: courierInsurance.policyNumber,
-          insuranceExpiry: courierInsurance.expiry,
-        })
-        .from(couriers)
-        .leftJoin(courierInsurance, eq(courierInsurance.courierId, couriers.id))
-        .where(where)
-        .orderBy(asc(couriers.joinedAt))
-        .limit(query.limit)
-        .offset(query.offset),
-      this.db.select({ total: sql<number>`count(*)::int` }).from(couriers).where(where),
-    ]);
+    const { data, count, error } = await q
+      .order('joined_at', { ascending: true })
+      .range(query.offset, query.offset + query.limit - 1);
+    if (error) throw unexpectedDbError(error);
 
-    return { items: rows, total: counted?.total ?? 0, limit: query.limit, offset: query.offset };
+    return {
+      items: (data ?? []).map((r: any) => {
+        // Null for every bike courier by design — the card needs an empty
+        // state, not a spinner.
+        const ins = one<any>(r.courier_insurance);
+        const { courier_insurance: _drop, ...rest } = r;
+        return {
+          ...rest,
+          insurerName: ins?.insurerName ?? null,
+          policyNumber: ins?.policyNumber ?? null,
+          insuranceExpiry: ins?.insuranceExpiry ?? null,
+        };
+      }),
+      total: count ?? 0,
+      limit: query.limit,
+      offset: query.offset,
+    };
   }
 
   /**
@@ -397,74 +367,49 @@ export class ApprovalsService {
    * empty state rather than a spinner.
    */
   async courierDetail(id: string): Promise<AdminCourierDetail> {
-    const reviewer = alias(profiles, 'reviewer');
+    const fetched = await unwrap<any>(
+      this.db
+        .from('couriers')
+        .select(
+          `*,
+           account:profiles!couriers_user_id_profiles_id_fk(fullName:full_name, avatarUrl:avatar_url, memberSince:member_since),
+           reviewer:profiles!couriers_reviewed_by_profiles_id_fk(fullName:full_name),
+           insurance:courier_insurance(*),
+           payout:courier_payouts(*)`
+        )
+        .eq('id', id)
+        .maybeSingle()
+    );
+    if (!fetched) throw new NotFoundException('Courier not found');
 
-    const [base] = await this.db
-      .select({
-        id: couriers.id,
-        userId: couriers.userId,
-        fullName: couriers.fullName,
-        photoUrl: couriers.photoUrl,
-        phone: couriers.phone,
-        vehicle: couriers.vehicle,
-        plate: couriers.plate,
-        licenceNumber: couriers.licenceNumber,
-        city: couriers.city,
-        postalCode: couriers.postalCode,
-        baseLat: couriers.baseLat,
-        baseLng: couriers.baseLng,
-        rating: couriers.rating,
-        deliveryCount: couriers.deliveryCount,
-        status: couriers.status,
-        statusReason: couriers.statusReason,
-        reviewedAt: couriers.reviewedAt,
-        isOnline: couriers.isOnline,
-        lastSeenAt: couriers.lastSeenAt,
-        joinedAt: couriers.joinedAt,
-        accountName: profiles.fullName,
-        accountEmail: authUsersReadonly.email,
-        accountAvatarUrl: profiles.avatarUrl,
-        accountMemberSince: profiles.memberSince,
-        reviewerId: couriers.reviewedBy,
-        reviewerName: reviewer.fullName,
-        insurerName: courierInsurance.insurerName,
-        policyNumber: courierInsurance.policyNumber,
-        insuranceExpiry: courierInsurance.expiry,
-        stripeConnectAccountId: courierPayouts.stripeConnectAccountId,
-        payoutStatus: courierPayouts.status,
-        payoutUpdatedAt: courierPayouts.updatedAt,
-      })
-      .from(couriers)
-      .innerJoin(profiles, eq(profiles.id, couriers.userId))
-      .leftJoin(authUsersReadonly, eq(authUsersReadonly.id, couriers.userId))
-      .leftJoin(reviewer, eq(reviewer.id, couriers.reviewedBy))
-      .leftJoin(courierInsurance, eq(courierInsurance.courierId, couriers.id))
-      .leftJoin(courierPayouts, eq(courierPayouts.courierId, couriers.id))
-      .where(eq(couriers.id, id))
-      .limit(1);
+    const row = camelize<any>(fetched);
+    const account = one<any>(row.account);
+    const reviewer = one<any>(row.reviewer);
+    const insurance = one<any>(row.insurance);
+    // ⚠️ A **Stripe Connect account**, not bank details — this database holds
+    // no raw bank details by design; Stripe collects them during onboarding.
+    const payout = one<any>(row.payout);
 
-    if (!base) throw new NotFoundException('Courier not found');
+    const [accountAuth, stats] = await Promise.all([
+      unwrap<{ id: string; email: string | null }[]>(this.db.rpc('admin_auth_users', { p_ids: [row.userId] })),
+      unwrap<Record<string, any>>(this.db.rpc('admin_courier_stats', { p_courier_id: id })),
+    ]);
 
-    // All the real numbers live on `order_deliveries`, not on the courier row.
-    // `unpaidCad` uses exactly the predicate the partial index
-    // `order_deliveries_unpaid_idx` was built for, so it is index-served.
-    const [stats] = await this.db
-      .select({
-        runCount: sql<number>`count(*)::int`,
-        deliveredCount: sql<number>`(count(*) filter (where ${orderDeliveries.deliveredAt} is not null))::int`,
-        earningsTotalCad: sql<number>`round(coalesce(sum(${orderDeliveries.earningsCad}) filter (where ${orderDeliveries.deliveredAt} is not null), 0), 2)::float8`,
-        unpaidCad: sql<number>`round(coalesce(sum(${orderDeliveries.earningsCad}) filter (where ${orderDeliveries.paidOutAt} is null and ${orderDeliveries.deliveredAt} is not null), 0), 2)::float8`,
-        tipsTotalCad: sql<number>`round(coalesce(sum(${orderDeliveries.tipCad}), 0), 2)::float8`,
-        avgDistanceKm: sql<number>`round(coalesce(avg(${orderDeliveries.distanceKm}), 0), 2)::float8`,
-        lastDeliveredAt: sql<Date | null>`max(${orderDeliveries.deliveredAt})`,
-        openIssues: sql<number>`(
-          select count(*) from courier_issues ci
-          join order_deliveries d2 on d2.order_id = ci.order_id
-          where d2.courier_id = ${id} and ci.status = 'open'
-        )::int`,
-      })
-      .from(orderDeliveries)
-      .where(eq(orderDeliveries.courierId, id));
+    const base = {
+      ...row,
+      accountName: account?.fullName ?? null,
+      accountEmail: accountAuth[0]?.email ?? null,
+      accountAvatarUrl: account?.avatarUrl ?? null,
+      accountMemberSince: account?.memberSince ?? null,
+      reviewerId: row.reviewedBy,
+      reviewerName: reviewer?.fullName ?? null,
+      insurerName: insurance?.insurerName ?? null,
+      policyNumber: insurance?.policyNumber ?? null,
+      insuranceExpiry: insurance?.expiry ?? null,
+      stripeConnectAccountId: payout?.stripeConnectAccountId ?? null,
+      payoutStatus: payout?.status ?? null,
+      payoutUpdatedAt: payout?.updatedAt ?? null,
+    };
 
     return {
       id: base.id,
@@ -523,49 +468,37 @@ export class ApprovalsService {
   }
 
   async decideCourier(adminId: string, courierId: string, to: ReviewDecision, input: ReviewDecisionInput) {
-    const [courier] = await this.db
-      .select({ id: couriers.id, status: couriers.status, fullName: couriers.fullName })
-      .from(couriers)
-      .where(eq(couriers.id, courierId))
-      .limit(1);
+    const courier = await unwrap<{ id: string; status: ApplicationStatus; fullName: string } | null>(
+      this.db.from('couriers').select('id, status, fullName:full_name').eq('id', courierId).maybeSingle()
+    );
     if (!courier) throw new NotFoundException('Courier not found');
     assertDecision(courier.status, to);
 
-    const updated = await this.db.transaction(async (tx) => {
-      const [row] = await tx
-        .update(couriers)
-        .set({
-          status: to,
-          statusReason: input.reason ?? null,
-          reviewedBy: adminId,
-          reviewedAt: new Date(),
-          // Losing approval takes them off shift in the same write. Otherwise a
-          // suspended courier stays in the dispatch pool until they happen to
-          // toggle it themselves — which a suspended courier has no reason to do.
-          ...(to === 'approved' ? {} : { isOnline: false }),
-        })
-        .where(and(eq(couriers.id, courierId), eq(couriers.status, courier.status)))
-        .returning();
-      if (!row) throw new BadRequestException('This file was decided by someone else while you were reviewing it');
-
-      await this.audit.record(
-        {
-          actorId: adminId,
-          action: AUDIT_ACTION_FOR.courier[to],
-          subjectType: 'courier',
-          subjectId: courierId,
-          subjectLabel: courier.fullName,
-          reason: input.reason ?? null,
-          changes: { status: { from: courier.status, to } },
-        },
-        tx
-      );
-
-      return row;
-    });
+    // Same one-transaction guarantee as `decideVendor`. Losing approval also
+    // takes them off shift in the same write — otherwise a suspended courier
+    // stays in the dispatch pool until they happen to toggle it themselves,
+    // which a suspended courier has no reason to do.
+    const updated = await unwrapRpc<Record<string, unknown>>(
+      this.db.rpc('admin_decide_courier', {
+        p_admin_id: adminId,
+        p_courier_id: courierId,
+        p_from: courier.status,
+        p_to: to,
+        // Cast because the generated RPC types model every argument as
+        // non-null. `status_reason` is nullable and an approval with no note
+        // attached is a real state, not a missing value to invent one for.
+        p_reason: (input.reason ?? null) as string,
+        p_action: AUDIT_ACTION_FOR.courier[to],
+        p_label: courier.fullName,
+      }),
+      (error) => {
+        if (error.code === DECIDED_BY_SOMEONE_ELSE) throw new BadRequestException(error.message);
+        throw unexpectedDbError(error);
+      }
+    );
 
     this.logger.log(`Admin ${adminId} moved courier ${courierId} ("${courier.fullName}") from ${courier.status} to ${to}`);
-    return updated;
+    return camelize(updated);
   }
 
   // ── users ─────────────────────────────────────────────────────────────────
@@ -580,45 +513,19 @@ export class ApprovalsService {
    * that is exactly the state an administrator would want to notice.
    */
   async listUsers(query: UserQuery) {
-    const conditions: SQL[] = [];
-    if (query.role) conditions.push(eq(profiles.role, query.role));
-    if (query.search) {
-      // `containsPattern` is not optional: a bare `%${q}%` with `q = '%'`
-      // matches every row and hands over the whole user table. See
-      // `common/sql/like.ts`.
-      const pattern = containsPattern(query.search);
-      conditions.push(or(ilike(profiles.fullName, pattern), ilike(authUsersReadonly.email, pattern))!);
-    }
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
-
-    const [rows, [counted]] = await Promise.all([
-      this.db
-        .select({
-          id: profiles.id,
-          fullName: profiles.fullName,
-          email: authUsersReadonly.email,
-          role: profiles.role,
-          memberSince: profiles.memberSince,
-          vendorId: profiles.vendorId,
-          courierId: profiles.courierId,
-          lastSignInAt: authUsersReadonly.lastSignInAt,
-        })
-        .from(profiles)
-        .leftJoin(authUsersReadonly, eq(authUsersReadonly.id, profiles.id))
-        .where(where)
-        .orderBy(desc(profiles.memberSince))
-        .limit(query.limit)
-        .offset(query.offset),
-      this.db
-        .select({ total: sql<number>`count(*)::int` })
-        .from(profiles)
-        // Repeated because `search` filters on the email — the count must see
-        // the same rows the page does, or the page count lies.
-        .leftJoin(authUsersReadonly, eq(authUsersReadonly.id, profiles.id))
-        .where(where),
-    ]);
-
-    return { items: rows, total: counted?.total ?? 0, limit: query.limit, offset: query.offset };
+    // An RPC because the filter and the count both span `auth.users`, which
+    // `service_role` cannot read directly. `containsPattern` is not optional:
+    // a bare `%${q}%` with `q = '%'` matches every row and hands over the whole
+    // user table. See `common/sql/like.ts`.
+    const page = await unwrap<{ items: unknown[]; total: number }>(
+      this.db.rpc('admin_list_users', {
+        p_role: query.role ?? undefined,
+        p_pattern: query.search ? containsPattern(query.search) : undefined,
+        p_limit: query.limit,
+        p_offset: query.offset,
+      })
+    );
+    return { items: page.items, total: page.total, limit: query.limit, offset: query.offset };
   }
 
   /**
@@ -630,119 +537,107 @@ export class ApprovalsService {
    * field here should weigh whether an administrator genuinely needs it.
    */
   async userDetail(id: string): Promise<AdminUserDetail> {
-    // `profiles` is joined twice — once for the account, once for whoever
-    // referred them — so the second needs an alias.
-    const referrer = alias(profiles, 'referrer');
+    // `profiles` twice — the account, and whoever referred them — named by
+    // foreign key rather than aliased.
+    const fetched = await unwrap<any>(
+      this.db
+        .from('profiles')
+        .select(
+          `id, fullName:full_name, avatarUrl:avatar_url, memberSince:member_since, role,
+           vendorId:vendor_id, courierId:courier_id, referredById:referred_by,
+           referrer:profiles!profiles_referred_by_profiles_id_fk(fullName:full_name)`
+        )
+        .eq('id', id)
+        .maybeSingle()
+    );
+    if (!fetched) throw new NotFoundException('User not found');
+    const base = camelize<any>(fetched);
+    const referrer = one<any>(base.referrer);
 
-    const [base] = await this.db
-      .select({
-        id: profiles.id,
-        fullName: profiles.fullName,
-        email: authUsersReadonly.email,
-        avatarUrl: profiles.avatarUrl,
-        memberSince: profiles.memberSince,
-        role: profiles.role,
-        emailConfirmedAt: authUsersReadonly.emailConfirmedAt,
-        lastSignInAt: authUsersReadonly.lastSignInAt,
-        phone: authUsersReadonly.phone,
-        bannedUntil: authUsersReadonly.bannedUntil,
-        vendorId: profiles.vendorId,
-        courierId: profiles.courierId,
-        referredById: profiles.referredBy,
-        referrerName: referrer.fullName,
-      })
-      .from(profiles)
-      .leftJoin(authUsersReadonly, eq(authUsersReadonly.id, profiles.id))
-      .leftJoin(referrer, eq(referrer.id, profiles.referredBy))
-      .where(eq(profiles.id, id))
-      .limit(1);
-
-    if (!base) throw new NotFoundException('User not found');
-
-    const [linkedVendor, linkedCourier, addressRows, [activity], [referrals], recentOrders] = await Promise.all([
+    const [auth, linkedVendor, linkedCourier, addressRows, activity, recentOrders] = await Promise.all([
+      unwrap<any[]>(this.db.rpc('admin_auth_users', { p_ids: [id] })),
       base.vendorId
-        ? this.db
-            .select({ id: vendors.id, name: vendors.name, slug: vendors.slug, status: vendors.status, vendorType: vendors.vendorType })
-            .from(vendors)
-            .where(eq(vendors.id, base.vendorId))
-            .limit(1)
-        : Promise.resolve([]),
+        ? unwrap<any>(
+            this.db
+              .from('vendors')
+              .select('id, name, slug, status, vendorType:vendor_type')
+              .eq('id', base.vendorId)
+              .maybeSingle()
+          )
+        : Promise.resolve(null),
       base.courierId
-        ? this.db
-            .select({ id: couriers.id, fullName: couriers.fullName, status: couriers.status, vehicle: couriers.vehicle, isOnline: couriers.isOnline })
-            .from(couriers)
-            .where(eq(couriers.id, base.courierId))
-            .limit(1)
-        : Promise.resolve([]),
-      this.db
-        .select({
-          id: addresses.id,
-          label: addresses.label,
-          street: addresses.street,
-          city: addresses.city,
-          postalCode: addresses.postalCode,
-          lat: addresses.lat,
-          lng: addresses.lng,
-          isDefault: addresses.isDefault,
-        })
-        .from(addresses)
-        .where(eq(addresses.profileId, id))
-        .orderBy(desc(addresses.isDefault)),
-      // Cancelled orders excluded: no business happened, and counting them
-      // would overstate both the count and the spend.
-      this.db
-        .select({
-          orderCount: sql<number>`count(*)::int`,
-          lifetimeSpendCad: sql<number>`round(coalesce(sum(${orders.totalCad}), 0), 2)::float8`,
-          lastOrderAt: sql<Date | null>`max(${orders.createdAt})`,
-        })
-        .from(orders)
-        .where(and(eq(orders.customerId, id), ne(orders.status, 'cancelled'))),
-      this.db
-        .select({ referralCount: sql<number>`count(*)::int` })
-        .from(profiles)
-        .where(eq(profiles.referredBy, id)),
-      // The recent list keeps cancellations — "what happened lately" should
-      // show an order that fell through, unlike the aggregates above.
-      this.db
-        .select({
-          id: orders.id,
-          status: orders.status,
-          totalCad: orders.totalCad,
-          createdAt: orders.createdAt,
-          vendorName: vendors.name,
-        })
-        .from(orders)
-        .innerJoin(vendors, eq(vendors.id, orders.vendorId))
-        .where(eq(orders.customerId, id))
-        .orderBy(desc(orders.createdAt))
-        .limit(5),
+        ? unwrap<any>(
+            this.db
+              .from('couriers')
+              .select('id, fullName:full_name, status, vehicle, isOnline:is_online')
+              .eq('id', base.courierId)
+              .maybeSingle()
+          )
+        : Promise.resolve(null),
+      unwrap<any[]>(
+        this.db
+          .from('addresses')
+          .select('id, label, street, city, postalCode:postal_code, lat, lng, isDefault:is_default')
+          .eq('profile_id', id)
+          .order('is_default', { ascending: false })
+      ),
+      unwrap<Record<string, any>>(this.db.rpc('admin_user_activity', { p_profile_id: id })),
+      // Keeps cancellations, unlike the aggregates — "what happened lately"
+      // should show an order that fell through.
+      unwrap<any[]>(
+        this.db
+          .from('orders')
+          .select('id, status, totalCad:total_cad, createdAt:created_at, vendors!inner(name)')
+          .eq('customer_id', id)
+          .order('created_at', { ascending: false })
+          .limit(5)
+      ),
     ]);
+
+    const authRow = auth[0] ?? {};
 
     return {
       id: base.id,
       fullName: base.fullName,
-      email: base.email,
+      email: authRow.email ?? null,
       avatarUrl: base.avatarUrl,
       memberSince: base.memberSince,
       role: base.role,
       auth: {
-        emailConfirmedAt: base.emailConfirmedAt,
-        lastSignInAt: base.lastSignInAt,
-        phone: base.phone,
-        bannedUntil: base.bannedUntil,
+        emailConfirmedAt: authRow.email_confirmed_at ?? null,
+        lastSignInAt: authRow.last_sign_in_at ?? null,
+        phone: authRow.phone ?? null,
+        bannedUntil: authRow.banned_until ?? null,
       },
-      vendor: linkedVendor[0] ?? null,
-      courier: linkedCourier[0] ?? null,
-      referredBy: base.referredById ? { id: base.referredById, fullName: base.referrerName ?? '—' } : null,
-      referralCount: referrals?.referralCount ?? 0,
+      vendor: linkedVendor ?? null,
+      courier: linkedCourier ?? null,
+      referredBy: base.referredById ? { id: base.referredById, fullName: referrer?.fullName ?? '—' } : null,
+      referralCount: activity.referralCount ?? 0,
       addresses: addressRows,
       activity: {
-        orderCount: activity?.orderCount ?? 0,
-        lifetimeSpendCad: activity?.lifetimeSpendCad ?? 0,
-        lastOrderAt: activity?.lastOrderAt ?? null,
-        recentOrders: recentOrders.map((o) => ({ ...o, totalCad: num(o.totalCad) })),
+        orderCount: activity.orderCount ?? 0,
+        lifetimeSpendCad: activity.lifetimeSpendCad ?? 0,
+        lastOrderAt: activity.lastOrderAt ?? null,
+        recentOrders: recentOrders.map((o: any) => ({
+          id: o.id,
+          status: o.status,
+          totalCad: num(o.totalCad),
+          createdAt: o.createdAt,
+          vendorName: one<any>(o.vendors)?.name ?? null,
+        })),
       },
-    };
+    } as AdminUserDetail;
   }
+}
+
+/** `admin_decide_vendor` / `admin_decide_courier` raise this when the status moved under the reviewer. */
+const DECIDED_BY_SOMEONE_ELSE = 'SGB06';
+
+/**
+ * ⚠️ Never let `error.message` reach the client: PostgREST echoes constraint
+ * names, columns and sometimes offending values. The detail goes to the log.
+ */
+function unexpectedDbError(error: PostgrestError): Error {
+  console.error('[postgrest]', error.code, error.message, error.details ?? '', error.hint ?? '');
+  return new InternalServerErrorException('Database request failed');
 }
