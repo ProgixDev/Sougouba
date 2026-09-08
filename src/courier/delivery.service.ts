@@ -1,20 +1,22 @@
-import { BadRequestException, ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import type { PostgrestError } from '@supabase/supabase-js';
 
 import type { Db } from '../db/client.js';
+import { camelize } from '../db/case.js';
 import { DB } from '../db/db.module.js';
+import { one } from '../db/embed.js';
+import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import type { ReportCourierIssueInput } from '../admin/dto/admin.dto.js';
-import {
-  courierIssues,
-  courierLocations,
-  couriers,
-  deliveryProofs,
-  orderDeliveries,
-  orders,
-  orderStatusHistory,
-} from '../db/schema/index.js';
 import { LoyaltyService } from '../loyalty/loyalty.service.js';
-import { assertTransition } from '../orders/order-status.js';
+import { assertTransition, type OrderStatus } from '../orders/order-status.js';
 import { courierEarnings, pinMatches } from './courier-pay.js';
 import type { CompleteDeliveryInput, LocationPingInput } from './dto/courier.dto.js';
 
@@ -36,24 +38,23 @@ export class DeliveryService {
 
   /** The run this courier is carrying, or a 404. Every method below starts here. */
   private async ownedRun(courierId: string, orderId: string) {
-    const [row] = await this.db
-      .select({
-        orderId: orderDeliveries.orderId,
-        courierId: orderDeliveries.courierId,
-        pickedUpAt: orderDeliveries.pickedUpAt,
-        deliveredAt: orderDeliveries.deliveredAt,
-        distanceKm: orderDeliveries.distanceKm,
-        pin: orderDeliveries.pin,
-        status: orders.status,
-      })
-      .from(orderDeliveries)
-      .innerJoin(orders, eq(orders.id, orderDeliveries.orderId))
-      .where(and(eq(orderDeliveries.orderId, orderId), eq(orderDeliveries.courierId, courierId)))
-      .limit(1);
+    const row = await unwrap<any | null>(
+      this.db
+        .from('order_deliveries')
+        .select(
+          `orderId:order_id, courierId:courier_id, pickedUpAt:picked_up_at,
+           deliveredAt:delivered_at, distanceKm:distance_km, pin,
+           orders!inner(status)`
+        )
+        .eq('order_id', orderId)
+        .eq('courier_id', courierId)
+        .maybeSingle()
+    );
     // A 404 rather than a 403 — an order id you are not carrying should not be
     // confirmed to exist.
     if (!row) throw new NotFoundException('Run not found');
-    return row;
+    const { orders: order, ...rest } = row;
+    return { ...rest, status: one<any>(order)?.status as OrderStatus };
   }
 
   /** What the courier's own screen shows: the run, plus the PIN they will be read at the door. */
@@ -73,18 +74,15 @@ export class DeliveryService {
     if (run.pickedUpAt) throw new ConflictException('This run is already picked up');
     assertTransition(run.status, 'out_for_delivery', 'courier');
 
-    const now = new Date();
-    await this.db.transaction(async (tx) => {
-      const moved = await tx
-        .update(orders)
-        .set({ status: 'out_for_delivery' })
-        .where(and(eq(orders.id, orderId), eq(orders.status, run.status)))
-        .returning({ id: orders.id });
-      if (moved.length === 0) throw new ConflictException('The order status changed while you were acting on it');
-
-      await tx.update(orderDeliveries).set({ pickedUpAt: now }).where(eq(orderDeliveries.orderId, orderId));
-      await tx.insert(orderStatusHistory).values({ orderId, status: 'out_for_delivery', at: now });
-    });
+    // Order status, pickup timestamp and history row together — see
+    // `delivery_mark_picked_up`.
+    await unwrapRpc<void>(
+      this.db.rpc('delivery_mark_picked_up', { p_order_id: orderId, p_from: run.status }),
+      (error) => {
+        if (error.code === STATUS_MOVED) throw new ConflictException(error.message);
+        throw unexpectedDbError(error);
+      }
+    );
 
     return this.run(courierId, orderId);
   }
@@ -121,34 +119,26 @@ export class DeliveryService {
     // today's rates would rewrite a courier's history the day a rate changes.
     const earningsCad = courierEarnings(Number(run.distanceKm), tipCad);
 
-    await this.db.transaction(async (tx) => {
-      const moved = await tx
-        .update(orders)
-        .set({ status: 'delivered' })
-        .where(and(eq(orders.id, orderId), eq(orders.status, run.status)))
-        .returning({ id: orders.id });
-      if (moved.length === 0) throw new ConflictException('The order status changed while you were acting on it');
-
-      await tx
-        .update(orderDeliveries)
-        .set({ deliveredAt: now, tipCad: String(tipCad), earningsCad: String(earningsCad) })
-        .where(eq(orderDeliveries.orderId, orderId));
-
-      await tx.insert(deliveryProofs).values({
-        orderId,
-        method: input.method,
-        imagePath: input.imagePath ?? null,
-        note: input.note ?? null,
-        at: now,
-      });
-
-      await tx.insert(orderStatusHistory).values({ orderId, status: 'delivered', at: now });
-
-      await tx
-        .update(couriers)
-        .set({ deliveryCount: sql`${couriers.deliveryCount} + 1` })
-        .where(eq(couriers.id, courierId));
-    });
+    // Status, timestamps, frozen pay, the proof, the history row and the
+    // courier's run counter — one transaction. Proof and status must not drift
+    // apart: an order marked delivered with no proof is exactly the state a
+    // dispute turns on. See `delivery_complete`.
+    await unwrapRpc<void>(
+      this.db.rpc('delivery_complete', {
+        p_order_id: orderId,
+        p_courier_id: courierId,
+        p_from: run.status,
+        p_method: input.method,
+        p_image_path: (input.imagePath ?? null) as string,
+        p_note: (input.note ?? null) as string,
+        p_tip_cad: tipCad,
+        p_earnings_cad: earningsCad,
+      }),
+      (error) => {
+        if (error.code === STATUS_MOVED) throw new ConflictException(error.message);
+        throw unexpectedDbError(error);
+      }
+    );
 
     // **The caller Phase 4 was written for.** This is the one place an order
     // actually becomes delivered, and the brief credits points "après livraison
@@ -182,15 +172,21 @@ export class DeliveryService {
     const run = await this.ownedRun(courierId, orderId);
     if (run.deliveredAt) throw new ConflictException('This run is already complete');
 
-    const inserted = await this.db
-      .insert(courierIssues)
-      .values({ orderId, reason: input.reason, message: input.message, status: 'open' })
-      .onConflictDoNothing()
-      .returning();
-    if (inserted.length === 0) throw new ConflictException('An issue is already open on this run');
+    // One report per order: reopening would overwrite what the courier first
+    // said, which is the part an administrator is reading. The unique violation
+    // is what says so.
+    const { data, error } = await this.db
+      .from('courier_issues')
+      .insert({ order_id: orderId, reason: input.reason, message: input.message, status: 'open' })
+      .select('*')
+      .maybeSingle();
+    if (error) {
+      if (error.code === UNIQUE_VIOLATION) throw new ConflictException('An issue is already open on this run');
+      throw unexpectedDbError(error);
+    }
 
     this.logger.warn(`Courier ${courierId} reported "${input.reason}" on order ${orderId}`);
-    return inserted[0];
+    return camelize(data);
   }
 
   /**
@@ -209,24 +205,33 @@ export class DeliveryService {
     const run = await this.ownedRun(courierId, orderId);
     if (run.deliveredAt) throw new ConflictException('This run is already complete');
 
-    const now = new Date();
-    await this.db.transaction(async (tx) => {
-      await tx.insert(courierLocations).values({
-        courierId,
-        orderId,
-        lat: input.lat,
-        lng: input.lng,
-        heading: input.heading ?? null,
-      });
-      // A ping is also a heartbeat — a courier mid-run is plainly on shift, and
-      // requiring a separate keep-alive would age them out of the roster while
-      // they are literally driving.
-      await tx
-        .update(couriers)
-        .set({ lastSeenAt: now, baseLat: input.lat, baseLng: input.lng })
-        .where(eq(couriers.id, courierId));
-    });
+    // The ping and the heartbeat it implies, together — a courier mid-run is
+    // plainly on shift, and requiring a separate keep-alive would age them out
+    // of the roster while they are literally driving.
+    const recordedAt = await unwrapRpc<string>(
+      this.db.rpc('courier_record_location', {
+        p_courier_id: courierId,
+        p_order_id: orderId,
+        p_lat: input.lat,
+        p_lng: input.lng,
+        p_heading: input.heading,
+      })
+    );
 
-    return { recordedAt: now };
+    return { recordedAt };
   }
+}
+
+/** `delivery_mark_picked_up` / `delivery_complete` raise this when the order moved under the courier. */
+const STATUS_MOVED = 'SGB04';
+/** Postgres's own code for "unique violation". */
+const UNIQUE_VIOLATION = '23505';
+
+/**
+ * ⚠️ Never let `error.message` reach the client: PostgREST echoes constraint
+ * names, columns and sometimes offending values. The detail goes to the log.
+ */
+function unexpectedDbError(error: PostgrestError): Error {
+  console.error('[postgrest]', error.code, error.message, error.details ?? '', error.hint ?? '');
+  return new InternalServerErrorException('Database request failed');
 }

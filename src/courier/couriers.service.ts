@@ -1,19 +1,24 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, desc, eq, gte, sql } from 'drizzle-orm';
+import { ConflictException, Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import type { PostgrestError } from '@supabase/supabase-js';
 
 import type { Db } from '../db/client.js';
+import { camelize, snakeize } from '../db/case.js';
 import { DB } from '../db/db.module.js';
-import { courierInsurance, courierLocations, couriers, orderDeliveries, orders, profiles } from '../db/schema/index.js';
+import { one } from '../db/embed.js';
+import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import { GeoService } from '../geo/geo.service.js';
 import type { ApplyCourierInput, SetShiftInput, UpdateCourierInput } from './dto/courier.dto.js';
 
 /** Postgres's own code for "unique violation". */
 const UNIQUE_VIOLATION = '23505';
 
-function isUniqueViolation(error: unknown, constraint: string): boolean {
-  if (typeof error !== 'object' || error === null) return false;
-  const { code, constraint_name: constraintName } = error as { code?: unknown; constraint_name?: unknown };
-  return code === UNIQUE_VIOLATION && constraintName === constraint;
+/**
+ * PostgREST reports the constraint in `message`/`details` rather than in a
+ * `constraint_name` field the way postgres.js did.
+ */
+function isUniqueViolation(error: PostgrestError | null, constraint: string): boolean {
+  if (!error || error.code !== UNIQUE_VIOLATION) return false;
+  return `${error.message} ${error.details ?? ''}`.includes(constraint);
 }
 
 @Injectable()
@@ -34,92 +39,89 @@ export class CouriersService {
    * default, matching the merchant rule.
    */
   async apply(userId: string, input: ApplyCourierInput) {
-    const [existing] = await this.db.select({ id: couriers.id }).from(couriers).where(eq(couriers.userId, userId)).limit(1);
+    const existing = await unwrap<{ id: string } | null>(
+      this.db.from('couriers').select('id').eq('user_id', userId).maybeSingle()
+    );
     if (existing) throw new ConflictException('This account already has a courier file');
 
     // The base is the courier's declared home area — the origin a dispatch
     // offer is ranked from until they go on shift and send a real position.
     const { lat, lng } = await this.geo.coordinatesFor(input.postalCode, input.city);
 
-    const courierId = await this.db
-      .transaction(async (tx) => {
-        const [courier] = await tx
-          .insert(couriers)
-          .values({
-            userId,
-            fullName: input.fullName,
-            phone: input.phone,
-            vehicle: input.vehicle,
-            plate: input.plate ?? null,
-            licenceNumber: input.licenceNumber ?? null,
-            city: input.city,
-            postalCode: input.postalCode,
-            baseLat: lat,
-            baseLng: lng,
-            status: 'pending',
-            isOnline: false,
-          })
-          .returning({ id: couriers.id });
-
-        if (input.vehicle !== 'bike') {
-          await tx.insert(courierInsurance).values({
-            courierId: courier.id,
-            insurerName: input.insurerName!,
-            policyNumber: input.insurancePolicy!,
-            expiry: input.insuranceExpiry!,
-          });
-        }
-
-        await tx.update(profiles).set({ courierId: courier.id, updatedAt: new Date() }).where(eq(profiles.id, userId));
-        return courier.id;
-      })
-      .catch((error: unknown) => {
+    // Courier row, insurance if motorised, and the profile pointer, together.
+    // A courier file with no insurance row is one a reviewer would reject for
+    // paperwork the applicant actually submitted.
+    const courierId = await unwrapRpc<string>(
+      this.db.rpc('courier_apply', {
+        p_user_id: userId,
+        p_full_name: input.fullName,
+        p_phone: input.phone,
+        p_vehicle: input.vehicle,
+        p_plate: (input.plate ?? null) as string,
+        p_licence_number: (input.licenceNumber ?? null) as string,
+        p_city: input.city,
+        p_postal_code: input.postalCode,
+        p_base_lat: lat,
+        p_base_lng: lng,
+        p_insurer_name: input.insurerName,
+        p_policy_number: input.insurancePolicy,
+        p_insurance_expiry: input.insuranceExpiry,
+      }),
+      (error) => {
         // The pre-check above is a friendly fast path, not the guarantee — two
         // taps a moment apart both pass it. `couriers_user_id_unique` is what
         // holds the rule.
         if (isUniqueViolation(error, 'couriers_user_id_unique')) {
           throw new ConflictException('This account already has a courier file');
         }
-        throw error;
-      });
+        throw unexpectedDbError(error);
+      }
+    );
 
     return this.byId(courierId);
   }
 
   /** The courier's own file, at any status — how a pending applicant watches their queue position. */
   async mine(userId: string) {
-    const [row] = await this.db.select({ id: couriers.id }).from(couriers).where(eq(couriers.userId, userId)).limit(1);
+    const row = await unwrap<{ id: string } | null>(
+      this.db.from('couriers').select('id').eq('user_id', userId).maybeSingle()
+    );
     if (!row) throw new NotFoundException('This account has no courier file');
     return this.byId(row.id);
   }
 
   private async byId(courierId: string) {
-    const [courier] = await this.db.select().from(couriers).where(eq(couriers.id, courierId)).limit(1);
+    const courier = await unwrap<Record<string, unknown> | null>(
+      this.db.from('couriers').select('*').eq('id', courierId).maybeSingle()
+    );
     if (!courier) throw new NotFoundException('Courier not found');
 
-    const [insurance] = await this.db
-      .select()
-      .from(courierInsurance)
-      .where(eq(courierInsurance.courierId, courierId))
-      .limit(1);
+    const insurance = await unwrap<Record<string, unknown> | null>(
+      this.db.from('courier_insurance').select('*').eq('courier_id', courierId).maybeSingle()
+    );
 
     return {
-      ...courier,
+      ...camelize<Record<string, unknown>>(courier),
       rating: Number(courier.rating),
-      insurance: insurance ?? null,
+      insurance: insurance ? camelize(insurance) : null,
     };
   }
 
   /** The id behind the token, and the ownership check every courier route reuses. */
   async courierIdFor(userId: string): Promise<string> {
-    const [row] = await this.db.select({ id: couriers.id }).from(couriers).where(eq(couriers.userId, userId)).limit(1);
+    const row = await unwrap<{ id: string } | null>(
+      this.db.from('couriers').select('id').eq('user_id', userId).maybeSingle()
+    );
     if (!row) throw new NotFoundException('This account has no courier file');
     return row.id;
   }
 
   async update(userId: string, patch: UpdateCourierInput) {
     const courierId = await this.courierIdFor(userId);
-    await this.db.update(couriers).set(patch).where(eq(couriers.id, courierId));
+    // Cast: `snakeize` returns an open record, and the generated Update type
+    // is a closed set of columns. The patch is already validated by
+    // `UpdateCourierInput`, which is the narrower guarantee of the two.
+    await unwrap(this.db.from('couriers').update(snakeize(patch) as never).eq('id', courierId));
     return this.byId(courierId);
   }
 
@@ -136,7 +138,9 @@ export class CouriersService {
    */
   async setShift(userId: string, input: SetShiftInput) {
     const courierId = await this.courierIdFor(userId);
-    const [courier] = await this.db.select({ status: couriers.status }).from(couriers).where(eq(couriers.id, courierId)).limit(1);
+    const courier = await unwrap<{ status: string }>(
+      this.db.from('couriers').select('status').eq('id', courierId).single()
+    );
 
     if (input.isOnline && courier.status !== 'approved') {
       throw new ConflictException(
@@ -146,16 +150,18 @@ export class CouriersService {
       );
     }
 
-    await this.db
-      .update(couriers)
-      .set({
-        isOnline: input.isOnline,
-        lastSeenAt: new Date(),
-        ...(input.isOnline && input.lat !== undefined && input.lng !== undefined
-          ? { baseLat: input.lat, baseLng: input.lng }
-          : {}),
-      })
-      .where(eq(couriers.id, courierId));
+    await unwrap(
+      this.db
+        .from('couriers')
+        .update({
+          is_online: input.isOnline,
+          last_seen_at: new Date().toISOString(),
+          ...(input.isOnline && input.lat !== undefined && input.lng !== undefined
+            ? { base_lat: input.lat, base_lng: input.lng }
+            : {}),
+        })
+        .eq('id', courierId)
+    );
 
     return this.byId(courierId);
   }
@@ -168,10 +174,15 @@ export class CouriersService {
    */
   async heartbeat(userId: string, position?: { lat: number; lng: number }) {
     const courierId = await this.courierIdFor(userId);
-    await this.db
-      .update(couriers)
-      .set({ lastSeenAt: new Date(), ...(position ? { baseLat: position.lat, baseLng: position.lng } : {}) })
-      .where(eq(couriers.id, courierId));
+    await unwrap(
+      this.db
+        .from('couriers')
+        .update({
+          last_seen_at: new Date().toISOString(),
+          ...(position ? { base_lat: position.lat, base_lng: position.lng } : {}),
+        })
+        .eq('id', courierId)
+    );
     return { ok: true as const };
   }
 
@@ -190,90 +201,71 @@ export class CouriersService {
     since.setHours(0, 0, 0, 0);
     since.setDate(since.getDate() - (days - 1));
 
-    const window = and(
-      eq(orderDeliveries.courierId, courierId),
-      sql`${orderDeliveries.deliveredAt} is not null`,
-      gte(orderDeliveries.deliveredAt, since)
-    )!;
+    // One call. The day buckets are grouped in Montreal time, which is the
+    // part that cannot move client-side: a run delivered at 20:00 Montreal is
+    // 00:00 UTC the next day, and bucketing in UTC would shift a courier's
+    // whole evening onto tomorrow's bar. See `courier_earnings`.
+    const totals = await unwrap<{
+      earningsCad: number;
+      tipsCad: number;
+      distanceKm: number;
+      runCount: number;
+      buckets: { date: string; earningsCad: number; distanceKm: number; runCount: number }[];
+    }>(this.db.rpc('courier_earnings', { p_courier_id: courierId, p_since: since.toISOString() }));
 
-    const [totals] = await this.db
-      .select({
-        earningsCad: sql<string>`coalesce(sum(${orderDeliveries.earningsCad}), 0)`,
-        tipsCad: sql<string>`coalesce(sum(${orderDeliveries.tipCad}), 0)`,
-        distanceKm: sql<string>`coalesce(sum(${orderDeliveries.distanceKm}), 0)`,
-        runCount: sql<number>`count(*)::int`,
-      })
-      .from(orderDeliveries)
-      .where(window);
-
-    // Day buckets in the platform's own timezone, not UTC: a run delivered at
-    // 20:00 Montreal time is 00:00 UTC the next day, and bucketing in UTC would
-    // move a courier's whole evening onto tomorrow's bar.
-    const buckets = await this.db
-      .select({
-        date: sql<string>`to_char((${orderDeliveries.deliveredAt} at time zone 'America/Montreal')::date, 'YYYY-MM-DD')`,
-        earningsCad: sql<string>`coalesce(sum(${orderDeliveries.earningsCad}), 0)`,
-        distanceKm: sql<string>`coalesce(sum(${orderDeliveries.distanceKm}), 0)`,
-        runCount: sql<number>`count(*)::int`,
-      })
-      .from(orderDeliveries)
-      .where(window)
-      .groupBy(sql`(${orderDeliveries.deliveredAt} at time zone 'America/Montreal')::date`)
-      .orderBy(sql`(${orderDeliveries.deliveredAt} at time zone 'America/Montreal')::date`);
-
-    const runCount = totals?.runCount ?? 0;
-    const earningsCad = Number(totals?.earningsCad ?? 0);
+    const runCount = totals.runCount ?? 0;
+    const earningsCad = totals.earningsCad ?? 0;
 
     return {
       days,
       earningsCad,
-      tipsCad: Number(totals?.tipsCad ?? 0),
-      distanceKm: Number(totals?.distanceKm ?? 0),
+      tipsCad: totals.tipsCad ?? 0,
+      distanceKm: totals.distanceKm ?? 0,
       runCount,
       avgPerRunCad: runCount > 0 ? Math.round((earningsCad / runCount) * 100) / 100 : 0,
       // Empty days are filled in by the client, which knows the window it asked
       // for. Emitting them here would mean generating a date series in SQL to
       // ship rows that are all zero.
-      buckets: buckets.map((b) => ({
-        date: b.date,
-        earningsCad: Number(b.earningsCad),
-        distanceKm: Number(b.distanceKm),
-        runCount: b.runCount,
-      })),
+      buckets: totals.buckets ?? [],
     };
   }
 
   /** Everything this courier has carried, newest first. */
   async runs(userId: string, limit: number, offset: number) {
     const courierId = await this.courierIdFor(userId);
-    const rows = await this.db
-      .select({
-        orderId: orders.id,
-        status: orders.status,
-        vendorId: orders.vendorId,
-        createdAt: orders.createdAt,
-        deliveryAddressStreet: orders.deliveryAddressStreet,
-        deliveryAddressCity: orders.deliveryAddressCity,
-        acceptedAt: orderDeliveries.acceptedAt,
-        pickedUpAt: orderDeliveries.pickedUpAt,
-        deliveredAt: orderDeliveries.deliveredAt,
-        distanceKm: orderDeliveries.distanceKm,
-        tipCad: orderDeliveries.tipCad,
-        earningsCad: orderDeliveries.earningsCad,
-      })
-      .from(orderDeliveries)
-      .innerJoin(orders, eq(orders.id, orderDeliveries.orderId))
-      .where(eq(orderDeliveries.courierId, courierId))
-      .orderBy(desc(orderDeliveries.acceptedAt))
-      .limit(limit)
-      .offset(offset);
+    const rows = await unwrap<any[]>(
+      this.db
+        .from('order_deliveries')
+        .select(
+          `acceptedAt:accepted_at, pickedUpAt:picked_up_at, deliveredAt:delivered_at,
+           distanceKm:distance_km, tipCad:tip_cad, earningsCad:earnings_cad,
+           orders!inner(orderId:id, status, vendorId:vendor_id, createdAt:created_at,
+                        deliveryAddressStreet:delivery_address_street,
+                        deliveryAddressCity:delivery_address_city)`
+        )
+        .eq('courier_id', courierId)
+        .order('accepted_at', { ascending: false })
+        .range(offset, offset + limit - 1)
+    );
 
-    return rows.map((r) => ({
-      ...r,
-      distanceKm: Number(r.distanceKm),
-      tipCad: Number(r.tipCad),
-      earningsCad: Number(r.earningsCad),
-    }));
+    // Flattened back to the shape the join produced.
+    return rows.map((r) => {
+      const order = one<any>(r.orders);
+      return {
+        orderId: order?.orderId,
+        status: order?.status,
+        vendorId: order?.vendorId,
+        createdAt: order?.createdAt,
+        deliveryAddressStreet: order?.deliveryAddressStreet,
+        deliveryAddressCity: order?.deliveryAddressCity,
+        acceptedAt: r.acceptedAt,
+        pickedUpAt: r.pickedUpAt,
+        deliveredAt: r.deliveredAt,
+        distanceKm: Number(r.distanceKm),
+        tipCad: Number(r.tipCad),
+        earningsCad: Number(r.earningsCad),
+      };
+    });
   }
 
   /**
@@ -285,17 +277,24 @@ export class CouriersService {
    * map says so rather than animating a courier who may not be moving.
    */
   async latestLocationForOrder(orderId: string) {
-    const [ping] = await this.db
-      .select({
-        lat: courierLocations.lat,
-        lng: courierLocations.lng,
-        heading: courierLocations.heading,
-        recordedAt: courierLocations.recordedAt,
-      })
-      .from(courierLocations)
-      .where(eq(courierLocations.orderId, orderId))
-      .orderBy(desc(courierLocations.recordedAt))
-      .limit(1);
+    const ping = await unwrap<{ lat: number; lng: number; heading: number | null; recordedAt: string } | null>(
+      this.db
+        .from('courier_locations')
+        .select('lat, lng, heading, recordedAt:recorded_at')
+        .eq('order_id', orderId)
+        .order('recorded_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    );
     return ping ?? null;
   }
+}
+
+/**
+ * ⚠️ Never let `error.message` reach the client: PostgREST echoes constraint
+ * names, columns and sometimes offending values. The detail goes to the log.
+ */
+function unexpectedDbError(error: PostgrestError): Error {
+  console.error('[postgrest]', error.code, error.message, error.details ?? '', error.hint ?? '');
+  return new InternalServerErrorException('Database request failed');
 }

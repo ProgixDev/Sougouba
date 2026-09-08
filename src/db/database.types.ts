@@ -1706,6 +1706,94 @@ export type Database = {
       admin_stats: { Args: never; Returns: Json }
       admin_user_activity: { Args: { p_profile_id: string }; Returns: Json }
       admin_vendor_stats: { Args: { p_vendor_id: string }; Returns: Json }
+      courier_apply: {
+        Args: {
+          p_base_lat: number
+          p_base_lng: number
+          p_city: string
+          p_full_name: string
+          p_insurance_expiry?: string
+          p_insurer_name?: string
+          p_licence_number: string
+          p_phone: string
+          p_plate: string
+          p_policy_number?: string
+          p_postal_code: string
+          p_user_id: string
+          p_vehicle: string
+        }
+        Returns: string
+      }
+      courier_earnings: {
+        Args: { p_courier_id: string; p_since: string }
+        Returns: Json
+      }
+      courier_record_location: {
+        Args: {
+          p_courier_id: string
+          p_heading?: number
+          p_lat: number
+          p_lng: number
+          p_order_id: string
+        }
+        Returns: string
+      }
+      delivery_complete: {
+        Args: {
+          p_courier_id: string
+          p_earnings_cad: number
+          p_from: string
+          p_image_path: string
+          p_method: string
+          p_note: string
+          p_order_id: string
+          p_tip_cad: number
+        }
+        Returns: undefined
+      }
+      delivery_mark_picked_up: {
+        Args: { p_from: string; p_order_id: string }
+        Returns: undefined
+      }
+      dispatch_accept: {
+        Args: {
+          p_courier_id: string
+          p_distance_km: number
+          p_dropoff_eta_min: number
+          p_earnings_cad: number
+          p_offer_id: string
+          p_order_id: string
+          p_pickup_eta_min: number
+          p_pin: string
+        }
+        Returns: string
+      }
+      dispatch_expire_lapsed: { Args: never; Returns: number }
+      dispatch_next_courier: {
+        Args: {
+          p_max_pickup_km: number
+          p_order_id: string
+          p_pickup_lat: number
+          p_pickup_lng: number
+          p_stale_before: string
+        }
+        Returns: {
+          distance_to_pickup_km: number
+          id: string
+          vehicle: string
+        }[]
+      }
+      dispatch_waiting_orders: {
+        Args: { p_limit?: number }
+        Returns: {
+          dropoff_lat: number
+          dropoff_lng: number
+          order_id: string
+          pickup_lat: number
+          pickup_lng: number
+          vendor_id: string
+        }[]
+      }
       is_open: {
         Args: { v: Database["public"]["Tables"]["vendors"]["Row"] }
         Returns: boolean
