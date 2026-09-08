@@ -12,7 +12,11 @@ export const DB = Symbol('DB');
     {
       provide: DB,
       inject: [ConfigService],
-      useFactory: (config: ConfigService<Env, true>) => createDbClient(config.get('DATABASE_URL', { infer: true })),
+      useFactory: (config: ConfigService<Env, true>) =>
+        createDbClient(
+          config.get('SUPABASE_URL', { infer: true }),
+          config.get('SUPABASE_SERVICE_ROLE_KEY', { infer: true })
+        ),
     },
   ],
   exports: [DB],

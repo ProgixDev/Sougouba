@@ -11,9 +11,6 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
 
-  /** Supabase's Postgres connection string — Drizzle's own connection, not through PostgREST. */
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required — Supabase project settings → Database.'),
-
   /**
    * The project's own REST/Auth base URL, e.g. https://<ref>.supabase.co —
    * required from Phase 1 on: the auth guard fetches this project's own JWKS
@@ -25,15 +22,17 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().url('SUPABASE_URL is required from Phase 1 — Supabase project settings → API.'),
 
   /**
-   * Storage admin access, for the retention purge only.
+   * The API's only database credential, and its Storage admin access.
    *
-   * Optional: without it the purge still clears the GPS trail and any proof
-   * with no file, and refuses — loudly — to delete a proof row whose image it
-   * cannot remove from the bucket. See `RetentionService`.
-   *
-   * Never reachable from the mobile bundle. This is the service-role key.
+   * Required — this is how every query reaches Postgres now that the Drizzle
+   * connection is gone. `service_role` **bypasses RLS entirely**: it is as
+   * privileged as the `DATABASE_URL` password it replaced, so treat a leak of
+   * it as a full database compromise. Never reachable from the mobile or admin
+   * bundles.
    */
-  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z
+    .string()
+    .min(1, 'SUPABASE_SERVICE_ROLE_KEY is required — Supabase project settings → API → service_role.'),
 
   /**
    * Browser origins allowed to call this API cross-origin, comma-separated.

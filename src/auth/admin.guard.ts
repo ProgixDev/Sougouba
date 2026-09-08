@@ -1,10 +1,9 @@
 import { type CanActivate, type ExecutionContext, ForbiddenException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
 import type { FastifyRequest } from 'fastify';
 
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
-import { profiles } from '../db/schema/index.js';
+import { unwrap } from '../db/unwrap.js';
 
 /**
  * Authorization for the back office. Pairs with `SupabaseAuthGuard`, never
@@ -30,11 +29,9 @@ export class AdminGuard implements CanActivate {
     const userId = request.userId;
     if (!userId) throw new UnauthorizedException('Missing bearer token');
 
-    const [profile] = await this.db
-      .select({ role: profiles.role })
-      .from(profiles)
-      .where(eq(profiles.id, userId))
-      .limit(1);
+    const profile = await unwrap<{ role: string } | null>(
+      this.db.from('profiles').select('role').eq('id', userId).maybeSingle()
+    );
 
     if (profile?.role !== 'admin') {
       // Deliberately the same answer whether the account is a shopper, a

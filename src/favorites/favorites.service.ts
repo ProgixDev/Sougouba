@@ -1,40 +1,46 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
-import type { PgTable } from 'drizzle-orm/pg-core';
+import type { PostgrestError } from '@supabase/supabase-js';
 
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
-import { favoriteProducts, favoriteVendors } from '../db/schema/index.js';
+import { unwrap } from '../db/unwrap.js';
 
-/** Postgres's own code for "foreign key violation" — https://www.postgresql.org/docs/current/errcodes-appendix.html */
+/** Postgres's own codes — https://www.postgresql.org/docs/current/errcodes-appendix.html */
 const FOREIGN_KEY_VIOLATION = '23503';
+const UNIQUE_VIOLATION = '23505';
 
 @Injectable()
 export class FavoritesService {
   constructor(@Inject(DB) private readonly db: Db) {}
 
-  listProducts(profileId: string) {
-    return this.db.select({ productId: favoriteProducts.productId }).from(favoriteProducts).where(eq(favoriteProducts.profileId, profileId));
+  listProducts(profileId: string): Promise<{ productId: string }[]> {
+    return unwrap<{ productId: string }[]>(
+      this.db.from('favorite_products').select('productId:product_id').eq('profile_id', profileId)
+    );
   }
 
-  listVendors(profileId: string) {
-    return this.db.select({ vendorId: favoriteVendors.vendorId }).from(favoriteVendors).where(eq(favoriteVendors.profileId, profileId));
+  listVendors(profileId: string): Promise<{ vendorId: string }[]> {
+    return unwrap<{ vendorId: string }[]>(
+      this.db.from('favorite_vendors').select('vendorId:vendor_id').eq('profile_id', profileId)
+    );
   }
 
   async addProduct(profileId: string, productId: string): Promise<void> {
-    await this.insertIgnoringDuplicate(favoriteProducts, { profileId, productId });
+    await this.insertIgnoringDuplicate('favorite_products', { profile_id: profileId, product_id: productId });
   }
 
   async removeProduct(profileId: string, productId: string): Promise<void> {
-    await this.db.delete(favoriteProducts).where(and(eq(favoriteProducts.profileId, profileId), eq(favoriteProducts.productId, productId)));
+    await unwrap(
+      this.db.from('favorite_products').delete().eq('profile_id', profileId).eq('product_id', productId)
+    );
   }
 
   async addVendor(profileId: string, vendorId: string): Promise<void> {
-    await this.insertIgnoringDuplicate(favoriteVendors, { profileId, vendorId });
+    await this.insertIgnoringDuplicate('favorite_vendors', { profile_id: profileId, vendor_id: vendorId });
   }
 
   async removeVendor(profileId: string, vendorId: string): Promise<void> {
-    await this.db.delete(favoriteVendors).where(and(eq(favoriteVendors.profileId, profileId), eq(favoriteVendors.vendorId, vendorId)));
+    await unwrap(this.db.from('favorite_vendors').delete().eq('profile_id', profileId).eq('vendor_id', vendorId));
   }
 
   /**
@@ -42,17 +48,27 @@ export class FavoritesService {
    * already-filled heart twice is not an error — so a duplicate-key conflict
    * (the composite primary key) is swallowed. A foreign-key violation (the
    * product/vendor id doesn't exist) is a real 404, not silently ignored.
+   *
+   * ⚠️ Drizzle's `onConflictDoNothing()` has no PostgREST equivalent: `upsert`
+   * with `ignoreDuplicates` is the near-miss, but it needs the conflict target
+   * spelled out and still reports the FK failure the same way. Reading the
+   * SQLSTATE off the returned error is both simpler and closer to what this
+   * method always meant — the two outcomes are told apart by code, not by
+   * whether something threw.
    */
-  private async insertIgnoringDuplicate(table: PgTable, values: Record<string, string>): Promise<void> {
-    try {
-      await this.db.insert(table).values(values).onConflictDoNothing();
-    } catch (error) {
-      if (isForeignKeyViolation(error)) throw new NotFoundException('That product or vendor does not exist');
-      throw error;
-    }
+  private async insertIgnoringDuplicate(
+    table: 'favorite_products' | 'favorite_vendors',
+    values: Record<string, string>
+  ): Promise<void> {
+    const { error } = await this.db.from(table).insert(values as never);
+    if (!error) return;
+    if (error.code === UNIQUE_VIOLATION) return;
+    if (error.code === FOREIGN_KEY_VIOLATION) throw new NotFoundException('That product or vendor does not exist');
+    throw asUnexpected(error);
   }
 }
 
-function isForeignKeyViolation(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && (error as { code: unknown }).code === FOREIGN_KEY_VIOLATION;
+function asUnexpected(error: PostgrestError): Error {
+  console.error('[postgrest]', error.code, error.message, error.details ?? '');
+  return new Error('Database request failed');
 }
