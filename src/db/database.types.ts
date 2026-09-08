@@ -1530,6 +1530,35 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      order_advance_status: {
+        Args: { p_from: string; p_order_id: string; p_to: string }
+        Returns: undefined
+      }
+      order_place: {
+        Args: {
+          p_addr_city: string
+          p_addr_label: string
+          p_addr_lat: number
+          p_addr_lng: number
+          p_addr_postal_code: string
+          p_addr_street: string
+          p_coupon_code?: string
+          p_coupon_discount_cad?: number
+          p_customer_id: string
+          p_customer_name: string
+          p_delivery_fee_cad: number
+          p_gst_cad: number
+          p_items: Json
+          p_payment_intent_id?: string
+          p_points_discount_cad?: number
+          p_points_redeemed?: number
+          p_qst_cad: number
+          p_subtotal_cad: number
+          p_total_cad: number
+          p_vendor_id: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       audit_subject:

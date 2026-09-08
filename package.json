@@ -21,6 +21,7 @@
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "verify:stripe": "npm run build && node --env-file=.env scripts/verify-stripe.mjs",
+    "verify:orders": "node --env-file=.env scripts/verify-orders.mjs",
     "db:seed": "node --env-file=.env --import tsx scripts/seed/index.ts",
     "db:seed:reset": "node --env-file=.env --import tsx scripts/seed/index.ts --reset"
   },

@@ -15,6 +15,24 @@ import type { PostgrestError } from '@supabase/supabase-js';
 
 export type PostgrestResult<T> = { data: T | null; error: PostgrestError | null };
 
+/**
+ * What every builder resolves to, as far as these helpers care.
+ *
+ * Deliberately loose on `data`: supabase-js infers a row type from the select
+ * string itself, so `select('id, priceCad:price_cad')` yields a shape that is
+ * structurally its own and will not unify with a hand-written interface. The
+ * caller states what it expects through the type argument — the same contract
+ * Drizzle's `.select({ … })` gave, asserted at this boundary rather than
+ * inferred through it.
+ *
+ * The assertion is only as good as the select string next to it. A column
+ * renamed in the database and not here fails at runtime, not at compile time;
+ * that is the type-safety this rewrite gives up, and it is why the specs
+ * matter more now than they did.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyResult = PromiseLike<{ data: any; error: PostgrestError | null }>;
+
 function fail(error: PostgrestError): never {
   // The full detail goes to the log, once, at the boundary where it happened.
   console.error('[postgrest]', error.code, error.message, error.details ?? '', error.hint ?? '');
@@ -22,7 +40,7 @@ function fail(error: PostgrestError): never {
 }
 
 /** A query that must succeed and may legitimately return no rows. */
-export async function unwrap<T>(promise: PromiseLike<PostgrestResult<T>>): Promise<T> {
+export async function unwrap<T>(promise: AnyResult): Promise<T> {
   const { data, error } = await promise;
   if (error) fail(error);
   return data as T;
@@ -33,7 +51,7 @@ export async function unwrap<T>(promise: PromiseLike<PostgrestResult<T>>): Promi
  * all over this codebase, where "not yours" and "not there" deliberately
  * answer alike so an id you don't own can't be probed for existence.
  */
-export async function unwrapFound<T>(promise: PromiseLike<PostgrestResult<T>>, message: string): Promise<T> {
+export async function unwrapFound<T>(promise: AnyResult, message: string): Promise<T> {
   const { data, error } = await promise;
   if (error) fail(error);
   if (data === null) throw new NotFoundException(message);
@@ -44,7 +62,7 @@ export async function unwrapFound<T>(promise: PromiseLike<PostgrestResult<T>>, m
  * A write whose returned row is not read. Still checks `error` — a silently
  * dropped update is the failure mode this whole module exists to prevent.
  */
-export async function unwrapVoid(promise: PromiseLike<PostgrestResult<unknown>>): Promise<void> {
+export async function unwrapVoid(promise: AnyResult): Promise<void> {
   const { error } = await promise;
   if (error) fail(error);
 }
@@ -55,7 +73,7 @@ export async function unwrapVoid(promise: PromiseLike<PostgrestResult<unknown>>)
  * they refuse (see `drizzle/00xx_rpc_*.sql`); `code` lets a caller map a
  * specific refusal onto its own HTTP status instead of a blanket 500.
  */
-export async function unwrapRpc<T>(promise: PromiseLike<PostgrestResult<T>>, onError?: (e: PostgrestError) => never): Promise<T> {
+export async function unwrapRpc<T>(promise: AnyResult, onError?: (e: PostgrestError) => never): Promise<T> {
   const { data, error } = await promise;
   if (error) {
     if (onError) onError(error);

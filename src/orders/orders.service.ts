@@ -4,24 +4,16 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { and, desc, eq, inArray, notInArray, sql, type SQL } from 'drizzle-orm';
+import type { PostgrestError } from '@supabase/supabase-js';
 
 import type { Db } from '../db/client.js';
+import { camelize } from '../db/case.js';
 import { DB } from '../db/db.module.js';
-import {
-  addresses,
-  disputes,
-  merchantSubscriptions,
-  orderItems,
-  orders,
-  orderStatusHistory,
-  products,
-  profiles,
-  vendors,
-} from '../db/schema/index.js';
+import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import type { Page } from '../catalog/dto/query.dto.js';
 import type {
   CartInput,
@@ -62,28 +54,27 @@ export class OrdersService {
    * supplies ids and quantities and nothing else.
    */
   private async quote(customerId: string, cart: CartInput) {
-    const [vendor] = await this.db
-      .select({
-        id: vendors.id,
-        name: vendors.name,
-        status: vendors.status,
-        lat: vendors.addressLat,
-        lng: vendors.addressLng,
-      })
-      .from(vendors)
-      .where(eq(vendors.id, cart.vendorId))
-      .limit(1);
+    const vendor = await unwrap<VendorRow | null>(
+      this.db
+        .from('vendors')
+        .select('id, name, status, lat:address_lat, lng:address_lng')
+        .eq('id', cart.vendorId)
+        .maybeSingle()
+    );
     if (!vendor) throw new NotFoundException('Vendor not found');
     // A shop the platform has not vouched for, or has taken offline, cannot
     // take orders — the same rule the catalogue browse applies, restated here
     // because a client could hold a vendor id from before a suspension.
     if (vendor.status !== 'approved') throw new ForbiddenException('This shop is not currently accepting orders');
 
-    const [address] = await this.db
-      .select()
-      .from(addresses)
-      .where(and(eq(addresses.id, cart.addressId), eq(addresses.profileId, customerId)))
-      .limit(1);
+    const address = await unwrap<AddressRow | null>(
+      this.db
+        .from('addresses')
+        .select('label, street, city, postalCode:postal_code, lat, lng')
+        .eq('id', cart.addressId)
+        .eq('profile_id', customerId)
+        .maybeSingle()
+    );
     // A 404 rather than a 403: an address id you don't own should not be
     // confirmed to exist. Same rule as `AddressesService.findOwned`.
     if (!address) throw new NotFoundException('Address not found');
@@ -95,17 +86,12 @@ export class OrdersService {
       throw new BadRequestException('The same product appears more than once in the cart');
     }
 
-    const rows = await this.db
-      .select({
-        id: products.id,
-        vendorId: products.vendorId,
-        name: products.name,
-        priceCad: products.priceCad,
-        stockQty: products.stockQty,
-        isAvailable: products.isAvailable,
-      })
-      .from(products)
-      .where(inArray(products.id, productIds));
+    const rows = await unwrap<ProductRow[]>(
+      this.db
+        .from('products')
+        .select('id, vendorId:vendor_id, name, priceCad:price_cad, stockQty:stock_qty, isAvailable:is_available')
+        .in('id', productIds)
+    );
 
     const byId = new Map(rows.map((r) => [r.id, r]));
     const lines: PricedLine[] = cart.items.map((item) => {
@@ -173,14 +159,16 @@ export class OrdersService {
     // the one line to change if the client reads "la vente" as the full total.)
     const [settings, connect] = await Promise.all([
       this.settings.all(),
-      this.db
-        .select({ accountId: merchantSubscriptions.stripeConnectAccountId })
-        .from(merchantSubscriptions)
-        .where(eq(merchantSubscriptions.vendorId, cart.vendorId))
-        .limit(1),
+      unwrap<{ accountId: string | null } | null>(
+        this.db
+          .from('merchant_subscriptions')
+          .select('accountId:stripe_connect_account_id')
+          .eq('vendor_id', cart.vendorId)
+          .maybeSingle()
+      ),
     ]);
 
-    const connectAccountId = connect[0]?.accountId ?? null;
+    const connectAccountId = connect?.accountId ?? null;
     const applicationFeeCents = toStripeAmount(roundCad(priced.subtotalCad * settings.commissionRate));
 
     const intent = await this.payments.createIntent({
@@ -206,11 +194,9 @@ export class OrdersService {
    * payment for a different amount is the failure worth preventing.
    */
   async place(customerId: string, input: PlaceOrderInput) {
-    const [existing] = await this.db
-      .select({ id: orders.id })
-      .from(orders)
-      .where(eq(orders.stripePaymentIntentId, input.paymentIntentId))
-      .limit(1);
+    const existing = await unwrap<{ id: string } | null>(
+      this.db.from('orders').select('id').eq('stripe_payment_intent_id', input.paymentIntentId).maybeSingle()
+    );
     // A retry, a double-tap or a flaky network can deliver this twice. Return
     // the order that already exists instead of creating a second one against
     // one payment — and check before calling Stripe, so a retry is cheap.
@@ -223,93 +209,76 @@ export class OrdersService {
       customerId,
     });
 
-    const [profile] = await this.db
-      .select({ fullName: profiles.fullName })
-      .from(profiles)
-      .where(eq(profiles.id, customerId))
-      .limit(1);
+    const profile = await unwrap<{ fullName: string | null } | null>(
+      this.db.from('profiles').select('fullName:full_name').eq('id', customerId).maybeSingle()
+    );
 
-    const orderId = await this.db.transaction(async (tx) => {
-      const now = new Date();
-      const [order] = await tx
-        .insert(orders)
-        .values({
-          customerId,
-          // Snapshot: an order must not change if the account's name later does.
-          customerName: profile?.fullName ?? null,
-          vendorId: input.vendorId,
-          status: 'pending',
-          subtotalCad: String(priced.subtotalCad),
-          gstCad: String(priced.gstCad),
-          qstCad: String(priced.qstCad),
-          deliveryFeeCad: String(priced.deliveryFeeCad),
-          pointsRedeemed: priced.pointsRedeemed > 0 ? priced.pointsRedeemed : null,
-          pointsDiscountCad: priced.pointsRedeemed > 0 ? String(priced.pointsDiscountCad) : null,
-          couponCode: priced.couponCode,
-          couponDiscountCad: priced.couponCode ? String(priced.couponDiscountCad) : null,
-          totalCad: String(priced.totalCad),
-          // The delivery address is copied, not referenced: editing or deleting
-          // a saved address must not rewrite where a past order went.
-          deliveryAddressLabel: address.label,
-          deliveryAddressStreet: address.street,
-          deliveryAddressCity: address.city,
-          deliveryAddressPostalCode: address.postalCode,
-          deliveryAddressLat: address.lat,
-          deliveryAddressLng: address.lng,
-          stripePaymentIntentId: input.paymentIntentId,
-          createdAt: now,
-        })
-        .returning({ id: orders.id });
-
-      await tx.insert(orderItems).values(
-        priced.items.map((line) => ({
-          orderId: order.id,
+    // All six writes — the order, its lines, the first history row, the guarded
+    // stock decrements, the points debit and the coupon claim — land together
+    // or not at all, inside `order_place` (migration `rpc_order_place`).
+    //
+    // The last two used to be handed the transaction itself
+    // (`loyalty.debitForRedemption(tx, …)`, `coupons.redeem(tx, …)`). There is
+    // no handle to pass over PostgREST, so they moved into the function rather
+    // than becoming separate requests: a shopper must never lose points, or
+    // burn a limited coupon, on an order that then rolls back.
+    //
+    // Pricing deliberately stays out of SQL — `priceOrder` remains the single
+    // authority on what an order is worth and hands the result in, so the tax
+    // and delivery formulas have no second copy to drift from.
+    const orderId = await unwrapRpc<string>(
+      this.db.rpc('order_place', {
+        p_customer_id: customerId,
+        // Snapshot: an order must not change if the account's name later does.
+        //
+        // Cast because the generated RPC types model every argument as
+        // non-null. `orders.customer_name` is nullable and the SQL parameter
+        // takes null happily — an account with no name on it is a real state,
+        // not a missing value to invent one for.
+        p_customer_name: (profile?.fullName ?? null) as string,
+        p_vendor_id: input.vendorId,
+        p_subtotal_cad: priced.subtotalCad,
+        p_gst_cad: priced.gstCad,
+        p_qst_cad: priced.qstCad,
+        p_delivery_fee_cad: priced.deliveryFeeCad,
+        p_total_cad: priced.totalCad,
+        // The delivery address is copied, not referenced: editing or deleting
+        // a saved address must not rewrite where a past order went.
+        p_addr_label: address.label,
+        p_addr_street: address.street,
+        p_addr_city: address.city,
+        p_addr_postal_code: address.postalCode,
+        p_addr_lat: address.lat,
+        p_addr_lng: address.lng,
+        // Name and price snapshot: the catalogue is mutable, an order is not.
+        p_items: priced.items.map((line) => ({
           productId: line.productId,
-          // Name and price snapshot: the catalogue is mutable, an order is not.
           name: line.name,
           qty: line.qty,
-          unitPriceCad: String(line.unitPriceCad),
-        }))
-      );
-
-      await tx.insert(orderStatusHistory).values({ orderId: order.id, status: 'pending', at: now });
-
-      // Stock comes down in the same transaction as the order, guarded so two
-      // simultaneous checkouts cannot both take the last unit: the `where`
-      // re-checks the quantity the row actually has right now, and a zero-row
-      // update means somebody else got there first.
-      for (const line of priced.items) {
-        const decremented = await tx
-          .update(products)
-          .set({ stockQty: sql`${products.stockQty} - ${line.qty}`, updatedAt: now })
-          .where(and(eq(products.id, line.productId), sql`${products.stockQty} >= ${line.qty}`))
-          .returning({ id: products.id });
-        if (decremented.length === 0) {
-          // Rolls the whole order back. The shopper has been charged at this
-          // point, so this is logged loudly: it needs a refund, and Phase 6's
+          unitPriceCad: line.unitPriceCad,
+        })),
+        p_payment_intent_id: input.paymentIntentId,
+        p_points_redeemed: priced.pointsRedeemed > 0 ? priced.pointsRedeemed : undefined,
+        p_points_discount_cad: priced.pointsRedeemed > 0 ? priced.pointsDiscountCad : undefined,
+        p_coupon_code: priced.couponCode ?? undefined,
+        p_coupon_discount_cad: priced.couponCode ? priced.couponDiscountCad : undefined,
+      }),
+      (error) => {
+        if (error.code === SOLD_OUT) {
+          // The whole order rolled back, but the shopper has already been
+          // charged — logged loudly because it needs a refund, and Phase 6's
           // refund flow is where that becomes automatic.
           this.logger.error(
-            `Order rolled back after payment ${input.paymentIntentId}: "${line.name}" went out of stock mid-checkout. REFUND REQUIRED.`
+            `Order rolled back after payment ${input.paymentIntentId}: ${error.message} REFUND REQUIRED.`
           );
-          throw new ConflictException(`"${line.name}" sold out while you were paying — you have not been charged for an order`);
+          throw new ConflictException(error.message);
         }
+        if (error.code === COUPON_EXHAUSTED || error.code === COUPON_ALREADY_USED) {
+          throw new BadRequestException(error.message);
+        }
+        throw unexpectedDbError(error);
       }
-
-      // Both of these run inside the order's own transaction, so a rollback
-      // (an item selling out mid-checkout, below) takes them with it: a
-      // shopper must never lose points, or burn a limited coupon, on an order
-      // that does not exist.
-      if (priced.pointsRedeemed > 0) {
-        await this.loyalty.debitForRedemption(tx, customerId, priced.pointsRedeemed, order.id);
-      }
-      if (priced.couponCode) {
-        // Enforces the usage limit atomically — the count in `resolve` was
-        // only advisory, so that a quote could show the right total.
-        await this.coupons.redeem(tx, { code: priced.couponCode, customerId, orderId: order.id });
-      }
-
-      return order.id;
-    });
+    );
 
     return this.byId(customerId, orderId, 'customer');
   }
@@ -321,21 +290,18 @@ export class OrdersService {
     const ids = rows.map((r) => r.id);
 
     const [items, history, openDisputes] = await Promise.all([
-      this.db
-        .select({
-          orderId: orderItems.orderId,
-          productId: orderItems.productId,
-          name: orderItems.name,
-          qty: orderItems.qty,
-          unitPriceCad: orderItems.unitPriceCad,
-        })
-        .from(orderItems)
-        .where(inArray(orderItems.orderId, ids)),
-      this.db
-        .select({ orderId: orderStatusHistory.orderId, status: orderStatusHistory.status, at: orderStatusHistory.at })
-        .from(orderStatusHistory)
-        .where(inArray(orderStatusHistory.orderId, ids)),
-      this.db.select().from(disputes).where(inArray(disputes.orderId, ids)),
+      unwrap<{ orderId: string; productId: string; name: string; qty: number; unitPriceCad: string }[]>(
+        this.db
+          .from('order_items')
+          .select('orderId:order_id, productId:product_id, name, qty, unitPriceCad:unit_price_cad')
+          .in('order_id', ids)
+      ),
+      unwrap<{ orderId: string; status: string; at: string }[]>(
+        this.db.from('order_status_history').select('orderId:order_id, status, at').in('order_id', ids)
+      ),
+      unwrap<Record<string, unknown>[]>(this.db.from('disputes').select('*').in('order_id', ids)).then((rows) =>
+        camelize<{ orderId: string }[]>(rows)
+      ),
     ]);
 
     const map = new Map<string, { items: unknown[]; statusHistory: unknown[]; dispute: unknown }>();
@@ -355,8 +321,14 @@ export class OrdersService {
       map.get(dispute.orderId)!.dispute = dispute;
     }
     // Oldest first, so the timeline reads top to bottom.
+    //
+    // ⚠️ `at` is an ISO **string** here, not a Date. `postgres.js` parsed
+    // timestamptz into Date objects; PostgREST hands back JSON, so it never
+    // does. The previous `a.at.getTime()` would throw at runtime on a shape
+    // TypeScript had been told was a Date. Any other date arithmetic in this
+    // codebase carries the same break.
     for (const entry of map.values()) {
-      (entry.statusHistory as { at: Date }[]).sort((a, b) => a.at.getTime() - b.at.getTime());
+      (entry.statusHistory as { at: string }[]).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
     }
     return map;
   }
@@ -389,55 +361,54 @@ export class OrdersService {
    * but isn't yours should not be distinguishable from one that doesn't.
    */
   async byId(userId: string, orderId: string, scope: 'customer' | 'merchant') {
-    const ownership =
-      scope === 'customer'
-        ? eq(orders.customerId, userId)
-        : sql`exists (select 1 from ${vendors} v where v.id = ${orders.vendorId} and v.owner_id = ${userId})`;
+    // The merchant claim was an `exists` subquery against `vendors.owner_id`.
+    // PostgREST has no correlated subquery, so the shop is resolved first and
+    // the order filtered on its id — the same rule, one extra round trip.
+    let query = this.db.from('orders').select('*').eq('id', orderId);
+    if (scope === 'customer') {
+      query = query.eq('customer_id', userId);
+    } else {
+      const vendor = await this.vendorOwnedBy(userId);
+      query = query.eq('vendor_id', vendor.id);
+    }
 
-    const [row] = await this.db
-      .select()
-      .from(orders)
-      .where(and(eq(orders.id, orderId), ownership))
-      .limit(1);
-    if (!row) throw new NotFoundException('Order not found');
+    const raw = await unwrap<Record<string, unknown> | null>(query.maybeSingle());
+    if (!raw) throw new NotFoundException('Order not found');
+    const row = camelize<Record<string, unknown> & { id: string }>(raw);
 
     const parts = await this.hydrate([row]);
     return this.toOrder(row, parts.get(row.id)!);
   }
 
   async listForCustomer(customerId: string, query: OrderQuery): Promise<Page<unknown>> {
-    return this.list(eq(orders.customerId, customerId), query);
+    return this.list({ column: 'customer_id', value: customerId }, query);
   }
 
   async listForVendorOwner(userId: string, query: OrderQuery): Promise<Page<unknown>> {
-    const [vendor] = await this.db.select({ id: vendors.id }).from(vendors).where(eq(vendors.ownerId, userId)).limit(1);
-    if (!vendor) throw new NotFoundException('This account has no shop');
-    return this.list(eq(orders.vendorId, vendor.id), query);
+    const vendor = await this.vendorOwnedBy(userId);
+    return this.list({ column: 'vendor_id', value: vendor.id }, query);
   }
 
-  private async list(ownership: SQL, query: OrderQuery): Promise<Page<unknown>> {
-    const conditions: SQL[] = [ownership];
-    if (query.status) conditions.push(eq(orders.status, query.status));
-    if (query.activeOnly) conditions.push(notInArray(orders.status, ['delivered', 'cancelled']));
-    const where = and(...conditions)!;
+  private async list(ownership: { column: 'customer_id' | 'vendor_id'; value: string }, query: OrderQuery): Promise<Page<unknown>> {
+    // One request instead of two: `count: 'exact'` returns the total alongside
+    // the page, so the separate `count(*)` query is gone.
+    let q = this.db.from('orders').select('*', { count: 'exact' }).eq(ownership.column, ownership.value);
+    if (query.status) q = q.eq('status', query.status);
+    if (query.activeOnly) q = q.not('status', 'in', '("delivered","cancelled")');
 
-    const [rows, [counted]] = await Promise.all([
-      this.db
-        .select()
-        .from(orders)
-        .where(where)
-        // Newest first, matching every list in the app. `id` breaks ties so a
-        // page boundary can't repeat or drop a row when two share a timestamp.
-        .orderBy(desc(orders.createdAt), desc(orders.id))
-        .limit(query.limit)
-        .offset(query.offset),
-      this.db.select({ total: sql<number>`count(*)::int` }).from(orders).where(where),
-    ]);
+    const { data, count, error } = await q
+      // Newest first, matching every list in the app. `id` breaks ties so a
+      // page boundary can't repeat or drop a row when two share a timestamp.
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(query.offset, query.offset + query.limit - 1);
+    if (error) throw unexpectedDbError(error);
 
+    const rows = camelize<(Record<string, unknown> & { id: string })[]>(data ?? []);
     const parts = await this.hydrate(rows);
     return {
       items: rows.map((row) => this.toOrder(row, parts.get(row.id)!)),
-      total: counted?.total ?? 0,
+      total: count ?? 0,
       limit: query.limit,
       offset: query.offset,
     };
@@ -458,32 +429,26 @@ export class OrdersService {
   async advanceAsMerchant(userId: string, orderId: string, to: OrderStatus) {
     const actor: StatusActor = 'merchant';
 
-    const [vendor] = await this.db.select({ id: vendors.id }).from(vendors).where(eq(vendors.ownerId, userId)).limit(1);
-    if (!vendor) throw new NotFoundException('This account has no shop');
+    const vendor = await this.vendorOwnedBy(userId);
 
-    const [order] = await this.db
-      .select({ id: orders.id, status: orders.status })
-      .from(orders)
-      .where(and(eq(orders.id, orderId), eq(orders.vendorId, vendor.id)))
-      .limit(1);
+    const order = await unwrap<{ id: string; status: OrderStatus } | null>(
+      this.db.from('orders').select('id, status').eq('id', orderId).eq('vendor_id', vendor.id).maybeSingle()
+    );
     if (!order) throw new NotFoundException('Order not found');
 
     assertTransition(order.status, to, actor);
 
-    await this.db.transaction(async (tx) => {
-      const now = new Date();
-      // Re-check the status inside the write: two dashboard taps a moment apart
-      // would otherwise both pass `assertTransition` against the same old value
-      // and append two history rows for one move.
-      const moved = await tx
-        .update(orders)
-        .set({ status: to })
-        .where(and(eq(orders.id, orderId), eq(orders.status, order.status)))
-        .returning({ id: orders.id });
-      if (moved.length === 0) throw new ConflictException('The order status changed while you were acting on it');
-
-      await tx.insert(orderStatusHistory).values({ orderId, status: to, at: now });
-    });
+    // The move and its history row land together, and the status is re-checked
+    // inside the write — two dashboard taps a moment apart would otherwise both
+    // pass `assertTransition` against the same stale value and append two
+    // history rows for one move. See migration `rpc_order_advance_status`.
+    await unwrapRpc<void>(
+      this.db.rpc('order_advance_status', { p_order_id: orderId, p_from: order.status, p_to: to }),
+      (error) => {
+        if (error.code === STATUS_MOVED) throw new ConflictException(error.message);
+        throw unexpectedDbError(error);
+      }
+    );
 
     return this.byId(userId, orderId, 'merchant');
   }
@@ -498,49 +463,50 @@ export class OrdersService {
    * cancellation question, which the merchant owns.
    */
   async openDispute(customerId: string, orderId: string, input: OpenDisputeInput) {
-    const [order] = await this.db
-      .select({ id: orders.id, status: orders.status })
-      .from(orders)
-      .where(and(eq(orders.id, orderId), eq(orders.customerId, customerId)))
-      .limit(1);
+    const order = await unwrap<{ id: string; status: OrderStatus } | null>(
+      this.db.from('orders').select('id, status').eq('id', orderId).eq('customer_id', customerId).maybeSingle()
+    );
     if (!order) throw new NotFoundException('Order not found');
     if (order.status !== 'delivered') {
       throw new BadRequestException('A dispute can only be opened on a delivered order');
     }
 
-    const inserted = await this.db
-      .insert(disputes)
-      .values({ orderId, reason: input.reason, message: input.message, status: 'open' })
-      // Reopening would overwrite what the shopper originally said, which is
-      // the one part of a dispute nobody should be able to rewrite. The mock
-      // returned the order unchanged; a conflict is the honest answer.
-      .onConflictDoNothing()
-      .returning({ orderId: disputes.orderId });
-    if (inserted.length === 0) throw new ConflictException('A dispute is already open on this order');
+    // Reopening would overwrite what the shopper originally said, which is the
+    // one part of a dispute nobody should be able to rewrite. The mock returned
+    // the order unchanged; a conflict is the honest answer.
+    //
+    // `onConflictDoNothing().returning()` told the two cases apart by row count;
+    // here the unique violation comes back as a SQLSTATE instead.
+    const { error } = await this.db
+      .from('disputes')
+      .insert({ order_id: orderId, reason: input.reason, message: input.message, status: 'open' });
+    if (error) {
+      if (error.code === UNIQUE_VIOLATION) throw new ConflictException('A dispute is already open on this order');
+      throw unexpectedDbError(error);
+    }
 
     return this.byId(customerId, orderId, 'customer');
   }
 
   /** The merchant's answer. Settling the dispute is the back-office's call (Phase 6), not theirs. */
   async replyToDispute(userId: string, orderId: string, input: ReplyDisputeInput) {
-    const [vendor] = await this.db.select({ id: vendors.id }).from(vendors).where(eq(vendors.ownerId, userId)).limit(1);
-    if (!vendor) throw new NotFoundException('This account has no shop');
+    const vendor = await this.vendorOwnedBy(userId);
 
-    const [order] = await this.db
-      .select({ id: orders.id })
-      .from(orders)
-      .where(and(eq(orders.id, orderId), eq(orders.vendorId, vendor.id)))
-      .limit(1);
+    const order = await unwrap<{ id: string } | null>(
+      this.db.from('orders').select('id').eq('id', orderId).eq('vendor_id', vendor.id).maybeSingle()
+    );
     if (!order) throw new NotFoundException('Order not found');
 
-    const updated = await this.db
-      .update(disputes)
-      .set({ status: 'answered', merchantReply: input.message, answeredAt: new Date() })
-      // Only an open dispute takes a reply: one an admin has already resolved
-      // or rejected is closed, and reopening it is Phase 6's call, not a
-      // merchant's.
-      .where(and(eq(disputes.orderId, orderId), inArray(disputes.status, ['open', 'answered'])))
-      .returning({ orderId: disputes.orderId });
+    // Only an open dispute takes a reply: one an admin has already resolved or
+    // rejected is closed, and reopening it is Phase 6's call, not a merchant's.
+    const updated = await unwrap<{ orderId: string }[]>(
+      this.db
+        .from('disputes')
+        .update({ status: 'answered', merchant_reply: input.message, answered_at: new Date().toISOString() })
+        .eq('order_id', orderId)
+        .in('status', ['open', 'answered'])
+        .select('orderId:order_id')
+    );
     if (updated.length === 0) throw new NotFoundException('No open dispute on this order');
 
     return this.byId(userId, orderId, 'merchant');
@@ -550,4 +516,49 @@ export class OrdersService {
   isActive(status: OrderStatus): boolean {
     return isActiveStatus(status);
   }
+
+  /**
+   * The signed-in merchant's shop.
+   *
+   * Was an inline `select … where owner_id = …` at four call sites; PostgREST
+   * cannot express the `exists` correlation those sites used to rely on, so
+   * the lookup is now explicit and shared rather than copied four times.
+   */
+  private async vendorOwnedBy(userId: string): Promise<{ id: string }> {
+    const vendor = await unwrap<{ id: string } | null>(
+      this.db.from('vendors').select('id').eq('owner_id', userId).maybeSingle()
+    );
+    if (!vendor) throw new NotFoundException('This account has no shop');
+    return vendor;
+  }
 }
+
+// ── the refusals `order_place` and `order_advance_status` raise ──────────────
+// Custom SQLSTATEs, so each maps to the status it always had rather than to a
+// blanket 500. See the two `rpc_order_*` migrations.
+const SOLD_OUT = 'SGB01';
+const COUPON_EXHAUSTED = 'SGB02';
+const COUPON_ALREADY_USED = 'SGB03';
+const STATUS_MOVED = 'SGB04';
+/** Postgres's own — https://www.postgresql.org/docs/current/errcodes-appendix.html */
+const UNIQUE_VIOLATION = '23505';
+
+/**
+ * ⚠️ Never let `error.message` reach the client: PostgREST echoes constraint
+ * names, columns and sometimes offending values. The detail goes to the log.
+ */
+function unexpectedDbError(error: PostgrestError): Error {
+  console.error('[postgrest]', error.code, error.message, error.details ?? '', error.hint ?? '');
+  return new InternalServerErrorException('Database request failed');
+}
+
+type VendorRow = { id: string; name: string; status: string; lat: number; lng: number };
+type AddressRow = { label: string; street: string; city: string; postalCode: string; lat: number; lng: number };
+type ProductRow = {
+  id: string;
+  vendorId: string;
+  name: string;
+  priceCad: string;
+  stockQty: number;
+  isAvailable: boolean;
+};
