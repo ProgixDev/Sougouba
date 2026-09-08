@@ -1,11 +1,10 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { and, eq, inArray, isNotNull, lt, notExists, sql } from 'drizzle-orm';
 
 import type { Env } from '../config/env.js';
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
-import { courierLocations, deliveryProofs, disputes, platformSettings } from '../db/schema/index.js';
+import { unwrap, unwrapRpc } from '../db/unwrap.js';
 
 export type PurgeReport = {
   courierLocations: number;
@@ -35,14 +34,13 @@ export class RetentionService {
   ) {}
 
   async purge(): Promise<PurgeReport> {
-    const [settings] = await this.db
-      .select({
-        locationDays: platformSettings.courierLocationRetentionDays,
-        proofDays: platformSettings.deliveryProofRetentionDays,
-      })
-      .from(platformSettings)
-      .where(eq(platformSettings.id, 1))
-      .limit(1);
+    const settings = await unwrap<{ locationDays: number; proofDays: number } | null>(
+      this.db
+        .from('platform_settings')
+        .select('locationDays:courier_location_retention_days, proofDays:delivery_proof_retention_days')
+        .eq('id', 1)
+        .maybeSingle()
+    );
 
     // No settings row means no stated retention period, which means nothing has
     // been promised and nothing should be destroyed on a guess.
@@ -63,15 +61,14 @@ export class RetentionService {
    * `order_deliveries` at delivery rather than re-derived from these rows.
    */
   private async purgeCourierLocations(days: number): Promise<number> {
-    const deleted = await this.db
-      .delete(courierLocations)
-      .where(lt(courierLocations.recordedAt, cutoff(days)))
-      .returning({ id: courierLocations.id });
+    // The cutoff is computed by the database, not this process: a purge that
+    // deletes on a drifting host clock deletes the wrong rows.
+    const count = await unwrapRpc<number>(this.db.rpc('retention_purge_locations', { p_days: days }));
 
-    if (deleted.length > 0) {
-      this.logger.log(`Retention: deleted ${deleted.length} courier location ping(s) older than ${days} days`);
+    if (count > 0) {
+      this.logger.log(`Retention: deleted ${count} courier location ping(s) older than ${days} days`);
     }
-    return deleted.length;
+    return count;
   }
 
   /**
@@ -97,23 +94,10 @@ export class RetentionService {
   private async purgeDeliveryProofs(
     days: number
   ): Promise<{ deliveryProofs: number; deliveryProofsHeld: number; skippedReason?: string }> {
-    const expired = and(
-      lt(deliveryProofs.at, cutoff(days)),
-      // `notExists` rather than a join: a proof with no dispute row at all must
-      // still be purged, and an inner join would silently keep every one of them.
-      notExists(
-        this.db
-          .select({ one: sql`1` })
-          .from(disputes)
-          .where(and(eq(disputes.orderId, deliveryProofs.orderId), inArray(disputes.status, ['open', 'answered'])))
-      )
-    );
-
     // Anything with an image can only go once Storage can go with it.
-    const withImage = await this.db
-      .select({ orderId: deliveryProofs.orderId, imagePath: deliveryProofs.imagePath })
-      .from(deliveryProofs)
-      .where(and(expired, isNotNull(deliveryProofs.imagePath)));
+    const withImage = await unwrap<{ order_id: string; image_path: string }[]>(
+      this.db.rpc('retention_expired_proofs_with_image', { p_days: days })
+    );
 
     if (withImage.length > 0 && !this.config.get('SUPABASE_SERVICE_ROLE_KEY', { infer: true })) {
       // Loud, and it does not proceed. Deleting these rows now would orphan the
@@ -128,23 +112,20 @@ export class RetentionService {
 
     // Proofs with no image — a plain "left at the door" note, or a signature
     // method that never produced a file — have nothing in Storage to wait for.
-    const deleted = await this.db
-      .delete(deliveryProofs)
-      .where(and(expired, sql`${deliveryProofs.imagePath} is null`))
-      .returning({ orderId: deliveryProofs.orderId });
+    const deleted = await unwrapRpc<number>(
+      this.db.rpc('retention_delete_proofs_without_image', { p_days: days })
+    );
 
-    if (deleted.length > 0) {
-      this.logger.log(`Retention: deleted ${deleted.length} delivery proof(s) older than ${days} days`);
+    if (deleted > 0) {
+      this.logger.log(`Retention: deleted ${deleted} delivery proof(s) older than ${days} days`);
     }
 
     return {
-      deliveryProofs: deleted.length,
+      deliveryProofs: deleted,
       deliveryProofsHeld: withImage.length,
       ...(withImage.length > 0 ? { skippedReason: 'SUPABASE_SERVICE_ROLE_KEY not set; Storage objects cannot be deleted' } : {}),
     };
   }
 }
 
-function cutoff(days: number): Date {
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-}
+

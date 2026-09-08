@@ -1,20 +1,13 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { Inject, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import type { PostgrestError } from '@supabase/supabase-js';
 
 import { referralCodeFor } from '../common/loyalty/referral.js';
 import type { Db } from '../db/client.js';
+import { camelize } from '../db/case.js';
 import { DB } from '../db/db.module.js';
-import { loyaltyTransactions, orders, profiles } from '../db/schema/index.js';
+import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import { pointsEarnedFor, pointsExpiryFrom, qualifiesForReferralReward } from './loyalty-rules.js';
 import { SettingsService } from './settings.service.js';
-
-/**
- * The connection *or* an open transaction on it. Every write below is called
- * both standalone and from inside a caller's transaction (the redemption debit
- * runs inside the order's own, so a failed order leaves no debit behind), and
- * Drizzle types the two differently.
- */
-type DbOrTx = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
 
 /**
  * The Points Sougouba ledger.
@@ -51,45 +44,56 @@ export class LoyaltyService {
    * expiring a *debit* would hand points back for something already spent.
    */
   async balance(customerId: string): Promise<number> {
-    const [row] = await this.db
-      .select({ balance: sql<number>`coalesce(sum(${loyaltyTransactions.points}), 0)::int` })
-      .from(loyaltyTransactions)
-      .where(
-        and(
-          eq(loyaltyTransactions.customerId, customerId),
-          sql`(${loyaltyTransactions.expiresAt} is null or ${loyaltyTransactions.expiresAt} > now())`
-        )
-      );
-    return row?.balance ?? 0;
+    // Summed here rather than in SQL. The rows are one customer's ledger — tens,
+    // not thousands — and PostgREST has no `sum()`; an RPC for an addition this
+    // small would be a function to maintain for no gain. `or(expires_at.is.null,
+    // expires_at.gt.now)` cannot be expressed against the database's own clock
+    // either, so the cutoff is this process's — a few milliseconds of skew on a
+    // points expiry that is measured in months.
+    const rows = await unwrap<{ points: number; expiresAt: string | null }[]>(
+      this.db
+        .from('loyalty_transactions')
+        .select('points, expiresAt:expires_at')
+        .eq('customer_id', customerId)
+    );
+    const now = Date.now();
+    // An expired earn simply stops counting. Redemptions and reversals carry no
+    // expiry, so they always count: expiring a *debit* would hand points back
+    // for something already spent.
+    return rows.reduce(
+      (sum, r) => (r.expiresAt === null || Date.parse(r.expiresAt) > now ? sum + r.points : sum),
+      0
+    );
   }
 
   /** Newest first, matching the points screen. Includes expired rows — the history is a record, not a balance. */
-  history(customerId: string, limit: number, offset: number) {
-    return this.db
-      .select()
-      .from(loyaltyTransactions)
-      .where(eq(loyaltyTransactions.customerId, customerId))
-      .orderBy(desc(loyaltyTransactions.createdAt), desc(loyaltyTransactions.id))
-      .limit(limit)
-      .offset(offset);
+  async history(customerId: string, limit: number, offset: number) {
+    const rows = await unwrap<Record<string, unknown>[]>(
+      this.db
+        .from('loyalty_transactions')
+        .select('*')
+        .eq('customer_id', customerId)
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(offset, offset + limit - 1)
+    );
+    return camelize<unknown[]>(rows);
   }
 
   /** How this account's own referral code has paid off — read off the ledger rather than a separate counter. */
   async referralStats(customerId: string) {
-    const [row] = await this.db
-      .select({
-        referredCount: sql<number>`count(*)::int`,
-        pointsFromReferrals: sql<number>`coalesce(sum(${loyaltyTransactions.points}), 0)::int`,
-      })
-      .from(loyaltyTransactions)
-      .where(
-        and(eq(loyaltyTransactions.customerId, customerId), eq(loyaltyTransactions.reason, 'referral_referrer'))
-      );
+    const rows = await unwrap<{ points: number }[]>(
+      this.db
+        .from('loyalty_transactions')
+        .select('points')
+        .eq('customer_id', customerId)
+        .eq('reason', 'referral_referrer')
+    );
 
     return {
       code: referralCodeFor(customerId),
-      referredCount: row?.referredCount ?? 0,
-      pointsFromReferrals: row?.pointsFromReferrals ?? 0,
+      referredCount: rows.length,
+      pointsFromReferrals: rows.reduce((sum, r) => sum + r.points, 0),
     };
   }
 
@@ -104,30 +108,38 @@ export class LoyaltyService {
    * win. Rows with a null `order_id` (none today) would not be covered by the
    * partial index, which is why every caller here passes one.
    */
-  private async record(
-    tx: DbOrTx,
-    values: {
-      customerId: string;
-      points: number;
-      reason: 'order_delivered' | 'referral_referrer' | 'referral_referred' | 'redeemed' | 'order_refunded';
-      orderId: string;
-      expiresAt?: Date | null;
-      createdAt?: Date;
-    }
-  ): Promise<boolean> {
-    const inserted = await tx
-      .insert(loyaltyTransactions)
-      .values({
-        customerId: values.customerId,
+  /**
+   * ⚠️ No transaction handle any more. This writes a movement that stands
+   * alone — the delivery credit and its referral reward moved into
+   * `loyalty_credit_delivered`, and the redemption debit into `order_place`,
+   * precisely because those must not be separate requests.
+   */
+  private async record(values: {
+    customerId: string;
+    points: number;
+    reason: 'order_delivered' | 'referral_referrer' | 'referral_referred' | 'redeemed' | 'order_refunded';
+    orderId: string;
+    expiresAt?: Date | null;
+    createdAt?: Date;
+  }): Promise<boolean> {
+    const { data, error } = await this.db
+      .from('loyalty_transactions')
+      .insert({
+        customer_id: values.customerId,
         points: values.points,
         reason: values.reason,
-        orderId: values.orderId,
-        expiresAt: values.expiresAt ?? null,
-        ...(values.createdAt ? { createdAt: values.createdAt } : {}),
+        order_id: values.orderId,
+        expires_at: values.expiresAt?.toISOString() ?? null,
+        ...(values.createdAt ? { created_at: values.createdAt.toISOString() } : {}),
       })
-      .onConflictDoNothing()
-      .returning({ id: loyaltyTransactions.id });
-    return inserted.length > 0;
+      .select('id');
+    // A duplicate is the "already recorded" answer, not a failure — the shape
+    // `onConflictDoNothing().returning()` gave by row count.
+    if (error) {
+      if (error.code === UNIQUE_VIOLATION) return false;
+      throw unexpectedDbError(error);
+    }
+    return (data?.length ?? 0) > 0;
   }
 
   /**
@@ -139,10 +151,10 @@ export class LoyaltyService {
    * only writes the debit down. Called inside the order's own transaction, so a
    * failed order never leaves a debit behind.
    */
-  async debitForRedemption(tx: DbOrTx, customerId: string, points: number, orderId: string): Promise<void> {
+  async debitForRedemption(customerId: string, points: number, orderId: string): Promise<void> {
     if (points <= 0) return;
     // No expiry on a debit — see `balance`.
-    await this.record(tx, { customerId, points: -points, reason: 'redeemed', orderId });
+    await this.record({ customerId, points: -points, reason: 'redeemed', orderId });
   }
 
   /**
@@ -161,17 +173,19 @@ export class LoyaltyService {
   async creditForDeliveredOrder(orderId: string, deliveredAt: Date = new Date()): Promise<void> {
     const rates = await this.settings.loyaltyRates();
 
-    const [order] = await this.db
-      .select({
-        id: orders.id,
-        customerId: orders.customerId,
-        subtotalCad: orders.subtotalCad,
-        status: orders.status,
-        createdAt: orders.createdAt,
-      })
-      .from(orders)
-      .where(eq(orders.id, orderId))
-      .limit(1);
+    const order = await unwrap<{
+      id: string;
+      customerId: string;
+      subtotalCad: string;
+      status: string;
+      createdAt: string;
+    } | null>(
+      this.db
+        .from('orders')
+        .select('id, customerId:customer_id, subtotalCad:subtotal_cad, status, createdAt:created_at')
+        .eq('id', orderId)
+        .maybeSingle()
+    );
     if (!order) return;
     if (order.status !== 'delivered') {
       // Defence in depth: the caller is the completion endpoint, but crediting
@@ -182,78 +196,34 @@ export class LoyaltyService {
 
     const subtotalCad = Number(order.subtotalCad);
     const points = pointsEarnedFor(subtotalCad, rates, deliveredAt);
+    const expiresAt = pointsExpiryFrom(deliveredAt, rates);
 
-    await this.db.transaction(async (tx) => {
-      if (points > 0) {
-        const credited = await this.record(tx, {
-          customerId: order.customerId,
-          points,
-          reason: 'order_delivered',
-          orderId: order.id,
-          expiresAt: pointsExpiryFrom(deliveredAt, rates),
-          createdAt: deliveredAt,
-        });
-        // Already credited — a retry, or a webhook arriving twice. Everything
-        // below is conditioned on the same order, so stopping here keeps the
-        // referral reward from being paid a second time too.
-        if (!credited) return;
-      }
+    // The credit and the referral reward it can trigger, in one transaction —
+    // both are conditioned on the same event, and the "first delivered order"
+    // count has to be read inside it. See `loyalty_credit_delivered`.
+    const outcome = await unwrapRpc<string>(
+      this.db.rpc('loyalty_credit_delivered', {
+        p_order_id: order.id,
+        p_customer_id: order.customerId,
+        p_points: points,
+        p_expires_at: (expiresAt?.toISOString() ?? null) as string,
+        p_created_at: deliveredAt.toISOString(),
+        p_referral_points: rates.referralRewardPoints,
+        p_qualifies_for_referral: qualifiesForReferralReward(subtotalCad, rates),
+      })
+    );
 
-      if (!qualifiesForReferralReward(subtotalCad, rates)) return;
-
-      const [customer] = await tx
-        .select({ referredBy: profiles.referredBy })
-        .from(profiles)
-        .where(eq(profiles.id, order.customerId))
-        .limit(1);
-      if (!customer?.referredBy) return;
-
-      // Only on the *first* delivered order. Counted rather than flagged: a
-      // "has been rewarded" column would be a second source of truth, and the
-      // ledger already knows — this order plus any earlier delivered one.
-      const [{ earlier }] = await tx
-        .select({ earlier: sql<number>`count(*)::int` })
-        .from(orders)
-        .where(
-          and(
-            eq(orders.customerId, order.customerId),
-            eq(orders.status, 'delivered'),
-            sql`${orders.id} <> ${order.id}`,
-            // Strictly earlier by placement time, not by delivery time: two
-            // orders can be delivered out of the order they were placed in,
-            // and "first order" in the brief means the first one they made.
-            sql`${orders.createdAt} < ${order.createdAt}`
-          )
-        );
-      if (earlier > 0) return;
-
-      // ⚠️ The brief's other anti-fraud gate — a **verified phone number** —
-      // is still not enforced. Without it, one person with two email addresses
-      // can refer themselves and collect both sides. The mock admitted the same
+    if (outcome === 'referral') {
+      // ⚠️ The brief's other anti-fraud gate — a **verified phone number** — is
+      // still not enforced. Without it, one person with two email addresses can
+      // refer themselves and collect both sides. The mock admitted the same
       // gap; it needs an SMS OTP decision (Twilio vs. Supabase phone auth)
       // before this is safe to run with real money behind it. Logged so the
       // exposure is visible rather than silent.
       this.logger.log(
         `Referral reward paid on order ${order.id} without phone verification — see docs/BACKEND-BUILD-PHASES.md, Phase 4.`
       );
-
-      await this.record(tx, {
-        customerId: order.customerId,
-        points: rates.referralRewardPoints,
-        reason: 'referral_referred',
-        orderId: order.id,
-        expiresAt: pointsExpiryFrom(deliveredAt, rates),
-        createdAt: deliveredAt,
-      });
-      await this.record(tx, {
-        customerId: customer.referredBy,
-        points: rates.referralRewardPoints,
-        reason: 'referral_referrer',
-        orderId: order.id,
-        expiresAt: pointsExpiryFrom(deliveredAt, rates),
-        createdAt: deliveredAt,
-      });
-    });
+    }
   }
 
   /**
@@ -265,21 +235,36 @@ export class LoyaltyService {
    * error than taking back too little. Still unwired, like its counterpart in
    * the mock — Phase 6's refund flow is the caller it is waiting for.
    */
-  async reverseForOrder(orderId: string, tx: DbOrTx = this.db): Promise<void> {
-    const [earned] = await tx
-      .select({ customerId: loyaltyTransactions.customerId, points: loyaltyTransactions.points })
-      .from(loyaltyTransactions)
-      .where(and(eq(loyaltyTransactions.orderId, orderId), eq(loyaltyTransactions.reason, 'order_delivered')))
-      .limit(1);
+  async reverseForOrder(orderId: string): Promise<void> {
+    const earned = await unwrap<{ customerId: string; points: number } | null>(
+      this.db
+        .from('loyalty_transactions')
+        .select('customerId:customer_id, points')
+        .eq('order_id', orderId)
+        .eq('reason', 'order_delivered')
+        .maybeSingle()
+    );
     // Nothing was ever credited — an order refunded before delivery, which is
     // the common case. Not an error: there is simply nothing to take back.
     if (!earned) return;
 
-    await this.record(tx, {
+    await this.record({
       customerId: earned.customerId,
       points: -earned.points,
       reason: 'order_refunded',
       orderId,
     });
   }
+}
+
+/** Postgres's own code for "unique violation". */
+const UNIQUE_VIOLATION = '23505';
+
+/**
+ * ⚠️ Never let `error.message` reach the client: PostgREST echoes constraint
+ * names, columns and sometimes offending values. The detail goes to the log.
+ */
+function unexpectedDbError(error: PostgrestError): Error {
+  console.error('[postgrest]', error.code, error.message, error.details ?? '', error.hint ?? '');
+  return new InternalServerErrorException('Database request failed');
 }

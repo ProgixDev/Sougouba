@@ -1,13 +1,12 @@
 import { Controller, Headers, HttpCode, Inject, Logger, Post, Req } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
-import { eq } from 'drizzle-orm';
 import type { FastifyRequest } from 'fastify';
 import type Stripe from 'stripe';
 
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
-import { orders } from '../db/schema/index.js';
+import { unwrap } from '../db/unwrap.js';
 import { PaymentsService } from './payments.service.js';
 
 /**
@@ -83,11 +82,9 @@ export class StripeWebhookController {
    * orders.
    */
   private async onPaymentSucceeded(intent: Stripe.PaymentIntent): Promise<void> {
-    const [order] = await this.db
-      .select({ id: orders.id })
-      .from(orders)
-      .where(eq(orders.stripePaymentIntentId, intent.id))
-      .limit(1);
+    const order = await unwrap<{ id: string } | null>(
+      this.db.from('orders').select('id').eq('stripe_payment_intent_id', intent.id).maybeSingle()
+    );
 
     if (order) return;
 

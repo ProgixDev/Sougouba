@@ -1,12 +1,9 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { sql } from 'drizzle-orm';
 
-import type { Db } from '../db/client.js';
+import type { Db, Tables } from '../db/client.js';
 import { DB } from '../db/db.module.js';
-import { couponRedemptions, coupons } from '../db/schema/index.js';
+import { unwrap } from '../db/unwrap.js';
 import type { ApplicableCoupon } from '../orders/pricing.js';
-
-type DbOrTx = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
 
 /**
  * "Coupons promotionnels" — contracted in the devis ("Programme de fidélité :
@@ -52,33 +49,41 @@ export class CouponsService {
     const now = context.now ?? new Date();
     const normalized = code.trim().toUpperCase();
 
-    const [coupon] = await this.db
-      .select()
-      .from(coupons)
-      // Codes are compared case-insensitively: a shopper typing "bienvenue10"
-      // from a poster that reads "BIENVENUE10" has entered the right code.
-      .where(sql`upper(${coupons.code}) = ${normalized}`)
-      .limit(1);
+    // Codes are compared case-insensitively: a shopper typing "bienvenue10"
+    // from a poster that reads "BIENVENUE10" has entered the right code.
+    // `ilike` with no metacharacters is an exact, case-insensitive match — the
+    // code is normalised above, and `%`/`_` in a coupon code would be a coupon
+    // nobody could type anyway.
+    const coupon = await unwrap<Tables<'coupons'> | null>(
+      this.db.from('coupons').select('*').ilike('code', normalized).maybeSingle()
+    );
     if (!coupon) throw new NotFoundException('Code promo inconnu');
 
-    if (coupon.startsAt && now < coupon.startsAt) throw new BadRequestException("Ce code promo n'est pas encore actif");
-    if (coupon.endsAt && now >= coupon.endsAt) throw new BadRequestException('Ce code promo a expiré');
+    // ⚠️ `starts_at`/`ends_at` are ISO **strings** here, not Dates — PostgREST
+    // returns JSON. `now < coupon.startsAt` would compare a Date to a string
+    // and coerce, silently accepting an inactive coupon or refusing a live one.
+    if (coupon.starts_at && now.getTime() < Date.parse(coupon.starts_at)) {
+      throw new BadRequestException("Ce code promo n'est pas encore actif");
+    }
+    if (coupon.ends_at && now.getTime() >= Date.parse(coupon.ends_at)) {
+      throw new BadRequestException('Ce code promo a expiré');
+    }
 
-    if (coupon.vendorId && coupon.vendorId !== context.vendorId) {
+    if (coupon.vendor_id && coupon.vendor_id !== context.vendorId) {
       throw new BadRequestException("Ce code promo ne s'applique pas à cette boutique");
     }
 
     // Advisory only: the binding check is the atomic increment in `redeem`.
     // This one exists so a quote shows the right total instead of promising a
     // discount that will be refused at checkout.
-    if (coupon.usageLimit !== null && coupon.usedCount >= coupon.usageLimit) {
+    if (coupon.usage_limit !== null && coupon.used_count >= coupon.usage_limit) {
       throw new BadRequestException('Ce code promo a atteint sa limite');
     }
 
     return {
       code: coupon.code,
-      discountType: coupon.discountType,
-      discountValue: Number(coupon.discountValue),
+      discountType: coupon.discount_type,
+      discountValue: Number(coupon.discount_value),
     };
   }
 
@@ -88,53 +93,18 @@ export class CouponsService {
     return this.resolve(code, context);
   }
 
-  /**
-   * Record that this order used this coupon.
-   *
-   * Written inside the order's transaction, and the usage limit is enforced
-   * *here* rather than by the count in `resolve`: a check-then-insert lets the
-   * last unit of a limited coupon be claimed by two simultaneous checkouts.
-   * The insert only proceeds while the ledger it is counting still has room,
-   * which is a rule Postgres evaluates atomically.
-   */
-  async redeem(tx: DbOrTx, input: { code: string; customerId: string; orderId: string }): Promise<void> {
-    const normalized = input.code.trim().toUpperCase();
-
-    // **The claim on the usage limit, and the only thing that actually holds
-    // it.** A single UPDATE whose predicate reads the column it increments:
-    // Postgres takes a row lock, and a concurrent transaction that was waiting
-    // re-evaluates `used_count < usage_limit` against the version the winner
-    // committed — so the loser matches no row and gets nothing.
-    //
-    // The version this replaces (`insert … where (select count(*) …) < limit`)
-    // read like it was atomic and was not: under READ COMMITTED each
-    // transaction's counting subquery sees its own snapshot, so two concurrent
-    // checkouts both saw room for one more. That was demonstrated against this
-    // database, not reasoned about.
-    const claimed = await tx.execute(sql`
-      update ${coupons} c
-         set used_count = c.used_count + 1
-       where upper(c.code) = ${normalized}
-         and (c.usage_limit is null or c.used_count < c.usage_limit)
-      returning c.id
-    `);
-    if (claimed.length === 0) {
-      throw new BadRequestException('Ce code promo a atteint sa limite');
-    }
-
-    // The audit trail, and the one-coupon-per-order rule (a unique index on
-    // `(coupon_id, order_id)`). A conflict here means this order already
-    // redeemed this coupon — which `place` never does twice, so it is a real
-    // error rather than something to swallow. Throwing rolls back the
-    // increment above with it, since both run in the order's transaction.
-    const recorded = await tx.execute(sql`
-      insert into ${couponRedemptions} (coupon_id, customer_id, order_id)
-      values (${(claimed[0] as { id: string }).id}::uuid, ${input.customerId}::uuid, ${input.orderId}::uuid)
-      on conflict do nothing
-      returning id
-    `);
-    if (recorded.length === 0) {
-      throw new BadRequestException('Ce code promo a déjà été utilisé sur cette commande');
-    }
-  }
+  // ⚠️ `redeem()` is gone, and must not come back here.
+  //
+  // The usage-limit claim is a single UPDATE whose predicate reads the column
+  // it increments, and it has to run in the order's own transaction — a
+  // shopper must never burn a limited coupon on an order that then rolls back.
+  // There is no transaction to hand across PostgREST, so it moved into
+  // `order_place` (migration `rpc_order_place`) with the rest.
+  //
+  // The version this replaced (`insert … where (select count(*) …) < limit`)
+  // read like it was atomic and was not: under READ COMMITTED each
+  // transaction's counting subquery sees its own snapshot, so two concurrent
+  // checkouts both saw room for one more. That was demonstrated against this
+  // database in Phase 4, not reasoned about — and the fix is preserved
+  // verbatim in the function.
 }

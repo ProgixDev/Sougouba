@@ -1,9 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
-import { courierPayouts, orderDeliveries } from '../db/schema/index.js';
+import { unwrap } from '../db/unwrap.js';
 import { PaymentsService } from '../orders/payments.service.js';
 import { toStripeAmount } from '../orders/pricing.js';
 
@@ -40,20 +39,21 @@ export class PayoutsService {
    * anything keyed on "since last Friday" would silently drop it forever.
    */
   async pendingFor(courierId: string) {
-    const [row] = await this.db
-      .select({
-        pendingCad: sql<string>`coalesce(sum(${orderDeliveries.earningsCad}), 0)`,
-        runCount: sql<number>`count(*)::int`,
-      })
-      .from(orderDeliveries)
-      .where(
-        and(
-          eq(orderDeliveries.courierId, courierId),
-          sql`${orderDeliveries.deliveredAt} is not null`,
-          isNull(orderDeliveries.paidOutAt)
-        )
-      );
-    return { pendingCad: Number(row?.pendingCad ?? 0), runCount: row?.runCount ?? 0 };
+    // Summed here rather than in SQL: this is one courier's unpaid runs, a
+    // handful of rows, and PostgREST has no `sum()`. The `paid_out_at is null`
+    // predicate is the one that matters and it is still the database's.
+    const rows = await unwrap<{ earningsCad: string }[]>(
+      this.db
+        .from('order_deliveries')
+        .select('earningsCad:earnings_cad')
+        .eq('courier_id', courierId)
+        .not('delivered_at', 'is', null)
+        .is('paid_out_at', null)
+    );
+    return {
+      pendingCad: rows.reduce((sum, r) => sum + Number(r.earningsCad), 0),
+      runCount: rows.length,
+    };
   }
 
   /**
@@ -73,16 +73,14 @@ export class PayoutsService {
   async runBatch(now: Date = new Date()): Promise<{ paid: number; skipped: number; totalCad: number }> {
     const batchKey = now.toISOString().slice(0, 10);
 
-    const owed = await this.db
-      .select({
-        courierId: orderDeliveries.courierId,
-        pendingCad: sql<string>`sum(${orderDeliveries.earningsCad})`,
-        accountId: courierPayouts.stripeConnectAccountId,
-      })
-      .from(orderDeliveries)
-      .leftJoin(courierPayouts, eq(courierPayouts.courierId, orderDeliveries.courierId))
-      .where(and(sql`${orderDeliveries.deliveredAt} is not null`, isNull(orderDeliveries.paidOutAt)))
-      .groupBy(orderDeliveries.courierId, courierPayouts.stripeConnectAccountId);
+    const rows = await unwrap<{ courier_id: string; pending_cad: string; account_id: string | null }[]>(
+      this.db.rpc('payouts_owed')
+    );
+    const owed = rows.map((r) => ({
+      courierId: r.courier_id,
+      pendingCad: r.pending_cad,
+      accountId: r.account_id,
+    }));
 
     let paid = 0;
     let skipped = 0;
@@ -115,21 +113,23 @@ export class PayoutsService {
         // the database and paid at Stripe, which the idempotency key makes safe
         // to re-run: the second attempt returns the same transfer without
         // moving money again.
-        await this.db
-          .update(orderDeliveries)
-          .set({ paidOutAt: now, stripeTransferId: transferId })
-          .where(
-            and(
-              eq(orderDeliveries.courierId, courier.courierId),
-              sql`${orderDeliveries.deliveredAt} is not null`,
-              isNull(orderDeliveries.paidOutAt)
-            )
-          );
+        // The same `paid_out_at is null` predicate, so a run that somehow got
+        // settled between the roll-up and here is not re-stamped.
+        await unwrap(
+          this.db
+            .from('order_deliveries')
+            .update({ paid_out_at: now.toISOString(), stripe_transfer_id: transferId })
+            .eq('courier_id', courier.courierId)
+            .not('delivered_at', 'is', null)
+            .is('paid_out_at', null)
+        );
 
-        await this.db
-          .update(courierPayouts)
-          .set({ status: 'paid', updatedAt: now })
-          .where(eq(courierPayouts.courierId, courier.courierId));
+        await unwrap(
+          this.db
+            .from('courier_payouts')
+            .update({ status: 'paid', updated_at: now.toISOString() })
+            .eq('courier_id', courier.courierId)
+        );
 
         paid++;
         totalCad += amountCad;

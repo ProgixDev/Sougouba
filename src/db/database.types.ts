@@ -1798,6 +1798,22 @@ export type Database = {
         Args: { v: Database["public"]["Tables"]["vendors"]["Row"] }
         Returns: boolean
       }
+      loyalty_credit_delivered: {
+        Args: {
+          p_created_at: string
+          p_customer_id: string
+          p_expires_at: string
+          p_order_id: string
+          p_points: number
+          p_qualifies_for_referral: boolean
+          p_referral_points: number
+        }
+        Returns: string
+      }
+      merchant_analytics: {
+        Args: { p_days: number; p_vendor_id: string }
+        Returns: Json
+      }
       order_advance_status: {
         Args: { p_from: string; p_order_id: string; p_to: string }
         Returns: undefined
@@ -1827,6 +1843,25 @@ export type Database = {
         }
         Returns: string
       }
+      order_refund: {
+        Args: {
+          p_admin_id: string
+          p_amount_cad: number
+          p_changes: Json
+          p_order_id: string
+          p_reason: string
+          p_stripe_refund_id: string
+        }
+        Returns: undefined
+      }
+      payouts_owed: {
+        Args: never
+        Returns: {
+          account_id: string
+          courier_id: string
+          pending_cad: number
+        }[]
+      }
       product_page: {
         Args: {
           p_approved_only?: boolean
@@ -1843,6 +1878,44 @@ export type Database = {
           p_vendor_id?: string
         }
         Returns: Json
+      }
+      retention_delete_proofs_without_image: {
+        Args: { p_days: number }
+        Returns: number
+      }
+      retention_expired_proofs_with_image: {
+        Args: { p_days: number }
+        Returns: {
+          image_path: string
+          order_id: string
+        }[]
+      }
+      retention_purge_locations: { Args: { p_days: number }; Returns: number }
+      settings_update: {
+        Args: { p_admin_id: string; p_changes: Json; p_patch: Json }
+        Returns: {
+          commission_rate: number
+          courier_location_retention_days: number
+          delivery_proof_retention_days: number
+          double_points_active: boolean
+          double_points_ends_at: string | null
+          double_points_starts_at: string | null
+          id: number
+          max_redemption_share: number
+          monthly_subscription_cad: number
+          points_expiry_months: number
+          points_per_cad: number
+          points_per_cad_redeemed: number
+          referral_min_first_order_cad: number
+          referral_reward_points: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "platform_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       vendor_apply: {
         Args: {

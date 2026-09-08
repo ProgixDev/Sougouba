@@ -1,9 +1,8 @@
 import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
 
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
-import { courierPayouts, couriers, merchantSubscriptions, vendors } from '../db/schema/index.js';
+import { unwrap } from '../db/unwrap.js';
 import { PaymentsService } from '../orders/payments.service.js';
 
 /**
@@ -41,11 +40,9 @@ export class ConnectService {
    * opening a fresh one and stranding the first.
    */
   async onboardVendor(userId: string, returnUrl: string, refreshUrl: string) {
-    const [vendor] = await this.db
-      .select({ id: vendors.id, name: vendors.name, status: vendors.status })
-      .from(vendors)
-      .where(eq(vendors.ownerId, userId))
-      .limit(1);
+    const vendor = await unwrap<{ id: string; name: string; status: string } | null>(
+      this.db.from('vendors').select('id, name, status').eq('owner_id', userId).maybeSingle()
+    );
     if (!vendor) throw new NotFoundException('This account has no shop');
     // An unapproved shop cannot take money, so there is nothing for a Connect
     // account to receive — and creating one would leave a real Stripe account
@@ -54,14 +51,12 @@ export class ConnectService {
       throw new ConflictException('Votre boutique doit être approuvée avant la configuration des paiements');
     }
 
-    const [existing] = await this.db
-      .select()
-      .from(merchantSubscriptions)
-      .where(eq(merchantSubscriptions.vendorId, vendor.id))
-      .limit(1);
+    const existing = await unwrap<{ stripe_connect_account_id: string | null } | null>(
+      this.db.from('merchant_subscriptions').select('*').eq('vendor_id', vendor.id).maybeSingle()
+    );
 
     const accountId =
-      existing?.stripeConnectAccountId ??
+      existing?.stripe_connect_account_id ??
       (await this.payments.createConnectAccount({ kind: 'vendor', id: vendor.id, name: vendor.name }));
 
     if (!existing) {
@@ -71,15 +66,19 @@ export class ConnectService {
       // A merchant can finish Connect onboarding and still owe a subscription,
       // and writing "onboarding" into this column would conflate two states
       // that come apart in practice.
-      await this.db.insert(merchantSubscriptions).values({
-        vendorId: vendor.id,
-        stripeConnectAccountId: accountId,
-      });
-    } else if (!existing.stripeConnectAccountId) {
-      await this.db
-        .update(merchantSubscriptions)
-        .set({ stripeConnectAccountId: accountId })
-        .where(eq(merchantSubscriptions.vendorId, vendor.id));
+      await unwrap(
+        this.db.from('merchant_subscriptions').insert({
+          vendor_id: vendor.id,
+          stripe_connect_account_id: accountId,
+        })
+      );
+    } else if (!existing.stripe_connect_account_id) {
+      await unwrap(
+        this.db
+          .from('merchant_subscriptions')
+          .update({ stripe_connect_account_id: accountId })
+          .eq('vendor_id', vendor.id)
+      );
     }
 
     const url = await this.payments.createAccountLink(accountId, returnUrl, refreshUrl);
@@ -95,25 +94,25 @@ export class ConnectService {
    * a cache for display; this is the truth.
    */
   async vendorStatus(userId: string) {
-    const [vendor] = await this.db.select({ id: vendors.id }).from(vendors).where(eq(vendors.ownerId, userId)).limit(1);
+    const vendor = await unwrap<{ id: string } | null>(
+      this.db.from('vendors').select('id').eq('owner_id', userId).maybeSingle()
+    );
     if (!vendor) throw new NotFoundException('This account has no shop');
 
-    const [row] = await this.db
-      .select()
-      .from(merchantSubscriptions)
-      .where(eq(merchantSubscriptions.vendorId, vendor.id))
-      .limit(1);
-    if (!row?.stripeConnectAccountId) {
+    const row = await unwrap<{ stripe_connect_account_id: string | null; status: string } | null>(
+      this.db.from('merchant_subscriptions').select('*').eq('vendor_id', vendor.id).maybeSingle()
+    );
+    if (!row?.stripe_connect_account_id) {
       return { onboarded: false, chargesEnabled: false, payoutsEnabled: false, status: 'not_started' as const };
     }
 
-    const live = await this.payments.getConnectAccount(row.stripeConnectAccountId);
+    const live = await this.payments.getConnectAccount(row.stripe_connect_account_id);
     return {
       onboarded: live.detailsSubmitted,
       chargesEnabled: live.chargesEnabled,
       payoutsEnabled: live.payoutsEnabled,
       status: row.status,
-      accountId: row.stripeConnectAccountId,
+      accountId: row.stripe_connect_account_id,
     };
   }
 
@@ -121,37 +120,37 @@ export class ConnectService {
 
   /** The courier half, same shape — and the reason no bank detail is stored here. */
   async onboardCourier(userId: string, returnUrl: string, refreshUrl: string) {
-    const [courier] = await this.db
-      .select({ id: couriers.id, fullName: couriers.fullName, status: couriers.status })
-      .from(couriers)
-      .where(eq(couriers.userId, userId))
-      .limit(1);
+    const courier = await unwrap<{ id: string; fullName: string; status: string } | null>(
+      this.db.from('couriers').select('id, fullName:full_name, status').eq('user_id', userId).maybeSingle()
+    );
     if (!courier) throw new NotFoundException('This account has no courier file');
     if (courier.status !== 'approved') {
       throw new ConflictException('Votre dossier doit être approuvé avant la configuration des paiements');
     }
 
-    const [existing] = await this.db
-      .select()
-      .from(courierPayouts)
-      .where(eq(courierPayouts.courierId, courier.id))
-      .limit(1);
+    const existing = await unwrap<{ stripe_connect_account_id: string | null } | null>(
+      this.db.from('courier_payouts').select('*').eq('courier_id', courier.id).maybeSingle()
+    );
 
     const accountId =
-      existing?.stripeConnectAccountId ??
+      existing?.stripe_connect_account_id ??
       (await this.payments.createConnectAccount({ kind: 'courier', id: courier.id, name: courier.fullName }));
 
     if (!existing) {
-      await this.db.insert(courierPayouts).values({
-        courierId: courier.id,
-        stripeConnectAccountId: accountId,
-        status: 'onboarding',
-      });
-    } else if (!existing.stripeConnectAccountId) {
-      await this.db
-        .update(courierPayouts)
-        .set({ stripeConnectAccountId: accountId, updatedAt: new Date() })
-        .where(eq(courierPayouts.courierId, courier.id));
+      await unwrap(
+        this.db.from('courier_payouts').insert({
+          courier_id: courier.id,
+          stripe_connect_account_id: accountId,
+          status: 'onboarding',
+        })
+      );
+    } else if (!existing.stripe_connect_account_id) {
+      await unwrap(
+        this.db
+          .from('courier_payouts')
+          .update({ stripe_connect_account_id: accountId, updated_at: new Date().toISOString() })
+          .eq('courier_id', courier.id)
+      );
     }
 
     const url = await this.payments.createAccountLink(accountId, returnUrl, refreshUrl);
@@ -159,21 +158,25 @@ export class ConnectService {
   }
 
   async courierStatus(userId: string) {
-    const [courier] = await this.db.select({ id: couriers.id }).from(couriers).where(eq(couriers.userId, userId)).limit(1);
+    const courier = await unwrap<{ id: string } | null>(
+      this.db.from('couriers').select('id').eq('user_id', userId).maybeSingle()
+    );
     if (!courier) throw new NotFoundException('This account has no courier file');
 
-    const [row] = await this.db.select().from(courierPayouts).where(eq(courierPayouts.courierId, courier.id)).limit(1);
-    if (!row?.stripeConnectAccountId) {
+    const row = await unwrap<{ stripe_connect_account_id: string | null; status: string } | null>(
+      this.db.from('courier_payouts').select('*').eq('courier_id', courier.id).maybeSingle()
+    );
+    if (!row?.stripe_connect_account_id) {
       return { onboarded: false, chargesEnabled: false, payoutsEnabled: false, status: 'not_started' as const };
     }
 
-    const live = await this.payments.getConnectAccount(row.stripeConnectAccountId);
+    const live = await this.payments.getConnectAccount(row.stripe_connect_account_id);
     return {
       onboarded: live.detailsSubmitted,
       chargesEnabled: live.chargesEnabled,
       payoutsEnabled: live.payoutsEnabled,
       status: row.status,
-      accountId: row.stripeConnectAccountId,
+      accountId: row.stripe_connect_account_id,
     };
   }
 }

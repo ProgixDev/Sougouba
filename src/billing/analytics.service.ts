@@ -1,9 +1,8 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
 
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
-import { orderItems, orders, vendors } from '../db/schema/index.js';
+import { unwrap } from '../db/unwrap.js';
 import { SettingsService } from '../loyalty/settings.service.js';
 
 /**
@@ -30,7 +29,9 @@ export class AnalyticsService {
   ) {}
 
   private async vendorIdFor(userId: string): Promise<string> {
-    const [row] = await this.db.select({ id: vendors.id }).from(vendors).where(eq(vendors.ownerId, userId)).limit(1);
+    const row = await unwrap<{ id: string } | null>(
+      this.db.from('vendors').select('id').eq('owner_id', userId).maybeSingle()
+    );
     if (!row) throw new NotFoundException('This account has no shop');
     return row.id;
   }
@@ -39,62 +40,20 @@ export class AnalyticsService {
     const vendorId = await this.vendorIdFor(userId);
     const rates = await this.settings.all();
 
-    // The window starts at midnight `days-1` days ago, in **Montreal time**.
-    // Bucketing in UTC would move a shop's whole evening onto the next day's
-    // bar — the same reason the courier earnings query does it this way.
-    const start = sql`(date_trunc('day', now() at time zone 'America/Montreal') - make_interval(days => ${days - 1}))`;
-    const placedAt = sql`(${orders.createdAt} at time zone 'America/Montreal')`;
+    // One call. The window is truncated to midnight in **Montreal time** inside
+    // the function — bucketing in UTC would move a shop's whole evening onto
+    // the next day's bar, the same reason the courier earnings query does it
+    // that way. See `merchant_analytics`.
+    const agg = await unwrap<{
+      revenueCad: number;
+      orderCount: number;
+      buckets: { date: string; revenueCad: number; orderCount: number }[];
+      statusCounts: Record<string, number>;
+      topProducts: { productId: string; name: string; qty: number; revenueCad: number }[];
+    }>(this.db.rpc('merchant_analytics', { p_vendor_id: vendorId, p_days: days }));
 
-    const inWindow = and(eq(orders.vendorId, vendorId), sql`${placedAt} >= ${start}`)!;
-    const earned = and(inWindow, sql`${orders.status} <> 'cancelled'`)!;
-
-    const [totals, buckets, statusRows, top] = await Promise.all([
-      this.db
-        .select({
-          revenueCad: sql<string>`coalesce(sum(${orders.subtotalCad}), 0)`,
-          orderCount: sql<number>`count(*)::int`,
-        })
-        .from(orders)
-        .where(earned),
-
-      this.db
-        .select({
-          date: sql<string>`to_char(${placedAt}::date, 'YYYY-MM-DD')`,
-          revenueCad: sql<string>`coalesce(sum(${orders.subtotalCad}), 0)`,
-          orderCount: sql<number>`count(*)::int`,
-        })
-        .from(orders)
-        .where(earned)
-        .groupBy(sql`${placedAt}::date`)
-        .orderBy(sql`${placedAt}::date`),
-
-      // Counts every status, cancelled included — that is the point of it.
-      this.db
-        .select({ status: orders.status, count: sql<number>`count(*)::int` })
-        .from(orders)
-        .where(inWindow)
-        .groupBy(orders.status),
-
-      // Best sellers by units, with the revenue they actually brought in.
-      // Joined through `order_items`, which holds the name and price as they
-      // were at the time — the catalogue is mutable and an order is not.
-      this.db
-        .select({
-          productId: orderItems.productId,
-          name: sql<string>`max(${orderItems.name})`,
-          qty: sql<number>`sum(${orderItems.qty})::int`,
-          revenueCad: sql<string>`sum(${orderItems.unitPriceCad} * ${orderItems.qty})`,
-        })
-        .from(orderItems)
-        .innerJoin(orders, eq(orders.id, orderItems.orderId))
-        .where(earned)
-        .groupBy(orderItems.productId)
-        .orderBy(sql`sum(${orderItems.qty}) desc`)
-        .limit(5),
-    ]);
-
-    const revenueCad = Number(totals[0]?.revenueCad ?? 0);
-    const orderCount = totals[0]?.orderCount ?? 0;
+    const revenueCad = agg.revenueCad ?? 0;
+    const orderCount = agg.orderCount ?? 0;
 
     // The rate comes from `platform_settings`, not a constant — an admin can
     // change it (Phase 8) and the dashboard has to follow. `commissionOn` in
@@ -114,18 +73,9 @@ export class AnalyticsService {
       // Empty days are filled in by the client, which knows the window it asked
       // for — generating a date series in SQL to ship all-zero rows is work for
       // nothing.
-      buckets: buckets.map((b) => ({
-        date: b.date,
-        revenueCad: Number(b.revenueCad),
-        orderCount: b.orderCount,
-      })),
-      statusCounts: Object.fromEntries(statusRows.map((s) => [s.status, s.count])),
-      topProducts: top.map((p) => ({
-        productId: p.productId,
-        name: p.name,
-        qty: p.qty,
-        revenueCad: Number(p.revenueCad),
-      })),
+      buckets: agg.buckets ?? [],
+      statusCounts: agg.statusCounts ?? {},
+      topProducts: agg.topProducts ?? [],
     };
   }
 }

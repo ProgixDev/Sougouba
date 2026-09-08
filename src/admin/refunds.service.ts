@@ -1,15 +1,12 @@
 import { BadRequestException, ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
 
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
-import { orders } from '../db/schema/index.js';
+import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import { LoyaltyService } from '../loyalty/loyalty.service.js';
 import { PaymentsService } from '../orders/payments.service.js';
 import { roundCad, toStripeAmount } from '../orders/pricing.js';
-import { AuditService } from './audit.service.js';
 
-type DbOrTx = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
 
 /**
  * Money going back.
@@ -31,11 +28,12 @@ type DbOrTx = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
 export class RefundsService {
   private readonly logger = new Logger(RefundsService.name);
 
+  // No `AuditService` and no `LoyaltyService`: `order_refund` writes its own
+  // audit entry and reverses the points inside the transaction that records the
+  // refund.
   constructor(
     @Inject(DB) private readonly db: Db,
-    private readonly payments: PaymentsService,
-    private readonly loyalty: LoyaltyService,
-    private readonly audit: AuditService
+    private readonly payments: PaymentsService
   ) {}
 
   /**
@@ -51,17 +49,19 @@ export class RefundsService {
     orderId: string,
     input: { amountCad?: number; reason: string }
   ): Promise<{ refundAmountCad: number; stripeRefundId: string | null }> {
-    const [order] = await this.db
-      .select({
-        id: orders.id,
-        totalCad: orders.totalCad,
-        status: orders.status,
-        refundedAt: orders.refundedAt,
-        stripePaymentIntentId: orders.stripePaymentIntentId,
-      })
-      .from(orders)
-      .where(eq(orders.id, orderId))
-      .limit(1);
+    const order = await unwrap<{
+      id: string;
+      totalCad: string;
+      status: string;
+      refundedAt: string | null;
+      stripePaymentIntentId: string | null;
+    } | null>(
+      this.db
+        .from('orders')
+        .select('id, totalCad:total_cad, status, refundedAt:refunded_at, stripePaymentIntentId:stripe_payment_intent_id')
+        .eq('id', orderId)
+        .maybeSingle()
+    );
     if (!order) throw new NotFoundException('Order not found');
     if (order.refundedAt) throw new ConflictException('This order has already been refunded');
 
@@ -81,56 +81,38 @@ export class RefundsService {
       this.logger.warn(`Order ${orderId} refunded with no PaymentIntent — no money moved, decision recorded only`);
     }
 
-    await this.db.transaction(async (tx) => {
-      await tx
-        .update(orders)
-        .set({
-          refundedAt: new Date(),
-          refundAmountCad: String(amountCad),
-          stripeRefundId,
-          refundReason: input.reason,
-        })
-        .where(eq(orders.id, orderId));
-
-      await this.reversePoints(tx, orderId);
-
-      // In the same transaction as the record of the refund, for the reason the
-      // whole table exists — but note it cannot cover the Stripe call, which
-      // already happened above and cannot be rolled back. If this transaction
-      // fails, the loud log below is still the trail, and the ordering note at
-      // the top of this class explains why Stripe has to go first anyway.
-      await this.audit.record(
-        {
-          actorId: adminId,
-          action: 'order.refund',
-          subjectType: 'order',
-          subjectId: orderId,
-          reason: input.reason,
-          changes: {
-            refundAmountCad: { from: null, to: amountCad },
-            stripeRefundId: { from: null, to: stripeRefundId },
-          },
-        },
-        tx
-      );
-    });
+    // The stamp, the points reversal and the audit entry, together. Note it
+    // cannot cover the Stripe call, which already happened above and cannot be
+    // rolled back — the ordering note at the top of this class explains why
+    // Stripe has to go first anyway. If this fails, the loud log below is the
+    // trail.
+    await unwrapRpc<void>(
+      this.db.rpc('order_refund', {
+        p_admin_id: adminId,
+        p_order_id: orderId,
+        p_amount_cad: amountCad,
+        p_reason: input.reason,
+        p_stripe_refund_id: stripeRefundId as string,
+        p_changes: {
+          refundAmountCad: { from: null, to: amountCad },
+          stripeRefundId: { from: null, to: stripeRefundId },
+        } as never,
+      }),
+      (error) => {
+        if (error.code === ALREADY_REFUNDED) throw new ConflictException(error.message);
+        throw error;
+      }
+    );
 
     this.logger.log(`Admin ${adminId} refunded ${amountCad} CAD on order ${orderId} (stripe: ${stripeRefundId ?? 'none'})`);
     return { refundAmountCad: amountCad, stripeRefundId };
   }
 
-  /**
-   * Take back the points a refunded order earned — `LoyaltyService.reverseForOrder`
-   * finally has a caller, having been written in Phase 4 specifically to wait
-   * for one.
-   *
-   * Reverses only the *earn*. The redemption debit is deliberately left alone:
-   * points a shopper spent on an order that was then refunded are points they
-   * spent, and handing them back alongside a cash refund would pay twice for
-   * the same order. If the business wants those returned too, that is a rule to
-   * add here explicitly rather than a side effect to inherit.
-   */
-  private async reversePoints(tx: DbOrTx, orderId: string): Promise<void> {
-    await this.loyalty.reverseForOrder(orderId, tx);
-  }
+  // `reversePoints` is gone: `LoyaltyService.reverseForOrder` took the caller's
+  // transaction, and there is none to hand across PostgREST. The reversal moved
+  // into `order_refund` so the points and the refund record cannot come apart —
+  // a refunded order whose points were never taken back is money paid twice.
 }
+
+/** `order_refund` raises this when the order was already refunded. */
+const ALREADY_REFUNDED = 'SGB08';

@@ -1,14 +1,16 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import type { PostgrestError } from '@supabase/supabase-js';
 
-import { AuditService, diffSettings } from '../admin/audit.service.js';
+import { diffSettings } from '../admin/audit.service.js';
 import type { UpdateSettingsInput } from '../admin/dto/admin.dto.js';
-import type { Db } from '../db/client.js';
+import type { Db, Tables } from '../db/client.js';
+import { camelize } from '../db/case.js';
 import { DB } from '../db/db.module.js';
-import { platformSettings } from '../db/schema/index.js';
+import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import { DEFAULT_LOYALTY_RATES, type LoyaltyRates } from './loyalty-rules.js';
 
-type SettingsRow = typeof platformSettings.$inferSelect;
+/** The camelCase shape `camelize` produces from a `platform_settings` row. */
+type SettingsRow = Record<string, any>;
 
 /**
  * The admin-editable rates, read from the `platform_settings` singleton.
@@ -22,10 +24,9 @@ type SettingsRow = typeof platformSettings.$inferSelect;
  */
 @Injectable()
 export class SettingsService {
-  constructor(
-    @Inject(DB) private readonly db: Db,
-    private readonly audit: AuditService
-  ) {}
+  // No `AuditService`: `settings_update` writes its own audit entry inside the
+  // transaction that makes the change.
+  constructor(@Inject(DB) private readonly db: Db) {}
 
   /**
    * The `numeric` columns come back from Postgres as strings, and every reader
@@ -45,7 +46,7 @@ export class SettingsService {
   }
 
   async loyaltyRates(): Promise<LoyaltyRates> {
-    const [row] = await this.db.select().from(platformSettings).where(eq(platformSettings.id, 1)).limit(1);
+    const row = await this.readRow();
     // Falling back to the mobile app's own constants rather than throwing: the
     // row is seeded by the first migration and a missing one is close to
     // impossible, but a marketplace that stops taking orders because a settings
@@ -68,7 +69,7 @@ export class SettingsService {
 
   /** The whole settings row, for the back office. Includes the monetization figures `loyaltyRates` leaves out. */
   async all() {
-    const [row] = await this.db.select().from(platformSettings).where(eq(platformSettings.id, 1)).limit(1);
+    const row = await this.readRow();
     if (!row) throw new NotFoundException('Platform settings row is missing');
     return this.rowToSettings(row);
   }
@@ -89,60 +90,52 @@ export class SettingsService {
    * "who raised the commission", not "what did this order pay".
    */
   async update(adminId: string, patch: UpdateSettingsInput) {
-    // Read before write, inside the transaction, so the diff describes the row
-    // this update actually overwrites rather than one a concurrent admin has
-    // since replaced.
-    return this.db.transaction(async (tx) => {
-      const [before] = await tx.select().from(platformSettings).where(eq(platformSettings.id, 1)).limit(1);
-      if (!before) throw new NotFoundException('Platform settings row is missing');
+    // Read before write so the diff describes the row this update overwrites.
+    // ⚠️ This read is now *outside* the transaction, where it used to be inside
+    // it — PostgREST has no way to read within one. A concurrent administrator
+    // saving between these two calls would produce a diff whose `from` names a
+    // value that was already gone. The change itself still lands atomically
+    // with its audit row; only the recorded "before" can be stale. Narrow, and
+    // narrower than losing the entry altogether, but it is a real regression
+    // and worth knowing when reading the log.
+    const before = await this.readRow();
+    if (!before) throw new NotFoundException('Platform settings row is missing');
 
-      const [updated] = await tx
-        .update(platformSettings)
-        .set({
-          ...(patch.pointsPerCad !== undefined ? { pointsPerCad: String(patch.pointsPerCad) } : {}),
-          ...(patch.pointsPerCadRedeemed !== undefined
-            ? { pointsPerCadRedeemed: String(patch.pointsPerCadRedeemed) }
-            : {}),
-          ...(patch.maxRedemptionShare !== undefined ? { maxRedemptionShare: String(patch.maxRedemptionShare) } : {}),
-          ...(patch.pointsExpiryMonths !== undefined ? { pointsExpiryMonths: patch.pointsExpiryMonths } : {}),
-          ...(patch.referralRewardPoints !== undefined ? { referralRewardPoints: patch.referralRewardPoints } : {}),
-          ...(patch.referralMinFirstOrderCad !== undefined
-            ? { referralMinFirstOrderCad: String(patch.referralMinFirstOrderCad) }
-            : {}),
-          ...(patch.doublePointsActive !== undefined ? { doublePointsActive: patch.doublePointsActive } : {}),
-          ...(patch.doublePointsStartsAt !== undefined ? { doublePointsStartsAt: patch.doublePointsStartsAt } : {}),
-          ...(patch.doublePointsEndsAt !== undefined ? { doublePointsEndsAt: patch.doublePointsEndsAt } : {}),
-          ...(patch.commissionRate !== undefined ? { commissionRate: String(patch.commissionRate) } : {}),
-          ...(patch.monthlySubscriptionCad !== undefined
-            ? { monthlySubscriptionCad: String(patch.monthlySubscriptionCad) }
-            : {}),
-          ...(patch.courierLocationRetentionDays !== undefined
-            ? { courierLocationRetentionDays: patch.courierLocationRetentionDays }
-            : {}),
-          ...(patch.deliveryProofRetentionDays !== undefined
-            ? { deliveryProofRetentionDays: patch.deliveryProofRetentionDays }
-            : {}),
-          updatedAt: new Date(),
-        })
-        .where(eq(platformSettings.id, 1))
-        .returning();
-      if (!updated) throw new NotFoundException('Platform settings row is missing');
+    const updated = await unwrapRpc<Tables<'platform_settings'>>(
+      this.db.rpc('settings_update', {
+        p_admin_id: adminId,
+        // Cast: the generated arg type for a `jsonb` parameter is `Json`,
+        // whose object branch does not accept an arbitrary record.
+        p_patch: patch as never,
+        // Computed here, not in SQL: the comparison has to be numeric, because
+        // Postgres returns numeric(4,3) as '0.120' while the JSON body carries
+        // 0.12 — a string compare logs a commission change on every untouched
+        // save. That rule has its own test.
+        p_changes: diffSettings(before as Record<string, unknown>, patch as Record<string, unknown>) as never,
+      }),
+      (error) => {
+        if (error.code === 'SGB05') throw new NotFoundException(error.message);
+        throw unexpectedDbError(error);
+      }
+    );
 
-      await this.audit.record(
-        {
-          actorId: adminId,
-          action: 'settings.update',
-          subjectType: 'settings',
-          // No uuid to point at: there is exactly one settings row, by check
-          // constraint. `subject_label` carries what a reader needs instead.
-          subjectId: null,
-          subjectLabel: 'Réglages de la plateforme',
-          changes: diffSettings(before as Record<string, unknown>, patch as Record<string, unknown>),
-        },
-        tx
-      );
-
-      return this.rowToSettings(updated);
-    });
+    return this.rowToSettings(camelize<SettingsRow>(updated));
   }
+
+  /** The singleton row — there is exactly one, enforced by a check constraint on `id = 1`. */
+  private async readRow(): Promise<SettingsRow | null> {
+    const row = await unwrap<Tables<'platform_settings'> | null>(
+      this.db.from('platform_settings').select('*').eq('id', 1).maybeSingle()
+    );
+    return row ? camelize<SettingsRow>(row) : null;
+  }
+}
+
+/**
+ * ⚠️ Never let `error.message` reach the client: PostgREST echoes constraint
+ * names, columns and sometimes offending values. The detail goes to the log.
+ */
+function unexpectedDbError(error: PostgrestError): Error {
+  console.error('[postgrest]', error.code, error.message, error.details ?? '', error.hint ?? '');
+  return new InternalServerErrorException('Database request failed');
 }
