@@ -1706,6 +1706,10 @@ export type Database = {
       admin_stats: { Args: never; Returns: Json }
       admin_user_activity: { Args: { p_profile_id: string }; Returns: Json }
       admin_vendor_stats: { Args: { p_vendor_id: string }; Returns: Json }
+      is_open: {
+        Args: { v: Database["public"]["Tables"]["vendors"]["Row"] }
+        Returns: boolean
+      }
       order_advance_status: {
         Args: { p_from: string; p_order_id: string; p_to: string }
         Returns: undefined
@@ -1734,6 +1738,54 @@ export type Database = {
           p_vendor_id: string
         }
         Returns: string
+      }
+      product_page: {
+        Args: {
+          p_approved_only?: boolean
+          p_category_id?: string
+          p_in_stock_only?: boolean
+          p_limit?: number
+          p_offset?: number
+          p_on_sale?: boolean
+          p_price_max?: number
+          p_price_min?: number
+          p_q?: string
+          p_section_id?: string
+          p_sort?: string
+          p_vendor_id?: string
+        }
+        Returns: Json
+      }
+      vendor_apply: {
+        Args: {
+          p_city: string
+          p_contact_name: string
+          p_contact_phone: string
+          p_default_hours: Json
+          p_default_sections: string[]
+          p_delivery_eta_min: number
+          p_is_halal_certified: boolean
+          p_lat: number
+          p_lng: number
+          p_mapaq_number: string
+          p_name: string
+          p_neq: string
+          p_owner_id: string
+          p_postal_code: string
+          p_slug_base: string
+          p_specialty_fr: string
+          p_street: string
+          p_vendor_type: string
+        }
+        Returns: string
+      }
+      vendor_set_categories: {
+        Args: { p_category_ids: string[]; p_vendor_id: string }
+        Returns: undefined
+      }
+      vendor_set_hours: {
+        Args: { p_vendor_id: string; p_week: Json }
+        Returns: undefined
       }
     }
     Enums: {

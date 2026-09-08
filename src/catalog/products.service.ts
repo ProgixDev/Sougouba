@@ -1,9 +1,8 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, desc, eq, gte, ilike, lt, or, sql, type SQL } from 'drizzle-orm';
 
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
-import { categories, products, vendorSections, vendors } from '../db/schema/index.js';
+import { unwrap } from '../db/unwrap.js';
 import {
   PRICE_BANDS,
   type CreateProductInput,
@@ -17,24 +16,11 @@ import { containsPattern } from '../common/sql/like.js';
 import { assertMediaPath, PRODUCT_MEDIA_BUCKET } from './media-paths.js';
 import { toProduct, type ProductResponse, type ProductRow } from './mappers.js';
 
-const productColumns = {
-  id: products.id,
-  vendorId: products.vendorId,
-  categoryId: products.categoryId,
-  sectionId: products.sectionId,
-  name: products.name,
-  description: products.description,
-  priceCad: products.priceCad,
-  compareAtPriceCad: products.compareAtPriceCad,
-  imageUrl: products.imageUrl,
-  stockQty: products.stockQty,
-  isAvailable: products.isAvailable,
-  tags: products.tags,
-  nutritionCalories: products.nutritionCalories,
-  nutritionProteinG: products.nutritionProteinG,
-  nutritionFatG: products.nutritionFatG,
-  nutritionWeightG: products.nutritionWeightG,
-};
+const PRODUCT_COLUMNS = `id, vendorId:vendor_id, categoryId:category_id, sectionId:section_id,
+  name, description, priceCad:price_cad, compareAtPriceCad:compare_at_price_cad,
+  imageUrl:image_url, stockQty:stock_qty, isAvailable:is_available, tags,
+  nutritionCalories:nutrition_calories, nutritionProteinG:nutrition_protein_g,
+  nutritionFatG:nutrition_fat_g, nutritionWeightG:nutrition_weight_g`;
 
 @Injectable()
 export class ProductsService {
@@ -50,68 +36,43 @@ export class ProductsService {
    * phone can stop holding the array at all. The band comparisons keep their
    * asymmetry (`>= min`, `< max`) for the reason `PRICE_BANDS` documents.
    */
-  private filters(query: ProductQuery): SQL[] {
-    const conditions: SQL[] = [];
-    const [min, max] = PRICE_BANDS[query.priceBand];
-
-    if (min !== null) conditions.push(gte(products.priceCad, String(min)));
-    if (max !== null) conditions.push(lt(products.priceCad, String(max)));
-    if (query.onSale) conditions.push(sql`${products.compareAtPriceCad} is not null`);
-    if (query.inStockOnly) conditions.push(and(eq(products.isAvailable, true), sql`${products.stockQty} > 0`)!);
-    if (query.sectionId) conditions.push(eq(products.sectionId, query.sectionId));
-    if (query.categoryId) conditions.push(eq(products.categoryId, query.categoryId));
-    if (query.q) {
-      // Escaped: unescaped, `?q=%` builds the pattern `%%%` and returns the
-      // whole catalogue — the opposite of the literal `name.includes(q)` this
-      // ports. See `common/sql/like.ts`.
-      const term = containsPattern(query.q);
-      // Name or any one tag — the same test `searchProducts` makes, with the
-      // array membership pushed into Postgres rather than a `.some()` per row.
-      conditions.push(
-        or(ilike(products.name, term), sql`exists (select 1 from unnest(${products.tags}) tag where tag ilike ${term})`)!
-      );
-    }
-    return conditions;
-  }
-
   /**
-   * `relevance` keeps the catalogue's own order rather than imposing one —
-   * matching the mobile default, which returns the incoming array untouched.
-   * "Untouched" needs a tiebreak here that an array doesn't: without a stable
-   * `ORDER BY`, Postgres may return page 2 overlapping page 1.
+   * `lib/productFilters.ts`'s `applyFilters`, answered by `product_page`.
    *
-   * `name` sorts under the `fr-CA` collation so "Épices" files under E, where
-   * `localeCompare(…, 'fr-CA')` puts it on the phone — a plain byte sort would
-   * push every accented name to the end of the list.
+   * An RPC rather than a PostgREST query because three of its rules have no
+   * REST equivalent — the tag search (`unnest` + ilike), the `fr-CA` collation
+   * on the name sort, and the price bands' deliberate asymmetry — and applying
+   * any of them after the fact would paginate over the wrong set. See the
+   * `rpc_product_page` migration.
    */
-  private ordering(sort: SortKey): SQL[] {
-    switch (sort) {
-      case 'price_asc':
-        return [asc(products.priceCad), asc(products.id)];
-      case 'price_desc':
-        return [desc(products.priceCad), asc(products.id)];
-      case 'name':
-        return [sql`${products.name} collate "fr-CA-x-icu" asc`, asc(products.id)];
-      default:
-        return [asc(products.createdAt), asc(products.id)];
-    }
-  }
-
-  private async page(where: SQL, query: ProductQuery): Promise<Page<ProductResponse>> {
-    const [rows, [counted]] = await Promise.all([
-      this.db
-        .select(productColumns)
-        .from(products)
-        .where(where)
-        .orderBy(...this.ordering(query.sort))
-        .limit(query.limit)
-        .offset(query.offset),
-      this.db.select({ total: sql<number>`count(*)::int` }).from(products).where(where),
-    ]);
+  private async page(
+    scope: { vendorId?: string; approvedOnly: boolean },
+    query: ProductQuery
+  ): Promise<Page<ProductResponse>> {
+    const [min, max] = PRICE_BANDS[query.priceBand];
+    const result = await unwrap<{ items: ProductRow[]; total: number }>(
+      this.db.rpc('product_page', {
+        p_vendor_id: scope.vendorId,
+        p_approved_only: scope.approvedOnly,
+        // Escaped: unescaped, `?q=%` builds the pattern `%%%` and returns the
+        // whole catalogue — the opposite of the literal `name.includes(q)` this
+        // ports. See `common/sql/like.ts`.
+        p_q: query.q ? containsPattern(query.q) : undefined,
+        p_section_id: query.sectionId,
+        p_category_id: query.categoryId,
+        p_price_min: min ?? undefined,
+        p_price_max: max ?? undefined,
+        p_on_sale: query.onSale ?? false,
+        p_in_stock_only: query.inStockOnly ?? false,
+        p_sort: query.sort,
+        p_limit: query.limit,
+        p_offset: query.offset,
+      })
+    );
 
     return {
-      items: rows.map((r) => toProduct(r as ProductRow)),
-      total: counted?.total ?? 0,
+      items: (result.items ?? []).map((r) => toProduct(r)),
+      total: result.total ?? 0,
       limit: query.limit,
       offset: query.offset,
     };
@@ -120,47 +81,43 @@ export class ProductsService {
   /** A shopper's view of one shop's shelves — approved shops only, same rule as the vendor list. */
   async listForVendor(vendorId: string, query: ProductQuery): Promise<Page<ProductResponse>> {
     await this.assertApprovedVendor(vendorId);
-    return this.page(and(eq(products.vendorId, vendorId), ...this.filters(query))!, query);
+    return this.page({ vendorId, approvedOnly: true }, query);
   }
 
   /** Platform-wide search across every approved shop. */
   async search(query: ProductSearchQuery): Promise<Page<ProductResponse>> {
-    const conditions = [
-      sql`exists (select 1 from ${vendors} v where v.id = ${products.vendorId} and v.status = 'approved')`,
-      ...this.filters(query),
-    ];
-    if (query.vendorId) conditions.push(eq(products.vendorId, query.vendorId));
-    return this.page(and(...conditions)!, query);
+    return this.page({ vendorId: query.vendorId, approvedOnly: true }, query);
   }
 
   async byId(id: string): Promise<ProductResponse> {
-    const [row] = await this.db
-      .select(productColumns)
-      .from(products)
-      .where(
-        and(
-          eq(products.id, id),
-          sql`exists (select 1 from ${vendors} v where v.id = ${products.vendorId} and v.status = 'approved')`
-        )
-      )
-      .limit(1);
+    // `vendors!inner(status)` with the filter on the embed is the `exists`
+    // clause this replaces: an inner embed drops the product when its shop is
+    // not approved, rather than returning it with a null shop.
+    const row = await unwrap<ProductRow | null>(
+      this.db
+        .from('products')
+        .select(`${PRODUCT_COLUMNS}, vendors!inner(status)`)
+        .eq('id', id)
+        .eq('vendors.status', 'approved')
+        .maybeSingle()
+    );
     if (!row) throw new NotFoundException('Product not found');
-    return toProduct(row as ProductRow);
+    return toProduct(row);
   }
 
   private async assertApprovedVendor(vendorId: string): Promise<void> {
-    const [vendor] = await this.db
-      .select({ id: vendors.id })
-      .from(vendors)
-      .where(and(eq(vendors.id, vendorId), eq(vendors.status, 'approved')))
-      .limit(1);
+    const vendor = await unwrap<{ id: string } | null>(
+      this.db.from('vendors').select('id').eq('id', vendorId).eq('status', 'approved').maybeSingle()
+    );
     if (!vendor) throw new NotFoundException('Vendor not found');
   }
 
   // ── merchant writes ───────────────────────────────────────────────────────
 
   private async ownedVendorId(userId: string): Promise<string> {
-    const [row] = await this.db.select({ id: vendors.id }).from(vendors).where(eq(vendors.ownerId, userId)).limit(1);
+    const row = await unwrap<{ id: string } | null>(
+      this.db.from('vendors').select('id').eq('owner_id', userId).maybeSingle()
+    );
     if (!row) throw new NotFoundException('This account has no shop');
     return row.id;
   }
@@ -168,7 +125,10 @@ export class ProductsService {
   /** The merchant's own catalogue, at any vendor status — they manage it while the shop is still pending. */
   async listMine(userId: string, query: ProductQuery): Promise<Page<ProductResponse>> {
     const vendorId = await this.ownedVendorId(userId);
-    return this.page(and(eq(products.vendorId, vendorId), ...this.filters(query))!, query);
+    // `approvedOnly: false` — the merchant manages their catalogue while the
+    // shop is still pending, so their own listing must not apply the shopper's
+    // approved-shops-only rule to them.
+    return this.page({ vendorId, approvedOnly: false }, query);
   }
 
   /**
@@ -178,14 +138,14 @@ export class ProductsService {
    * which only knows the section exists.
    */
   private async assertOwnedRefs(vendorId: string, categoryId: string, sectionId: string): Promise<void> {
-    const [section] = await this.db
-      .select({ id: vendorSections.id })
-      .from(vendorSections)
-      .where(and(eq(vendorSections.id, sectionId), eq(vendorSections.vendorId, vendorId)))
-      .limit(1);
+    const section = await unwrap<{ id: string } | null>(
+      this.db.from('vendor_sections').select('id').eq('id', sectionId).eq('vendor_id', vendorId).maybeSingle()
+    );
     if (!section) throw new NotFoundException('Section not found in this shop');
 
-    const [category] = await this.db.select({ id: categories.id }).from(categories).where(eq(categories.id, categoryId)).limit(1);
+    const category = await unwrap<{ id: string } | null>(
+      this.db.from('categories').select('id').eq('id', categoryId).maybeSingle()
+    );
     if (!category) throw new NotFoundException('Category not found');
   }
 
@@ -194,37 +154,38 @@ export class ProductsService {
     await this.assertOwnedRefs(vendorId, input.categoryId, input.sectionId);
     assertMediaPath(input.imageUrl, PRODUCT_MEDIA_BUCKET, vendorId, 'imageUrl');
 
-    const [created] = await this.db
-      .insert(products)
-      .values({
-        vendorId,
-        categoryId: input.categoryId,
-        sectionId: input.sectionId,
-        name: input.name,
-        description: input.description,
-        priceCad: String(input.priceCad),
-        compareAtPriceCad: input.compareAtPriceCad === undefined ? null : String(input.compareAtPriceCad),
-        imageUrl: input.imageUrl,
-        stockQty: input.stockQty,
-        isAvailable: input.isAvailable,
-        tags: input.tags,
-        nutritionCalories: input.nutrition?.calories ?? null,
-        nutritionProteinG: input.nutrition ? String(input.nutrition.proteinG) : null,
-        nutritionFatG: input.nutrition ? String(input.nutrition.fatG) : null,
-        nutritionWeightG: input.nutrition ? String(input.nutrition.weightG) : null,
-      })
-      .returning(productColumns);
-    return toProduct(created as ProductRow);
+    const created = await unwrap<ProductRow>(
+      this.db
+        .from('products')
+        .insert({
+          vendor_id: vendorId,
+          category_id: input.categoryId,
+          section_id: input.sectionId,
+          name: input.name,
+          description: input.description,
+          price_cad: input.priceCad,
+          compare_at_price_cad: input.compareAtPriceCad ?? null,
+          image_url: input.imageUrl,
+          stock_qty: input.stockQty,
+          is_available: input.isAvailable,
+          tags: input.tags,
+          nutrition_calories: input.nutrition?.calories ?? null,
+          nutrition_protein_g: input.nutrition?.proteinG ?? null,
+          nutrition_fat_g: input.nutrition?.fatG ?? null,
+          nutrition_weight_g: input.nutrition?.weightG ?? null,
+        })
+        .select(PRODUCT_COLUMNS)
+        .single()
+    );
+    return toProduct(created);
   }
 
   async update(userId: string, id: string, patch: UpdateProductInput): Promise<ProductResponse> {
     const vendorId = await this.ownedVendorId(userId);
 
-    const [current] = await this.db
-      .select(productColumns)
-      .from(products)
-      .where(and(eq(products.id, id), eq(products.vendorId, vendorId)))
-      .limit(1);
+    const current = await unwrap<ProductRow | null>(
+      this.db.from('products').select(PRODUCT_COLUMNS).eq('id', id).eq('vendor_id', vendorId).maybeSingle()
+    );
     // A 404, not a 403, so an id you don't own doesn't confirm it exists —
     // same rule as `AddressesService.findOwned`.
     if (!current) throw new NotFoundException('Product not found');
@@ -248,52 +209,58 @@ export class ProductsService {
       throw new BadRequestException('Le prix barré doit être supérieur au prix de vente');
     }
 
-    const [updated] = await this.db
-      .update(products)
-      .set({
-        ...(patch.name !== undefined ? { name: patch.name } : {}),
-        ...(patch.description !== undefined ? { description: patch.description } : {}),
-        ...(patch.categoryId !== undefined ? { categoryId: patch.categoryId } : {}),
-        ...(patch.sectionId !== undefined ? { sectionId: patch.sectionId } : {}),
-        ...(patch.priceCad !== undefined ? { priceCad: String(patch.priceCad) } : {}),
-        ...(patch.compareAtPriceCad !== undefined
-          ? { compareAtPriceCad: patch.compareAtPriceCad === null ? null : String(patch.compareAtPriceCad) }
-          : {}),
-        ...(patch.imageUrl !== undefined ? { imageUrl: patch.imageUrl } : {}),
-        ...(patch.stockQty !== undefined ? { stockQty: patch.stockQty } : {}),
-        ...(patch.isAvailable !== undefined ? { isAvailable: patch.isAvailable } : {}),
-        ...(patch.tags !== undefined ? { tags: patch.tags } : {}),
-        // `null` clears the whole block; absent leaves it alone. The four
-        // columns are always written together — a half-set would draw the
-        // product page's nutrition strip with holes in it.
-        ...(patch.nutrition !== undefined
-          ? patch.nutrition === null
-            ? { nutritionCalories: null, nutritionProteinG: null, nutritionFatG: null, nutritionWeightG: null }
-            : {
-                nutritionCalories: patch.nutrition.calories,
-                nutritionProteinG: String(patch.nutrition.proteinG),
-                nutritionFatG: String(patch.nutrition.fatG),
-                nutritionWeightG: String(patch.nutrition.weightG),
-              }
-          : {}),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(products.id, id), eq(products.vendorId, vendorId)))
-      .returning(productColumns);
+    const updated = await unwrap<ProductRow | null>(
+      this.db
+        .from('products')
+        .update({
+          ...(patch.name !== undefined ? { name: patch.name } : {}),
+          ...(patch.description !== undefined ? { description: patch.description } : {}),
+          ...(patch.categoryId !== undefined ? { category_id: patch.categoryId } : {}),
+          ...(patch.sectionId !== undefined ? { section_id: patch.sectionId } : {}),
+          ...(patch.priceCad !== undefined ? { price_cad: patch.priceCad } : {}),
+          ...(patch.compareAtPriceCad !== undefined ? { compare_at_price_cad: patch.compareAtPriceCad } : {}),
+          ...(patch.imageUrl !== undefined ? { image_url: patch.imageUrl } : {}),
+          ...(patch.stockQty !== undefined ? { stock_qty: patch.stockQty } : {}),
+          ...(patch.isAvailable !== undefined ? { is_available: patch.isAvailable } : {}),
+          ...(patch.tags !== undefined ? { tags: patch.tags } : {}),
+          // `null` clears the whole block; absent leaves it alone. The four
+          // columns are always written together — a half-set would draw the
+          // product page's nutrition strip with holes in it.
+          ...(patch.nutrition !== undefined
+            ? patch.nutrition === null
+              ? {
+                  nutrition_calories: null,
+                  nutrition_protein_g: null,
+                  nutrition_fat_g: null,
+                  nutrition_weight_g: null,
+                }
+              : {
+                  nutrition_calories: patch.nutrition.calories,
+                  nutrition_protein_g: patch.nutrition.proteinG,
+                  nutrition_fat_g: patch.nutrition.fatG,
+                  nutrition_weight_g: patch.nutrition.weightG,
+                }
+            : {}),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .eq('vendor_id', vendorId)
+        .select(PRODUCT_COLUMNS)
+        .maybeSingle()
+    );
     // The existence check above and this update are separate statements: the
     // row can be deleted in between (the merchant's own second device, say).
     // Without this guard `toProduct(undefined)` throws a TypeError and the
     // caller gets a 500 instead of the 404 that actually describes it.
     if (!updated) throw new NotFoundException('Product not found');
-    return toProduct(updated as ProductRow);
+    return toProduct(updated);
   }
 
   async remove(userId: string, id: string): Promise<void> {
     const vendorId = await this.ownedVendorId(userId);
-    const deleted = await this.db
-      .delete(products)
-      .where(and(eq(products.id, id), eq(products.vendorId, vendorId)))
-      .returning({ id: products.id });
+    const deleted = await unwrap<{ id: string }[]>(
+      this.db.from('products').delete().eq('id', id).eq('vendor_id', vendorId).select('id')
+    );
     if (deleted.length === 0) throw new NotFoundException('Product not found');
   }
 }

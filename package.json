@@ -23,6 +23,7 @@
     "verify:stripe": "npm run build && node --env-file=.env scripts/verify-stripe.mjs",
     "verify:orders": "node --env-file=.env scripts/verify-orders.mjs",
     "verify:admin": "node --env-file=.env scripts/verify-admin-audit.mjs",
+    "verify:catalog": "node --env-file=.env scripts/verify-catalog.mjs",
     "db:seed": "node --env-file=.env --import tsx scripts/seed/index.ts",
     "db:seed:reset": "node --env-file=.env --import tsx scripts/seed/index.ts --reset"
   },

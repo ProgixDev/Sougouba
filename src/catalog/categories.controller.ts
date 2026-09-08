@@ -1,10 +1,9 @@
 import { Controller, Get, Inject, Injectable } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { asc } from 'drizzle-orm';
-
 import type { Db } from '../db/client.js';
+import { camelize } from '../db/case.js';
 import { DB } from '../db/db.module.js';
-import { categories } from '../db/schema/index.js';
+import { unwrap } from '../db/unwrap.js';
 
 @Injectable()
 export class CategoriesService {
@@ -19,8 +18,11 @@ export class CategoriesService {
    * screen, and a `?limit=` on it would be ceremony around a table that will
    * never need a second page.
    */
-  list() {
-    return this.db.select().from(categories).orderBy(asc(categories.nameFr));
+  async list() {
+    const rows = await unwrap<Record<string, unknown>[]>(
+      this.db.from('categories').select('*').order('name_fr', { ascending: true })
+    );
+    return camelize<unknown[]>(rows);
   }
 }
 
