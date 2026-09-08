@@ -23,28 +23,7 @@
  * migration because those 8 categories are reference data the product needs;
  * 40 invented people are not.
  */
-import { sql, type InferInsertModel } from 'drizzle-orm';
-import type { PgTable } from 'drizzle-orm/pg-core';
-
-import { createDbClient } from '../../src/db/client.js';
-import {
-  addresses,
-  courierIssues,
-  couriers,
-  courierInsurance,
-  disputes,
-  orderDeliveries,
-  orderItems,
-  orders,
-  orderStatusHistory,
-  products,
-  profiles,
-  vendorCategories,
-  vendorHours,
-  vendorRegistrations,
-  vendorSections,
-  vendors,
-} from '../../src/db/schema/index.js';
+import { createSeedDb } from './seed-db.js';
 import { deleteSeedAuthUsers, ensureAuthUsers, type SeedPerson } from './auth-users.js';
 import {
   CATEGORY_IDS,
@@ -58,7 +37,7 @@ import {
   SECTION_NAMES,
   VENDORS,
 } from './fixtures.js';
-import { Family, isSeedEmail, seedEmail, seedId, SEED_ID_LIKE_PATTERN } from './ids.js';
+import { Family, isSeedEmail, seedEmail, seedId, SEED_ID_PREFIX } from './ids.js';
 import { cents, hashString, intBetween, mulberry32, pick } from './rng.js';
 
 // ── configuration ───────────────────────────────────────────────────────────
@@ -76,7 +55,6 @@ if (process.env.NODE_ENV === 'production') {
   process.exit(1);
 }
 
-const DATABASE_URL = required('DATABASE_URL');
 const SUPABASE_URL = required('SUPABASE_URL');
 const SERVICE_ROLE_KEY = required('SUPABASE_SERVICE_ROLE_KEY');
 
@@ -132,17 +110,17 @@ function required(name: string): string {
   return value;
 }
 
-const db = createDbClient(DATABASE_URL);
+const db = createSeedDb(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 /**
  * Multi-row insert, chunked.
  *
- * Postgres allows at most 65,535 bind parameters per statement, so a 20-column
- * table tops out near 3,000 rows — `INSERT_CHUNK` sits well under that for the
- * widest table here. Empty arrays are skipped: Drizzle would build `values ()`,
- * which Postgres rejects.
+ * The old bind-parameter ceiling is gone — PostgREST takes a JSON array, not
+ * 65,535 placeholders — but the chunking stays: the request body is still one
+ * HTTP payload, and a few thousand rows in one POST is a timeout waiting to
+ * happen. Empty arrays are skipped.
  */
-async function insertAll<T extends PgTable>(table: T, rows: InferInsertModel<T>[]): Promise<void> {
+async function insertAll(table: string, rows: Record<string, unknown>[]): Promise<void> {
   for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
     await db.insert(table).values(rows.slice(i, i + INSERT_CHUNK)).onConflictDoNothing();
   }
@@ -156,7 +134,7 @@ async function assertSafe(): Promise<void> {
     process.exit(1);
   }
 
-  const host = new URL(DATABASE_URL).hostname;
+  const host = new URL(SUPABASE_URL).hostname;
   console.log(`  target   ${host}`);
   console.log(`  mode     ${RESET_ONLY ? 'RESET (delete seeded rows)' : 'SEED'}`);
 
@@ -168,19 +146,19 @@ async function assertSafe(): Promise<void> {
 
   // The guard the other three miss: a database that is real but not labelled
   // production. Counts rows this script could not have written.
-  const [foreign] = await db.execute<{ vendors: number; orders: number; couriers: number }>(sql`
-    select (select count(*) from vendors  where id::text not like ${SEED_ID_LIKE_PATTERN})::int as vendors,
-           (select count(*) from orders   where id::text not like ${SEED_ID_LIKE_PATTERN})::int as orders,
-           (select count(*) from couriers where id::text not like ${SEED_ID_LIKE_PATTERN})::int as couriers
-  `);
+  const [vendorCount, orderCount, courierCount] = await Promise.all([
+    db.countNotMatching('vendors', 'id', SEED_ID_PREFIX),
+    db.countNotMatching('orders', 'id', SEED_ID_PREFIX),
+    db.countNotMatching('couriers', 'id', SEED_ID_PREFIX),
+  ]);
 
-  const total = (foreign?.vendors ?? 0) + (foreign?.orders ?? 0) + (foreign?.couriers ?? 0);
+  const total = vendorCount + orderCount + courierCount;
   if (total > 0 && !FORCE) {
     console.error(
       `\n✗ This database holds ${total} row(s) this script did not create ` +
-        `(${foreign?.vendors} vendors, ${foreign?.orders} orders, ${foreign?.couriers} couriers).`
+        `(${vendorCount} vendors, ${orderCount} orders, ${courierCount} couriers).`
     );
-    console.error('  That usually means DATABASE_URL points somewhere real. Pass --force only if you are certain.');
+    console.error('  That usually means SUPABASE_URL points somewhere real. Pass --force only if you are certain.');
     process.exit(1);
   }
 }
@@ -193,27 +171,13 @@ async function assertSafe(): Promise<void> {
  * nothing and documents the graph.
  */
 async function reset(): Promise<void> {
-  const like = SEED_ID_LIKE_PATTERN;
-
-  await db.execute(sql`delete from courier_issues       where order_id::text like ${like}`);
-  await db.execute(sql`delete from disputes             where order_id::text like ${like}`);
-  await db.execute(sql`delete from delivery_proofs      where order_id::text like ${like}`);
-  await db.execute(sql`delete from order_deliveries     where order_id::text like ${like}`);
-  await db.execute(sql`delete from order_status_history where order_id::text like ${like}`);
-  await db.execute(sql`delete from order_items          where order_id::text like ${like}`);
-  await db.execute(sql`delete from orders               where id::text       like ${like}`);
-  await db.execute(sql`delete from addresses            where id::text       like ${like}`);
-  await db.execute(sql`delete from products             where id::text       like ${like}`);
-  await db.execute(sql`delete from vendor_categories    where vendor_id::text like ${like}`);
-  await db.execute(sql`delete from vendor_hours         where vendor_id::text like ${like}`);
-  await db.execute(sql`delete from vendor_registrations where vendor_id::text like ${like}`);
-  await db.execute(sql`delete from vendor_sections      where vendor_id::text like ${like}`);
-  await db.execute(sql`delete from courier_insurance    where courier_id::text like ${like}`);
-  // Break the profile back-links before the rows they point at disappear.
-  await db.execute(sql`update profiles set vendor_id = null, courier_id = null
-                       where vendor_id::text like ${like} or courier_id::text like ${like}`);
-  await db.execute(sql`delete from couriers             where id::text like ${like}`);
-  await db.execute(sql`delete from vendors              where id::text like ${like}`);
+  // One transaction, and one place where the `5eed…` scoping lives — see the
+  // `rpc_seed_reset` migration. The previous version issued fifteen separate
+  // statements and could fail halfway, leaving a half-deleted dataset with
+  // dangling vendor and courier pointers on `profiles`.
+  const { data, error } = await db.client.rpc('seed_reset', { p_prefix: SEED_ID_PREFIX });
+  if (error) throw new Error(`seed reset: ${error.code ?? '?'} ${error.message}`);
+  console.log(`  deleted  ${JSON.stringify(data)}`);
 
   const removed = await deleteSeedAuthUsers({ supabaseUrl: SUPABASE_URL, serviceRoleKey: SERVICE_ROLE_KEY }, isSeedEmail);
   console.log(`  removed  ${removed} seeded auth account(s) (the admin account is kept)`);
@@ -246,7 +210,7 @@ async function seed(): Promise<void> {
   const id = (key: string) => ids.get(key)!;
 
   // 2 ─ roles and join dates. Never an insert: the trigger already made these.
-  await db.execute(sql`update profiles set role = 'admin' where id = ${adminId}`);
+  await db.setOn('profiles', adminId, { role: 'admin' });
   for (const [index, person] of people.entries()) {
     const role = person.key.startsWith('vendor:') ? 'business' : person.key.startsWith('courier:') ? 'courier' : 'customer';
     // Spread joining dates across the past year — otherwise every account
@@ -255,8 +219,9 @@ async function seed(): Promise<void> {
     // `::role` — the enum is named `role`, matching `roleEnum` in
     // `src/db/schema/identity.ts`. A bare string parameter has no type Postgres
     // can infer here, so the cast is required.
-    await db.execute(sql`update profiles set role = ${role}::role, member_since = ${memberSince.toISOString()}
-                         where id = ${id(person.key)}`);
+    // The enum cast the raw SQL needed is gone: PostgREST resolves the column
+    // type itself, so a bare string is enough here.
+    await db.setOn('profiles', id(person.key), { role, memberSince });
   }
 
   // 3 ─ shops.
@@ -266,7 +231,7 @@ async function seed(): Promise<void> {
     vendorIdOf.set(v.key, vendorId);
     const decided = v.status !== 'pending';
     await db
-      .insert(vendors)
+      .insert('vendors')
       .values({
         id: vendorId,
         slug: v.slug,
@@ -290,11 +255,11 @@ async function seed(): Promise<void> {
         reviewedAt: decided ? new Date(now - intBetween(rand, 20, 200) * 86_400_000) : null,
         createdAt: new Date(now - intBetween(rand, 200, 400) * 86_400_000),
       })
-      .onConflictDoUpdate({ target: vendors.id, set: { name: v.name, status: v.status, statusReason: v.statusReason ?? null } });
+      .onConflictDoUpdate({ set: { name: v.name, status: v.status, statusReason: v.statusReason ?? null } });
 
     // A file under review needs the paperwork the reviewer is looking at.
     await db
-      .insert(vendorRegistrations)
+      .insert('vendor_registrations')
       .values({
         vendorId,
         neq: `11${String(70000000 + index * 137).slice(0, 8)}`,
@@ -306,20 +271,20 @@ async function seed(): Promise<void> {
 
     for (const [position, nameFr] of SECTION_NAMES.entries()) {
       await db
-        .insert(vendorSections)
+        .insert('vendor_sections')
         .values({ id: seedId(Family.Section, index * 100 + position), vendorId, nameFr, position })
         .onConflictDoNothing();
     }
 
     for (let day = 0; day < 7; day += 1) {
       await db
-        .insert(vendorHours)
+        .insert('vendor_hours')
         .values({ vendorId, day, open: day === 0 ? '10:00' : '08:00', close: day === 0 ? '17:00' : '20:00', closed: false })
         .onConflictDoNothing();
     }
 
     for (const key of v.categoryKeys) {
-      await db.insert(vendorCategories).values({ vendorId, categoryId: CATEGORY_IDS[key] }).onConflictDoNothing();
+      await db.insert('vendor_categories').values({ vendorId, categoryId: CATEGORY_IDS[key] }).onConflictDoNothing();
     }
   }
 
@@ -334,7 +299,7 @@ async function seed(): Promise<void> {
       // `products_section_id_vendor_id_fk` enforces it.
       const sectionId = seedId(Family.Section, vIndex * 100 + SECTION_NAMES.indexOf(item.sectionName));
       await db
-        .insert(products)
+        .insert('products')
         .values({
           id: productId,
           vendorId,
@@ -346,7 +311,7 @@ async function seed(): Promise<void> {
           stockQty: intBetween(rand, 4, 90),
           isAvailable: true,
         })
-        .onConflictDoUpdate({ target: products.id, set: { priceCad: cents(item.priceCents) } });
+        .onConflictDoUpdate({ set: { priceCad: cents(item.priceCents) } });
       list.push({ id: productId, name: item.name, priceCents: item.priceCents });
     }
     productsOf.set(v.key, list);
@@ -359,7 +324,7 @@ async function seed(): Promise<void> {
     courierIdOf.set(c.key, courierId);
     const decided = c.status !== 'pending';
     await db
-      .insert(couriers)
+      .insert('couriers')
       .values({
         id: courierId,
         userId: id(`courier:${c.key}`),
@@ -380,11 +345,11 @@ async function seed(): Promise<void> {
         isOnline: c.isOnline,
         joinedAt: new Date(now - intBetween(rand, 60, 380) * 86_400_000),
       })
-      .onConflictDoUpdate({ target: couriers.id, set: { status: c.status, isOnline: c.isOnline } });
+      .onConflictDoUpdate({ set: { status: c.status, isOnline: c.isOnline } });
 
     if (c.insurance) {
       await db
-        .insert(courierInsurance)
+        .insert('courier_insurance')
         .values({ courierId, insurerName: c.insurance.insurerName, policyNumber: c.insurance.policyNumber, expiry: c.insurance.expiry })
         .onConflictDoNothing();
     }
@@ -392,16 +357,16 @@ async function seed(): Promise<void> {
 
   // 6 ─ profile back-links, only now that both sides exist.
   for (const v of VENDORS) {
-    await db.execute(sql`update profiles set vendor_id = ${vendorIdOf.get(v.key)!} where id = ${id(`vendor:${v.key}`)}`);
+    await db.setOn('profiles', id(`vendor:${v.key}`), { vendorId: vendorIdOf.get(v.key)! });
   }
   for (const c of COURIERS) {
-    await db.execute(sql`update profiles set courier_id = ${courierIdOf.get(c.key)!} where id = ${id(`courier:${c.key}`)}`);
+    await db.setOn('profiles', id(`courier:${c.key}`), { courierId: courierIdOf.get(c.key)! });
   }
 
   // 7 ─ customer addresses.
   for (const [index, c] of CUSTOMERS.entries()) {
     await db
-      .insert(addresses)
+      .insert('addresses')
       .values({
         id: seedId(Family.Address, index),
         profileId: id(`customer:${c.key}`),
@@ -425,12 +390,17 @@ async function seed(): Promise<void> {
   const approvedVendors = VENDORS.filter((v) => v.status === 'approved');
   const approvedCouriers = COURIERS.filter((c) => c.status === 'approved');
 
-  const orderRows: (typeof orders.$inferInsert)[] = [];
-  const itemRows: (typeof orderItems.$inferInsert)[] = [];
-  const historyRows: (typeof orderStatusHistory.$inferInsert)[] = [];
-  const deliveryRows: (typeof orderDeliveries.$inferInsert)[] = [];
-  const issueRows: (typeof courierIssues.$inferInsert)[] = [];
-  const disputeRows: (typeof disputes.$inferInsert)[] = [];
+  // Loosely typed now that the Drizzle row types are gone. The shape is
+  // asserted by the database on insert instead — a wrong column name is a
+  // PostgREST error naming it, which is a clearer failure than a type error
+  // three files away.
+  type Row = Record<string, unknown>;
+  const orderRows: Row[] = [];
+  const itemRows: Row[] = [];
+  const historyRows: Row[] = [];
+  const deliveryRows: Row[] = [];
+  const issueRows: Row[] = [];
+  const disputeRows: Row[] = [];
 
   let orderSeq = 0;
 
@@ -578,12 +548,12 @@ async function seed(): Promise<void> {
   }
 
   // Parents before children, so every foreign key resolves.
-  await insertAll(orders, orderRows);
-  await insertAll(orderItems, itemRows);
-  await insertAll(orderStatusHistory, historyRows);
-  await insertAll(orderDeliveries, deliveryRows);
-  await insertAll(courierIssues, issueRows);
-  await insertAll(disputes, disputeRows);
+  await insertAll('orders', orderRows);
+  await insertAll('order_items', itemRows);
+  await insertAll('order_status_history', historyRows);
+  await insertAll('order_deliveries', deliveryRows);
+  await insertAll('courier_issues', issueRows);
+  await insertAll('disputes', disputeRows);
 
   const liveCount = orderRows.filter((o) => IN_FLIGHT.includes(o.status as (typeof IN_FLIGHT)[number])).length;
 

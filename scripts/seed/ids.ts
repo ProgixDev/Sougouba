@@ -98,6 +98,13 @@ export function isSeedId(id: string): boolean {
 export const SEED_ID_LIKE_PATTERN = `${NAMESPACE}%`;
 
 /**
+ * The bare prefix, without the wildcard — what `seed_reset` takes, because the
+ * function builds its own `LIKE` pattern and validates the prefix is at least
+ * four hex characters before deleting anything.
+ */
+export const SEED_ID_PREFIX = NAMESPACE;
+
+/**
  * Seeded accounts live in Supabase's `auth.users`, where GoTrue assigns the
  * ids — so they fall outside the uuid namespace above and need their own
  * marker. `example.com` is IANA-reserved and can never receive mail.

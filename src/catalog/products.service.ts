@@ -8,7 +8,6 @@ import {
   type CreateProductInput,
   type ProductQuery,
   type ProductSearchQuery,
-  type SortKey,
   type UpdateProductInput,
 } from './dto/product.dto.js';
 import type { Page } from './dto/query.dto.js';

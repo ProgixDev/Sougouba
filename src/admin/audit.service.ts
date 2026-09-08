@@ -4,7 +4,6 @@ import type { Page } from '../catalog/dto/query.dto.js';
 import type { Db } from '../db/client.js';
 import { camelize } from '../db/case.js';
 import { DB } from '../db/db.module.js';
-import { unwrap } from '../db/unwrap.js';
 import type { AuditQuery } from './dto/admin.dto.js';
 
 /**

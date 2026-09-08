@@ -3,7 +3,6 @@ import { BadRequestException, ConflictException, Inject, Injectable, Logger, Not
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
 import { unwrap, unwrapRpc } from '../db/unwrap.js';
-import { LoyaltyService } from '../loyalty/loyalty.service.js';
 import { PaymentsService } from '../orders/payments.service.js';
 import { roundCad, toStripeAmount } from '../orders/pricing.js';
 

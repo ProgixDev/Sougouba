@@ -19,7 +19,7 @@ import { containsPattern } from '../common/sql/like.js';
 import { orIlike } from '../common/sql/postgrest.js';
 import { assertMediaPath, VENDOR_MEDIA_BUCKET } from './media-paths.js';
 import { toVendor, type VendorResponse, type VendorRow } from './mappers.js';
-import { slugify, uniqueSlug } from './slugify.js';
+import { slugify } from './slugify.js';
 
 /**
  * "Is this shop trading right now", asked of Postgres.
