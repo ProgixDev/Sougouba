@@ -63,7 +63,7 @@ and `devis-contract-scope` for the condensed facts pulled from the two PDFs.
 | 0 · Foundations & infra | **Done** (2026-08-30) — see `sougouba-api/PROGRESS.md` |
 | 1 · Identity & accounts | **Done** (2026-08-30) — API side only; mobile app not yet wired to real Supabase Auth |
 | 2 · Catalog | **Done** (2026-09-03) — API side only; mobile app not yet wired |
-| 3 · Cart → checkout → orders → payments | **Stripe paths verified** (2026-09-03) — `npm run verify:stripe`, 12/12 against live test mode. The order-writing half still needs a `DATABASE_URL` |
+| 3 · Cart → checkout → orders → payments | **Done and walked** (2026-09-08) — `verify:stripe` 12/12 on the payment path, `verify:orders` 17/17 on the order-writing half, including the rollback when a line sells out mid-checkout |
 | 4 · Loyalty, referrals & coupons | **Done** (2026-09-03) — coupon *rules* still assumed, not confirmed |
 | 5 · Courier, dispatch & live tracking | **Done** (2026-09-03) — straight-line ETAs until Mapbox Directions; scheduler is single-instance |
 | 6 · Disputes & courier issues | **Done** (2026-09-03) — incl. the `admin` role and refunds |
@@ -141,7 +141,8 @@ project, static checks have never once caught the bug that mattered.** Full
 detail and what is verified vs. merely written is in `sougouba-api/PROGRESS.md` —
 this file stays the phase-by-phase plan, that one is the build log.
 
-**Waiting on**: a real `DATABASE_URL` (see below), **Connect enabled** on the
+**Waiting on**: ~~a real `DATABASE_URL`~~ (removed — see the data-layer note below),
+**Connect enabled** on the
 Stripe account and a **webhook signing secret** (both dashboard steps — see
 Phase 7 in the table), a deploy target decision, the remaining open questions in
 §"Confirm before Phase 0" below, and — per the devis — Apple Developer / Google
@@ -175,22 +176,48 @@ the native SDK build, so one secret is doing two jobs and rotating it for the
 mobile build would silently stop server-side geocoding. A dedicated server
 token before launch.
 
-On `DATABASE_URL` specifically: `.env` holds
-`postgresql://postgres:…@127.0.0.1:5432/postgres` — a placeholder in **both**
-host and password, checked rather than assumed. Nothing listens on 127.0.0.1:5432
-or :54322 on this machine, there is no Supabase CLI, no `supabase/` directory
-and no Docker, so that host reaches nothing; and the password it carries was
-tried against the real pooler and rejected (`28P01`), so it is not the Supabase
-one either. The connection string to use is in `.env.example` — only the
-password is missing, and it comes from Supabase → Project Settings → Database. The app boots, maps 91 routes and resolves its
-whole module graph against it, but `/health/db` returns 500 and the dispatch
-scheduler logs a connection failure every five seconds. **No query the API
-issues has ever reached a database.** Everything verified so far was proved
-against the live Supabase project over the MCP connection instead — including
-the exact SQL Drizzle compiles for a given call, which is how `0028`'s insert
-was checked without one.
+## The data layer changed (2026-09-08) — `DATABASE_URL` is gone
 
-**Also still true after three phases of API work**: the mobile app is not wired
+The longest-standing blocker on this plan was removed by changing the
+architecture rather than by obtaining the password. **The API talks to Postgres
+through PostgREST now** (`supabase-js` + the service-role key); nothing in
+`sougouba-api/` opens a TCP connection.
+
+The trade, stated plainly: `service_role` bypasses RLS entirely, so the app still
+holds one god-mode secret — a different name, not a smaller blast radius. What it
+bought is that the secret was one we already had, which is why this data layer
+read its first real row that day, after eight phases in which **no query this API
+issued had ever reached a database**.
+
+What it cost, and what anyone extending this needs to know:
+
+- **19 transactions became 34 `plpgsql` functions.** PostgREST is one statement per
+  request, so anything that must land together moved into SQL — order placement with
+  its stock decrements and coupon claim, every audited admin decision with its log
+  entry, the dispatch accept, the delivery completion with its proof.
+- **Query-level type safety is gone.** The caller asserts what a `select` returns; a
+  column renamed in the database and not in the code fails at runtime. That is why
+  the five committed verification gates matter more than they did.
+- **Four `Date`-vs-string bugs surfaced**, none visible to the type-checker:
+  `postgres.js` parsed `timestamptz` into `Date` objects and PostgREST returns JSON
+  strings, so every date comparison in the codebase was silently wrong until fixed.
+- **⚠️ A new attack surface, by default.** PostgREST publishes every function in
+  `public` as `POST /rpc/<name>`, and a new function grants EXECUTE to PUBLIC —
+  which includes `anon`. Every function must revoke `public, anon, authenticated`
+  and grant only `service_role`, verified by attacking it. This is the fifth
+  appearance of the "a guard protected the route and said nothing about the
+  PostgREST path" class on this project, and the first one the architecture creates
+  for free rather than by oversight.
+- **Nothing checks schema drift any more.** CI's `drizzle-kit generate` check
+  compared schema files to a migration snapshot and both sides are gone. The check
+  that would work is a live introspection diff, which needs a Supabase token in CI.
+  Recorded as a real gap in `.github/workflows/ci.yml`.
+
+Migrations still go through the Supabase MCP, exactly as they did before —
+`apply_migration` never needed a connection string, and all 30 original migrations
+were applied that way.
+
+**Still true, and now the critical path**: the mobile app is not wired
 to any of it. Every screen still reads the mock `data/api/*` layer. The cutover
 is deliberately cheap by design (see "Frontend migration strategy" below), but
 it is real work that has not started, and no phase's review gate can be walked
@@ -227,9 +254,18 @@ end-to-end from the app until it does.
   lightweight, fast on Fastify's performance-conscious footing, plain SQL escape
   hatch for the aggregation-heavy endpoints. Prisma is the alternative if the team
   prefers its migration tooling; either works against Supabase's connection string.
-- Migrations live in the API repo (Drizzle Kit or Prisma Migrate), applied to
-  Supabase's Postgres via its connection string — **not** hand-edited in the
-  Supabase dashboard, so schema history is in git.
+
+  > **Superseded 2026-09-08.** This recommendation was followed, then reversed: the
+  > data layer is `supabase-js` over PostgREST. The paragraph above was right about
+  > the *problem* — "the analytics aggregations need real SQL that a REST-over-
+  > Postgres client makes awkward" is exactly what happened, and the answer is that
+  > all of it moved into `plpgsql` functions called over `.rpc()`. Nineteen
+  > transactions and every aggregate now live in SQL rather than in an ORM. See
+  > "The data layer changed" above.
+- Migrations live in the API repo as plain `.sql` under `drizzle/` (the directory
+  keeps its name; the tool that made it is gone), applied to Supabase through the
+  MCP's `apply_migration` — **not** hand-edited in the Supabase dashboard, so
+  schema history is in git.
 - Supabase itself is used for: **Auth** (email/password + Google + Apple OAuth,
   password reset emails — replaces every fake auth path in `data/api/auth.ts` and
   `app/(auth)/forgot-password.tsx`), **Storage** (product/vendor images, merchant
