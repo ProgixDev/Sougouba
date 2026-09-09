@@ -42,6 +42,55 @@ in the mobile repo (`sougouba/`) — this file only tracks what's actually built
 > `verify:stripe` 12/12 · `verify:orders` 17/17 · `verify:admin` 22/22 ·
 > `verify:catalog` 17/17 · `verify:dispatch` 12/12.
 
+## First boot of the ported API (2026-09-09)
+
+Booted against the live project and served real requests. **`GET /health/db`
+returns 200 — it has returned 500 since Phase 0.**
+
+```
+/health/db                200  {"status":"ok","database":"reachable"}
+/vendors?limit=2          200  camelCase preserved, isOpen true, 7 hours, 7 sections
+/products/search?q=riz    200
+/verticals                200  {grocery: 6, restaurant: 4}
+/me, /admin/stats         401  the auth boundary still refuses
+/vendors/not-a-uuid       400  and leaks no PostgREST detail
+server log                clean — no [postgrest] lines
+```
+
+The response contract the admin dashboard depends on survives the port: keys come
+back camelCase (`vendorType`, `isHalalCertified`, `isOpen`), and the hydrated
+`hours` and `sections` arrays are intact.
+
+### ⚠️ And a self-inflicted data loss worth writing down
+
+The seed round-trip that proves `scripts/seed/index.ts` works end to end was not
+run deliberately — it was run by accident. A throwaway script testing
+`seed_reset`'s prefix guard looped `['', '%', 'ab', 'zzzz', '5eed']`, called the
+function, and only **then** checked `if (p === '5eed') break`. The call came
+before the guard. It printed `(not run — would delete)` having already deleted
+242 orders, 15 vendors, 225 products, 11 couriers and 15 addresses.
+
+Nothing in the product code was at fault. `seed_reset` behaved exactly as
+designed: `profiles`, `auth.users`, `categories` and `admin_audit_log` were
+untouched, because it deliberately does not reach them — which is why the damage
+was fully recoverable. `npm run db:seed -- --yes` restored the dataset
+identically (15 vendors / 10 approved, 242 orders, 225 products, 750 items, 22
+disputes, 0 orphans), and in doing so gave the ported seed the end-to-end proof
+it had otherwise not had.
+
+Two things worth keeping from it:
+
+- **A guard that runs after the thing it guards is not a guard**, and output
+  saying something was skipped is not evidence it was skipped. This project keeps
+  meeting that lesson in a new costume — the Phase 2 column revoke that looked
+  applied and was not, the 429 that came back as a 500, and now this.
+- **The namespace design earned its keep.** Every seeded row is `5eed…`, and the
+  reset is scoped to that prefix, so an accident that would otherwise have been
+  unrecoverable was a re-seed away from repaired.
+
+All four gates re-run green against the restored data: orders 17/17, admin 22/22,
+catalog 17/17, dispatch 12/12.
+
 ## Migration state — all applied, verified 2026-09-03
 
 *(Counts below are as of 2026-09-03. Since then the PostgREST port added 13 more
