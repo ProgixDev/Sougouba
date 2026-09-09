@@ -3,7 +3,50 @@
 Read this first in a fresh session. Full plan and rationale: `docs/BACKEND-BUILD-PHASES.md`
 in the mobile repo (`sougouba/`) — this file only tracks what's actually built here.
 
+> ## ⚠️ Read this before the phase log: the data layer changed (2026-09-08)
+>
+> **Drizzle and `DATABASE_URL` are gone.** Every query now goes through PostgREST
+> (`supabase-js`), authenticated with `SUPABASE_SERVICE_ROLE_KEY`. Nothing in this
+> repo opens a TCP connection to Postgres.
+>
+> The phase log below is a record of what happened and is **left as written** —
+> it describes a Drizzle codebase because that is what it was built against. Do
+> not read its code snippets as current. What is still true from it: every
+> business rule, every security finding, and every migration.
+>
+> | Then | Now |
+> |---|---|
+> | `DATABASE_URL` + `postgres.js` | `SUPABASE_URL` + service-role key |
+> | `db.select().from(x)` | `db.from('x').select()` |
+> | `db.transaction(tx => …)` | a `plpgsql` function called over `.rpc()` |
+> | `src/db/schema/*.ts` | `src/db/database.types.ts` (generated) |
+> | `drizzle-kit generate` drift check | **nothing** — see `.github/workflows/ci.yml` |
+>
+> **Why**: the service-role key was a credential we already had, and the database
+> password was not. That unblocked the data layer the same day, after eight phases
+> in which no query this API issued had ever reached a database.
+>
+> **What it cost**: 34 `plpgsql` functions now carry the 19 transactions and
+> everything PostgREST cannot express; query-level type safety is gone (the caller
+> asserts what a `select` returns); and the settings audit's "before" read can now
+> be stale, because PostgREST cannot read inside a transaction.
+>
+> **The rule that came with it**: PostgREST publishes every function in `public` as
+> `POST /rpc/<name>`, and a new function grants EXECUTE to PUBLIC — which includes
+> `anon`. **Every function must revoke `public, anon, authenticated` and grant only
+> `service_role`**, and the revoke must be verified by attacking it, not by reading
+> the migration. This is the fifth appearance of that class of bug on this project
+> and the first the architecture hands us for free.
+>
+> **Live gates** (all committed, all run against the real project):
+> `verify:stripe` 12/12 · `verify:orders` 17/17 · `verify:admin` 22/22 ·
+> `verify:catalog` 17/17 · `verify:dispatch` 12/12.
+
 ## Migration state — all applied, verified 2026-09-03
+
+*(Counts below are as of 2026-09-03. Since then the PostgREST port added 13 more
+migrations of `plpgsql` functions — no tables, no policies. `src/db/schema/` is
+deleted, so the "schema files" rows no longer have a left-hand side.)*
 
 **Every migration is applied to the live Supabase project** (`wyjkaiquugoblvvzpjnq`),
 and the live schema matches the schema files. Checked, not assumed:
@@ -58,6 +101,8 @@ live introspection diff, and it needs a working `DATABASE_URL` — see below.
 `nodenext` ESM (every relative import needs its `.js` extension — this is not a typo
 anywhere you see it), Vitest (not Jest), oxlint (not ESLint), Drizzle ORM + `postgres.js`
 against Supabase's Postgres directly (not through PostgREST).
+*(Superseded 2026-09-08 — the data layer is `supabase-js` over PostgREST now. See the
+banner at the top.)*
 
 **Live Supabase project**: `wyjkaiquugoblvvzpjnq` (`https://wyjkaiquugoblvvzpjnq.supabase.co`).
 Connected via the `supabase` MCP server (already authenticated in this session/toolchain —
@@ -790,23 +835,36 @@ walked either.
 
 ## Needed from you before this app can actually run for real
 
-1. **`DATABASE_URL`** — Supabase dashboard → Project Settings → Database → Connection string
-   (session-mode pooled connection is right for a long-lived server process like this one).
-2. **`MAPBOX_SECRET_TOKEN`** — same Mapbox account the mobile app already uses for map
-   *rendering*; geocoding needs the account's **secret** key (`sk.…`), not the public one
-   (`pk.…`) the client bundle carries.
-   Put both in a local `.env` (gitignored) — see `.env.example`.
-3. A decision on where this deploys (Phase 0's review gate calls for "a deployed, even dev-box,
-   instance" — not done yet, blocked on this choice).
+1. ~~**`DATABASE_URL`**~~ — **no longer needed.** The data layer is PostgREST; the
+   project URL plus the service-role key are the database credentials. This was the
+   longest-standing blocker on this list and it was removed by changing the
+   architecture rather than by obtaining the password.
+2. ~~**`MAPBOX_SECRET_TOKEN`**~~ — already present; the mobile repo's `.env` carried an
+   `sk.` token as `RNMAPBOX_MAPS_DOWNLOAD_TOKEN` and it geocodes. ⚠️ One secret is
+   doing two jobs: rotating it for the mobile build would silently stop server-side
+   geocoding. A dedicated server token before launch.
+3. **Stripe Connect** must be switched on at dashboard.stripe.com/connect —
+   `accounts.create` is refused until it is, which blocks Phase 7's gate.
+4. **A `STRIPE_WEBHOOK_SECRET`** (`whsec_…`), for the webhook half.
+5. A decision on where this deploys (Phase 0's review gate calls for "a deployed, even
+   dev-box, instance" — not done yet, blocked on this choice).
+6. Apple Developer / Google Play accounts the client owns — not blocking API work,
+   blocking store publishing.
 
-## Next: the Stripe walkthrough, then Phase 9
+## Next: the mobile cutover, then Phase 9
 
-**The moment a test-mode key lands, walk the payment path end to end before writing anything
-new.** Six calls have never executed and they are the riskiest surface in the project:
+**The API is no longer the bottleneck.** It builds, 248 unit tests pass, and five
+committed gates run against the live project. What has never happened is a request
+from the actual app: every mobile screen still reads the mock `data/api/*` layer.
+That cutover is now genuinely unblocked — the app can use the same Supabase project
+with the anon key, and this API is reachable.
 
-1. `POST /orders/payment-intent` → confirm with a test card → `POST /orders`. This is Phase
-   3's review gate, still unwalked: the order must land in `pending` *only* after Stripe
-   confirms, and the amount/currency/owner checks must all fire.
+Remaining Stripe walkthrough steps, in order of risk:
+
+1. ~~`POST /orders/payment-intent` → confirm with a test card → `POST /orders`~~ —
+   **both halves now walked.** `verify:stripe` proved the payment path (12/12) and
+   `verify:orders` the order-writing half (17/17), including the rollback when a line
+   sells out mid-checkout.
 2. `POST /vendors/me/stripe/onboard` → finish Stripe's hosted flow → `GET .../status` shows
    `chargesEnabled`.
 3. A paid order on an onboarded merchant → the Stripe dashboard shows the **12 % of subtotal**
