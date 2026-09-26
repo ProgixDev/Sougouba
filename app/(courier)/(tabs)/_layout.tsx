@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import { History, Navigation, User, Wallet } from 'lucide-react-native';
 
 import { TabBarBackground, TabBarIcon } from '@/components/ui';
+import { useT } from '@/lib/i18n/useT';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { darkColors, lightColors } from '@/theme/colors';
 
@@ -13,6 +14,7 @@ export const unstable_settings = { anchor: 'missions' };
  * into the only screen that matters while someone is driving.
  */
 export default function CourierTabsLayout() {
+  const t = useT();
   const { colorScheme } = useColorScheme();
   const colors = colorScheme === 'dark' ? darkColors : lightColors;
 
@@ -36,19 +38,19 @@ export default function CourierTabsLayout() {
     >
       <Tabs.Screen
         name="missions"
-        options={{ title: 'Missions', tabBarIcon: (props) => <TabBarIcon icon={Navigation} {...props} /> }}
+        options={{ title: t('courier.tabs.missions'), tabBarIcon: (props) => <TabBarIcon icon={Navigation} {...props} /> }}
       />
       <Tabs.Screen
         name="history"
-        options={{ title: 'Courses', tabBarIcon: (props) => <TabBarIcon icon={History} {...props} /> }}
+        options={{ title: t('courier.tabs.history'), tabBarIcon: (props) => <TabBarIcon icon={History} {...props} /> }}
       />
       <Tabs.Screen
         name="earnings"
-        options={{ title: 'Gains', tabBarIcon: (props) => <TabBarIcon icon={Wallet} {...props} /> }}
+        options={{ title: t('courier.tabs.earnings'), tabBarIcon: (props) => <TabBarIcon icon={Wallet} {...props} /> }}
       />
       <Tabs.Screen
         name="profile"
-        options={{ title: 'Profil', tabBarIcon: (props) => <TabBarIcon icon={User} {...props} /> }}
+        options={{ title: t('courier.tabs.profile'), tabBarIcon: (props) => <TabBarIcon icon={User} {...props} /> }}
       />
     </Tabs>
   );

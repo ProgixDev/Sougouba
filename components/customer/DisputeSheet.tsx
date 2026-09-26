@@ -7,7 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Chip, Input, Text } from '@/components/ui';
 import type { DisputeReason } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
-import { disputeReasons } from '@/lib/disputes';
+import { disputeReasonKey, disputeReasons } from '@/lib/disputes';
+import { useT } from '@/lib/i18n/useT';
 
 export interface DisputeSheetProps {
   visible: boolean;
@@ -29,6 +30,7 @@ const MIN_MESSAGE = 10;
  * them to write more is a worse moment than a button that visibly waits.
  */
 export function DisputeSheet({ visible, onClose, onSubmit }: DisputeSheetProps) {
+  const t = useT();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const [reason, setReason] = useState<DisputeReason | null>(null);
@@ -72,7 +74,7 @@ export function DisputeSheet({ visible, onClose, onSubmit }: DisputeSheetProps) 
             backgroundColor: 'rgba(10, 32, 24, 0.45)',
           }}
         >
-          <Pressable className="flex-1" accessibilityLabel="Fermer" onPress={dismiss} />
+          <Pressable className="flex-1" accessibilityLabel={t('common.ui.close', { label: '' })} onPress={dismiss} />
         </MotiView>
 
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -97,44 +99,44 @@ export function DisputeSheet({ visible, onClose, onSubmit }: DisputeSheetProps) 
                 </View>
                 <View className="flex-1 gap-0.5">
                   <Text variant="subtitle" weight="bold" className="text-[19px]">
-                    Signaler un problème
+                    {t('customer.dispute.title')}
                   </Text>
                   <Text variant="caption" tone="muted" className="text-[13px]">
-                    Le commerce est informé et vous répondra ici.
+                    {t('customer.dispute.note')}
                   </Text>
                 </View>
               </View>
 
               <View className="gap-2.5">
                 <Text variant="label" tone="muted">
-                  Que s’est-il passé ?
+                  {t('customer.dispute.whatHappened')}
                 </Text>
                 <View className="flex-row flex-wrap gap-2">
                   {disputeReasons.map((option) => (
                     <Chip
-                      key={option.key}
-                      label={option.label}
-                      selected={reason === option.key}
-                      onPress={() => setReason(option.key)}
+                      key={option}
+                      label={t(disputeReasonKey(option))}
+                      selected={reason === option}
+                      onPress={() => setReason(option)}
                     />
                   ))}
                 </View>
               </View>
 
               <Input
-                label="Décrivez le problème"
+                label={t('customer.dispute.describe')}
                 value={message}
                 onChangeText={setMessage}
                 multiline
                 numberOfLines={4}
                 autoCapitalize="sentences"
-                helperText="Précisez les articles concernés — cela accélère la réponse."
+                helperText={t('customer.dispute.describeHint')}
               />
             </ScrollView>
 
             <View className="px-5 pt-4 gap-2" style={{ paddingBottom: insets.bottom + 12 }}>
               <Button
-                label="Envoyer le signalement"
+                label={t('customer.dispute.submit')}
                 variant="primary"
                 size="lg"
                 fullWidth

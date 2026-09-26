@@ -3,13 +3,22 @@ import { Clock, Clock3, LogOut, MapPin, Moon, Receipt, Star, Store, Sun, Truck }
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { CounterHeader, DeliveryGrid } from '@/components/business';
-import { Badge, Button, CatalogImage, Reveal, Skeleton, Text } from '@/components/ui';
+import {
+  Badge,
+  Button,
+  CatalogImage,
+  LanguageToggle,
+  Reveal,
+  Skeleton,
+  Text,
+} from '@/components/ui';
 import { MIN_DELIVERY_FEE_CAD } from '@/data/deliveryPricing';
 import type { VendorHours } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
 import { formatCad } from '@/lib/format';
+import { useT } from '@/lib/i18n/useT';
 import { COMMISSION_RATE, MONTHLY_SUBSCRIPTION_CAD } from '@/lib/monetization';
 import { routes } from '@/lib/routes';
 import { shopDay, shopStatusLine } from '@/lib/shopHours';
@@ -21,6 +30,8 @@ import { mustard } from '@/theme/tokens';
 const DAY_NAMES = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
 export default function BusinessProfileScreen() {
+  // Prices on this screen are locale-formatted — see the note in the customer profile.
+  const t = useT();
   const tabBarInset = useTabBarInset();
   const user = useSessionStore((s) => s.user);
   const signOut = useSessionStore((s) => s.signOut);
@@ -37,8 +48,8 @@ export default function BusinessProfileScreen() {
   return (
     <View className="flex-1 bg-background">
       <CounterHeader
-        title={vendor?.name ?? 'Boutique'}
-        eyebrow={day ? shopStatusLine(day) : undefined}
+        title={vendor?.name ?? t('business.metrics.shop')}
+        eyebrow={day ? t(shopStatusLine(day)) : undefined}
         tradingState={day ? (day.isOpen ? 'open' : 'closed') : undefined}
       />
 
@@ -96,7 +107,7 @@ export default function BusinessProfileScreen() {
 
             <Reveal delay={60} className="mt-4 mx-5 rounded-[20px] bg-card p-4 gap-3">
               <Text variant="label" tone="muted" className="text-[10px]">
-                Heures d’ouverture
+                {t('business.shopProfile.openingHours')}
               </Text>
               <View className="gap-2">
                 {[...vendor.hours]
@@ -126,16 +137,16 @@ export default function BusinessProfileScreen() {
               )}
             </View>
             <Text variant="caption" weight="bold">
-              {missing ? 'Aucune boutique' : 'Demande en attente'}
+              {missing ? t('business.shopProfile.noShopTitle') : 'Demande en attente'}
             </Text>
             <Text variant="caption" tone="muted" className="text-center">
               {missing
-                ? 'Inscrivez votre commerce pour commencer à vendre sur Sougouba.'
-                : 'Votre boutique sera visible une fois votre dossier validé par un administrateur Sougouba.'}
+                ? t('business.shopProfile.noShopBody')
+                : t('business.shopProfile.pendingBody')}
             </Text>
             {missing ? (
               <Button
-                label="Inscrire ma boutique"
+                label={t('business.shopProfile.registerShop')}
                 variant="outline"
                 size="sm"
                 onPress={() => router.push(routes.businessSignup)}
@@ -150,7 +161,7 @@ export default function BusinessProfileScreen() {
         {approved && vendor ? (
           <Reveal delay={100} className="mt-4 mx-5 rounded-[20px] bg-card p-4 gap-3">
             <Text variant="label" tone="muted" className="text-[10px]">
-              Votre forfait
+              {t('business.shopProfile.yourPlan')}
             </Text>
             <View className="flex-row items-center gap-3">
               <View className="w-9 h-9 items-center justify-center rounded-full bg-primary/10">
@@ -192,21 +203,23 @@ export default function BusinessProfileScreen() {
               )}
             </View>
             <Text variant="caption" weight="semibold" className="flex-1">
-              Mode sombre
+              {t('common.preferences.darkMode')}
             </Text>
             <Switch
               value={isDark}
               onValueChange={(next) => setPreference(next ? 'dark' : 'light')}
               trackColor={{ false: colors.border, true: colors.primary }}
-              accessibilityLabel="Activer le mode sombre"
+              accessibilityLabel={t('common.preferences.darkModeA11y')}
             />
           </View>
+          <View className="h-px bg-border my-3" />
+          <LanguageToggle className="flex-row items-center gap-3" />
         </Reveal>
 
         <Reveal delay={200} className="mt-4 mx-5 rounded-[20px] bg-card overflow-hidden">
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Se déconnecter"
+            accessibilityLabel={t('business.shopProfile.signOut')}
             onPress={signOut}
             className="flex-row items-center gap-3 p-4 active:bg-muted"
           >
@@ -214,7 +227,7 @@ export default function BusinessProfileScreen() {
               <LogOut size={17} color={colors.destructive} strokeWidth={2} />
             </View>
             <Text variant="caption" weight="semibold" tone="destructive" className="flex-1">
-              Se déconnecter
+              {t('business.shopProfile.signOut')}
             </Text>
           </Pressable>
         </Reveal>
@@ -224,6 +237,7 @@ export default function BusinessProfileScreen() {
 }
 
 function HoursRow({ entry, isToday }: { entry: VendorHours; isToday: boolean }) {
+  const t = useT();
   return (
     <View className="flex-row items-center justify-between">
       <Text
@@ -239,7 +253,7 @@ function HoursRow({ entry, isToday }: { entry: VendorHours; isToday: boolean }) 
         weight={isToday ? 'semibold' : 'regular'}
         tone={entry.closed ? 'destructive' : isToday ? 'default' : 'muted'}
       >
-        {entry.closed ? 'Fermé' : `${entry.open} – ${entry.close}`}
+        {entry.closed ? t('business.closed') : `${entry.open} – ${entry.close}`}
       </Text>
     </View>
   );

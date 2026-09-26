@@ -21,14 +21,14 @@ import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { comparePeriods } from '@/lib/analytics';
 import { formatCad } from '@/lib/format';
-import { orderStatusMeta } from '@/lib/orderStatus';
+import { orderStatusKey, orderStatusTone } from '@/lib/orderStatus';
+import { useT } from '@/lib/i18n/useT';
 
-const RANGES = [
-  { days: 7, label: '7 jours' },
-  { days: 30, label: '30 jours' },
-] as const;
+/** Day counts only; the label is `common.rangeDays`, which pluralises per locale. */
+const RANGES = [7, 30] as const;
 
 export default function BusinessAnalyticsScreen() {
+  const t = useT();
   const tabBarInset = useTabBarInset();
   const { vendor, loading: vendorLoading, missing, pending, reload } = useOwnerVendor();
   const { width } = useWindowDimensions();
@@ -59,7 +59,7 @@ export default function BusinessAnalyticsScreen() {
   );
 
   const comparison = useMemo(() => comparePeriods(orders, days), [orders, days]);
-  const rangeLabel = RANGES.find((r) => r.days === days)?.label ?? `${days} jours`;
+  const rangeLabel = t('common.rangeDays', { count: days });
   const summary = comparison.current;
 
   // Chart width tracks the card, and bars are sized from the bucket count so a
@@ -94,18 +94,18 @@ export default function BusinessAnalyticsScreen() {
   return (
     <View className="flex-1 bg-background">
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: tabBarInset + 28 }}>
-        <CounterHeader title="Analytique" eyebrow={vendor?.name}>
+        <CounterHeader title={t('business.metrics.analytics')} eyebrow={vendor?.name}>
           {/* The range belongs with the figures it governs: a control sitting
               below the slab would leave the headline number unexplained. */}
           <View className="flex-row self-start rounded-full p-1" style={{ backgroundColor: onSlab.fill }}>
             {RANGES.map((range) => {
-              const selected = days === range.days;
+              const selected = days === range;
               return (
                 <Pressable
-                  key={range.days}
+                  key={range}
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
-                  onPress={() => setDays(range.days)}
+                  onPress={() => setDays(range)}
                   className="px-4 h-8 items-center justify-center rounded-full"
                   style={selected ? { backgroundColor: onSlab.text } : undefined}
                 >
@@ -115,7 +115,7 @@ export default function BusinessAnalyticsScreen() {
                     className="text-[12px]"
                     style={{ color: selected ? colors.primary : onSlab.muted }}
                   >
-                    {range.label}
+                    {t('common.rangeDays', { count: range })}
                   </Text>
                 </Pressable>
               );
@@ -123,8 +123,8 @@ export default function BusinessAnalyticsScreen() {
           </View>
 
           <View className="flex-row items-end justify-between gap-4">
-            <SlabMetric label="Recettes" value={formatCad(summary.revenueCad)} />
-            <SlabMetric label="Commandes" value={String(summary.orderCount)} align="right" />
+            <SlabMetric label={t('business.metrics.revenue')} value={formatCad(summary.revenueCad)} />
+            <SlabMetric label={t('business.metrics.orders')} value={String(summary.orderCount)} align="right" />
           </View>
         </CounterHeader>
 
@@ -138,20 +138,20 @@ export default function BusinessAnalyticsScreen() {
             <View className="px-5 pt-6">
               <Reveal>
                 <StatColumns
-                  title={`Contre les ${days} jours précédents`}
+                  title={t('courier.earnings.vsPrevious', { count: days })}
                   columns={[
                     {
-                      label: 'Recettes',
+                      label: t('business.metrics.revenue'),
                       value: formatCad(summary.revenueCad),
                       deltaPct: comparison.revenueDeltaPct,
                     },
                     {
-                      label: 'Commandes',
+                      label: t('business.metrics.orders'),
                       value: String(summary.orderCount),
                       deltaPct: comparison.orderDeltaPct,
                     },
                     {
-                      label: 'Panier moyen',
+                      label: t('business.metrics.avgBasket'),
                       value: formatCad(summary.avgBasketCad),
                       deltaPct: comparison.basketDeltaPct,
                     },
@@ -176,7 +176,7 @@ export default function BusinessAnalyticsScreen() {
             <Reveal delay={60} className="mx-5 mt-4 rounded-[20px] bg-card p-4 gap-4">
               <View className="flex-row items-baseline justify-between gap-3">
                 <Text variant="label" tone="muted" className="text-[10px]">
-                  Recettes par jour
+                  {t('business.analyticsScreen.revenueByDay')}
                 </Text>
                 {bestDay && bestDay.revenueCad > 0 ? (
                   <Text variant="caption" tone="muted" className="text-[11px]">
@@ -188,7 +188,7 @@ export default function BusinessAnalyticsScreen() {
                 <View className="py-10 items-center gap-2">
                   <ChartColumn size={26} color={colors.mutedForeground} strokeWidth={1.5} />
                   <Text variant="caption" tone="muted">
-                    Aucune vente sur cette période.
+                    {t('business.analyticsScreen.noSales')}
                   </Text>
                 </View>
               ) : (
@@ -216,11 +216,11 @@ export default function BusinessAnalyticsScreen() {
 
             <Reveal delay={120} className="mx-5 mt-4 rounded-[20px] bg-card p-4 gap-4">
               <Text variant="label" tone="muted" className="text-[10px]">
-                Meilleures ventes
+                {t('business.analyticsScreen.topSellers')}
               </Text>
               {summary.topProducts.length === 0 ? (
                 <Text variant="caption" tone="muted">
-                  Aucune vente sur cette période.
+                  {t('business.analyticsScreen.noSales')}
                 </Text>
               ) : (
                 <View className="gap-3">
@@ -255,11 +255,11 @@ export default function BusinessAnalyticsScreen() {
 
             <Reveal delay={180} className="mx-5 mt-4 rounded-[20px] bg-card p-4 gap-3">
               <Text variant="label" tone="muted" className="text-[10px]">
-                Répartition des statuts
+                {t('business.analyticsScreen.statusBreakdown')}
               </Text>
               {Object.keys(summary.statusCounts).length === 0 ? (
                 <Text variant="caption" tone="muted">
-                  Aucune commande sur cette période.
+                  {t('business.analyticsScreen.noOrders')}
                 </Text>
               ) : (
                 <View className="flex-row flex-wrap gap-2">
@@ -268,8 +268,11 @@ export default function BusinessAnalyticsScreen() {
                     .map(([status, count]) => (
                       <Badge
                         key={status}
-                        label={`${orderStatusMeta[status].label} · ${count}`}
-                        tone={orderStatusMeta[status].tone}
+                        label={t('business.analytics.statusMix', {
+                          status: t(orderStatusKey(status)),
+                          count,
+                        })}
+                        tone={orderStatusTone[status]}
                         size="sm"
                       />
                     ))}

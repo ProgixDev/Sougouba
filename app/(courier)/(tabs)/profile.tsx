@@ -17,7 +17,7 @@ import { useCallback, useMemo } from 'react';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { CourierGate, CourierSlabSurface, onCourierSlab } from '@/components/courier';
-import { Avatar, Reveal, Text } from '@/components/ui';
+import { Avatar, LanguageToggle, Reveal, Text } from '@/components/ui';
 import { bankLabel } from '@/data/banks';
 import { BASE_FARE_CAD, PER_KM_CAD } from '@/data/courierPay';
 import type { VehicleType } from '@/data/types';
@@ -28,7 +28,8 @@ import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { summariseRuns } from '@/lib/courierAnalytics';
 import { formatCad, formatMonthYear } from '@/lib/format';
 import { formatDistance } from '@/lib/geo';
-import { VEHICLE_LABELS } from '@/lib/validation/courier';
+import { useT } from '@/lib/i18n/useT';
+import { VEHICLE_KEYS } from '@/lib/validation/courier';
 import { useSessionStore } from '@/store/useSessionStore';
 import { useThemeStore } from '@/store/useThemeStore';
 import { shadows } from '@/theme/shadows';
@@ -37,7 +38,7 @@ import { mustard } from '@/theme/tokens';
 const VEHICLE_ICONS: Record<VehicleType, typeof Bike> = {
   bike: Bike,
   // `scooter` is the stored value; "Moto" is what it is called everywhere a
-  // human reads it (see VEHICLE_LABELS), so the glyph follows the label.
+  // human reads it (see VEHICLE_KEYS), so the glyph follows the label.
   scooter: Motorbike,
   car: Car,
 };
@@ -55,6 +56,9 @@ const VEHICLE_ICONS: Record<VehicleType, typeof Bike> = {
  * printing "0,0 ★" — a zero here reads as a bad courier, not as an absent one.
  */
 export default function CourierProfileScreen() {
+  // `useT` also subscribes to the language, which the locale-formatted
+  // earnings, distances and join date on this screen need.
+  const t = useT();
   const tabBarInset = useTabBarInset();
   const colors = useThemeColors();
   const user = useSessionStore((s) => s.user);
@@ -106,7 +110,7 @@ export default function CourierProfileScreen() {
 
             <View className="items-center gap-2.5">
               <Text variant="label" style={{ color: onCourierSlab.accent }} className="text-[10px]">
-                Livreur Sougouba
+                {t('courier.profile.roleLabel')}
               </Text>
               <Text
                 variant="title"
@@ -129,7 +133,7 @@ export default function CourierProfileScreen() {
                     className="text-[11px]"
                     style={{ color: onCourierSlab.muted }}
                   >
-                    {VEHICLE_LABELS[courier.vehicle]}
+                    {t(VEHICLE_KEYS[courier.vehicle])}
                     {courier.plate ? ` · ${courier.plate}` : ''}
                   </Text>
                 </View>
@@ -144,7 +148,7 @@ export default function CourierProfileScreen() {
                     className="text-[11px]"
                     style={{ color: onCourierSlab.accent }}
                   >
-                    Dossier validé
+                    {t('courier.profile.approved')}
                   </Text>
                 </View>
               </View>
@@ -185,9 +189,9 @@ export default function CourierProfileScreen() {
           <Reveal index={1}>
             <View className="rounded-[20px] bg-card p-4 gap-3.5">
               <Text variant="label" tone="muted" className="text-[10px]">
-                Votre dossier
+                {t('courier.profile.yourFile')}
               </Text>
-              <Row icon={Phone} label="Téléphone" value={courier.phone} colors={colors} />
+              <Row icon={Phone} label={t('courier.profile.phone')} value={courier.phone} colors={colors} />
               <Row icon={Route} label="Secteur" value={courier.city} colors={colors} />
               {/* Absent on the eight seeded couriers, who predate in-app
                   registration — the rows are not drawn empty. */}
@@ -195,7 +199,10 @@ export default function CourierProfileScreen() {
                 <Row
                   icon={ShieldCheck}
                   label="Assurance"
-                  value={`${courier.insurance.insurerName} — échéance ${courier.insurance.expiry}`}
+                  value={t('courier.insuranceLine', {
+                    insurer: courier.insurance.insurerName,
+                    expiry: courier.insurance.expiry,
+                  })}
                   colors={colors}
                 />
               ) : null}
@@ -219,15 +226,15 @@ export default function CourierProfileScreen() {
           <Reveal index={2}>
             <View className="rounded-[20px] bg-card p-4 gap-3">
               <Text variant="label" tone="muted" className="text-[10px]">
-                Votre rémunération
+                {t('courier.profile.yourPay')}
               </Text>
-              <Rate label="Prise en charge" value={`${formatCad(BASE_FARE_CAD)} par course`} />
-              <Rate label="Distance" value={`${formatCad(PER_KM_CAD)} du kilomètre`} />
-              <Rate label="Pourboires" value="100 % pour vous" />
+              <Rate label="Prise en charge" value={t('courier.baseFarePerRun', { amount: formatCad(BASE_FARE_CAD) })} />
+              <Rate label="Distance" value={t('courier.perKm', { amount: formatCad(PER_KM_CAD) })} />
+              <Rate label="Pourboires" value={t('courier.allYours')} />
               <View className="h-px bg-border mt-0.5" />
               <View className="flex-row items-baseline justify-between">
                 <Text variant="caption" weight="bold" className="text-[14px]">
-                  Gains cumulés
+                  {t('courier.profile.lifetimeEarnings')}
                 </Text>
                 <Text
                   weight="bold"
@@ -251,7 +258,7 @@ export default function CourierProfileScreen() {
                   )}
                 </View>
                 <Text variant="caption" weight="bold" className="flex-1 text-[14px]">
-                  Thème sombre
+                  {t('common.preferences.darkMode')}
                 </Text>
                 <Switch
                   value={isDark}
@@ -259,6 +266,8 @@ export default function CourierProfileScreen() {
                   trackColor={{ false: colors.border, true: colors.primary }}
                 />
               </View>
+              <View className="h-px bg-border ml-16" />
+              <LanguageToggle />
             </View>
           </Reveal>
 
@@ -277,7 +286,7 @@ export default function CourierProfileScreen() {
               </View>
               <View className="flex-1 gap-0.5">
                 <Text variant="caption" weight="bold" tone="destructive" className="text-[14px]">
-                  Se déconnecter
+                  {t('courier.profile.signOut')}
                 </Text>
                 <Text variant="caption" tone="muted" numberOfLines={1} className="text-[12px]">
                   {user?.email}

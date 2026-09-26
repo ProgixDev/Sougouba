@@ -98,6 +98,10 @@ export function OnboardingSlide({
         style={[copyStyle, { paddingBottom: bottomInset }]}
         className="flex-1 justify-end px-7 gap-3"
       >
+        {/* No `numberOfLines` here, deliberately. Each locale authors its own
+            line breaks inside `onboarding.slides.*.title` — French takes two
+            lines, another language may take one or three — and a line cap would
+            silently truncate whichever one disagrees with the cap. */}
         <Text variant="display" weight="extrabold" className="text-[34px] leading-[40px] text-white">
           {title}
         </Text>

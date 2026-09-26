@@ -5,6 +5,7 @@ import { Modal, Pressable, View } from 'react-native';
 import { Button, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { COURIER_SIGNUP_STEPS } from '@/lib/courierOnboarding';
+import { useT } from '@/lib/i18n/useT';
 
 export interface CourierSignupSheetProps {
   visible: boolean;
@@ -26,6 +27,7 @@ export interface CourierSignupSheetProps {
  * form rather than after it is the whole point of the sheet.
  */
 export function CourierSignupSheet({ visible, onClose, onContinue }: CourierSignupSheetProps) {
+  const t = useT();
   const colors = useThemeColors();
 
   return (
@@ -50,18 +52,17 @@ export function CourierSignupSheet({ visible, onClose, onContinue }: CourierSign
               </View>
               <View className="gap-2">
                 <Text variant="subtitle" weight="bold" className="text-[21px]">
-                  Livrer avec Sougouba
+                  {t('onboarding.onboardingSheet.courierTitle')}
                 </Text>
                 <Text variant="body" tone="muted">
-                  Trois étapes, directement dans l’application. Un administrateur valide ensuite
-                  votre dossier avant votre première course.
+                {t('onboarding.onboardingSheet.courierBody')}
                 </Text>
               </View>
             </View>
 
             <View className="gap-4">
               {COURIER_SIGNUP_STEPS.map((step, index) => (
-                <View key={step.title} className="flex-row gap-3.5">
+                <View key={step} className="flex-row gap-3.5">
                   <View className="w-7 h-7 rounded-full bg-secondary/10 items-center justify-center mt-0.5">
                     <Text variant="caption" weight="bold" tone="secondary" className="text-[12px]">
                       {index + 1}
@@ -69,10 +70,10 @@ export function CourierSignupSheet({ visible, onClose, onContinue }: CourierSign
                   </View>
                   <View className="flex-1 gap-1">
                     <Text variant="caption" weight="bold">
-                      {step.title}
+                      {t(`onboarding.courier.${step}.title`)}
                     </Text>
                     <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
-                      {step.body}
+                      {t(`onboarding.courier.${step}.body`)}
                     </Text>
                   </View>
                 </View>
@@ -91,7 +92,7 @@ export function CourierSignupSheet({ visible, onClose, onContinue }: CourierSign
                 }}
               />
               {onContinue ? (
-                <Button label="Plus tard" variant="ghost" size="md" fullWidth onPress={onClose} />
+                <Button label={t('common.later')} variant="ghost" size="md" fullWidth onPress={onClose} />
               ) : null}
             </View>
           </Pressable>

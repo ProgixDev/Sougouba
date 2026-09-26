@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import { geoApi } from '@/data/api';
+import { useT } from '@/lib/i18n/useT';
 import { cityNames as fallbackCityNames } from '@/data/cities';
 
 import { Chip } from './Chip';
@@ -33,7 +34,11 @@ export interface CitySelectProps {
  * Options come from `geoApi` rather than the table directly, so the screen is
  * asking the same side of the app that will reject a bad answer.
  */
-export function CitySelect({ label = 'Ville', value, onChange, error, helperText }: CitySelectProps) {
+export function CitySelect({ label, value, onChange, error, helperText }: CitySelectProps) {
+  const t = useT();
+  // Resolved here, not as a parameter default: a module-scope default string
+  // would be captured at import and never follow a language switch.
+  const resolvedLabel = label ?? t('common.ui.city');
   const [cities, setCities] = useState<string[]>(fallbackCityNames);
 
   useEffect(() => {
@@ -49,7 +54,7 @@ export function CitySelect({ label = 'Ville', value, onChange, error, helperText
   return (
     <View className="gap-2.5">
       <Text variant="label" tone="muted">
-        {label}
+        {resolvedLabel}
       </Text>
       <View className="flex-row flex-wrap gap-2">
         {cities.map((city) => (

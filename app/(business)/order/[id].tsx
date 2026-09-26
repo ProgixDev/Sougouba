@@ -10,19 +10,22 @@ import { useThemeColors } from '@/hooks/useColorScheme';
 import { Badge, BackHeader, Button, EmptyState, PriceSummary, Skeleton, Text } from '@/components/ui';
 import { couriersApi, ordersApi } from '@/data/api';
 import type { Courier, Order } from '@/data/types';
-import { customerLabel } from '@/lib/customerNames';
-import { courierIssueLabel } from '@/lib/disputes';
+import { customerName } from '@/lib/customerNames';
+import { useT } from '@/lib/i18n/useT';
+import { courierIssueKey } from '@/lib/disputes';
 import { formatCad, formatDate, formatTime } from '@/lib/format';
 import {
-  advanceActionLabel,
+  advanceActionKey,
   isActiveStatus,
   nextStatusFor,
-  orderStatusMeta,
+  orderStatusKey,
+  orderStatusTone,
 } from '@/lib/orderStatus';
 import { routes } from '@/lib/routes';
 import { orderReference } from '@/lib/orderRef';
 
 export default function BusinessOrderDetailScreen() {
+  const t = useT();
   const colors = useThemeColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [order, setOrder] = useState<Order | null>(null);
@@ -56,10 +59,9 @@ export default function BusinessOrderDetailScreen() {
 
   async function reply(message: string) {
     if (!order) return;
-    const updated = await ordersApi.replyToDispute(order.id, {
-      message,
-      at: new Date().toISOString(),
-    });
+    // The timestamp is the server's now — a client-supplied one is how a
+    // dispute thread ends up out of order.
+    const updated = await ordersApi.replyToDispute(order.id, message);
     if (updated) setOrder(updated);
   }
 
@@ -78,12 +80,12 @@ export default function BusinessOrderDetailScreen() {
     // Cancelling is irreversible in this model — there is no transition back
     // onto the happy path — so it gets a confirmation.
     Alert.alert(
-      'Annuler la commande ?',
-      'Le client sera informé. Cette action est définitive.',
+      t('business.queue.cancelTitle'),
+      t('business.confirmations.cancelBody'),
       [
         { text: 'Retour', style: 'cancel' },
         {
-          text: 'Annuler la commande',
+          text: t('business.orderDetail.cancelOrder'),
           style: 'destructive',
           onPress: async () => {
             setUpdating(true);
@@ -106,23 +108,23 @@ export default function BusinessOrderDetailScreen() {
         <BackHeader />
         <EmptyState
           icon={Receipt}
-          title="Commande introuvable"
-          description="Cette commande n’existe plus."
-          actionLabel="Voir les commandes"
+          title={t('business.orderDetail.notFoundTitle')}
+          description={t('business.orderDetail.notFoundBody')}
+          actionLabel={t('business.orderDetail.seeOrders')}
           onAction={() => router.replace(routes.businessOrders)}
         />
       </SafeAreaView>
     );
   }
 
-  const meta = order ? orderStatusMeta[order.status] : null;
   // Null once the order is packed — see `STATUS_ACTOR` in lib/orderStatus.ts.
-  const actionLabel =
-    order && nextStatusFor(order.status, 'merchant') ? advanceActionLabel(order.status) : null;
+  const actionKey =
+    order && nextStatusFor(order.status, 'merchant') ? advanceActionKey(order.status) : null;
+  const actionLabel = actionKey ? t(actionKey) : null;
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <BackHeader title={order ? `Commande ${orderReference(order)}` : 'Commande'} />
+      <BackHeader title={order ? t('common.orderRef', { reference: orderReference(order) }) : t('common.order')} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
         {loading || !order ? (
@@ -141,23 +143,25 @@ export default function BusinessOrderDetailScreen() {
                   {formatCad(order.totalCad)}
                 </Text>
               </View>
-              {meta ? <Badge label={meta.label} tone={meta.tone} /> : null}
+              {order ? (
+                <Badge label={t(orderStatusKey(order.status))} tone={orderStatusTone[order.status]} />
+              ) : null}
             </View>
 
             {order.dispute ? <DisputeCard dispute={order.dispute} onReply={reply} /> : null}
 
-            <Section title="Client">
+            <Section title={t('business.metrics.customer')}>
               <View className="flex-row items-center gap-3">
                 <View className="w-10 h-10 items-center justify-center rounded-full bg-muted">
                   <User size={18} color={colors.mutedForeground} strokeWidth={2} />
                 </View>
                 <Text variant="caption" weight="bold" className="flex-1" numberOfLines={1}>
-                  {customerLabel(order)}
+                  {customerName(order) ?? t('common.genericCustomer')}
                 </Text>
               </View>
             </Section>
 
-            <Section title="Adresse de livraison">
+            <Section title={t('business.orderDetail.deliveryAddress')}>
               <View className="flex-row items-start gap-3">
                 <View className="w-10 h-10 items-center justify-center rounded-full bg-muted">
                   <MapPin size={18} color={colors.mutedForeground} strokeWidth={2} />
@@ -176,7 +180,7 @@ export default function BusinessOrderDetailScreen() {
               </View>
             </Section>
 
-            <Section title="À préparer">
+            <Section title={t('business.orderDetail.toPrepare')}>
               <View className="gap-3">
                 {order.items.map((item) => (
                   <View key={item.productId} className="flex-row items-center gap-3">
@@ -222,8 +226,8 @@ export default function BusinessOrderDetailScreen() {
                     </Text>
                     <Text variant="caption" tone="muted" className="text-[12px]">
                       {order.delivery.pickedUpAt
-                        ? 'Commande récupérée'
-                        : `Arrive dans environ ${order.delivery.pickupEtaMin} min`}
+                        ? t('business.confirmations.pickedUp')
+                        : t('business.queue.courierEta', { minutes: order.delivery.pickupEtaMin })}
                     </Text>
                   </View>
                   {courier.plate ? (
@@ -236,10 +240,10 @@ export default function BusinessOrderDetailScreen() {
             ) : null}
 
             {order.courierIssue ? (
-              <Section title="Signalé par le livreur">
+              <Section title={t('business.orderDetail.reportedByCourier')}>
                 <View className="gap-1.5">
                   <Text variant="caption" weight="bold" tone="destructive">
-                    {courierIssueLabel(order.courierIssue.reason)}
+                    {t(courierIssueKey(order.courierIssue.reason))}
                   </Text>
                   <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
                     {order.courierIssue.message}
@@ -277,12 +281,12 @@ export default function BusinessOrderDetailScreen() {
                 <Clock3 size={16} color={colors.mutedForeground} strokeWidth={2} />
               )}
               <Text variant="caption" tone="muted">
-                {order.delivery ? 'Livraison en cours' : 'En attente d’un livreur'}
+                {order.delivery ? t('business.queue.delivering') : t('business.queue.awaitingCourier')}
               </Text>
             </View>
           )}
           <Button
-            label="Annuler la commande"
+            label={t('business.orderDetail.cancelOrder')}
             variant="ghost"
             size="md"
             fullWidth

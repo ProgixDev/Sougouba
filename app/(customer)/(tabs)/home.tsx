@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 
 import { HomeHeader, ProductGrid, VendorCard, VerticalCard } from '@/components/customer';
+import { useT } from '@/lib/i18n/useT';
 import { EmptyState, Reveal, SectionHeader, SkeletonCard, Text } from '@/components/ui';
 import { categoriesApi, ordersApi, productsApi, vendorsApi } from '@/data/api';
 import type { Category, ID, Product, Vendor, VendorType } from '@/data/types';
@@ -20,6 +21,7 @@ const NEARBY_LIMIT = 6;
 const VENDOR_CARD_WIDTH = 232;
 
 export default function CustomerHomeScreen() {
+  const t = useT();
   const tabBarInset = useTabBarInset();
   const user = useSessionStore((s) => s.user);
   const addItem = useCartStore((s) => s.addItem);
@@ -132,7 +134,7 @@ export default function CustomerHomeScreen() {
       >
         <HomeHeader
           fullName={user?.fullName ?? ''}
-          city="Montréal, QC"
+          city={t('customer.defaultCity')}
           onSearchPress={() => router.push(routes.customerSearch)}
           onProfilePress={() => router.push(routes.customerProfile)}
         />
@@ -159,16 +161,16 @@ export default function CustomerHomeScreen() {
 
         <View className="mt-8 gap-4">
           <SectionHeader
-            title="Articles les + vendus"
-            actionLabel="Tout voir"
+            title={t('customer.home.bestSellers')}
+            actionLabel={t('common.seeAll')}
             onAction={() => router.push(routes.customerSearch)}
           />
 
           {!loading && bestSellers.length === 0 ? (
             <EmptyState
               icon={PackageOpen}
-              title="Aucun produit ici"
-              description="Le catalogue est vide pour le moment."
+              title={t('customer.home.emptyProductsTitle')}
+              description={t('customer.home.emptyProductsBody')}
             />
           ) : (
             <ProductGrid
@@ -191,8 +193,8 @@ export default function CustomerHomeScreen() {
 
         <View className="mt-8 gap-4">
           <SectionHeader
-            title="Restaurants près de chez vous"
-            actionLabel="Tout voir"
+            title={t('customer.home.restaurantsNearby')}
+            actionLabel={t('common.seeAll')}
             onAction={() =>
               router.push({ pathname: dynamicRoutes.vendorList, params: { type: 'restaurant' } })
             }
@@ -204,7 +206,7 @@ export default function CustomerHomeScreen() {
           ) : nearbyRestaurants.length === 0 ? (
             <View className="px-5">
               <Text variant="caption" tone="muted">
-                Aucun restaurant pour l’instant.
+                {t('customer.home.noRestaurants')}
               </Text>
             </View>
           ) : (

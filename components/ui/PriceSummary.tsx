@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 
 import { formatCad } from '@/lib/format';
+import { useT } from '@/lib/i18n/useT';
 import { formatDistance } from '@/lib/geo';
 import { Text } from './Text';
 
@@ -43,29 +44,32 @@ export function PriceSummary({
   pointsDiscountCad,
   totalCad,
 }: PriceSummaryProps) {
+  const t = useT();
   return (
     <View className="gap-2.5">
-      <Line label="Sous-total" value={subtotalCad} />
+      <Line label={t('common.price.subtotal')} value={subtotalCad} />
 
       <View className="gap-1.5 pl-3">
-        <Line label="Taxe fédérale (TPS)" value={gstCad} tier="minor" />
-        <Line label="Taxe provinciale (TVQ)" value={qstCad} tier="minor" />
+        <Line label={t('common.price.gst')} value={gstCad} tier="minor" />
+        <Line label={t('common.price.qst')} value={qstCad} tier="minor" />
       </View>
 
       <Line
         label={
           deliveryDistanceKm === undefined
-            ? 'Livraison'
-            : `Livraison (${formatDistance(deliveryDistanceKm)})`
+            ? t('common.price.delivery')
+            : t('common.price.deliveryWithDistance', {
+                distance: formatDistance(deliveryDistanceKm),
+              })
         }
         value={deliveryFeeCad}
       />
 
-      {pointsDiscountCad ? <Line label="Points Sougouba" value={-pointsDiscountCad} tier="discount" /> : null}
+      {pointsDiscountCad ? <Line label={t('common.price.points')} value={-pointsDiscountCad} tier="discount" /> : null}
 
       <View className="h-px bg-border mt-1.5" />
 
-      <Line label="Total" value={totalCad} tier="total" />
+      <Line label={t('common.price.total')} value={totalCad} tier="total" />
     </View>
   );
 }
@@ -79,6 +83,7 @@ function Line({
   value: number;
   tier?: 'base' | 'minor' | 'discount' | 'total';
 }) {
+  const t = useT();
   const amount = formatCad(value);
   const minor = tier === 'minor';
   const discount = tier === 'discount';
@@ -86,7 +91,7 @@ function Line({
   return (
     <View
       accessible
-      accessibilityLabel={`${label} : ${amount}`}
+      accessibilityLabel={t('common.ui.labelledValue', { label, value: amount })}
       className="flex-row items-baseline justify-between gap-3"
     >
       <Text

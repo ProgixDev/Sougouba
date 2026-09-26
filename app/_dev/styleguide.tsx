@@ -11,6 +11,7 @@ import {
   Chip,
   EmptyState,
   Input,
+  LanguageToggle,
   Skeleton,
   SkeletonCard,
   StatPill,
@@ -19,6 +20,20 @@ import {
 import { CategoryRow } from '@/components/customer';
 import { categories } from '@/data/seed/categories';
 import type { Category } from '@/data/types';
+import {
+  formatCad,
+  formatCadCompact,
+  formatDate,
+  formatDayLong,
+  formatElapsed,
+  formatMonthYear,
+  formatPercent,
+  formatTime,
+} from '@/lib/format';
+import { formatDistance } from '@/lib/geo';
+import { useLocalized } from '@/lib/localized';
+import { intlSupportReport } from '@/lib/i18n/icu';
+import { useLocale } from '@/lib/i18n/useT';
 import { useThemeStore } from '@/store/useThemeStore';
 
 /**
@@ -26,6 +41,7 @@ import { useThemeStore } from '@/store/useThemeStore';
  * app/index.tsx becomes the animated splash + redirect slot in Phase 1.
  */
 export default function StyleguideScreen() {
+  const L = useLocalized();
   const { preference, toggle } = useThemeStore();
   const [selectedChip, setSelectedChip] = useState('cat_produce');
 
@@ -38,6 +54,8 @@ export default function StyleguideScreen() {
           </Text>
           <Button label={preference === 'dark' ? 'Mode clair' : 'Mode sombre'} variant="outline" size="sm" onPress={toggle} />
         </View>
+
+        <IntlProbe />
 
         <Section title="Typographie">
           <Text variant="display" weight="extrabold">
@@ -85,7 +103,7 @@ export default function StyleguideScreen() {
             {categories.map((cat: Category) => (
               <Chip
                 key={cat.id}
-                label={cat.shortNameFr}
+                label={L(cat.shortName)}
                 selected={selectedChip === cat.id}
                 onPress={() => setSelectedChip(cat.id)}
               />
@@ -172,6 +190,87 @@ export default function StyleguideScreen() {
         </Section>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/**
+ * What this device's `Intl` actually does — the release gate for the formatter
+ * work.
+ *
+ * `npm run verify` runs in Node, which has full ICU and therefore cannot speak
+ * for Hermes. Android's Hermes is the one with the trimmed `Intl`, and the crash
+ * documented atop `data/utils/time.ts` is what happens when that is assumed
+ * rather than checked. **Open this screen on a physical Android device** and
+ * read the table before trusting `lib/format.ts`.
+ *
+ * Every row should render a sensible string in both locales, except
+ * `relativeTime` and `pluralRules`, which are expected to read `undefined` on
+ * Android — they are listed so their absence is a recorded observation rather
+ * than a discovery made in production. Nothing in the app may use them.
+ *
+ * The FR/EN toggle beside it exercises the live switch: prices, dates and the
+ * formatted samples below should all change without a reload.
+ */
+function IntlProbe() {
+  // Subscribes this component to the locale. `LanguageToggle` below does too,
+  // but it is a *child* — its re-render would not re-run the `formatCad` calls
+  // here, and the samples would sit frozen in the launch language. This is the
+  // same trap `scripts/verify-i18n.ts` check 9 exists to catch across the app.
+  useLocale();
+
+  const report = intlSupportReport();
+  const sample = new Date(2026, 7, 8, 18, 30).toISOString();
+
+  return (
+    <Section title="Intl / i18n (dev gate)">
+      <LanguageToggle className="flex-row items-center gap-3" />
+      {report.map((row) => (
+        <View key={row.locale} className="gap-1 rounded-2xl bg-muted p-3">
+          <Text variant="caption" weight="bold">
+            {row.locale}
+          </Text>
+          {Object.entries(row)
+            .filter(([field]) => field !== 'locale')
+            .map(([field, value]) => (
+              <View key={field} className="flex-row justify-between gap-3">
+                <Text variant="caption" tone="muted" className="text-[12px]">
+                  {field}
+                </Text>
+                <Text variant="caption" className="text-[12px] flex-1 text-right">
+                  {value}
+                </Text>
+              </View>
+            ))}
+        </View>
+      ))}
+      <View className="gap-1 rounded-2xl bg-muted p-3">
+        <Text variant="caption" weight="bold">
+          Through lib/format (active locale)
+        </Text>
+        {(
+          [
+            ['formatCad', formatCad(1234.5)],
+            ['formatCadCompact', formatCadCompact(10)],
+            ['formatDate', formatDate(sample)],
+            ['formatTime', formatTime(sample)],
+            ['formatMonthYear', formatMonthYear(sample)],
+            ['formatDayLong', formatDayLong(sample)],
+            ['formatPercent', formatPercent(0.125)],
+            ['formatDistance', formatDistance(12.4)],
+            ['formatElapsed', formatElapsed(new Date(Date.now() - 5 * 86400000).toISOString())],
+          ] as const
+        ).map(([field, value]) => (
+          <View key={field} className="flex-row justify-between gap-3">
+            <Text variant="caption" tone="muted" className="text-[12px]">
+              {field}
+            </Text>
+            <Text variant="caption" className="text-[12px] flex-1 text-right">
+              {value}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </Section>
   );
 }
 

@@ -3,6 +3,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { useT } from '@/lib/i18n/useT';
 import { routes } from '@/lib/routes';
 import { darkColors, lightColors } from '@/theme/colors';
 import { Text } from './Text';
@@ -13,6 +14,7 @@ export interface BackHeaderProps {
 }
 
 export function BackHeader({ title, onBack }: BackHeaderProps) {
+  const t = useT();
   const { colorScheme } = useColorScheme();
   const colors = colorScheme === 'dark' ? darkColors : lightColors;
 
@@ -30,7 +32,7 @@ export function BackHeader({ title, onBack }: BackHeaderProps) {
         hitSlop={10}
         onPress={goBack}
         accessibilityRole="button"
-        accessibilityLabel="Retour"
+        accessibilityLabel={t('common.ui.back')}
         className="w-10 h-10 items-center justify-center rounded-full -ml-2"
       >
         <ChevronLeft size={24} color={colors.foreground} />

@@ -11,8 +11,10 @@ import { useCourierEarnings } from '@/hooks/useCourierEarnings';
 import { useCourierProfile } from '@/hooks/useCourierProfile';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { groupRunsByDay, summariseRuns } from '@/lib/courierAnalytics';
-import { formatCad } from '@/lib/format';
+import { formatCad, formatDayLong } from '@/lib/format';
 import { formatDistance } from '@/lib/geo';
+import type { TFunction } from '@/lib/i18n';
+import { useT } from '@/lib/i18n/useT';
 import { dynamicRoutes } from '@/lib/routes';
 
 /**
@@ -29,6 +31,7 @@ import { dynamicRoutes } from '@/lib/routes';
  * `renderItem` would fire dozens of them and make scrolling feel broken.
  */
 export default function CourierHistoryScreen() {
+  const t = useT();
   const tabBarInset = useTabBarInset();
   const { courier, loading: profileLoading, missing, pending, reload } = useCourierProfile();
   const { runs, loading, reload: reloadRuns } = useCourierEarnings(courier?.id);
@@ -66,10 +69,10 @@ export default function CourierHistoryScreen() {
     () =>
       groupRunsByDay(runs).map((day) => ({
         ...day,
-        title: dayTitle(day.date),
+        title: dayTitle(t, day.date),
         data: day.runs,
       })),
-    [runs]
+    [runs, t]
   );
 
   const allTime = useMemo(() => summariseRuns(runs, 3650), [runs]);
@@ -82,13 +85,13 @@ export default function CourierHistoryScreen() {
   return (
     <View className="flex-1 bg-background">
       <CourierSlab
-        title="Vos courses"
+        title={t('courier.historyScreen.title')}
         eyebrow={courier ? `depuis ${courier.city}` : undefined}
       >
         <View className="flex-row items-end justify-between gap-4">
-          <SlabFigure label="Livrées" value={String(allTime.runCount)} />
+          <SlabFigure label={t('courier.historyScreen.delivered')} value={String(allTime.runCount)} />
           <SlabFigure label="Distance" value={formatDistance(allTime.distanceKm)} />
-          <SlabFigure label="Encaissé" value={formatCad(allTime.earningsCad)} align="right" />
+          <SlabFigure label={t('courier.earningsScreen.collected')} value={formatCad(allTime.earningsCad)} align="right" />
         </View>
       </CourierSlab>
 
@@ -116,8 +119,8 @@ export default function CourierHistoryScreen() {
             <View className="pt-16">
               <EmptyState
                 icon={History}
-                title="Aucune course"
-                description="Vos livraisons terminées s’afficheront ici."
+                title={t('courier.historyScreen.emptyTitle')}
+                description={t('courier.historyScreen.emptyBody')}
               />
             </View>
           }
@@ -178,6 +181,7 @@ function DayHeader({
   distanceKm: number;
   earningsCad: number;
 }) {
+  const t = useT();
   return (
     <View className="flex-row items-baseline gap-3 pt-5 pb-2.5">
       <View className="flex-1 gap-0.5">
@@ -185,7 +189,10 @@ function DayHeader({
           {title}
         </Text>
         <Text variant="caption" tone="muted" className="text-[11px]">
-          {runCount} {runCount === 1 ? 'course' : 'courses'} · {formatDistance(distanceKm)}
+          {t('courier.history.runsWithDistance', {
+            runs: t('courier.runCount', { count: runCount }),
+            distance: formatDistance(distanceKm),
+          })}
         </Text>
       </View>
       <Text
@@ -199,20 +206,18 @@ function DayHeader({
   );
 }
 
-const dayFormatter = new Intl.DateTimeFormat('fr-CA', {
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-});
-
 /**
  * "Aujourd'hui" / "Hier" / "vendredi 8 août".
  *
  * The two nearest days get their names because that is how they are referred to
  * out loud, and a courier checking tonight's takings should not have to match a
  * date against their own memory of the calendar.
+ *
+ * The long form comes from `formatDayLong`; this file used to build its own
+ * `Intl.DateTimeFormat('fr-CA', …)`, which is how it acquired a second hardcoded
+ * locale that no language switch could reach.
  */
-function dayTitle(date: string): string {
+function dayTitle(t: TFunction, date: string): string {
   const [year, month, day] = date.split('-').map(Number);
   const value = new Date(year, month - 1, day);
 
@@ -220,9 +225,9 @@ function dayTitle(date: string): string {
   today.setHours(0, 0, 0, 0);
   const diffDays = Math.round((today.getTime() - value.getTime()) / 86400000);
 
-  if (diffDays === 0) return 'Aujourd’hui';
-  if (diffDays === 1) return 'Hier';
-  return capitalise(dayFormatter.format(value));
+  if (diffDays === 0) return t('common.today');
+  if (diffDays === 1) return t('common.yesterday');
+  return capitalise(formatDayLong(value.toISOString()));
 }
 
 function capitalise(value: string): string {

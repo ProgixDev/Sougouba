@@ -1,4 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import { router } from 'expo-router';
 import { Mail, MailCheck } from 'lucide-react-native';
 import { useState } from 'react';
@@ -10,8 +9,11 @@ import { BackHeader, Button, Input, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { delay } from '@/data/utils/delay';
 import { type ForgotPasswordValues, forgotPasswordSchema } from '@/lib/validation/auth';
+import { useT } from '@/lib/i18n/useT';
+import { i18nResolver } from '@/lib/validation/resolver';
 
 export default function ForgotPasswordScreen() {
+  const t = useT();
   const colors = useThemeColors();
   const [sent, setSent] = useState<string | null>(null);
   const {
@@ -19,7 +21,7 @@ export default function ForgotPasswordScreen() {
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<ForgotPasswordValues>({
-    resolver: zodResolver(forgotPasswordSchema),
+    resolver: i18nResolver(t, forgotPasswordSchema),
     defaultValues: { email: '' },
   });
 
@@ -38,23 +40,23 @@ export default function ForgotPasswordScreen() {
               <MailCheck size={36} color={colors.primary} strokeWidth={1.5} />
             </View>
             <Text variant="title" weight="bold" className="text-center">
-              Vérifiez vos courriels
+              {t('auth.forgot.sentTitle')}
             </Text>
             <Text variant="body" tone="muted" className="text-center">
-              Si un compte existe pour {sent}, un lien de réinitialisation vient d’être envoyé.
+              {t('auth.forgot.sentBody', { email: sent })}
             </Text>
             <View className="w-full mt-4">
-              <Button label="Retour à la connexion" variant="primary" size="lg" fullWidth onPress={() => router.replace('/(auth)/sign-in')} />
+              <Button label={t('auth.forgot.backToSignIn')} variant="primary" size="lg" fullWidth onPress={() => router.replace('/(auth)/sign-in')} />
             </View>
           </View>
         ) : (
           <View className="gap-6">
             <View className="gap-2">
               <Text variant="title" weight="bold">
-                Mot de passe oublié
+                {t('auth.forgot.title')}
               </Text>
               <Text variant="body" tone="muted">
-                Entrez votre adresse courriel — nous vous enverrons un lien pour le réinitialiser.
+                {t('auth.forgot.body')}
               </Text>
             </View>
 
@@ -63,7 +65,7 @@ export default function ForgotPasswordScreen() {
               name="email"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Adresse courriel"
+                  label={t('auth.field.email')}
                   icon={Mail}
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -77,7 +79,7 @@ export default function ForgotPasswordScreen() {
               )}
             />
 
-            <Button label="Envoyer le lien" variant="primary" size="lg" fullWidth loading={isSubmitting} onPress={handleSubmit(onSubmit)} />
+            <Button label={t('auth.forgot.submit')} variant="primary" size="lg" fullWidth loading={isSubmitting} onPress={handleSubmit(onSubmit)} />
           </View>
         )}
       </KeyboardAvoidingView>

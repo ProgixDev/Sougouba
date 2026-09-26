@@ -1,17 +1,14 @@
 import type { LoyaltyReason } from '@/data/types';
+import type { MessageKey } from '@/lib/i18n';
 
 /**
- * French label for each `LoyaltyReason` — the points-ledger twin of
- * `orderStatusMeta` in `lib/orderStatus.ts`. One place, so the history list and
- * anywhere else a transaction is named agree.
+ * The key naming each `LoyaltyReason` — the points-ledger twin of
+ * `orderStatusKey` in `lib/orderStatus.ts`. One place, so the history list and
+ * anywhere else a transaction is named agree. Wording is `domain.loyaltyReason.*`.
  */
-export const loyaltyReasonLabel: Record<LoyaltyReason, string> = {
-  order_delivered: 'Commande livrée',
-  referral_referred: 'Parrainage — bienvenue chez Sougouba',
-  referral_referrer: 'Parrainage — un ami vous a rejoint',
-  redeemed: 'Utilisés à la commande',
-  order_refunded: 'Commande remboursée',
-};
+export function loyaltyReasonKey(reason: LoyaltyReason): MessageKey {
+  return `domain.loyaltyReason.${reason}` as MessageKey;
+}
 
 /** "+45" or "-500" — the sign is the point, so it is never dropped even though `Intl` would round-trip it fine without. */
 export function formatPoints(points: number): string {

@@ -5,6 +5,7 @@ import { BackHandler, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Text } from '@/components/ui';
+import { useT } from '@/lib/i18n/useT';
 import { useThemeColors } from '@/hooks/useColorScheme';
 
 export interface ApplicationSubmittedProps {
@@ -37,6 +38,7 @@ export function ApplicationSubmitted({
   ctaLabel,
   onContinue,
 }: ApplicationSubmittedProps) {
+  const t = useT();
   const colors = useThemeColors();
 
   useEffect(() => {
@@ -109,7 +111,7 @@ export function ApplicationSubmitted({
         >
           <Mail size={13} color={colors.mutedForeground} strokeWidth={2} />
           <Text variant="caption" tone="muted" className="text-[12px]">
-            Une confirmation vous est envoyée par courriel.
+            {t('customer.misc.confirmationEmail')}
           </Text>
         </MotiView>
       </View>

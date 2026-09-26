@@ -1,4 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import * as Haptics from 'expo-haptics';
 import { CreditCard, Plus, ShieldCheck, Trash2 } from 'lucide-react-native';
 import { MotiView } from 'moti';
@@ -18,6 +17,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BackHeader, Badge, Button, EmptyState, Input, Reveal, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { type PaymentValues, paymentSchema } from '@/lib/validation/profile';
+import { useT } from '@/lib/i18n/useT';
+import { i18nResolver } from '@/lib/validation/resolver';
 import {
   usePreferencesStore,
   type PaymentBrand,
@@ -38,6 +39,7 @@ function brandFromNumber(cardNumber: string): PaymentBrand {
 }
 
 export default function PaymentMethodsScreen() {
+  const t = useT();
   const colors = useThemeColors();
   const methods = usePreferencesStore((s) => s.paymentMethods);
   const addPaymentMethod = usePreferencesStore((s) => s.addPaymentMethod);
@@ -60,7 +62,7 @@ export default function PaymentMethodsScreen() {
   }
 
   function remove(method: PaymentMethod) {
-    Alert.alert('Retirer ce moyen de paiement ?', `${brandLabels[method.brand]} •••• ${method.last4}`, [
+    Alert.alert(t('customer.confirmRemoveCard'), `${brandLabels[method.brand]} •••• ${method.last4}`, [
       { text: 'Annuler', style: 'cancel' },
       { text: 'Retirer', style: 'destructive', onPress: () => removePaymentMethod(method.id) },
     ]);
@@ -68,14 +70,14 @@ export default function PaymentMethodsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <BackHeader title="Moyens de paiement" />
+      <BackHeader title={t('customer.account.payment.title')} />
 
       {methods.length === 0 ? (
         <EmptyState
           icon={CreditCard}
-          title="Aucun moyen de paiement"
-          description="Ajoutez une carte pour payer vos commandes en un geste."
-          actionLabel="Ajouter une carte"
+          title={t('customer.account.payment.emptyTitle')}
+          description={t('customer.account.payment.emptyBody')}
+          actionLabel={t('customer.account.payment.add')}
           onAction={() => setAdding(true)}
         />
       ) : (
@@ -95,7 +97,7 @@ export default function PaymentMethodsScreen() {
                       <Text variant="caption" weight="bold">
                         {brandLabels[method.brand]} •••• {method.last4}
                       </Text>
-                      {method.isDefault ? <Badge label="Par défaut" tone="primary" size="sm" /> : null}
+                      {method.isDefault ? <Badge label={t('customer.account.addresses.isDefault')} tone="primary" size="sm" /> : null}
                     </View>
                     <Text variant="caption" tone="muted" className="text-[12px]">
                       {method.holder} · expire {method.expiry}
@@ -104,7 +106,7 @@ export default function PaymentMethodsScreen() {
                   <Pressable
                     hitSlop={8}
                     accessibilityRole="button"
-                    accessibilityLabel={`Retirer la carte finissant par ${method.last4}`}
+                    accessibilityLabel={t('common.a11y.removeCard', { last4: method.last4 })}
                     onPress={() => remove(method)}
                   >
                     <Trash2 size={17} color={colors.destructive} strokeWidth={2} />
@@ -119,7 +121,7 @@ export default function PaymentMethodsScreen() {
                     className="pl-14"
                   >
                     <Text variant="caption" weight="semibold" tone="primary" className="text-[13px]">
-                      Définir par défaut
+                      {t('customer.account.addresses.setDefault')}
                     </Text>
                   </Pressable>
                 ) : null}
@@ -134,15 +136,14 @@ export default function PaymentMethodsScreen() {
           >
             <Plus size={17} color={colors.primary} strokeWidth={2.4} />
             <Text variant="caption" weight="bold" tone="primary">
-              Ajouter une carte
+              {t('customer.account.payment.add')}
             </Text>
           </Pressable>
 
           <View className="mt-3 flex-row items-start gap-2.5 px-1">
             <ShieldCheck size={15} color={colors.mutedForeground} strokeWidth={2} />
             <Text variant="caption" tone="muted" className="flex-1 text-[12px] leading-[17px]">
-              Prototype de démonstration : aucun paiement réel n’est traité et seuls les quatre
-              derniers chiffres sont conservés sur l’appareil.
+          {t('customer.account.payment.footnote')}
             </Text>
           </View>
         </ScrollView>
@@ -162,6 +163,7 @@ function AddCardSheet({
   onClose: () => void;
   onSave: (values: PaymentValues) => void;
 }) {
+  const t = useT();
   const insets = useSafeAreaInsets();
   const {
     control,
@@ -169,7 +171,7 @@ function AddCardSheet({
     reset,
     formState: { errors },
   } = useForm<PaymentValues>({
-    resolver: zodResolver(paymentSchema),
+    resolver: i18nResolver(t, paymentSchema),
     defaultValues: { holder: '', cardNumber: '', expiry: '' },
   });
 
@@ -187,7 +189,7 @@ function AddCardSheet({
           transition={{ type: 'timing', duration: 180 }}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10, 32, 24, 0.45)' }}
         >
-          <Pressable className="flex-1" accessibilityLabel="Fermer" onPress={close} />
+          <Pressable className="flex-1" accessibilityLabel={t('common.ui.close', { label: '' })} onPress={close} />
         </MotiView>
 
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -207,7 +209,7 @@ function AddCardSheet({
               style={{ maxHeight: 420 }}
             >
               <Text variant="subtitle" weight="bold" className="text-[20px]">
-                Nouvelle carte
+                {t('customer.account.payment.newCard')}
               </Text>
 
               <Controller
@@ -215,7 +217,7 @@ function AddCardSheet({
                 name="holder"
                 render={({ field: { onChange, onBlur, value } }) => (
                   <Input
-                    label="Nom du titulaire"
+                    label={t('customer.account.payment.fieldHolder')}
                     value={value}
                     onChangeText={onChange}
                     onBlur={onBlur}
@@ -230,7 +232,7 @@ function AddCardSheet({
                 name="cardNumber"
                 render={({ field: { onChange, onBlur, value } }) => (
                   <Input
-                    label="Numéro de carte"
+                    label={t('customer.account.payment.fieldNumber')}
                     value={value}
                     onChangeText={onChange}
                     onBlur={onBlur}
@@ -245,7 +247,7 @@ function AddCardSheet({
                 name="expiry"
                 render={({ field: { onChange, onBlur, value } }) => (
                   <Input
-                    label="Expiration (MM/AA)"
+                    label={t('customer.account.payment.fieldExpiry')}
                     value={value}
                     onChangeText={onChange}
                     onBlur={onBlur}
@@ -259,7 +261,7 @@ function AddCardSheet({
 
             <View className="px-5 pt-4 gap-2" style={{ paddingBottom: insets.bottom + 12 }}>
               <Button
-                label="Ajouter la carte"
+                label={t('customer.account.payment.submit')}
                 variant="primary"
                 size="lg"
                 fullWidth
@@ -268,7 +270,7 @@ function AddCardSheet({
                   reset();
                 })}
               />
-              <Button label="Annuler" variant="ghost" size="lg" fullWidth onPress={close} />
+              <Button label={t('common.cancel')} variant="ghost" size="lg" fullWidth onPress={close} />
             </View>
           </MotiView>
         </KeyboardAvoidingView>

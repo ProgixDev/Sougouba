@@ -6,6 +6,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CourierSignupSheet, MerchantSignupSheet } from '@/components/onboarding';
+import { useT } from '@/lib/i18n/useT';
 import { Button, Text } from '@/components/ui';
 import { authApi } from '@/data/api';
 import type { UserRole } from '@/data/types';
@@ -15,10 +16,9 @@ import { forest, terracotta } from '@/theme/tokens';
 import type { LucideIcon } from 'lucide-react-native';
 
 interface RoleOption {
+  /** Also the catalogue key: the words are `common.roleSelect.<role>.*`. */
   role: UserRole;
   icon: LucideIcon;
-  title: string;
-  description: string;
   /** Icon disc tint. Identifies the role; selection is carried by the border and the check. */
   tint: { on: string; off: string };
 }
@@ -29,15 +29,11 @@ const options: RoleOption[] = [
   {
     role: 'customer',
     icon: ShoppingBag,
-    title: 'Je suis client',
-    description: 'Je veux commander des produits auprès de commerces près de chez moi.',
     tint: FOREST_TINT,
   },
   {
     role: 'business',
     icon: Store,
-    title: 'Je suis commerçant',
-    description: 'Je veux inscrire ma boutique et vendre sur Sougouba.',
     tint: FOREST_TINT,
   },
   {
@@ -46,8 +42,6 @@ const options: RoleOption[] = [
     // affordance stays forest across all three so "chosen" reads the same way.
     role: 'courier',
     icon: Bike,
-    title: 'Je suis livreur',
-    description: 'Je veux livrer les commandes des commerces de ma ville.',
     tint: { on: terracotta[600], off: terracotta[100] },
   },
 ];
@@ -58,6 +52,7 @@ const options: RoleOption[] = [
  * simultaneously refusing to render.
  */
 export default function RoleSelectScreen() {
+  const t = useT();
   const [selected, setSelected] = useState<UserRole | null>(null);
   const [saving, setSaving] = useState(false);
   const [merchantSheet, setMerchantSheet] = useState(false);
@@ -93,7 +88,7 @@ export default function RoleSelectScreen() {
     try {
       // Write through to the mock backend too, so signing out and back in with
       // the same account restores the role instead of re-asking for it.
-      await authApi.mockSelectRole(user.id, role);
+      await authApi.selectRole(user.id, role);
     } catch {
       // Mock layer only fails if the user vanished; the local session is still
       // the source of truth for navigation, so fall through and set it anyway.
@@ -115,10 +110,10 @@ export default function RoleSelectScreen() {
       >
         <View className="gap-2">
           <Text variant="title" weight="bold">
-            Vous êtes...
+            {t('common.roleSelect.title')}
           </Text>
           <Text variant="body" tone="muted">
-            Ce choix détermine votre expérience Sougouba — il ne peut pas être changé plus tard.
+            {t('common.roleSelect.body')}
           </Text>
         </View>
 
@@ -154,10 +149,10 @@ export default function RoleSelectScreen() {
                   </View>
                   <View className="flex-1 gap-1">
                     <Text weight="bold" variant="body">
-                      {opt.title}
+                      {t(`common.roleSelect.${opt.role}.title`)}
                     </Text>
                     <Text variant="caption" tone="muted">
-                      {opt.description}
+                      {t(`common.roleSelect.${opt.role}.body`)}
                     </Text>
                   </View>
                   {isSelected ? (
@@ -174,7 +169,7 @@ export default function RoleSelectScreen() {
 
       <View className="px-6 pb-4 pt-3">
         <Button
-          label="Continuer"
+          label={t('common.continue')}
           variant="primary"
           size="lg"
           fullWidth

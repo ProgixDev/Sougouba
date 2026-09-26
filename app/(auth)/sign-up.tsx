@@ -1,4 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import { Link } from 'expo-router';
 import { Gift, Lock, Mail, User } from 'lucide-react-native';
 import { useState } from 'react';
@@ -10,9 +9,12 @@ import { BackHeader, Button, Input, Text } from '@/components/ui';
 import { authApi } from '@/data/api';
 import { AuthError } from '@/data/api/auth';
 import { type SignUpValues, signUpSchema } from '@/lib/validation/auth';
+import { useT } from '@/lib/i18n/useT';
+import { i18nResolver } from '@/lib/validation/resolver';
 import { useSessionStore } from '@/store/useSessionStore';
 
 export default function SignUpScreen() {
+  const t = useT();
   const signUp = useSessionStore((s) => s.signUp);
   const signIn = useSessionStore((s) => s.signIn);
   const [formError, setFormError] = useState<string | null>(null);
@@ -23,7 +25,7 @@ export default function SignUpScreen() {
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<SignUpValues>({
-    resolver: zodResolver(signUpSchema),
+    resolver: i18nResolver(t, signUpSchema),
     // Without these, RHF hands `undefined` to TextInput and the field flips
     // from uncontrolled to controlled on the first keystroke.
     defaultValues: { fullName: '', email: '', password: '', referralCode: '' },
@@ -32,7 +34,7 @@ export default function SignUpScreen() {
   async function onSubmit(values: SignUpValues) {
     setFormError(null);
     try {
-      const user = await authApi.mockSignUp(
+      const user = await authApi.signUp(
         values.fullName,
         values.email,
         values.password,
@@ -40,7 +42,9 @@ export default function SignUpScreen() {
       );
       signUp(user);
     } catch (e) {
-      setFormError(e instanceof AuthError ? e.message : 'Une erreur est survenue.');
+      setFormError(
+        e instanceof AuthError ? t(`auth.error.${e.code}`) : t('common.genericError')
+      );
     }
   }
 
@@ -51,10 +55,12 @@ export default function SignUpScreen() {
       // OAuth is idempotent in the mock layer — it returns the existing demo
       // account if there is one. Treat it as a sign-in so a returning user
       // keeps the role they already picked instead of being re-gated.
-      const user = await authApi.mockOAuthContinue(provider);
+      const user = await authApi.oauthContinue(provider);
       signIn(user);
     } catch (e) {
-      setFormError(e instanceof AuthError ? e.message : 'Une erreur est survenue.');
+      setFormError(
+        e instanceof AuthError ? t(`auth.error.${e.code}`) : t('common.genericError')
+      );
     } finally {
       setOauthLoading(null);
     }
@@ -67,10 +73,10 @@ export default function SignUpScreen() {
         <ScrollView contentContainerClassName="px-6 pt-4 pb-10 gap-6" keyboardShouldPersistTaps="handled">
           <View className="gap-2">
             <Text variant="title" weight="bold">
-              Créer un compte
+              {t('auth.signUp.title')}
             </Text>
             <Text variant="body" tone="muted">
-              Rejoignez Sougouba pour commander ou vendre en quelques minutes.
+              {t('auth.signUp.body')}
             </Text>
           </View>
 
@@ -80,7 +86,7 @@ export default function SignUpScreen() {
               name="fullName"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Nom complet"
+                  label={t('auth.field.fullName')}
                   icon={User}
                   autoComplete="name"
                   value={value}
@@ -96,7 +102,7 @@ export default function SignUpScreen() {
               name="email"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Adresse courriel"
+                  label={t('auth.field.email')}
                   icon={Mail}
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -114,7 +120,7 @@ export default function SignUpScreen() {
               name="password"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Mot de passe"
+                  label={t('auth.field.password')}
                   icon={Lock}
                   isPassword
                   autoComplete="password-new"
@@ -122,7 +128,7 @@ export default function SignUpScreen() {
                   onChangeText={onChange}
                   onBlur={onBlur}
                   error={errors.password?.message}
-                  helperText={errors.password ? undefined : 'Minimum 6 caractères'}
+                  helperText={errors.password ? undefined : t('validation.password.tooShort')}
                   required
                 />
               )}
@@ -132,14 +138,14 @@ export default function SignUpScreen() {
               name="referralCode"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Code de parrainage"
+                  label={t('auth.field.referralCode')}
                   icon={Gift}
                   autoCapitalize="characters"
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
                   error={errors.referralCode?.message}
-                  helperText="Optionnel — un ami qui vous a invité y gagne aussi des points."
+                  helperText={t('auth.field.referralHint')}
                 />
               )}
             />
@@ -151,19 +157,19 @@ export default function SignUpScreen() {
             </Text>
           ) : null}
 
-          <Button label="Créer un compte" variant="primary" size="lg" fullWidth loading={isSubmitting} onPress={handleSubmit(onSubmit)} />
+          <Button label={t('auth.signUp.submit')} variant="primary" size="lg" fullWidth loading={isSubmitting} onPress={handleSubmit(onSubmit)} />
 
           <View className="flex-row items-center gap-3">
             <View className="flex-1 h-px bg-border" />
             <Text variant="caption" tone="muted">
-              ou
+              {t('auth.or')}
             </Text>
             <View className="flex-1 h-px bg-border" />
           </View>
 
           <View className="gap-3">
             <Button
-              label="Continuer avec Google"
+              label={t('auth.oauth.google')}
               variant="outline"
               size="lg"
               fullWidth
@@ -171,7 +177,7 @@ export default function SignUpScreen() {
               onPress={() => continueWithOAuth('google')}
             />
             <Button
-              label="Continuer avec Apple"
+              label={t('auth.oauth.apple')}
               variant="outline"
               size="lg"
               fullWidth
@@ -182,11 +188,11 @@ export default function SignUpScreen() {
 
           <View className="flex-row items-center justify-center gap-1.5 mt-2">
             <Text variant="caption" tone="muted">
-              Déjà un compte ?
+              {t('auth.signUp.hasAccount')}
             </Text>
             <Link href="/(auth)/sign-in" asChild>
               <Text variant="caption" weight="bold" tone="primary">
-                Se connecter
+                {t('auth.signIn.submit')}
               </Text>
             </Link>
           </View>

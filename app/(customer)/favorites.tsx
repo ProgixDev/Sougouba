@@ -5,6 +5,7 @@ import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ProductGrid, VendorCard } from '@/components/customer';
+import { useT } from '@/lib/i18n/useT';
 import { BackHeader, EmptyState, SectionHeader, Skeleton } from '@/components/ui';
 import { categoriesApi, productsApi, vendorsApi } from '@/data/api';
 import type { Category, Product, Vendor } from '@/data/types';
@@ -13,6 +14,7 @@ import { useCartStore } from '@/store/useCartStore';
 import { useFavoritesStore } from '@/store/useFavoritesStore';
 
 export default function FavoritesScreen() {
+  const t = useT();
   const productIds = useFavoritesStore((s) => s.productIds);
   const vendorIds = useFavoritesStore((s) => s.vendorIds);
   const addItem = useCartStore((s) => s.addItem);
@@ -59,7 +61,7 @@ export default function FavoritesScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <BackHeader title="Favoris" />
+      <BackHeader title={t('customer.favorites.title')} />
 
       {loading ? (
         <View className="px-5 gap-3">
@@ -70,16 +72,16 @@ export default function FavoritesScreen() {
       ) : isEmpty ? (
         <EmptyState
           icon={Heart}
-          title="Aucun favori"
-          description="Touchez le cœur sur un produit ou un commerce pour le retrouver ici."
-          actionLabel="Découvrir les commerces"
+          title={t('customer.favorites.emptyTitle')}
+          description={t('customer.favorites.emptyBody')}
+          actionLabel={t('customer.favorites.emptyAction')}
           onAction={() => router.replace(routes.customerHome)}
         />
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24, gap: 28 }}>
           {favoriteVendors.length > 0 ? (
             <View className="gap-4">
-              <SectionHeader title="Commerces" />
+              <SectionHeader title={t('customer.favorites.shops')} />
               <View className="px-5 gap-3">
                 {favoriteVendors.map((vendor) => (
                   <VendorCard
@@ -96,7 +98,7 @@ export default function FavoritesScreen() {
 
           {favoriteProducts.length > 0 ? (
             <View className="gap-4">
-              <SectionHeader title="Produits" />
+              <SectionHeader title={t('customer.favorites.products')} />
               <ProductGrid
                 products={favoriteProducts}
                 iconByCategory={iconByCategory}

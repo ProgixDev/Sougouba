@@ -5,6 +5,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useThemeColors } from '@/hooks/useColorScheme';
+import { useT } from '@/lib/i18n/useT';
 
 import { Text } from './Text';
 
@@ -45,12 +46,16 @@ export function SelectField({
   options,
   value,
   onChange,
-  placeholder = 'Choisir',
+  placeholder,
   error,
   helperText,
   required,
   sheetTitle,
 }: SelectFieldProps) {
+  const t = useT();
+  // Defaulted here rather than in the parameter list: a module-scope default
+  // would freeze the launch language into the component's signature.
+  const resolvedPlaceholder = placeholder ?? t('common.ui.choose');
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
@@ -61,7 +66,10 @@ export function SelectField({
     <View className="gap-1.5">
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${label} : ${selected?.label ?? placeholder}`}
+        accessibilityLabel={t('common.ui.labelledValue', {
+          label,
+          value: selected?.label ?? resolvedPlaceholder,
+        })}
         onPress={() => setOpen(true)}
         className={`flex-row items-center gap-3 rounded-2xl border-[1.5px] bg-card px-4 h-[58px] ${
           error ? 'border-destructive' : 'border-border'
@@ -78,7 +86,7 @@ export function SelectField({
             tone={selected ? 'default' : 'muted'}
             numberOfLines={1}
           >
-            {selected?.label ?? placeholder}
+            {selected?.label ?? resolvedPlaceholder}
           </Text>
         </View>
         <ChevronDown size={18} color={colors.mutedForeground} strokeWidth={2} />
@@ -104,7 +112,7 @@ export function SelectField({
           >
             <Pressable
               className="flex-1"
-              accessibilityLabel={`Fermer ${label}`}
+              accessibilityLabel={t('common.ui.close', { label })}
               onPress={() => setOpen(false)}
             />
           </MotiView>

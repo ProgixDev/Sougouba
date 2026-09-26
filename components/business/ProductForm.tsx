@@ -1,4 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import { MotiView } from 'moti';
 import { useEffect, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
@@ -15,6 +14,9 @@ import {
   type ProductFormValues,
 } from '@/lib/validation/product';
 import { darkColors, lightColors } from '@/theme/colors';
+import { i18nResolver } from '@/lib/validation/resolver';
+import { useLocalized } from '@/lib/localized';
+import { useT } from '@/lib/i18n/useT';
 
 export interface ProductFormProps {
   /** The shop being edited — its `sections` are the shelves a product can go on. */
@@ -34,6 +36,8 @@ export interface ProductFormProps {
  * `NaN` on every keystroke while the field is mid-edit.
  */
 export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }: ProductFormProps) {
+  const L = useLocalized();
+  const t = useT();
   const { colorScheme } = useColorScheme();
   const colors = colorScheme === 'dark' ? darkColors : lightColors;
 
@@ -50,7 +54,7 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
     handleSubmit,
     formState: { errors },
   } = useForm<ProductFormInput, unknown, ProductFormValues>({
-    resolver: zodResolver(productSchema),
+    resolver: i18nResolver(t, productSchema),
     defaultValues: {
       name: product?.name ?? '',
       description: product?.description ?? '',
@@ -80,7 +84,7 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
     try {
       await onSubmit(values, parseTags(values.tags));
     } catch {
-      setFormError('Enregistrement impossible. Veuillez réessayer.');
+      setFormError(t('business.saveFailed'));
       setSubmitting(false);
     }
   }
@@ -98,7 +102,7 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
             name="name"
             render={({ field: { onChange, onBlur, value } }) => (
               <Input
-                label="Nom du produit"
+                label={t('business.productForm.name')}
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}
@@ -112,7 +116,7 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
             name="description"
             render={({ field: { onChange, onBlur, value } }) => (
               <Input
-                label="Description"
+                label={t('business.productForm.description')}
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}
@@ -128,7 +132,7 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
               platform category because it is the one the merchant thinks in:
               they are adding a dish to a course, or a bag of rice to a shelf. */}
           <Text variant="label" tone="muted">
-            {vendor.vendorType === 'restaurant' ? 'Section du menu' : 'Rayon'}
+            {vendor.vendorType === 'restaurant' ? t('business.queue.menuSection') : 'Rayon'}
           </Text>
           <Controller
             control={control}
@@ -139,7 +143,7 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
                   {vendor.sections.map((section) => (
                     <Chip
                       key={section.id}
-                      label={section.nameFr}
+                      label={L(section.name)}
                       selected={value === section.id}
                       onPress={() => onChange(section.id)}
                     />
@@ -157,7 +161,7 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
 
         <View className="gap-3">
           <Text variant="label" tone="muted">
-            Catégorie
+            {t('business.productForm.category')}
           </Text>
           <Controller
             control={control}
@@ -168,7 +172,7 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
                   {categories.map((category) => (
                     <Chip
                       key={category.id}
-                      label={category.shortNameFr}
+                      label={L(category.shortName)}
                       selected={value === category.id}
                       onPress={() => onChange(category.id)}
                     />
@@ -186,7 +190,7 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
 
         <View className="gap-4">
           <Text variant="label" tone="muted">
-            Prix et stock
+            {t('business.productForm.priceAndStock')}
           </Text>
           <View className="flex-row gap-3">
             <View className="flex-1">
@@ -195,7 +199,7 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
                 name="priceCad"
                 render={({ field: { onChange, onBlur, value } }) => (
                   <Input
-                    label="Prix ($)"
+                    label={t('business.productForm.price')}
                     keyboardType="decimal-pad"
                     value={value}
                     onChangeText={onChange}
@@ -212,7 +216,7 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
                 name="compareAtPriceCad"
                 render={({ field: { onChange, onBlur, value } }) => (
                   <Input
-                    label="Prix barré ($)"
+                    label={t('business.productForm.compareAt')}
                     keyboardType="decimal-pad"
                     value={value}
                     onChangeText={onChange}
@@ -230,7 +234,7 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
             name="stockQty"
             render={({ field: { onChange, onBlur, value } }) => (
               <Input
-                label="Quantité en stock"
+                label={t('business.productForm.stock')}
                 keyboardType="number-pad"
                 value={value}
                 onChangeText={onChange}
@@ -248,17 +252,17 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
               <View className="flex-row items-center justify-between rounded-2xl bg-card px-4 py-3">
                 <View className="flex-1 pr-3">
                   <Text variant="caption" weight="semibold">
-                    En vente
+                    {t('business.productForm.onSale')}
                   </Text>
                   <Text variant="caption" tone="muted" className="text-[12px]">
-                    Masqué du catalogue client si désactivé
+                    {t('business.productForm.onSaleHint')}
                   </Text>
                 </View>
                 <Switch
                   value={value}
                   onValueChange={onChange}
                   trackColor={{ false: colors.border, true: colors.primary }}
-                  accessibilityLabel="Produit en vente"
+                  accessibilityLabel={t('common.a11y.productOnSale')}
                 />
               </View>
             )}
@@ -277,17 +281,17 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
               <View className="flex-row items-center justify-between rounded-2xl bg-card px-4 py-3">
                 <View className="flex-1 pr-3">
                   <Text variant="caption" weight="semibold">
-                    Ajouter les valeurs nutritionnelles
+                    {t('business.productForm.addNutrition')}
                   </Text>
                   <Text variant="caption" tone="muted" className="text-[12px]">
-                    Facultatif — affichées sur la fiche produit si renseignées
+                    {t('business.productForm.nutritionHint')}
                   </Text>
                 </View>
                 <Switch
                   value={value}
                   onValueChange={onChange}
                   trackColor={{ false: colors.border, true: colors.primary }}
-                  accessibilityLabel="Ajouter les valeurs nutritionnelles"
+                  accessibilityLabel={t('business.productForm.addNutrition')}
                 />
               </View>
             )}
@@ -307,7 +311,7 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
                     name="calories"
                     render={({ field: { onChange, onBlur, value } }) => (
                       <Input
-                        label="Calories"
+                        label={t('business.productForm.calories')}
                         keyboardType="number-pad"
                         value={value}
                         onChangeText={onChange}
@@ -324,7 +328,7 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
                     name="proteinG"
                     render={({ field: { onChange, onBlur, value } }) => (
                       <Input
-                        label="Protéines (g)"
+                        label={t('business.productForm.protein')}
                         keyboardType="number-pad"
                         value={value}
                         onChangeText={onChange}
@@ -343,7 +347,7 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
                     name="fatG"
                     render={({ field: { onChange, onBlur, value } }) => (
                       <Input
-                        label="Lipides (g)"
+                        label={t('business.productForm.fat')}
                         keyboardType="number-pad"
                         value={value}
                         onChangeText={onChange}
@@ -360,7 +364,7 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
                     name="weightG"
                     render={({ field: { onChange, onBlur, value } }) => (
                       <Input
-                        label="Poids (g)"
+                        label={t('business.productForm.weight')}
                         keyboardType="number-pad"
                         value={value}
                         onChangeText={onChange}
@@ -381,12 +385,12 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
           name="tags"
           render={({ field: { onChange, onBlur, value } }) => (
             <Input
-              label="Étiquettes"
+              label={t('business.productForm.tags')}
               value={value}
               onChangeText={onChange}
               onBlur={onBlur}
               autoCapitalize="none"
-              helperText="Séparées par des virgules — ex. bio, frais, halal"
+              helperText={t('business.productForm.tagsHint')}
             />
           )}
         />
@@ -408,7 +412,7 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
           />
           {onDelete ? (
             <Button
-              label="Supprimer ce produit"
+              label={t('business.productForm.remove')}
               variant="ghost"
               size="md"
               fullWidth

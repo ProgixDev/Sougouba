@@ -8,6 +8,7 @@ import { useThemeColors } from '@/hooks/useColorScheme';
 import { useDemoShopApproval } from '@/hooks/useDemoShopApproval';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { MERCHANT_SIGNUP_STEPS } from '@/lib/merchantOnboarding';
+import { useT } from '@/lib/i18n/useT';
 import { routes } from '@/lib/routes';
 
 export interface PendingApprovalProps {
@@ -34,6 +35,7 @@ export interface PendingApprovalProps {
  * they are all the same account in the same state.
  */
 export function PendingApproval({ state, onApproved }: PendingApprovalProps) {
+  const t = useT();
   const colors = useThemeColors();
   const tabBarInset = useTabBarInset();
   const { approve, approving, adoptDemoShop, adopting } = useDemoShopApproval(onApproved);
@@ -58,19 +60,19 @@ export function PendingApproval({ state, onApproved }: PendingApprovalProps) {
           </View>
           <View className="gap-2">
             <Text variant="title" weight="bold" className="text-[26px]">
-              {applied ? 'Demande en attente' : 'Inscrivez votre boutique'}
+              {applied ? 'Demande en attente' : t('business.queue.registerShop')}
             </Text>
             <Text variant="body" tone="muted">
               {applied
-                ? 'Votre boutique n’est pas encore en ligne. Un administrateur Sougouba doit valider votre dossier avant que vous puissiez recevoir des commandes.'
-                : 'Quelques informations sur votre commerce, votre adresse et vos documents, et votre dossier part en validation.'}
+                ? t('business.queue.pendingBody')
+                : t('business.queue.missingBody')}
             </Text>
           </View>
         </View>
 
         <View className="rounded-[20px] bg-card p-5 gap-5">
           {MERCHANT_SIGNUP_STEPS.map((step, index) => (
-            <View key={step.title} className="flex-row gap-3.5">
+            <View key={step} className="flex-row gap-3.5">
               <View className="w-7 h-7 rounded-full bg-primary/10 items-center justify-center mt-0.5">
                 <Text variant="caption" weight="bold" tone="primary" className="text-[12px]">
                   {index + 1}
@@ -78,10 +80,10 @@ export function PendingApproval({ state, onApproved }: PendingApprovalProps) {
               </View>
               <View className="flex-1 gap-1">
                 <Text variant="caption" weight="bold">
-                  {step.title}
+                  {t(`onboarding.merchant.${step}.title`)}
                 </Text>
                 <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
-                  {step.body}
+                  {t(`onboarding.merchant.${step}.body`)}
                 </Text>
               </View>
             </View>
@@ -97,13 +99,12 @@ export function PendingApproval({ state, onApproved }: PendingApprovalProps) {
               className="mt-0.5"
             />
             <Text variant="caption" tone="muted" className="flex-1 text-[13px] leading-[19px]">
-              La validation prend généralement un jour ouvrable. Vous serez averti dès que votre
-              boutique est en ligne.
+            {t('business.pending.body')}
             </Text>
           </View>
         ) : (
           <Button
-            label="Inscrire ma boutique"
+            label={t('business.shopProfile.registerShop')}
             variant="primary"
             size="lg"
             fullWidth
@@ -116,12 +117,12 @@ export function PendingApproval({ state, onApproved }: PendingApprovalProps) {
             demo that cannot show them is worse than one honest button. */}
         <View className="gap-2 pt-2 border-t border-border">
           <Text variant="label" tone="muted" className="text-[10px]">
-            Démonstration
+            {t('business.pending.demoLabel')}
           </Text>
           {applied ? (
             <>
               <Button
-                label="Simuler l’approbation"
+                label={t('business.pending.approve')}
                 variant="outline"
                 size="md"
                 fullWidth
@@ -129,8 +130,7 @@ export function PendingApproval({ state, onApproved }: PendingApprovalProps) {
                 onPress={approve}
               />
               <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
-                Met votre boutique en ligne, comme le ferait un administrateur. Elle démarre sans
-                catalogue ni historique.
+                {t('business.pending.approveBody')}
               </Text>
             </>
           ) : (
@@ -141,7 +141,7 @@ export function PendingApproval({ state, onApproved }: PendingApprovalProps) {
                   without filling a form first — a different thing from approving
                   a real application, and labelled as such. */}
               <Button
-                label="Ouvrir une boutique de démonstration"
+                label={t('business.pending.openDemo')}
                 variant="outline"
                 size="md"
                 fullWidth
@@ -149,8 +149,7 @@ export function PendingApproval({ state, onApproved }: PendingApprovalProps) {
                 onPress={adoptDemoShop}
               />
               <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
-                Rattache ce compte à une boutique déjà garnie, avec son catalogue et son historique
-                de commandes.
+                {t('business.pending.openDemoBody')}
               </Text>
             </>
           )}

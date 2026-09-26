@@ -5,6 +5,7 @@ import { Pressable, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BackHeader, Button, PriceSummary, Text } from '@/components/ui';
+import { useT } from '@/lib/i18n/useT';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { ordersApi, loyaltyApi } from '@/data/api';
 import { maxRedeemablePoints, pointsToDiscountCad } from '@/data/loyalty';
@@ -26,6 +27,7 @@ const cardBrandLabels: Record<PaymentBrand, string> = {
 };
 
 export default function CheckoutScreen() {
+  const t = useT();
   const colors = useThemeColors();
   const user = useSessionStore((s) => s.user);
   const clearCart = useCartStore((s) => s.clear);
@@ -121,20 +123,20 @@ export default function CheckoutScreen() {
       // already been placed would let it be submitted twice.
       router.replace({ pathname: dynamicRoutes.orderConfirmed, params: { id: order.id } });
     } catch {
-      setError('La commande n’a pas pu être enregistrée. Veuillez réessayer.');
+      setError(t('customer.checkoutFailed'));
       setPlacing(false);
     }
   }
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <BackHeader title="Commande" />
+      <BackHeader title={t('customer.checkout.title')} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
         <View className="px-5 pt-2 gap-5">
           <Section
-            title="Livraison"
-            actionLabel="Modifier"
+            title={t('customer.checkout.delivery')}
+            actionLabel={t('customer.checkout.edit')}
             onAction={() => router.push(routes.accountAddresses)}
           >
             <View className="flex-row items-start gap-3">
@@ -156,7 +158,7 @@ export default function CheckoutScreen() {
           </Section>
 
           {vendor ? (
-            <Section title="Commerce">
+            <Section title={t('customer.checkout.shop')}>
               <View className="flex-row items-center gap-3">
                 <View className="w-10 h-10 items-center justify-center rounded-full bg-muted">
                   <Store size={18} color={colors.mutedForeground} strokeWidth={2} />
@@ -174,8 +176,8 @@ export default function CheckoutScreen() {
           ) : null}
 
           <Section
-            title="Paiement"
-            actionLabel={cards.length ? 'Gérer' : undefined}
+            title={t('customer.checkout.payment')}
+            actionLabel={cards.length ? t('customer.manage') : undefined}
             onAction={cards.length ? () => router.push(routes.accountPayment) : undefined}
           >
             {cards.length ? (
@@ -194,7 +196,7 @@ export default function CheckoutScreen() {
             ) : (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Ajouter un moyen de paiement"
+                accessibilityLabel={t('customer.checkout.addPayment')}
                 onPress={() => router.push(routes.accountPayment)}
                 className="flex-row items-center gap-3 active:opacity-70"
               >
@@ -203,10 +205,10 @@ export default function CheckoutScreen() {
                 </View>
                 <View className="flex-1">
                   <Text variant="caption" weight="bold">
-                    Ajouter un moyen de paiement
+                    {t('customer.checkout.addPayment')}
                   </Text>
                   <Text variant="caption" tone="muted" className="text-[12px]">
-                    Les paiements se font dans l’application — pas de comptant à la livraison.
+                    {t('customer.misc.paymentsInApp')}
                   </Text>
                 </View>
               </Pressable>
@@ -229,19 +231,22 @@ export default function CheckoutScreen() {
           </Section>
 
           {pointsBalance > 0 ? (
-            <Section title="Points Sougouba">
+            <Section title={t('customer.checkout.pointsSection')}>
               <View className="flex-row items-center gap-3">
                 <View className="w-10 h-10 items-center justify-center rounded-full bg-primary/10">
                   <Sparkles size={18} color={colors.primary} strokeWidth={2} />
                 </View>
                 <View className="flex-1 gap-0.5 pr-2">
                   <Text variant="caption" weight="bold">
-                    Utiliser mes points
+                    {t('customer.checkout.usePoints')}
                   </Text>
                   <Text variant="caption" tone="muted" className="text-[12px] leading-[16px]">
                     {redeemablePoints > 0
-                      ? `${pointsBalance} points disponibles — jusqu’à ${formatCad(pointsToDiscountCad(redeemablePoints))} de réduction sur cette commande.`
-                      : `${pointsBalance} points disponibles — pas encore assez pour une réduction sur ce panier.`}
+                      ? t('customer.checkout.pointsAvailable', {
+                          points: pointsBalance,
+                          amount: formatCad(pointsToDiscountCad(redeemablePoints)),
+                        })
+                      : t('customer.checkout.pointsTooFew', { points: pointsBalance })}
                   </Text>
                 </View>
                 <Switch
@@ -249,7 +254,7 @@ export default function CheckoutScreen() {
                   onValueChange={setUsePoints}
                   disabled={redeemablePoints <= 0}
                   trackColor={{ false: colors.border, true: colors.primary }}
-                  accessibilityLabel="Utiliser mes points Sougouba"
+                  accessibilityLabel={t('customer.checkout.usePointsA11y')}
                 />
               </View>
             </Section>
@@ -277,7 +282,11 @@ export default function CheckoutScreen() {
 
       <View className="px-5 pt-3 border-t border-border bg-card">
         <Button
-          label={card ? `Confirmer — ${formatCad(discountedTotalCad)}` : 'Ajouter un moyen de paiement'}
+          label={
+            card
+              ? t('customer.checkout.confirm', { total: formatCad(discountedTotalCad) })
+              : t('customer.checkout.addPayment')
+          }
           variant="cta"
           size="lg"
           fullWidth
@@ -287,8 +296,8 @@ export default function CheckoutScreen() {
         />
         <Text variant="caption" tone="muted" className="text-center mt-2 mb-1 text-[11px]">
           {card
-            ? 'Paiement simulé — aucune transaction réelle n’est effectuée.'
-            : 'Une carte est requise : Sougouba n’accepte pas le paiement à la livraison.'}
+            ? t('customer.simulatedPayment')
+            : t('customer.cardRequired')}
         </Text>
       </View>
     </SafeAreaView>

@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 
 import { CatalogImage, QuantityStepper, Text } from '@/components/ui';
+import { useLocale } from '@/lib/i18n/useT';
 import type { CartItem, Product } from '@/data/types';
 import { categoryIcons } from '@/lib/categoryIcons';
 import { formatCad } from '@/lib/format';
@@ -14,6 +15,9 @@ export interface CartItemRowProps {
 
 /** One cart line: thumbnail, name, line total, and the quantity control. */
 export function CartItemRow({ item, product, categoryIcon, onChangeQty }: CartItemRowProps) {
+  // Formats money here but renders no translated string of its own; this is
+  // the subscription that re-runs those formatters on a language switch.
+  useLocale();
   return (
     <View className="flex-row items-center gap-3">
       <CatalogImage

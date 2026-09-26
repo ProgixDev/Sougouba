@@ -10,18 +10,9 @@
  *
  * The exact list of documents is indicative and still to be confirmed with the
  * client, exactly as the CDC flags for merchants.
+ *
+ * The steps are keys, in order; the wording is `onboarding.courier.*`.
  */
-export const COURIER_SIGNUP_STEPS = [
-  {
-    title: 'Vous et votre véhicule',
-    body: 'Vos coordonnées, votre ville et le moyen avec lequel vous livrez — vélo, moto ou voiture.',
-  },
-  {
-    title: 'Vos documents',
-    body: 'Pièce d’identité, permis de conduire si nécessaire, et preuve d’assurance pour un véhicule motorisé.',
-  },
-  {
-    title: 'Validation manuelle',
-    body: 'Un administrateur Sougouba examine votre dossier. Vous recevez les premières courses une fois approuvé.',
-  },
-];
+export const COURIER_SIGNUP_STEPS = ['identity', 'documents', 'review'] as const;
+
+export type CourierSignupStep = (typeof COURIER_SIGNUP_STEPS)[number];

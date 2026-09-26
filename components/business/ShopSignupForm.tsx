@@ -1,4 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import { Check } from 'lucide-react-native';
 import { MotiView } from 'moti';
 import { useState } from 'react';
@@ -20,6 +19,8 @@ import {
 } from '@/lib/validation/merchant';
 
 import { DeliveryGrid } from './DeliveryGrid';
+import { i18nResolver } from '@/lib/validation/resolver';
+import { useT } from '@/lib/i18n/useT';
 
 export interface ShopSignupValues {
   identity: ShopIdentityValues;
@@ -31,7 +32,8 @@ export interface ShopSignupFormProps {
   onSubmit: (values: ShopSignupValues) => Promise<void>;
 }
 
-const STEP_TITLES = ['Votre commerce', 'Adresse et livraison', 'Documents'];
+/** Keys, not sentences — module scope. See the note in `CourierSignupForm`. */
+const STEP_KEYS = ['business', 'address', 'documents'] as const;
 
 /**
  * Shop registration, in the app.
@@ -42,6 +44,7 @@ const STEP_TITLES = ['Votre commerce', 'Adresse et livraison', 'Documents'];
  * back and errors land where they were made.
  */
 export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
+  const t = useT();
   const colors = useThemeColors();
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -50,7 +53,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
   const [address, setAddress] = useState<ShopAddressValues | null>(null);
 
   const identityForm = useForm<ShopIdentityValues>({
-    resolver: zodResolver(shopIdentitySchema),
+    resolver: i18nResolver(t, shopIdentitySchema),
     defaultValues: {
       name: '',
       vendorType: 'grocery',
@@ -59,7 +62,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
     },
   });
   const addressForm = useForm<ShopAddressInput, unknown, ShopAddressValues>({
-    resolver: zodResolver(shopAddressSchema),
+    resolver: i18nResolver(t, shopAddressSchema),
     defaultValues: {
       street: '',
       city: 'Montréal',
@@ -68,7 +71,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
     },
   });
   const documentsForm = useForm<ShopDocumentsInput, unknown, ShopDocumentsValues>({
-    resolver: zodResolver(shopDocumentsSchema),
+    resolver: i18nResolver(t, shopDocumentsSchema),
     defaultValues: {
       neq: '',
       contactName: '',
@@ -87,7 +90,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
     try {
       await onSubmit({ identity, address, documents });
     } catch {
-      setFormError('Envoi impossible. Veuillez réessayer.');
+      setFormError(t('business.shopForm.sendFailed'));
       setSubmitting(false);
     }
   }
@@ -103,7 +106,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
             and it shows how much is left without asking anyone to read it. */}
         <View className="gap-2.5">
           <View className="flex-row gap-1.5">
-            {STEP_TITLES.map((title, index) => (
+            {STEP_KEYS.map((title, index) => (
               <MotiView
                 key={title}
                 className="flex-1 h-1 rounded-full"
@@ -113,7 +116,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
             ))}
           </View>
           <Text variant="label" tone="muted" className="text-[10px]">
-            Étape {step + 1} — {STEP_TITLES[step]}
+            Étape {step + 1} — {t(`business.shopFormSteps.${STEP_KEYS[step]}`)}
           </Text>
         </View>
 
@@ -124,7 +127,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
               name="name"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Nom de la boutique"
+                  label={t('business.shopForm.name')}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
@@ -136,7 +139,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
 
             <View className="gap-3">
               <Text variant="label" tone="muted">
-                Catégorie
+                {t('business.shopForm.category')}
               </Text>
               {/* The two verticals the catalogue is organised around (CDC
                   addendum v1.1, §01). Not a free-text field: this is what a
@@ -185,7 +188,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
               name="specialtyFr"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label={chosenType === 'restaurant' ? 'Type de cuisine' : 'Spécialité'}
+                  label={chosenType === 'restaurant' ? t('business.shopFormSteps.cuisine') : t('business.shopForm.specialty')}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
@@ -193,8 +196,8 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
                   required
                   helperText={
                     chosenType === 'restaurant'
-                      ? 'Ex. « Cuisine sénégalaise » — la ligne sous votre nom dans les listes.'
-                      : 'Ex. « Épicerie maghrébine » — la ligne sous votre nom dans les listes.'
+                      ? t('business.specialtyPlaceholderRestaurant')
+                      : t('business.specialtyPlaceholderGrocery')
                   }
                 />
               )}
@@ -207,10 +210,10 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
                 <View className="flex-row items-center justify-between gap-4 rounded-2xl bg-card p-4">
                   <View className="flex-1 gap-1">
                     <Text variant="caption" weight="bold">
-                      Certifié halal
+                      {t('business.shopForm.halal')}
                     </Text>
                     <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
-                      Affiché sur votre fiche. Une preuve de certification peut vous être demandée.
+                      {t('business.shopForm.halalHint')}
                     </Text>
                   </View>
                   <Switch
@@ -231,7 +234,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
               name="street"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Adresse"
+                  label={t('business.shopForm.address')}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
@@ -248,7 +251,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
                   value={value}
                   onChange={onChange}
                   error={addressForm.formState.errors.city?.message}
-                  helperText="Les villes que Sougouba dessert aujourd’hui."
+                  helperText={t('business.shopForm.cityHint')}
                 />
               )}
             />
@@ -257,14 +260,14 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
               name="postalCode"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Code postal"
+                  label={t('business.shopForm.postalCode')}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
                   autoCapitalize="characters"
                   error={addressForm.formState.errors.postalCode?.message}
                   required
-                  helperText="Doit correspondre à la ville choisie. Sert à calculer la distance jusqu’à vos clients."
+                  helperText={t('business.shopForm.postalHint')}
                 />
               )}
             />
@@ -273,7 +276,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
               name="deliveryEtaMin"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Délai annoncé (minutes)"
+                  label={t('business.shopForm.eta')}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
@@ -290,22 +293,21 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
         {step === 2 ? (
           <View className="gap-4">
             <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
-              Un administrateur Sougouba vérifie ces informations avant la mise en ligne de votre
-              boutique.
+            {t('business.shopForm.reviewNote')}
             </Text>
             <Controller
               control={documentsForm.control}
               name="neq"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Numéro d’entreprise (NEQ)"
+                  label={t('business.shopForm.neq')}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
                   keyboardType="number-pad"
                   error={documentsForm.formState.errors.neq?.message}
                   required
-                  helperText="10 chiffres, tel qu’inscrit au Registraire des entreprises."
+                  helperText={t('business.shopForm.neqHint')}
                 />
               )}
             />
@@ -314,7 +316,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
               name="contactName"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Personne responsable"
+                  label={t('business.shopForm.contact')}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
@@ -328,7 +330,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
               name="contactPhone"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Téléphone du responsable"
+                  label={t('business.shopForm.contactPhone')}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
@@ -347,22 +349,21 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
                 name="mapaqNumber"
                 render={({ field: { onChange, onBlur, value } }) => (
                   <Input
-                    label="Numéro de permis MAPAQ"
+                    label={t('business.shopForm.mapaq')}
                     value={value ?? ''}
                     onChangeText={onChange}
                     onBlur={onBlur}
                     autoCapitalize="characters"
                     error={documentsForm.formState.errors.mapaqNumber?.message}
                     required
-                    helperText="Permis de restauration valide, exigé pour tout restaurant."
+                    helperText={t('business.shopForm.mapaqHint')}
                   />
                 )}
               />
             ) : null}
             <View className="rounded-2xl border border-border p-4">
               <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
-                Une pièce d’identité de la personne responsable vous sera demandée lors de la
-                validation.
+            {t('business.shopForm.idNote')}
               </Text>
             </View>
           </View>
@@ -376,7 +377,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
 
         <View className="gap-2">
           <Button
-            label={step === 2 ? 'Envoyer ma demande' : 'Continuer'}
+            label={step === 2 ? t('business.shopFormSteps.submit') : 'Continuer'}
             variant="primary"
             size="lg"
             fullWidth
@@ -399,7 +400,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
           />
           {step > 0 ? (
             <Button
-              label="Retour"
+              label={t('common.ui.back')}
               variant="ghost"
               size="md"
               fullWidth

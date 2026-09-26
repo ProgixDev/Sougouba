@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { CatalogImage, Text } from '@/components/ui';
+import { useT } from '@/lib/i18n/useT';
 import type { Product } from '@/data/types';
 import { categoryIcons } from '@/lib/categoryIcons';
 import { formatCad } from '@/lib/format';
@@ -36,6 +37,7 @@ const IMAGE_RATIO = 0.64;
  * far taller than their content.
  */
 export function ProductCard({ product, width, categoryIcon, onPress, onAdd }: ProductCardProps) {
+  const t = useT();
   const scale = useSharedValue(1);
   const isFavorite = useFavoritesStore((s) => s.productIds.includes(product.id));
   const toggleProduct = useFavoritesStore((s) => s.toggleProduct);
@@ -46,7 +48,7 @@ export function ProductCard({ product, width, categoryIcon, onPress, onAdd }: Pr
   return (
     <AnimatedPressable
       accessibilityRole="button"
-      accessibilityLabel={`${product.name}, ${formatCad(product.priceCad)}`}
+      accessibilityLabel={t('common.a11y.priced', { name: product.name, price: formatCad(product.priceCad) })}
       onPress={onPress}
       onPressIn={() => {
         scale.value = withTiming(0.975, { duration: 90 });
@@ -69,7 +71,7 @@ export function ProductCard({ product, width, categoryIcon, onPress, onAdd }: Pr
         <Pressable
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel={isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+          accessibilityLabel={isFavorite ? t('customer.favorite.remove') : t('customer.favorite.add')}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             toggleProduct(product.id);
@@ -108,7 +110,7 @@ export function ProductCard({ product, width, categoryIcon, onPress, onAdd }: Pr
           hitSlop={6}
           disabled={soldOut}
           accessibilityRole="button"
-          accessibilityLabel={soldOut ? 'Produit épuisé' : `Ajouter ${product.name} au panier`}
+          accessibilityLabel={soldOut ? t('customer.misc.productOutOfStock') : t('common.a11y.addToCart', { name: product.name })}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             onAdd?.();

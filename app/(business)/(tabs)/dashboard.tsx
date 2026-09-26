@@ -12,7 +12,8 @@ import { useThemeColors } from '@/hooks/useColorScheme';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { comparePeriods } from '@/lib/analytics';
-import { customerLabel } from '@/lib/customerNames';
+import { customerName } from '@/lib/customerNames';
+import { useT } from '@/lib/i18n/useT';
 import { formatCad } from '@/lib/format';
 import { isActiveStatus, nextStatusFor } from '@/lib/orderStatus';
 import { dynamicRoutes, routes } from '@/lib/routes';
@@ -23,6 +24,7 @@ const LOW_STOCK_THRESHOLD = 20;
 const QUEUE_PREVIEW = 4;
 
 export default function BusinessDashboardScreen() {
+  const t = useT();
   const tabBarInset = useTabBarInset();
   const colors = useThemeColors();
   const { vendor, loading: vendorLoading, missing, pending, reload } = useOwnerVendor();
@@ -136,16 +138,16 @@ export default function BusinessDashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <CounterHeader
-          title={vendor?.name ?? 'Votre boutique'}
-          eyebrow={day ? shopStatusLine(day) : undefined}
+          title={vendor?.name ?? t('business.metrics.yourShop')}
+          eyebrow={day ? t(shopStatusLine(day)) : undefined}
           tradingState={day?.isOpen ? 'open' : 'closed'}
         >
           {/* The slab sits outside the loading branch so the shop's name and
               hours are up immediately. Its figures are not known yet, though,
               and rendering them as 0,00 $ reads as "you sold nothing today". */}
           <View className="flex-row items-end justify-between gap-4">
-            <SlabMetric label="Recettes du jour" value={busy ? '—' : formatCad(todayRevenue)} />
-            <SlabMetric label="À traiter" value={busy ? '—' : String(queue.length)} align="right" />
+            <SlabMetric label={t('business.dashboard.revenueToday')} value={busy ? '—' : formatCad(todayRevenue)} />
+            <SlabMetric label={t('business.dashboard.toHandle')} value={busy ? '—' : String(queue.length)} align="right" />
           </View>
           {day ? <DayStrip day={day} orders={todayOrders} loading={busy} /> : null}
         </CounterHeader>
@@ -159,9 +161,9 @@ export default function BusinessDashboardScreen() {
           <>
             <View className="mt-7 gap-3.5">
               <SectionHeader
-                title="À traiter"
+                title={t('business.dashboard.toHandle')}
                 count={queue.length}
-                actionLabel={queue.length > QUEUE_PREVIEW ? 'Tout voir' : undefined}
+                actionLabel={queue.length > QUEUE_PREVIEW ? t('common.seeAllShort') : undefined}
                 onAction={
                   queue.length > QUEUE_PREVIEW
                     ? () => router.push(routes.businessOrders)
@@ -171,10 +173,10 @@ export default function BusinessDashboardScreen() {
               {queue.length === 0 ? (
                 <View className="mx-5 rounded-[20px] bg-card p-5 items-center gap-1">
                   <Text variant="caption" weight="semibold">
-                    Rien en attente
+                    {t('business.dashboard.emptyQueueTitle')}
                   </Text>
                   <Text variant="caption" tone="muted" className="text-center text-[12px]">
-                    Les nouvelles commandes arrivent ici.
+                    {t('business.dashboard.emptyQueueBody')}
                   </Text>
                 </View>
               ) : (
@@ -183,7 +185,7 @@ export default function BusinessDashboardScreen() {
                     <Reveal key={order.id} index={index}>
                       <OrderQueueCard
                         order={order}
-                        customerName={customerLabel(order)}
+                        customerName={customerName(order) ?? t('common.genericCustomer')}
                         advancing={advancingId === order.id}
                         onAdvance={() => advance(order)}
                         onPress={() =>
@@ -202,20 +204,20 @@ export default function BusinessDashboardScreen() {
             <View className="mt-7 px-5">
               <Reveal>
                 <StatColumns
-                  title="7 derniers jours"
+                  title={t('business.metrics.last7Days')}
                   columns={[
                     {
-                      label: 'Recettes',
+                      label: t('business.metrics.revenue'),
                       value: formatCad(week.current.revenueCad),
                       deltaPct: week.revenueDeltaPct,
                     },
                     {
-                      label: 'Commandes',
+                      label: t('business.metrics.orders'),
                       value: String(week.current.orderCount),
                       deltaPct: week.orderDeltaPct,
                     },
                     {
-                      label: 'Panier moyen',
+                      label: t('business.metrics.avgBasket'),
                       value: formatCad(week.current.avgBasketCad),
                       deltaPct: week.basketDeltaPct,
                     },
@@ -227,8 +229,8 @@ export default function BusinessDashboardScreen() {
             {topProducts.length > 0 ? (
               <View className="mt-7 gap-3.5">
                 <SectionHeader
-                  title="Ce qui part le plus"
-                  actionLabel="Analytique"
+                  title={t('business.dashboard.topSellers')}
+                  actionLabel={t('business.metrics.analytics')}
                   onAction={() => router.push(routes.businessAnalytics)}
                 />
                 <Reveal className="mx-5 rounded-[20px] bg-card overflow-hidden">

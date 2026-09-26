@@ -4,6 +4,7 @@ import { Text } from '@/components/ui';
 import { BASE_FARE_CAD, PER_KM_CAD } from '@/data/courierPay';
 import type { Order } from '@/data/types';
 import { formatCad } from '@/lib/format';
+import { useT } from '@/lib/i18n/useT';
 import { formatDistance } from '@/lib/geo';
 
 export interface EarningsSummaryProps {
@@ -36,6 +37,7 @@ export interface EarningsSummaryProps {
  * adds up.
  */
 export function EarningsSummary({ runs, rangeLabel }: EarningsSummaryProps) {
+  const t = useT();
   const km = runs.reduce((sum, o) => sum + (o.delivery?.distanceKm ?? 0), 0);
   const tips = round2(runs.reduce((sum, o) => sum + (o.delivery?.tipCad ?? 0), 0));
   const base = round2(runs.length * BASE_FARE_CAD);
@@ -50,7 +52,9 @@ export function EarningsSummary({ runs, rangeLabel }: EarningsSummaryProps) {
 
       <View className="gap-2.5">
         <Row
-          label={`Prise en charge (${runs.length} ${runs.length === 1 ? 'course' : 'courses'})`}
+          label={t('courier.earnings.baseFareRow', {
+            runs: t('courier.runCount', { count: runs.length }),
+          })}
           value={formatCad(base)}
         />
         <Row label={`Distance (${formatDistance(km)})`} value={formatCad(distance)} />

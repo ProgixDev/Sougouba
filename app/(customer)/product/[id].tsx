@@ -8,6 +8,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { NutritionRow } from '@/components/customer';
+import { useT } from '@/lib/i18n/useT';
 import { Badge, Button, CatalogImage, EmptyState, Skeleton, Text } from '@/components/ui';
 import { categoriesApi, productsApi, vendorsApi } from '@/data/api';
 import type { Category, Product, Vendor } from '@/data/types';
@@ -23,6 +24,7 @@ import { forest, neutral, terracotta } from '@/theme/tokens';
 const HERO_HEIGHT = 330;
 
 export default function ProductDetailScreen() {
+  const t = useT();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
@@ -73,9 +75,9 @@ export default function ProductDetailScreen() {
       <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
         <EmptyState
           icon={PackageX}
-          title="Produit introuvable"
-          description="Ce produit n’est plus disponible ou le lien est expiré."
-          actionLabel="Retour à l’accueil"
+          title={t('customer.product.notFoundTitle')}
+          description={t('customer.product.notFoundBody')}
+          actionLabel={t('customer.orderConfirmed.home')}
           onAction={() => router.replace(routes.customerHome)}
         />
       </View>
@@ -96,16 +98,16 @@ export default function ProductDetailScreen() {
         className="flex-row items-center justify-between px-5"
         style={{ paddingTop: insets.top + 6, paddingBottom: 4 }}
       >
-        <CircleButton label="Retour" onPress={goBack}>
+        <CircleButton label={t('common.ui.back')} onPress={goBack}>
           <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.2} />
         </CircleButton>
 
         <Text variant="subtitle" weight="bold" className="text-[17px]">
-          Détails
+          {t('customer.product.details')}
         </Text>
 
         <CircleButton
-          label={isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+          label={isFavorite ? t('customer.favorite.remove') : t('customer.favorite.add')}
           onPress={() => {
             if (!id) return;
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -160,14 +162,14 @@ export default function ProductDetailScreen() {
                   <Text variant="title" weight="bold" className="flex-1 text-[27px] leading-[33px]">
                     {product.name}
                   </Text>
-                  {!product.isAvailable ? <Badge label="Épuisé" tone="neutral" /> : null}
+                  {!product.isAvailable ? <Badge label={t('customer.product.outOfStock')} tone="neutral" /> : null}
                 </View>
 
                 <View className="flex-row items-center justify-between gap-4">
                   <Pressable
                     hitSlop={6}
                     accessibilityRole="button"
-                    accessibilityLabel={`Voir ${vendor?.name ?? 'le commerce'}`}
+                    accessibilityLabel={t('common.a11y.view', { name: vendor?.name ?? t('common.genericShop') })}
                     onPress={() =>
                       vendor &&
                       router.push({
@@ -198,7 +200,7 @@ export default function ProductDetailScreen() {
 
               <View className="gap-2">
                 <Text variant="subtitle" weight="semibold" className="text-[17px]">
-                  Description
+                  {t('customer.product.description')}
                 </Text>
                 <Text variant="body" tone="muted">
                   {product.description}
@@ -229,8 +231,8 @@ export default function ProductDetailScreen() {
         <Button
           label={
             product && product.isAvailable
-              ? `Ajouter au panier — ${formatCad(product.priceCad)}`
-              : 'Produit épuisé'
+              ? t('customer.addToCartPrice', { price: formatCad(product.priceCad) })
+              : t('customer.misc.productOutOfStock')
           }
           variant="cta"
           size="lg"

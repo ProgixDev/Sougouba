@@ -1,190 +1,128 @@
-import { vendors as seedVendors } from '../seed/vendors';
-import type {
-  Address,
-  ID,
-  ShopRegistration,
-  Vendor,
-  VendorSection,
-  VendorStatus,
-  VendorType,
-} from '../types';
-import { delay } from '../utils/delay';
-import { generateId } from '../utils/ids';
-import { createPersistedTable } from '../utils/persistedTable';
+import { api, type Page } from '../http';
+import type { Address, ID, LocalizedText, ShopRegistration, Vendor, VendorStatus, VendorType } from '../types';
+import { toVendor } from './mappers';
 
 /**
- * Shops persist now that they can be created in the app: a merchant who
- * registers during a demo, kills the app and comes back to an empty account
- * would read that as a bug rather than a mock. Same rules as every other table —
- * seeds re-read from code each launch, only app-written rows stored.
+ * ⚠️ Every read here returns **approved shops only** — the API enforces it, not
+ * this file. A shop whose file is still in the queue is not "a shop that
+ * happens to be closed"; it is one the platform has not vouched for, and
+ * putting it in front of someone who could order from it is what the approval
+ * step exists to prevent. `getVendorByOwnerId` is the deliberate exception.
  */
-const table = createPersistedTable<Vendor>('sougouba-mock-vendors', seedVendors);
 
-/** Copies out, so callers can't mutate the table by holding a reference. */
-function snapshot(vendor: Vendor): Vendor {
-  return {
-    ...vendor,
-    categoryIds: [...vendor.categoryIds],
-    hours: vendor.hours.map((h) => ({ ...h })),
-    sections: vendor.sections.map((s) => ({ ...s })),
-    address: { ...vendor.address },
-    ...(vendor.registration ? { registration: { ...vendor.registration } } : {}),
-  };
-}
-
-/**
- * Only shops an administrator has cleared.
- *
- * Every list a shopper browses goes through this. A shop whose file is still in
- * the queue is not "a shop that happens to be closed" — it is one the platform
- * has not vouched for, and putting it in front of someone who could order from
- * it is the thing the approval step exists to prevent.
- *
- * Id and owner lookups deliberately do *not* filter: the merchant has to be able
- * to see their own pending shop, and those callers know which shop they asked
- * for.
- */
-function live(): Vendor[] {
-  return table.rows().filter((v) => v.status === 'approved');
-}
+/** The API paginates; the app's callers expect the whole list. 100 covers every served city today. */
+const ALL = 100;
 
 export async function getVendors(): Promise<Vendor[]> {
-  await table.ready;
-  await delay();
-  return live().map(snapshot);
+  const page = await api<Page<any>>('/vendors', { anonymous: true, query: { limit: ALL } });
+  return page.items.map(toVendor);
 }
 
 export async function getVendorById(id: ID): Promise<Vendor | undefined> {
-  await table.ready;
-  await delay(150, 300);
-  const found = table.rows().find((v) => v.id === id);
-  return found ? snapshot(found) : undefined;
+  return single(`/vendors/${id}`);
 }
 
 export async function getVendorBySlug(slug: string): Promise<Vendor | undefined> {
-  await table.ready;
-  await delay(150, 300);
-  const found = live().find((v) => v.slug === slug);
-  return found ? snapshot(found) : undefined;
+  return single(`/vendors/slug/${encodeURIComponent(slug)}`);
 }
 
 export async function getVendorsByType(vendorType: VendorType): Promise<Vendor[]> {
-  await table.ready;
-  await delay();
-  return live()
-    .filter((v) => v.vendorType === vendorType)
-    .map(snapshot);
+  const page = await api<Page<any>>('/vendors', {
+    anonymous: true,
+    query: { type: vendorType, limit: ALL },
+  });
+  return page.items.map(toVendor);
 }
 
 export async function getVendorsByCategory(categoryId: ID): Promise<Vendor[]> {
-  await table.ready;
-  await delay();
-  return live()
-    .filter((v) => v.categoryIds.includes(categoryId))
-    .map(snapshot);
+  const page = await api<Page<any>>('/vendors', {
+    anonymous: true,
+    query: { categoryId, limit: ALL },
+  });
+  return page.items.map(toVendor);
 }
 
-export async function getVendorByOwnerId(ownerId: ID): Promise<Vendor | undefined> {
-  await table.ready;
-  await delay(150, 300);
-  const found = table.rows().find((v) => v.ownerId === ownerId);
-  return found ? snapshot(found) : undefined;
+/**
+ * The signed-in merchant's own shop, **at any status** — how a pending applicant
+ * watches their queue position.
+ *
+ * ⚠️ The `ownerId` argument is ignored. The API answers `/vendors/me` from the
+ * token, and asking for someone else's shop by owner id is not a thing a
+ * merchant may do. Kept in the signature so the business screens need no edit.
+ */
+export async function getVendorByOwnerId(_ownerId: ID): Promise<Vendor | undefined> {
+  return single('/vendors/me');
 }
 
-// ── registration ────────────────────────────────────────────────────────────
+async function single(path: string): Promise<Vendor | undefined> {
+  try {
+    return toVendor(await api<any>(path, { anonymous: true }));
+  } catch (error) {
+    // A 404 is "no such shop", which every caller already handles as undefined.
+    if ((error as { status?: number }).status === 404) return undefined;
+    throw error;
+  }
+}
 
 export interface ShopApplication {
   ownerId: ID;
   name: string;
   vendorType: VendorType;
-  specialtyFr: string;
+  /** The merchant's own words, in the language they typed them. */
+  specialty: LocalizedText;
   isHalalCertified: boolean;
   address: Address;
   deliveryEtaMin: number;
   registration: Omit<ShopRegistration, 'submittedAt'>;
 }
 
-/** Nine to nine, seven days. A starting point the merchant edits, not a claim. */
-const DEFAULT_HOURS = Array.from({ length: 7 }, (_, day) => ({
-  day,
-  open: '09:00',
-  close: '21:00',
-}));
-
 /**
- * Headings a new shop starts with, so its page is not a single unsorted list on
- * day one. They are the merchant's own words to change (CDC addendum v1.1, §01)
- * — these are a first draft, not a taxonomy.
- */
-function defaultSections(id: ID, vendorType: VendorType): VendorSection[] {
-  const labels =
-    vendorType === 'restaurant'
-      ? ['Entrées', 'Plats', 'Desserts', 'Boissons']
-      : ['Fruits & légumes', 'Épices', 'Conserves', 'Boissons'];
-  return labels.map((nameFr, index) => ({ id: `sec_${id}_${index + 1}`, nameFr }));
-}
-
-/** Lowercase, accent-free, hyphenated — the shop's own address on the platform. */
-function slugify(name: string): string {
-  return name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-}
-
-/**
- * A merchant registers their shop.
+ * Register a shop.
  *
- * The shop is created `pending` and stays out of every customer-facing list
- * until an administrator clears it. Rating and review count start at zero rather
- * than at a flattering default — a shop that has never sold anything has no
- * reputation, and inventing one is the kind of lie a marketplace cannot walk
- * back.
+ * The default hours and starting sections that used to be built here are the
+ * API's now — `vendor_apply` writes the shop, its paperwork, a nine-to-nine
+ * week and the opening sections in one transaction, and links the owner's
+ * profile to it. A merchant left with a shop row and no hours would have a shop
+ * that is closed forever with no way to say otherwise.
  *
- * `categoryIds` starts empty on purpose: which platform categories a shop
- * belongs to falls out of what it actually stocks, so it fills in as the
- * catalogue does rather than being claimed up front.
+ * ⚠️ `specialty` is sent as its French text. The API column is `specialty_fr`;
+ * there is nowhere to put a second language yet.
  */
 export async function submitShopApplication(input: ShopApplication): Promise<Vendor> {
-  await table.ready;
-  await delay(500, 900);
-  const id = generateId('vnd');
-  const vendor: Vendor = {
-    id,
-    slug: slugify(input.name) || id,
-    name: input.name,
-    vendorType: input.vendorType,
-    specialtyFr: input.specialtyFr,
-    // Empty is the seeded value too — `CatalogImage` draws a stable tinted
-    // placeholder from the id, so a shop with no photography still has a face.
-    logoUrl: '',
-    coverUrl: '',
-    categoryIds: [],
-    city: input.address.city,
-    neighborhood: input.address.city,
-    address: input.address,
-    rating: 0,
-    reviewCount: 0,
-    deliveryEtaMin: input.deliveryEtaMin,
-    isHalalCertified: input.isHalalCertified,
-    hours: DEFAULT_HOURS,
-    sections: defaultSections(id, input.vendorType),
-    ownerId: input.ownerId,
-    status: 'pending',
-    registration: { ...input.registration, submittedAt: new Date().toISOString() },
-  };
-  await table.add(vendor);
-  return snapshot(vendor);
+  const created = await api<any>('/vendors/apply', {
+    method: 'POST',
+    body: {
+      name: input.name,
+      vendorType: input.vendorType,
+      specialtyFr: input.specialty.fr,
+      isHalalCertified: input.isHalalCertified,
+      street: input.address.street,
+      city: input.address.city,
+      postalCode: input.address.postalCode,
+      deliveryEtaMin: input.deliveryEtaMin,
+      neq: input.registration.neq,
+      contactName: input.registration.contactName,
+      contactPhone: input.registration.contactPhone,
+      mapaqNumber: input.registration.mapaqNumber,
+    },
+  });
+  return toVendor(created);
 }
 
-export async function setVendorStatus(id: ID, status: VendorStatus): Promise<Vendor | undefined> {
-  await table.ready;
-  await delay(300, 600);
-  const vendor = table.rows().find((v) => v.id === id);
-  if (!vendor) return undefined;
-  vendor.status = status;
-  await table.save(vendor.id);
-  return snapshot(vendor);
+/**
+ * ⚠️ **Removed, deliberately — this now always throws.**
+ *
+ * `setVendorStatus` let the app approve its own shop, which was a demo
+ * convenience the mock could afford because it was the only writer. Approving a
+ * merchant is an administrator's decision, taken in the back office, audited,
+ * and guarded — `POST /admin/vendors/:id/approve` behind `AdminGuard`.
+ *
+ * Left as a throwing stub rather than deleted so the two demo hooks that call it
+ * fail loudly at the call site instead of silently doing nothing. They should be
+ * removed once the review queue is the only path.
+ */
+export async function setVendorStatus(_id: ID, _status: VendorStatus): Promise<Vendor | undefined> {
+  throw new Error(
+    'setVendorStatus is not available to the app — approving a shop is an administrator action in the back office.'
+  );
 }

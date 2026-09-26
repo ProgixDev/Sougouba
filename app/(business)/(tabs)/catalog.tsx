@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, SectionList, View } from 'react-native';
 
 import { CounterHeader, PendingApproval, onSlab } from '@/components/business';
+import { useT } from '@/lib/i18n/useT';
 import { SearchField } from '@/components/customer';
 import { Badge, CatalogImage, EmptyState, Reveal, Skeleton, Text } from '@/components/ui';
 import { categoriesApi, productsApi } from '@/data/api';
@@ -11,6 +12,7 @@ import type { Category, Product } from '@/data/types';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { categoryIcons } from '@/lib/categoryIcons';
+import { useLocalized } from '@/lib/localized';
 import { formatCad } from '@/lib/format';
 import { dynamicRoutes, routes } from '@/lib/routes';
 
@@ -26,6 +28,8 @@ interface CatalogSection {
 const UNFILED_SECTION_ID = 'unfiled';
 
 export default function BusinessCatalogScreen() {
+  const t = useT();
+  const L = useLocalized();
   const tabBarInset = useTabBarInset();
   const { vendor, loading: vendorLoading, missing, pending, reload } = useOwnerVendor();
 
@@ -77,7 +81,7 @@ export default function BusinessCatalogScreen() {
     const q = query.trim().toLowerCase();
     if (!q) return products;
     return products.filter(
-      (p) => p.name.toLowerCase().includes(q) || p.tags.some((t) => t.toLowerCase().includes(q))
+      (p) => p.name.toLowerCase().includes(q) || p.tags.some((tag) => tag.toLowerCase().includes(q))
     );
   }, [products, query]);
 
@@ -96,14 +100,14 @@ export default function BusinessCatalogScreen() {
     const grouped = vendor.sections
       .map((section) => ({
         id: section.id,
-        title: section.nameFr,
+        title: L(section.name),
         data: visible.filter((p) => p.sectionId === section.id),
       }))
       .filter((section) => section.data.length > 0);
 
     const unfiled = visible.filter((p) => !known.has(p.sectionId));
     return unfiled.length > 0
-      ? [...grouped, { id: UNFILED_SECTION_ID, title: 'Non classés', data: unfiled }]
+      ? [...grouped, { id: UNFILED_SECTION_ID, title: t('business.catalogEmpty.uncategorised'), data: unfiled }]
       : grouped;
   }, [vendor, visible]);
 
@@ -130,7 +134,7 @@ export default function BusinessCatalogScreen() {
         right={
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Ajouter un produit"
+            accessibilityLabel={t('business.catalog.addProduct')}
             onPress={() => router.push(routes.businessProductNew)}
             className="flex-row items-center gap-1.5 rounded-full px-4 h-10 active:opacity-80"
             style={{ backgroundColor: onSlab.fill }}
@@ -145,7 +149,7 @@ export default function BusinessCatalogScreen() {
         <SearchField
           value={query}
           onChangeText={setQuery}
-          placeholder="Rechercher dans votre catalogue…"
+          placeholder={t('business.catalog.searchPlaceholder')}
         />
       </CounterHeader>
 
@@ -179,13 +183,13 @@ export default function BusinessCatalogScreen() {
           ListEmptyComponent={
             <EmptyState
               icon={PackagePlus}
-              title={query ? 'Aucun résultat' : 'Catalogue vide'}
+              title={query ? t('business.catalogEmpty.noResults') : 'Catalogue vide'}
               description={
                 query
-                  ? 'Aucun produit ne correspond à cette recherche.'
-                  : 'Ajoutez votre premier produit pour commencer à vendre.'
+                  ? t('business.catalogEmpty.noMatch')
+                  : t('business.catalogEmpty.addFirst')
               }
-              actionLabel={query ? undefined : 'Ajouter un produit'}
+              actionLabel={query ? undefined : t('business.catalog.addProduct')}
               onAction={query ? undefined : () => router.push(routes.businessProductNew)}
             />
           }
@@ -195,7 +199,7 @@ export default function BusinessCatalogScreen() {
               <Reveal index={index} className="mb-3">
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Modifier ${product.name}`}
+                  accessibilityLabel={t('common.a11y.edit', { name: product.name })}
                   onPress={() =>
                     router.push({
                       pathname: dynamicRoutes.businessProductEdit,

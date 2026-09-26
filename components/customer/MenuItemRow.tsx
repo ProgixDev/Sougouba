@@ -3,6 +3,7 @@ import { Plus } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 
 import { CatalogImage, Text } from '@/components/ui';
+import { useT } from '@/lib/i18n/useT';
 import type { Product } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { categoryIcons } from '@/lib/categoryIcons';
@@ -32,6 +33,7 @@ const THUMB = 84;
  * card surfaces read as ten separate objects.
  */
 export function MenuItemRow({ product, categoryIcon, onPress, onAdd }: MenuItemRowProps) {
+  const t = useT();
   const colors = useThemeColors();
   const soldOut = !product.isAvailable;
   const Icon = categoryIcon ? categoryIcons[categoryIcon] : undefined;
@@ -39,7 +41,10 @@ export function MenuItemRow({ product, categoryIcon, onPress, onAdd }: MenuItemR
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${product.name}, ${formatCad(product.priceCad)}${soldOut ? ', épuisé' : ''}`}
+      accessibilityLabel={
+        t('common.a11y.priced', { name: product.name, price: formatCad(product.priceCad) }) +
+        (soldOut ? t('customer.misc.outOfStockSuffix') : '')
+      }
       onPress={onPress}
       className="flex-row items-start gap-4 py-4"
       style={soldOut ? { opacity: 0.5 } : undefined}
@@ -80,13 +85,13 @@ export function MenuItemRow({ product, categoryIcon, onPress, onAdd }: MenuItemR
             style={{ backgroundColor: 'rgba(12,10,8,0.55)' }}
           >
             <Text variant="caption" weight="bold" className="text-[11px] text-white">
-              Épuisé
+              {t('customer.misc.outOfStock')}
             </Text>
           </View>
         ) : (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Ajouter ${product.name} au panier`}
+            accessibilityLabel={t('common.a11y.addToCart', { name: product.name })}
             // The button is 32px so it does not crowd an 84px thumbnail; the
             // hitSlop is what actually makes it a 44pt target.
             hitSlop={8}

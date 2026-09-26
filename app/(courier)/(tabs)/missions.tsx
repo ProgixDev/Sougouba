@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
 import { CourierGate, CourierHeader, MissionSheet, OfferCard } from '@/components/courier';
+import { useT } from '@/lib/i18n/useT';
 import { DeliveryMap } from '@/components/map';
 import { Text } from '@/components/ui';
 import { ordersApi, vendorsApi } from '@/data/api';
@@ -31,6 +32,7 @@ import { useDispatchStore } from '@/store/useDispatchStore';
  * decision the courier has to make while driving.
  */
 export default function MissionsScreen() {
+  const t = useT();
   const tabBarInset = useTabBarInset();
   const { courier, loading, missing, pending, reload } = useCourierProfile();
 
@@ -107,20 +109,13 @@ export default function MissionsScreen() {
     if (!offer || !courier || busy) return;
     setBusy(true);
     try {
-      const target = await ordersApi.getOrderById(offer.orderId);
       const shop = await vendorsApi.getVendorById(offer.vendorId);
-      if (!target || !shop) return;
-      const assigned = await ordersApi.assignCourier(
-        offer.orderId,
-        courier.id,
-        new Date().toISOString(),
-        {
-          from: courier.base,
-          pickup: shop.address,
-          dropoff: target.deliveryAddress,
-          vehicle: courier.vehicle,
-        }
-      );
+      if (!shop) return;
+      // The distances, the ETAs and the pay were computed when the offer was
+      // made and are stored on it — so accepting sends the offer id and nothing
+      // else. Passing them from here would let a courier name their own
+      // earnings, which is why the server stopped accepting them.
+      const assigned = await ordersApi.assignCourier(offer.id);
       // `assignCourier` returns undefined when someone else got there first —
       // the courier is told, rather than handed a run they do not have.
       if (!assigned) {
@@ -249,16 +244,17 @@ export default function MissionsScreen() {
  * being offline look like a slow night.
  */
 function IdleCard({ online }: { online: boolean }) {
+  const t = useT();
   return (
     <View className="rounded-[24px] bg-card p-5 gap-2 items-center">
       {online ? null : <Power size={20} color="#8A8175" strokeWidth={2} />}
       <Text variant="caption" weight="bold" className="text-[15px]">
-        {online ? 'En attente d’une course' : 'Vous êtes hors ligne'}
+        {t(online ? 'courier.missions.waiting' : 'courier.missions.offline')}
       </Text>
       <Text variant="caption" tone="muted" className="text-center text-[12px] leading-[18px]">
         {online
-          ? 'Nous vous proposons la prochaine commande prête près de vous.'
-          : 'Passez en ligne pour recevoir des propositions de course.'}
+          ? t('courier.missions.waitingBody')
+          : t('courier.missions.offlineBody')}
       </Text>
     </View>
   );

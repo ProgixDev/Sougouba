@@ -10,25 +10,27 @@ import { ordersApi } from '@/data/api';
 import type { ID, Order } from '@/data/types';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
-import { customerLabel } from '@/lib/customerNames';
+import { customerName } from '@/lib/customerNames';
+import { useT } from '@/lib/i18n/useT';
 import { formatCad } from '@/lib/format';
 import { isActiveStatus, nextStatusFor } from '@/lib/orderStatus';
 import { dynamicRoutes } from '@/lib/routes';
 
 type Filter = 'active' | 'disputes' | 'delivered' | 'cancelled' | 'all';
 
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: 'active', label: 'À traiter' },
+const FILTERS: Filter[] = [
+  'active',
   // Second, not last: a complaint is the other thing in this queue that is
   // waiting on the merchant, and it does not appear under "À traiter" because a
   // disputed order has usually already been delivered.
-  { key: 'disputes', label: 'Litiges' },
-  { key: 'delivered', label: 'Livrées' },
-  { key: 'cancelled', label: 'Annulées' },
-  { key: 'all', label: 'Toutes' },
+  'disputes',
+  'delivered',
+  'cancelled',
+  'all',
 ];
 
 export default function BusinessOrdersScreen() {
+  const t = useT();
   const tabBarInset = useTabBarInset();
   const { vendor, loading: vendorLoading, missing, pending, reload } = useOwnerVendor();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -128,7 +130,7 @@ export default function BusinessOrdersScreen() {
 
   return (
     <View className="flex-1 bg-background">
-      <CounterHeader title="Commandes" eyebrow={vendor?.name} />
+      <CounterHeader title={t('business.metrics.orders')} eyebrow={vendor?.name} />
 
       <ScrollView
         horizontal
@@ -138,14 +140,17 @@ export default function BusinessOrdersScreen() {
         // pinned means the queue can always be re-filtered from where you are.
         style={{ flexGrow: 0 }}
       >
-        {FILTERS.map(({ key, label }) => (
-          <Chip
-            key={key}
-            label={counts[key] > 0 ? `${label} (${counts[key]})` : label}
-            selected={filter === key}
-            onPress={() => setFilter(key)}
-          />
-        ))}
+        {FILTERS.map((key) => {
+          const label = t(`business.orderFilters.${key}`);
+          return (
+            <Chip
+              key={key}
+              label={counts[key] > 0 ? `${label} (${counts[key]})` : label}
+              selected={filter === key}
+              onPress={() => setFilter(key)}
+            />
+          );
+        })}
       </ScrollView>
 
       {vendorLoading || loading ? (
@@ -168,14 +173,9 @@ export default function BusinessOrdersScreen() {
           ListHeaderComponent={
             visible.length > 0 ? (
               <Text variant="caption" tone="muted" className="text-[12px]">
-                {visible.length}{' '}
                 {filter === 'disputes'
-                  ? visible.length === 1
-                    ? 'litige'
-                    : 'litiges'
-                  : visible.length === 1
-                    ? 'commande'
-                    : 'commandes'}
+                  ? t('business.counts.disputes', { count: visible.length })
+                  : t('business.counts.orders', { count: visible.length })}
                 {filter !== 'cancelled' && filter !== 'disputes'
                   ? ` · ${formatCad(visibleTotal)}`
                   : ''}
@@ -189,15 +189,15 @@ export default function BusinessOrdersScreen() {
                 filter === 'active'
                   ? 'Rien en attente'
                   : filter === 'disputes'
-                    ? 'Aucun litige'
-                    : 'Aucune commande'
+                    ? t('business.queue.noDisputes')
+                    : t('business.queue.noOrders')
               }
               description={
                 filter === 'active'
-                  ? 'Les nouvelles commandes apparaîtront ici dès qu’un client passe commande.'
+                  ? t('business.ordersEmpty.none')
                   : filter === 'disputes'
-                    ? 'Aucun client n’a signalé de problème sur vos commandes.'
-                    : 'Rien à afficher pour ce filtre.'
+                    ? t('business.ordersEmpty.noDisputes')
+                    : t('business.ordersEmpty.noneForFilter')
               }
             />
           }
@@ -207,7 +207,7 @@ export default function BusinessOrdersScreen() {
             <Reveal index={index}>
               <OrderQueueCard
                 order={item}
-                customerName={customerLabel(item)}
+                customerName={customerName(item) ?? t('common.genericCustomer')}
                 advancing={advancingId === item.id}
                 onAdvance={() => advance(item)}
                 onPress={() =>

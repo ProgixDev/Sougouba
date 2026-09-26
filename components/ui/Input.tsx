@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { useColorScheme, useThemeColors } from '@/hooks/useColorScheme';
+import { useT } from '@/lib/i18n/useT';
 import { darkColors, lightColors } from '@/theme/colors';
 import { neutral } from '@/theme/tokens';
 import { Text } from './Text';
@@ -44,6 +45,7 @@ export function Input({
   placeholder: _placeholder,
   ...rest
 }: InputProps) {
+  const t = useT();
   const [focused, setFocused] = useState(false);
   const [filled, setFilled] = useState(Boolean((value ?? defaultValue)?.toString().length));
   const [hidden, setHidden] = useState(!!isPassword);
@@ -145,7 +147,7 @@ export function Input({
           <Pressable
             hitSlop={8}
             onPress={() => setHidden((h) => !h)}
-            accessibilityLabel={hidden ? 'Afficher le mot de passe' : 'Masquer le mot de passe'}
+            accessibilityLabel={t(hidden ? 'common.ui.showPassword' : 'common.ui.hidePassword')}
           >
             {hidden ? <EyeOff size={19} color={colors.mutedForeground} /> : <Eye size={19} color={colors.mutedForeground} />}
           </Pressable>

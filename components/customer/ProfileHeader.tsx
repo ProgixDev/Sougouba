@@ -5,6 +5,7 @@ import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar, Text } from '@/components/ui';
+import { useT } from '@/lib/i18n/useT';
 import { vendorImages } from '@/data/images.generated';
 import { useColorScheme, useThemeColors } from '@/hooks/useColorScheme';
 
@@ -38,6 +39,7 @@ export function ProfileHeader({
   memberSinceLabel,
   onChangePhoto,
 }: ProfileHeaderProps) {
+  const t = useT();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { colorScheme } = useColorScheme();
@@ -71,7 +73,7 @@ export function ProfileHeader({
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Changer la photo de profil"
+            accessibilityLabel={t('customer.misc.changePhoto')}
             onPress={onChangePhoto}
             hitSlop={6}
             className="absolute bottom-0 right-0 w-9 h-9 items-center justify-center rounded-full border-[3px]"

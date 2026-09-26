@@ -5,6 +5,7 @@ import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ProofCapture } from '@/components/courier';
+import { useT } from '@/lib/i18n/useT';
 import { BackHeader, EmptyState, Skeleton, Text } from '@/components/ui';
 import { ordersApi } from '@/data/api';
 import type { DeliveryProof, Order } from '@/data/types';
@@ -23,6 +24,7 @@ import { useDispatchStore } from '@/store/useDispatchStore';
  * backgrounding the app at the wrong moment.
  */
 export default function CourierProofScreen() {
+  const t = useT();
   const { id } = useLocalSearchParams<{ id: string }>();
   const setActiveOrder = useDispatchStore((s) => s.setActiveOrder);
 
@@ -46,8 +48,9 @@ export default function CourierProofScreen() {
     if (!order || busy) return;
     setBusy(true);
     try {
-      const at = new Date().toISOString();
-      const updated = await ordersApi.completeDelivery(order.id, { ...proof, at }, at);
+      // `at` is dropped: the delivery time is stamped inside the same
+      // transaction that writes the proof, so the two cannot disagree.
+      const updated = await ordersApi.completeDelivery(order.id, proof);
       if (!updated) return;
       // The run is over: clear it before leaving, or the missions screen docks a
       // finished delivery until its next focus.
@@ -60,7 +63,7 @@ export default function CourierProofScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <BackHeader title="Confirmer la livraison" />
+      <BackHeader title={t('courier.proof.title')} />
 
       {loading ? (
         <View className="px-5 gap-4">
@@ -72,7 +75,7 @@ export default function CourierProofScreen() {
           <EmptyState
             icon={PackageCheck}
             title="Course introuvable"
-            description="Cette course n’existe plus ou ne vous est pas attribuée."
+            description={t('courier.delivery.notFound')}
           />
         </View>
       ) : (

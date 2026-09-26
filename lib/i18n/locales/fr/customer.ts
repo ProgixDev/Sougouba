@@ -1,0 +1,363 @@
+import { plural } from '../plural';
+
+/** Shopper-facing screens. Keyed `customer.<file>.<element>`. */
+export const customer = {
+  /**
+   * Tab bar labels. `docs/PROGRESS.md` flags the five-tab customer bar as the
+   * tightest spot for French copy on a narrow phone — English is shorter
+   * everywhere here, so it only gains slack.
+   */
+  tabs: {
+    home: 'Accueil',
+    search: 'Recherche',
+    cart: 'Panier',
+    orders: 'Commandes',
+    profile: 'Profil',
+  },
+  home: {
+    bestSellers: 'Articles les + vendus',
+    emptyProductsTitle: 'Aucun produit ici',
+    emptyProductsBody: 'Le catalogue est vide pour le moment.',
+    restaurantsNearby: 'Restaurants près de chez vous',
+    noRestaurants: 'Aucun restaurant pour l’instant.',
+    deliverTo: 'Livraison à',
+  },
+  searchField: {
+    placeholder: 'Rechercher un produit, un commerce…',
+    filters: 'Filtres',
+    filtersActive: 'Filtres, %{count} actifs',
+  },
+  cart: {
+    title: 'Panier',
+    clear: 'Vider',
+    emptyTitle: 'Votre panier est vide',
+    emptyBody: 'Parcourez les commerces près de chez vous pour commencer.',
+    emptyAction: 'Découvrir les commerces',
+    deliveryEta: 'Livraison en %{minutes} min',
+    switchVendor: {
+      bodyNamed:
+        'Votre panier contient des articles de %{current}. Pour commander chez %{next}, nous devons le vider.',
+      bodyGeneric:
+        'Votre panier contient des articles d’un autre commerce. Pour continuer, nous devons le vider.',
+    },
+  },
+  ordersScreen: {
+    title: 'Commandes',
+    emptyTitle: 'Aucune commande',
+    emptyBody: 'Vos commandes passées apparaîtront ici avec leur suivi en direct.',
+    emptyAction: 'Découvrir les commerces',
+  },
+  favorites: {
+    title: 'Favoris',
+    emptyTitle: 'Aucun favori',
+    emptyBody: 'Touchez le cœur sur un produit ou un commerce pour le retrouver ici.',
+    emptyAction: 'Découvrir les commerces',
+    shops: 'Commerces',
+    products: 'Produits',
+  },
+  orderTimeline: {
+    withCourier: 'Avec %{name}',
+  },
+  orders: {
+    /** "8 août · 3 articles" — the separator lives in the message, not in JSX. */
+    summaryLine: '%{date} · %{items}',
+    rowA11y: 'Commande %{reference}, %{status}',
+  },
+  vendorCard: {
+    a11y: '%{name}, %{specialty}',
+    a11yClosed: '%{name}, %{specialty}, fermé',
+    subtitle: '%{specialty} · %{neighborhood}',
+    feeFrom: 'dès %{amount}',
+  },
+  verticalCard: {
+    a11y: '%{label}, %{count}',
+    countWithEta: '%{shops} · livraison dès %{minutes} min',
+  },
+  account: {
+    about: {
+      title: 'Aide et informations',
+      version: 'Version %{version}',
+      tagline: 'Les épiceries africaines et maghrébines du Grand Montréal',
+      body: 'Sougouba relie les épiceries, boucheries et cuisines africaines et maghrébines de Montréal, Montréal-Nord, Laval et Longueuil aux gens qui cherchent leurs produits. Commandez auprès du commerce, suivez la préparation, recevez à la maison.',
+      support: 'Écrire au soutien',
+      registerShop: 'Inscrire mon commerce',
+      registerShopDetail: 'Comment vendre sur Sougouba',
+      prototypeLabel: 'Prototype de démonstration',
+      prototypeBody:
+        'Cette version fonctionne entièrement hors ligne, sur des données de démonstration. Les comptes, commandes et paiements ne quittent pas l’appareil, et aucune transaction réelle n’est effectuée. Les photographies proviennent de Pexels, sous licence d’utilisation commerciale.',
+    },
+    addresses: {
+      title: 'Adresses de livraison',
+      emptyTitle: 'Aucune adresse enregistrée',
+      emptyBody: 'Ajoutez une adresse pour accélérer vos prochaines commandes.',
+      add: 'Ajouter une adresse',
+      isDefault: 'Par défaut',
+      edit: 'Modifier',
+      setDefault: 'Définir par défaut',
+      fieldLabel: 'Nom (ex. Domicile)',
+      fieldStreet: 'Numéro et rue',
+      fieldPostalCode: 'Code postal',
+      postalHint: 'Doit correspondre à la ville choisie.',
+    },
+    edit: {
+      title: 'Modifier le profil',
+      changePhoto: 'Changer la photo',
+      changePhotoA11y: 'Changer la photo de profil',
+      emailHint:
+        'Votre adresse courriel sert à vous connecter et à recevoir les confirmations de commande.',
+    },
+    notifications: {
+      title: 'Notifications',
+      footnote:
+        'Ces préférences sont enregistrées sur cet appareil. Le prototype n’envoie pas de notifications réelles.',
+    },
+    payment: {
+      title: 'Moyens de paiement',
+      emptyTitle: 'Aucun moyen de paiement',
+      emptyBody: 'Ajoutez une carte pour payer vos commandes en un geste.',
+      add: 'Ajouter une carte',
+      newCard: 'Nouvelle carte',
+      fieldHolder: 'Nom du titulaire',
+      fieldNumber: 'Numéro de carte',
+      fieldExpiry: 'Expiration (MM/AA)',
+      submit: 'Ajouter la carte',
+      footnote:
+        'Prototype de démonstration : aucun paiement réel n’est traité et seuls les quatre derniers chiffres sont conservés sur l’appareil.',
+    },
+    points: {
+      title: 'Mes points',
+      balance: 'Solde Points Sougouba',
+      history: 'Historique',
+      emptyTitle: 'Aucun mouvement pour l’instant',
+      emptyBody: 'Vos points apparaissent ici dès qu’une commande est livrée.',
+      refer: 'Parrainer un proche',
+    },
+    refer: {
+      title: 'Parrainer un proche',
+      whatsapp: 'Partager via WhatsApp',
+      facebook: 'Partager sur Facebook',
+      shareFailedTitle: 'Impossible d’ouvrir l’application',
+      shareFailedBody: 'Réessayez, ou copiez votre code manuellement.',
+      yourCode: 'Votre code',
+      copyHint: 'Appuyez longuement sur le code pour le copier.',
+      terms:
+        'Une récompense par nouveau client. Les points sont crédités une fois la commande de votre ami livrée — jamais avant.',
+    },
+  },
+  profile: {
+    memberSince: 'Membre depuis %{date}',
+    statOrders: 'Commandes',
+    statFavorites: 'Favoris',
+    statSpent: 'Dépensé',
+    editProfile: 'Modifier le profil',
+    pointsBalance: '%{count} points Sougouba',
+    pointsA11y: '%{count} points Sougouba — voir mon solde',
+    pointsDetail: 'Voir mon solde et mon historique',
+    rewards: 'Récompenses',
+    purchases: 'Mes achats',
+    myOrders: 'Mes commandes',
+    deliveryAndPayment: 'Livraison et paiement',
+    noAddress: 'Aucune',
+    notificationsValue: '%{count} sur 4',
+    about: 'À propos',
+    signOut: 'Se déconnecter',
+    photoDeniedTitle: 'Accès aux photos refusé',
+    photoDeniedBody:
+      'Autorisez l’accès à vos photos dans les réglages de l’appareil pour changer votre portrait.',
+  },
+  orderDetail: {
+    notFoundBody: 'Cette commande n’existe plus ou le lien est expiré.',
+    seeOrders: 'Voir mes commandes',
+    yourCourier: 'Votre livreur',
+    issueReported: 'Problème signalé',
+    reportProblem: 'Signaler un problème',
+    delivered: 'Commande livrée',
+    shopReply: 'Réponse du commerce',
+    replyPending: 'Le commerce a été informé. Vous verrez sa réponse ici.',
+    deliveryCode: 'Code de livraison',
+  },
+  dispute: {
+    title: 'Signaler un problème',
+    whatHappened: 'Que s’est-il passé ?',
+    describe: 'Décrivez le problème',
+    describeHint: 'Précisez les articles concernés — cela accélère la réponse.',
+    submit: 'Envoyer le signalement',
+    note: 'Le commerce est informé et vous répondra ici.',
+  },
+  filters: {
+    applyCta: plural({
+      zero: 'Aucun résultat',
+      one: 'Voir %{count} produit',
+      other: 'Voir %{count} produits',
+    }),
+    close: 'Fermer les filtres',
+    onSale: 'Les articles en promotion',
+    inStock: 'Les articles disponibles',
+    clear: 'Effacer les filtres',
+    noResults: 'Aucun résultat',
+  },
+  verticalScreen: {
+    notFoundTitle: 'Catégorie introuvable',
+    notFoundBody: 'Sougouba couvre l’épicerie et le restaurant.',
+    noMatchTitle: 'Rien ne correspond',
+    noMatchBody: 'Aucun commerce de cette catégorie ne passe les filtres choisis.',
+  },
+  misc: {
+    yourProfile: 'Votre profil',
+    outOfStock: 'Épuisé',
+    outOfStockSuffix: ', épuisé',
+    closedSuffix: ', fermé',
+    removeFavorite: 'Retirer des favoris',
+    productOutOfStock: 'Produit épuisé',
+    changePhoto: 'Changer la photo de profil',
+    protein: 'Protéines',
+    emptyAndContinue: 'Vider et continuer',
+    emptyCartTitle: 'Vider votre panier ?',
+    paymentsInApp: 'Les paiements se font dans l’application — pas de comptant à la livraison.',
+    browseOnly: 'Vous pouvez parcourir la carte, mais pas commander pour l’instant.',
+    confirmationEmail: 'Une confirmation vous est envoyée par courriel.',
+  },
+  notificationRows: {
+    orderUpdates: { label: 'Suivi de commande', body: 'Confirmation, préparation et commande prête à partir.' },
+    deliveryAlerts: { label: 'Livraison en approche', body: 'Un avis quand le livreur part et quand il arrive chez vous.' },
+    promotions: { label: 'Promotions', body: 'Rabais et offres des commerces où vous avez déjà commandé.' },
+    newVendors: { label: 'Nouveaux commerces', body: 'Quand une épicerie ouvre la livraison dans votre quartier.' },
+  },
+  tracking: {
+    to_pickup: 'récupère votre commande',
+    awaiting_pickup: 'est au commerce',
+    to_dropoff: 'est en route vers vous',
+    delivered: 'a livré votre commande',
+  },
+  cartCta: 'Passer à la caisse — %{total}',
+  checkoutFailed: 'La commande n’a pas pu être enregistrée. Veuillez réessayer.',
+  manage: 'Gérer',
+  simulatedPayment: 'Paiement simulé — aucune transaction réelle.',
+  answered: 'Répondu',
+  feeFromLine: 'dès %{amount}',
+  nutrition: {
+    calories: 'Calories',
+    proteinG: 'Protéines',
+    fatG: 'Lipides',
+    weightG: 'Poids',
+  },
+  emptyStates: {
+    searchNoFilterMatch: 'Aucun produit ne correspond à vos filtres. Élargissez-les pour voir plus de résultats.',
+    searchTryAnotherWithCategory: 'Essayez un autre mot-clé ou retirez le filtre de catégorie.',
+    searchTryAnother: 'Essayez un autre mot-clé.',
+  },
+  pointsRules: {
+    earn: '1 $ d’achats éligibles (hors taxes, livraison et pourboire) = 1 point.',
+    expiry: 'Les points sont crédités après livraison et expirent %{months} mois après leur obtention.',
+  },
+  referShare:
+    'Rejoins-moi sur Sougouba et gagne %{points} points (%{amount}) sur ta première commande de %{minimum} $ et plus. Mon code : %{code} — %{link}',
+  cardRequired: 'Une carte est requise : Sougouba n’accepte pas le paiement à la livraison.',
+  themeDark: 'thème sombre',
+  themeLight: 'thème clair',
+  defaultCity: 'Montréal, QC',
+  favorite: {
+    add: 'Ajouter aux favoris',
+    remove: 'Retirer des favoris',
+  },
+  addToCartPrice: 'Ajouter au panier — %{price}',
+  orderNotFound: 'Commande introuvable',
+  fastDelivery: 'Livraison rapide',
+  keepCart: 'Garder mon panier',
+  sortBy: 'Trier par',
+  browseTruncated: 'Suggestions — %{count} produits, cherchez pour voir le reste',
+  confirmRemoveAddress: 'Supprimer cette adresse ?',
+  confirmRemoveCard: 'Retirer ce moyen de paiement ?',
+  vendorFilters: {
+    open: 'Ouvert',
+    halal: 'Halal',
+    fast: 'Livraison rapide',
+  },
+  checkout: {
+    title: 'Commande',
+    delivery: 'Livraison',
+    edit: 'Modifier',
+    shop: 'Commerce',
+    payment: 'Paiement',
+    addPayment: 'Ajouter un moyen de paiement',
+    pointsSection: 'Points Sougouba',
+    usePoints: 'Utiliser mes points',
+    usePointsA11y: 'Utiliser mes points Sougouba',
+    pointsAvailable:
+      '%{points} points disponibles — jusqu’à %{amount} de réduction sur cette commande.',
+    pointsTooFew: '%{points} points disponibles — pas encore assez pour une réduction sur ce panier.',
+    confirm: 'Confirmer — %{total}',
+  },
+  orderConfirmed: {
+    title: 'Commande confirmée',
+    bodyNamed: '%{vendor} prépare votre commande. Vous recevrez une notification à chaque étape.',
+    bodyGeneric: 'Votre commande est en préparation.',
+    orderNumber: 'Numéro de commande',
+    total: 'Total',
+    pointsUsed: 'Points utilisés',
+    estimatedDelivery: 'Livraison estimée',
+    track: 'Suivre ma commande',
+    home: 'Retour à l’accueil',
+  },
+  product: {
+    notFoundTitle: 'Produit introuvable',
+    notFoundBody: 'Ce produit n’est plus disponible ou le lien est expiré.',
+    details: 'Détails',
+    description: 'Description',
+    outOfStock: 'Épuisé',
+  },
+  vendor: {
+    notFoundTitle: 'Commerce introuvable',
+    notFoundBody: 'Ce commerce n’est plus référencé ou le lien est expiré.',
+    emptyCatalogTitle: 'Catalogue vide',
+    emptyCatalogBody: 'Ce commerce n’a pas encore ajouté de produits.',
+    halal: 'Halal',
+  },
+  vertical: {
+    listSummary: '%{shops} · les plus proches d’abord',
+  },
+  search: {
+    results: plural({
+      zero: 'Aucun résultat',
+      one: '%{count} résultat',
+      other: '%{count} résultats',
+    }),
+    /**
+     * The guillemets are the point. French quotes with « », English with " ".
+     * Baking them into JSX is the same class of bug as baking `$` into a price.
+     */
+    resultsForQuery: plural({
+      zero: 'Aucun résultat pour « %{query} »',
+      one: '%{count} résultat pour « %{query} »',
+      other: '%{count} résultats pour « %{query} »',
+    }),
+  },
+  notifications: {
+    /**
+     * Replaces `${n} type${n>1?'s':''} d'avis activé${n>1?'s':''}` — two spliced
+     * suffixes, one for the noun and one for French participle agreement. English
+     * additionally needs is/are, a third agreement the spliced version had no way
+     * to express. Whole sentences are the only form that can carry all three.
+     */
+    activeCount: plural({
+      zero: 'Toutes les notifications sont désactivées. Vous ne recevrez aucun avis de livraison.',
+      one: '%{count} type d’avis activé.',
+      other: '%{count} types d’avis activés.',
+    }),
+  },
+  refer: {
+    /**
+     * Two independent quantities in one sentence — friends and points. i18n-js
+     * resolves one `count` per message, so the points are formatted through
+     * `common.pointsCount` and interpolated here as an opaque string.
+     */
+    summary: plural({
+      zero: 'Aucun ami parrainé pour l’instant.',
+      one: '%{count} ami parrainé · %{points} gagnés grâce au parrainage.',
+      other: '%{count} amis parrainés · %{points} gagnés grâce au parrainage.',
+    }),
+  },
+  points: {
+    count: plural({ one: '%{count} point', other: '%{count} points' }),
+  },
+};

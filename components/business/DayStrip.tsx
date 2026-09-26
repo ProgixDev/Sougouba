@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { Reveal, Text } from '@/components/ui';
 import type { Order } from '@/data/types';
 import { positionInDay, type ShopDay } from '@/lib/shopHours';
+import { useT } from '@/lib/i18n/useT';
 import { forest, mustard } from '@/theme/tokens';
 
 export interface DayStripProps {
@@ -41,6 +42,7 @@ const ON_SLAB = {
  * specific to this shop on this day rather than a generic sparkline.
  */
 export function DayStrip({ day, orders, loading = false }: DayStripProps) {
+  const t = useT();
   if (day.closedToday) {
     return (
       <View className="gap-2">
@@ -48,7 +50,7 @@ export function DayStrip({ day, orders, loading = false }: DayStripProps) {
           <View style={{ height: TRACK_HEIGHT, borderRadius: TRACK_HEIGHT, backgroundColor: ON_SLAB.rule }} />
         </View>
         <Text variant="caption" style={{ color: ON_SLAB.label }} className="text-[11px]">
-          Boutique fermée aujourd’hui
+          {t('business.dashboard.shopClosedToday')}
         </Text>
       </View>
     );
@@ -129,13 +131,7 @@ export function DayStrip({ day, orders, loading = false }: DayStripProps) {
           {day.hours!.open}
         </Text>
         <Text variant="caption" style={{ color: ON_SLAB.label }} className="text-[11px]">
-          {loading
-            ? ' '
-            : plotted.length === 0
-              ? 'Aucune commande aujourd’hui'
-              : plotted.length === 1
-                ? '1 commande aujourd’hui'
-                : `${plotted.length} commandes aujourd’hui`}
+          {loading ? ' ' : t('business.dayStrip.orderCount', { count: plotted.length })}
         </Text>
         <Text variant="caption" style={{ color: ON_SLAB.label }} className="text-[11px]">
           {day.hours!.close}

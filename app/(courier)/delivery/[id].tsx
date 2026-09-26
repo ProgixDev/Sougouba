@@ -11,8 +11,9 @@ import type { Courier, Order, Vendor } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useDeliveryProgress } from '@/hooks/useDeliveryProgress';
 import { formatCad } from '@/lib/format';
+import { useT } from '@/lib/i18n/useT';
 import { formatDistance } from '@/lib/geo';
-import { courierActionLabel, nextStatusFor } from '@/lib/orderStatus';
+import { courierActionKey, nextStatusFor } from '@/lib/orderStatus';
 import { orderReference } from '@/lib/orderRef';
 import { dynamicRoutes } from '@/lib/routes';
 import { useDispatchStore } from '@/store/useDispatchStore';
@@ -28,6 +29,7 @@ import { useDispatchStore } from '@/store/useDispatchStore';
  * turn-by-turn engine. Mapbox draws the picture; Apple and Google own the voice.
  */
 export default function CourierDeliveryScreen() {
+  const t = useT();
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useThemeColors();
   const setActiveOrder = useDispatchStore((s) => s.setActiveOrder);
@@ -91,7 +93,8 @@ export default function CourierDeliveryScreen() {
     );
   }
 
-  const actionLabel = order ? courierActionLabel(order.status) : null;
+  const actionKey = order ? courierActionKey(order.status) : null;
+  const actionLabel = actionKey ? t(actionKey) : null;
   const towardsShop = progress?.phase === 'to_pickup' || progress?.phase === 'awaiting_pickup';
   const target = towardsShop ? vendor?.address : order?.deliveryAddress;
 
@@ -109,7 +112,7 @@ export default function CourierDeliveryScreen() {
           <EmptyState
             icon={Navigation}
             title="Course introuvable"
-            description="Cette course n’existe plus ou ne vous est pas attribuée."
+            description={t('courier.delivery.notFound')}
           />
         </View>
       ) : (
@@ -136,7 +139,7 @@ export default function CourierDeliveryScreen() {
                 icon={Store}
                 tint={colors.primary}
                 active={Boolean(towardsShop)}
-                title={vendor?.name ?? 'Commerce'}
+                title={vendor?.name ?? t('common.genericShop')}
                 lines={[vendor?.address.street ?? '', `${vendor?.address.city ?? ''}`]}
                 etaMin={towardsShop ? progress?.etaMin : undefined}
                 onNavigate={
@@ -169,7 +172,7 @@ export default function CourierDeliveryScreen() {
                   as on the proof screen so it can be checked before knocking. */}
               <View className="rounded-[20px] bg-card p-4 gap-1.5">
                 <Text variant="label" tone="muted" className="text-[10px]">
-                  Code de livraison
+                  {t('courier.delivery.codeTitle')}
                 </Text>
                 <Text
                   weight="bold"
@@ -179,13 +182,13 @@ export default function CourierDeliveryScreen() {
                   {order.delivery.pin}
                 </Text>
                 <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
-                  Le client vous le donne à la remise. Il figure aussi sur sa commande.
+                  {t('courier.delivery.codeHint')}
                 </Text>
               </View>
 
               <View className="rounded-[20px] bg-card p-4 gap-3">
                 <Text variant="label" tone="muted" className="text-[10px]">
-                  À récupérer
+                  {t('courier.delivery.toPickUp')}
                 </Text>
                 {order.items.map((item) => (
                   <View key={item.productId} className="flex-row items-baseline gap-3">
@@ -202,7 +205,7 @@ export default function CourierDeliveryScreen() {
               <View className="rounded-[20px] bg-card p-4 gap-2">
                 <View className="flex-row items-center justify-between">
                   <Text variant="caption" tone="muted" className="text-[13px]">
-                    Distance de livraison
+                    {t('courier.delivery.distance')}
                   </Text>
                   <Text variant="caption" weight="bold" className="text-[13px]">
                     {formatDistance(order.delivery.distanceKm)}
@@ -219,7 +222,7 @@ export default function CourierDeliveryScreen() {
                 <View className="h-px bg-border my-0.5" />
                 <View className="flex-row items-center justify-between">
                   <Text variant="caption" weight="bold" className="text-[14px]">
-                    Votre gain
+                    {t('courier.delivery.yourEarnings')}
                   </Text>
                   <Text weight="bold" className="text-[17px]">
                     {formatCad(order.delivery.earningsCad)}
@@ -236,7 +239,7 @@ export default function CourierDeliveryScreen() {
               >
                 <TriangleAlert size={16} color={colors.mutedForeground} strokeWidth={2} />
                 <Text variant="caption" tone="muted" className="flex-1 text-[13px]">
-                  Signaler un problème avec cette course
+                  {t('courier.delivery.reportProblem')}
                 </Text>
               </Pressable>
             </View>
@@ -283,6 +286,7 @@ function Stop({
   etaMin?: number;
   onNavigate?: () => void;
 }) {
+  const t = useT();
   return (
     <View className="flex-row items-start gap-3" style={{ opacity: active ? 1 : 0.55 }}>
       <View
@@ -316,7 +320,7 @@ function Stop({
       {onNavigate ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Naviguer vers ${title}`}
+          accessibilityLabel={t('common.a11y.navigateTo', { name: title })}
           onPress={onNavigate}
           className="w-10 h-10 rounded-full items-center justify-center bg-muted active:opacity-70"
         >

@@ -1,4 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import { Link } from 'expo-router';
 import { Lock, Mail } from 'lucide-react-native';
 import { useState } from 'react';
@@ -10,9 +9,12 @@ import { BackHeader, Button, Input, Text } from '@/components/ui';
 import { authApi } from '@/data/api';
 import { AuthError } from '@/data/api/auth';
 import { type SignInValues, signInSchema } from '@/lib/validation/auth';
+import { useT } from '@/lib/i18n/useT';
+import { i18nResolver } from '@/lib/validation/resolver';
 import { useSessionStore } from '@/store/useSessionStore';
 
 export default function SignInScreen() {
+  const t = useT();
   const signIn = useSessionStore((s) => s.signIn);
   const [formError, setFormError] = useState<string | null>(null);
   const [oauthLoading, setOauthLoading] = useState<'google' | 'apple' | null>(null);
@@ -22,7 +24,7 @@ export default function SignInScreen() {
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<SignInValues>({
-    resolver: zodResolver(signInSchema),
+    resolver: i18nResolver(t, signInSchema),
     // Without these, RHF hands `undefined` to TextInput and the field flips
     // from uncontrolled to controlled on the first keystroke.
     defaultValues: { email: '', password: '' },
@@ -31,10 +33,12 @@ export default function SignInScreen() {
   async function onSubmit(values: SignInValues) {
     setFormError(null);
     try {
-      const user = await authApi.mockSignIn(values.email, values.password);
+      const user = await authApi.signIn(values.email, values.password);
       signIn(user);
     } catch (e) {
-      setFormError(e instanceof AuthError ? e.message : 'Une erreur est survenue.');
+      setFormError(
+        e instanceof AuthError ? t(`auth.error.${e.code}`) : t('common.genericError')
+      );
     }
   }
 
@@ -42,10 +46,12 @@ export default function SignInScreen() {
     setFormError(null);
     setOauthLoading(provider);
     try {
-      const user = await authApi.mockOAuthContinue(provider);
+      const user = await authApi.oauthContinue(provider);
       signIn(user);
     } catch (e) {
-      setFormError(e instanceof AuthError ? e.message : 'Une erreur est survenue.');
+      setFormError(
+        e instanceof AuthError ? t(`auth.error.${e.code}`) : t('common.genericError')
+      );
     } finally {
       setOauthLoading(null);
     }
@@ -58,10 +64,10 @@ export default function SignInScreen() {
         <ScrollView contentContainerClassName="px-6 pt-4 pb-10 gap-6" keyboardShouldPersistTaps="handled">
           <View className="gap-2">
             <Text variant="title" weight="bold">
-              Content de vous revoir
+              {t('auth.signIn.title')}
             </Text>
             <Text variant="body" tone="muted">
-              Connectez-vous pour continuer vos commandes.
+              {t('auth.signIn.body')}
             </Text>
           </View>
 
@@ -71,7 +77,7 @@ export default function SignInScreen() {
               name="email"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Adresse courriel"
+                  label={t('auth.field.email')}
                   icon={Mail}
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -89,7 +95,7 @@ export default function SignInScreen() {
               name="password"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Mot de passe"
+                  label={t('auth.field.password')}
                   icon={Lock}
                   isPassword
                   autoComplete="password"
@@ -103,7 +109,7 @@ export default function SignInScreen() {
             />
             <Link href="/(auth)/forgot-password" asChild>
               <Text variant="caption" weight="semibold" tone="primary" className="self-end">
-                Mot de passe oublié ?
+                {t('auth.signIn.forgot')}
               </Text>
             </Link>
           </View>
@@ -114,19 +120,19 @@ export default function SignInScreen() {
             </Text>
           ) : null}
 
-          <Button label="Se connecter" variant="primary" size="lg" fullWidth loading={isSubmitting} onPress={handleSubmit(onSubmit)} />
+          <Button label={t('auth.signIn.submit')} variant="primary" size="lg" fullWidth loading={isSubmitting} onPress={handleSubmit(onSubmit)} />
 
           <View className="flex-row items-center gap-3">
             <View className="flex-1 h-px bg-border" />
             <Text variant="caption" tone="muted">
-              ou
+              {t('auth.or')}
             </Text>
             <View className="flex-1 h-px bg-border" />
           </View>
 
           <View className="gap-3">
             <Button
-              label="Continuer avec Google"
+              label={t('auth.oauth.google')}
               variant="outline"
               size="lg"
               fullWidth
@@ -134,7 +140,7 @@ export default function SignInScreen() {
               onPress={() => continueWithOAuth('google')}
             />
             <Button
-              label="Continuer avec Apple"
+              label={t('auth.oauth.apple')}
               variant="outline"
               size="lg"
               fullWidth
@@ -145,11 +151,11 @@ export default function SignInScreen() {
 
           <View className="flex-row items-center justify-center gap-1.5 mt-2">
             <Text variant="caption" tone="muted">
-              Pas encore de compte ?
+              {t('auth.signIn.noAccount')}
             </Text>
             <Link href="/(auth)/sign-up" asChild>
               <Text variant="caption" weight="bold" tone="primary">
-                Créer un compte
+                {t('auth.signUp.submit')}
               </Text>
             </Link>
           </View>

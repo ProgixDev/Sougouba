@@ -6,14 +6,15 @@ import Animated, { useAnimatedStyle, useDerivedValue, withSpring } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { OnboardingSlide } from '@/components/onboarding';
+import { useT } from '@/lib/i18n/useT';
 import { Button, Text } from '@/components/ui';
 import { onboardingImages } from '@/lib/onboardingImages';
 import { routes } from '@/lib/routes';
 
 interface Slide {
+  /** Also the catalogue key: the words are `onboarding.slides.<key>.*`. */
+  key: 'market' | 'spices' | 'table' | 'shopping';
   photo: ImageSourcePropType;
-  title: string;
-  description: string;
 }
 
 /**
@@ -28,39 +29,20 @@ interface Slide {
  * vendor list, wrong as the first thing a brand says about itself.
  */
 const slides: Slide[] = [
-  {
-    photo: onboardingImages.market,
-    title: 'Les épiceries d’ici,\nenfin réunies',
-    description:
-      'Commerces africains et maghrébins de Montréal, Montréal-Nord, Laval et Longueuil, réunis dans une seule application.',
-  },
-  {
-    photo: onboardingImages.spices,
-    title: 'Ce qu’on ne trouve\npas ailleurs',
-    description:
-      'Ras el hanout, attiéké, bissap, agneau halal, fonio : les rayons de dix commerces, au complet.',
-  },
-  {
-    photo: onboardingImages.table,
-    title: 'Commandez,\nsuivez, recevez',
-    description:
-      'De la préparation à votre porte, chaque étape de votre commande s’affiche en direct.',
-  },
-  {
-    photo: onboardingImages.shopping,
-    // "Gardées au chaud" belonged to the old photograph, which was a glass of
-    // tea; against a market stall the metaphor no longer lands. The slide is
-    // about repeating your usual shop, so the copy now says that plainly.
-    title: 'Votre panier habituel,\nen deux gestes',
-    description:
-      'Vos favoris et vos commandes passées restent à portée — pas besoin de tout rechercher.',
-  },
+  { key: 'market', photo: onboardingImages.market },
+  { key: 'spices', photo: onboardingImages.spices },
+  { key: 'table', photo: onboardingImages.table },
+  // "Gardées au chaud" belonged to the old photograph, which was a glass of
+  // tea; against a market stall the metaphor no longer lands. The slide is
+  // about repeating your usual shop, so the copy now says that plainly.
+  { key: 'shopping', photo: onboardingImages.shopping },
 ];
 
 /** Height the pinned controls occupy, so slide copy never runs under them. */
 const CONTROLS_HEIGHT = 132;
 
 export default function OnboardingScreen() {
+  const t = useT();
   const insets = useSafeAreaInsets();
   const [page, setPage] = useState(0);
   const pagerRef = useRef<PagerView>(null);
@@ -93,11 +75,11 @@ export default function OnboardingScreen() {
       >
         {slides.map((slide, index) => (
           <OnboardingSlide
-            key={index}
+            key={slide.key}
             index={index}
             photo={slide.photo}
-            title={slide.title}
-            description={slide.description}
+            title={t(`onboarding.slides.${slide.key}.title`)}
+            description={t(`onboarding.slides.${slide.key}.body`)}
             active={page === index}
             bottomInset={CONTROLS_HEIGHT + insets.bottom}
           />
@@ -112,7 +94,7 @@ export default function OnboardingScreen() {
         style={{ top: insets.top + 6 }}
       >
         <Text variant="caption" weight="semibold" className="text-white/80">
-          Passer
+          {t('onboarding.skip')}
         </Text>
       </Pressable>
 
@@ -128,7 +110,7 @@ export default function OnboardingScreen() {
         </View>
 
         <Button
-          label={isLast ? 'Commencer' : 'Suivant'}
+          label={isLast ? t('onboarding.start') : t('onboarding.next')}
           variant="cta"
           size="lg"
           fullWidth

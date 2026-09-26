@@ -23,8 +23,8 @@ import { DEMO_TIME_SCALE, buildLeg, etaMinutes, positionAlong, progressAt, split
 import { OFFER_TIMEOUT_MS, isOfferExpired, offerRemainingMs, rankCouriers } from '../lib/dispatch';
 import { couriers as seedCouriers } from '../data/seed/couriers';
 import {
-  advanceActionLabel,
-  courierActionLabel,
+  advanceActionKey,
+  courierActionKey,
   isActiveStatus,
   nextStatus,
   nextStatusFor,
@@ -87,6 +87,32 @@ if (ok.success) {
 const comma = productSchema.safeParse({ ...base, priceCad: '4,50' });
 check('French decimal comma accepted', comma.success && comma.data.priceCad === 4.5);
 
+/**
+ * Price parsing across keyboards. The old parser replaced only the first comma,
+ * so "1,250" became 1.25 — a $1,250 product saved at $1.25, silently. These pin
+ * every shape a French or English keyboard can produce, and pin the rejections
+ * too: a malformed "1.2.3" used to strip down to a plausible 12.3.
+ */
+const priceOf = (raw: string): number | null => {
+  const parsed = productSchema.safeParse({ ...base, priceCad: raw });
+  return parsed.success ? parsed.data.priceCad : null;
+};
+for (const [raw, want] of [
+  ['12.99', 12.99],
+  ['1 250', 1250],
+  ['1,250.50', 1250.5],
+  ['1 250,50', 1250.5],
+  ['1.250,50', 1250.5],
+  ['1,234,567.89', 1234567.89],
+] as const) {
+  check(`price "${raw}" → ${want}`, priceOf(raw) === want, String(priceOf(raw)));
+}
+// The one ambiguous shape: French reads 1.25, English 1250. Resolved as
+// grouping — a price with three decimal places is not a thing a merchant types.
+check('English thousands not read as a decimal', priceOf('1,250') === 1250, String(priceOf('1,250')));
+check('double separator rejected', priceOf('1.2.3') === null);
+check('malformed grouping rejected', priceOf('1,25,50') === null);
+
 check('blank price rejected', !productSchema.safeParse({ ...base, priceCad: '' }).success);
 check('zero price rejected', !productSchema.safeParse({ ...base, priceCad: '0' }).success);
 check('zero stock allowed', productSchema.safeParse({ ...base, stockQty: '0' }).success);
@@ -129,8 +155,10 @@ check('tags parsed + deduped', JSON.stringify(parseTags(' Bio , frais,bio, ')) =
 check('pending advances to confirmed', nextStatus('pending') === 'confirmed');
 check('delivered is terminal', nextStatus('delivered') === null);
 check('cancelled is off the happy path', nextStatus('cancelled') === null);
-check('delivered has no advance label', advanceActionLabel('delivered') === null);
-check('pending has an advance label', Boolean(advanceActionLabel('pending')));
+// Structure, not copy: these assert *whether* an actor gets a button, which is
+// what the checks always meant. The wording moved to `domain.orderAdvance.*`.
+check('delivered has no advance action', advanceActionKey('delivered') === null);
+check('pending has an advance action', Boolean(advanceActionKey('pending')));
 check('delivered is not active', !isActiveStatus('delivered'));
 check('cancelled is not active', !isActiveStatus('cancelled'));
 check('preparing is active', isActiveStatus('preparing'));
@@ -157,8 +185,8 @@ for (const status of orderProgression) {
     }
   }
 }
-check("the courier has a label where they have a move", Boolean(courierActionLabel('ready')));
-check("no courier label where they have no move", courierActionLabel('pending') === null);
+check('the courier has an action where they have a move', Boolean(courierActionKey('ready')));
+check('no courier action where they have no move', courierActionKey('pending') === null);
 
 // ── delivery pay and timing ──────────────────────────────────────────────────
 // Recomputed from the rates, not through the helper, so the assertion fails if

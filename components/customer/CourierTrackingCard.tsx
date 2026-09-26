@@ -2,6 +2,7 @@ import { Bike, Car, MessageSquare, Motorbike, Phone, Star } from 'lucide-react-n
 import { Linking, Pressable, View } from 'react-native';
 
 import { Avatar, Text } from '@/components/ui';
+import { useT } from '@/lib/i18n/useT';
 import type { Courier, VehicleType } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import type { DeliveryPhase } from '@/hooks/useDeliveryProgress';
@@ -21,12 +22,7 @@ const VEHICLE_ICONS: Record<VehicleType, typeof Bike> = {
   car: Car,
 };
 
-const PHASE_COPY: Record<DeliveryPhase, string> = {
-  to_pickup: 'récupère votre commande',
-  awaiting_pickup: 'est au commerce',
-  to_dropoff: 'est en route vers vous',
-  delivered: 'a livré votre commande',
-};
+
 
 /**
  * Who is bringing the order, and when.
@@ -39,6 +35,7 @@ const PHASE_COPY: Record<DeliveryPhase, string> = {
  * someone waits outside is the failure this whole surface exists to prevent.
  */
 export function CourierTrackingCard({ courier, phase, etaMin, pin }: CourierTrackingCardProps) {
+  const t = useT();
   const colors = useThemeColors();
   const VehicleIcon = VEHICLE_ICONS[courier.vehicle];
   const rated = courier.deliveryCount > 0 && courier.rating > 0;
@@ -65,7 +62,7 @@ export function CourierTrackingCard({ courier, phase, etaMin, pin }: CourierTrac
             <View className="flex-row items-center gap-1">
               <VehicleIcon size={12} color={colors.mutedForeground} strokeWidth={2} />
               <Text variant="caption" tone="muted" className="text-[12px]" numberOfLines={1}>
-                {PHASE_COPY[phase]}
+                {t(`customer.tracking.${phase}`)}
               </Text>
             </View>
           </View>
@@ -100,7 +97,7 @@ export function CourierTrackingCard({ courier, phase, etaMin, pin }: CourierTrac
 
       <View className="rounded-2xl bg-muted p-3.5 gap-1">
         <Text variant="label" tone="muted" className="text-[10px]">
-          Code de livraison
+          {t('customer.orderDetail.deliveryCode')}
         </Text>
         <Text
           weight="bold"

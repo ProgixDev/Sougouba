@@ -7,7 +7,9 @@ import type { Order, Vendor } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import type { DeliveryProgress } from '@/hooks/useDeliveryProgress';
 import { formatCad } from '@/lib/format';
-import { courierActionLabel } from '@/lib/orderStatus';
+import type { MessageKey } from '@/lib/i18n';
+import { useT } from '@/lib/i18n/useT';
+import { courierActionKey } from '@/lib/orderStatus';
 
 export interface MissionSheetProps {
   order: Order;
@@ -18,11 +20,12 @@ export interface MissionSheetProps {
   advancing?: boolean;
 }
 
-const PHASE_COPY: Record<DeliveryProgress['phase'], string> = {
-  to_pickup: 'En route vers le commerce',
-  awaiting_pickup: 'Sur place — récupérez la commande',
-  to_dropoff: 'En route vers le client',
-  delivered: 'Livrée',
+/** Keys, not sentences — this is module scope. See `courier.missionPhase.*`. */
+const PHASE_KEYS: Record<DeliveryProgress['phase'], MessageKey> = {
+  to_pickup: 'courier.missionPhase.to_pickup',
+  awaiting_pickup: 'courier.missionPhase.awaiting_pickup',
+  to_dropoff: 'courier.missionPhase.to_dropoff',
+  delivered: 'courier.missionPhase.delivered',
 };
 
 /**
@@ -43,9 +46,15 @@ export function MissionSheet({
   onAdvance,
   advancing = false,
 }: MissionSheetProps) {
+  const t = useT();
   const colors = useThemeColors();
-  const actionLabel = courierActionLabel(order.status);
-  const heading = progress ? PHASE_COPY[progress.phase] : 'Course acceptée';
+  const actionKey = courierActionKey(order.status);
+  const actionLabel = actionKey ? t(actionKey) : null;
+  // Both branches resolve to a rendered string. An earlier pass left one of them
+  // holding the raw key, which renders the dotted path on the courier's screen.
+  const heading = progress
+    ? t(PHASE_KEYS[progress.phase])
+    : t('courier.mission.accepted');
   const towardsShop = progress?.phase === 'to_pickup' || progress?.phase === 'awaiting_pickup';
 
   return (
@@ -91,7 +100,7 @@ export function MissionSheet({
           </View>
           <View className="flex-1 gap-0.5">
             <Text variant="caption" weight="bold" numberOfLines={1} className="text-[15px]">
-              {towardsShop ? (vendor?.name ?? 'Commerce') : order.deliveryAddress.street}
+              {towardsShop ? (vendor?.name ?? t('common.genericShop')) : order.deliveryAddress.street}
             </Text>
             <Text variant="caption" tone="muted" className="text-[12px]">
               {towardsShop

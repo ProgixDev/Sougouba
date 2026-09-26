@@ -4,6 +4,7 @@ import { Modal, Pressable, View } from 'react-native';
 import { MotiView } from 'moti';
 
 import { Button, Text } from '@/components/ui';
+import { useT } from '@/lib/i18n/useT';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { vendorsApi } from '@/data/api';
 import { useCartStore } from '@/store/useCartStore';
@@ -18,6 +19,7 @@ import { useCartStore } from '@/store/useCartStore';
  * add-to-cart surface is covered.
  */
 export function VendorSwitchDialog() {
+  const t = useT();
   const colors = useThemeColors();
   const pendingItem = useCartStore((s) => s.pendingItem);
   const currentVendorId = useCartStore((s) => s.vendorId);
@@ -63,25 +65,25 @@ export function VendorSwitchDialog() {
 
             <View className="gap-2">
               <Text variant="subtitle" weight="bold">
-                Vider votre panier ?
+                {t('customer.misc.emptyCartTitle')}
               </Text>
               <Text variant="body" tone="muted">
                 {names.current && names.next
-                  ? `Votre panier contient des articles de ${names.current}. Pour commander chez ${names.next}, nous devons le vider.`
-                  : 'Votre panier contient des articles d’un autre commerce. Pour continuer, nous devons le vider.'}
+                  ? t('customer.cart.switchVendor.bodyNamed', { current: names.current, next: names.next })
+                  : t('customer.cart.switchVendor.bodyGeneric')}
               </Text>
             </View>
 
             <View className="gap-2 mt-1">
               <Button
-                label="Vider et continuer"
+                label={t('customer.misc.emptyAndContinue')}
                 variant="primary"
                 size="lg"
                 fullWidth
                 onPress={() => resolveVendorSwitch(true)}
               />
               <Button
-                label="Garder mon panier"
+                label={t('customer.keepCart')}
                 variant="ghost"
                 size="lg"
                 fullWidth

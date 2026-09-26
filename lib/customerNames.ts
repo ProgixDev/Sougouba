@@ -19,9 +19,11 @@ export const customerNameById: Record<string, string> = Object.fromEntries(
  * What the shop should call the person who placed an order.
  *
  * Orders written by the app carry the name they were placed under; seeded ones
- * resolve through the table above. The generic label is the last resort, and
- * should now only appear for an order predating this field.
+ * resolve through the table above. `null` means there is no real name to show —
+ * the screen supplies `t('common.genericCustomer')`, because the fallback is
+ * copy and this module deals in data. It should now only appear for an order
+ * predating this field.
  */
-export function customerLabel(order: Order): string {
-  return order.customerName ?? customerNameById[order.customerId] ?? 'Client Sougouba';
+export function customerName(order: Order): string | null {
+  return order.customerName ?? customerNameById[order.customerId] ?? null;
 }

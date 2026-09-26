@@ -16,11 +16,13 @@ import {
 import type { LoyaltyTransaction } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { formatCad, formatDate, formatMonthYear } from '@/lib/format';
-import { formatPoints, loyaltyReasonLabel } from '@/lib/loyalty';
+import { useT } from '@/lib/i18n/useT';
+import { formatPoints, loyaltyReasonKey } from '@/lib/loyalty';
 import { routes } from '@/lib/routes';
 import { useSessionStore } from '@/store/useSessionStore';
 
 export default function PointsScreen() {
+  const t = useT();
   const colors = useThemeColors();
   const user = useSessionStore((s) => s.user);
   const [balance, setBalance] = useState(0);
@@ -50,7 +52,7 @@ export default function PointsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <BackHeader title="Mes points" />
+      <BackHeader title={t('customer.account.points.title')} />
 
       {loading ? (
         <View className="px-5 pt-2 gap-3">
@@ -69,7 +71,7 @@ export default function PointsScreen() {
                   <Sparkles size={17} color={colors.primary} strokeWidth={2} />
                 </View>
                 <Text variant="label" tone="muted">
-                  Solde Points Sougouba
+                  {t('customer.account.points.balance')}
                 </Text>
               </View>
               <View className="gap-0.5">
@@ -95,7 +97,7 @@ export default function PointsScreen() {
               </View>
               <View className="flex-1">
                 <Text variant="caption" weight="bold" tone="primary">
-                  Parrainer un proche
+                  {t('customer.account.points.refer')}
                 </Text>
                 <Text variant="caption" tone="muted" className="text-[12px]">
                   300 points pour vous, 300 points pour votre ami.
@@ -106,7 +108,7 @@ export default function PointsScreen() {
 
           <Reveal delay={100}>
             <View className="rounded-[20px] bg-card overflow-hidden">
-              <RuleRow icon={Coins} text="1 $ d’achats éligibles (hors taxes, livraison et pourboire) = 1 point." />
+              <RuleRow icon={Coins} text={t('customer.pointsRules.earn')} />
               <View className="h-px bg-border ml-16" />
               <RuleRow
                 icon={Percent}
@@ -115,20 +117,20 @@ export default function PointsScreen() {
                 )} % du sous-total d’une commande.`}
               />
               <View className="h-px bg-border ml-16" />
-              <RuleRow icon={Clock} text={`Les points sont crédités après livraison et expirent ${POINTS_EXPIRY_MONTHS} mois après leur obtention.`} />
+              <RuleRow icon={Clock} text={t('customer.pointsRules.expiry', { months: POINTS_EXPIRY_MONTHS })} />
             </View>
           </Reveal>
 
           <View className="gap-3">
             <Text variant="label" tone="muted" className="px-1">
-              Historique
+              {t('customer.account.points.history')}
             </Text>
             {history.length === 0 ? (
               <View className="rounded-[20px] bg-card">
                 <EmptyState
                   icon={Sparkles}
-                  title="Aucun mouvement pour l’instant"
-                  description="Vos points apparaissent ici dès qu’une commande est livrée."
+                  title={t('customer.account.points.emptyTitle')}
+                  description={t('customer.account.points.emptyBody')}
                 />
               </View>
             ) : (
@@ -139,7 +141,7 @@ export default function PointsScreen() {
                     <View className="flex-row items-center gap-3 p-4">
                       <View className="flex-1 gap-0.5">
                         <Text variant="caption" weight="semibold">
-                          {loyaltyReasonLabel[tx.reason]}
+                          {t(loyaltyReasonKey(tx.reason))}
                         </Text>
                         <Text variant="caption" tone="muted" className="text-[12px]">
                           {formatDate(tx.createdAt)}

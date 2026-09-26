@@ -2,6 +2,7 @@ import { Truck } from 'lucide-react-native';
 import { View } from 'react-native';
 
 import { Text } from '@/components/ui';
+import { useT } from '@/lib/i18n/useT';
 import { DELIVERY_TIERS } from '@/data/deliveryPricing';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { formatCad } from '@/lib/format';
@@ -16,6 +17,7 @@ import { formatCad } from '@/lib/format';
  * drift.
  */
 export function DeliveryGrid() {
+  const t = useT();
   const colors = useThemeColors();
 
   return (
@@ -23,13 +25,12 @@ export function DeliveryGrid() {
       <View className="flex-row items-center gap-2">
         <Truck size={15} color={colors.mutedForeground} strokeWidth={2} />
         <Text variant="label" tone="muted">
-          Frais de livraison
+          {t('business.deliveryGrid.title')}
         </Text>
       </View>
 
       <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
-        Fixés par Sougouba selon la distance jusqu’au client, et payés par lui en plus du
-        total. Vous n’avez rien à saisir.
+                {t('business.deliveryGrid.body')}
       </Text>
 
       <View className="rounded-xl bg-muted px-3 py-2">

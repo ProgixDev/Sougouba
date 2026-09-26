@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useCartStore } from '@/store/useCartStore';
 import { useDispatchStore } from '@/store/useDispatchStore';
 import { useFavoritesStore } from '@/store/useFavoritesStore';
+import { useLanguageStore } from '@/store/useLanguageStore';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 import { useSessionStore } from '@/store/useSessionStore';
 import { useThemeStore } from '@/store/useThemeStore';
@@ -18,6 +19,10 @@ const HYDRATION_TIMEOUT_MS = 3000;
 const persistedStores = [
   useSessionStore,
   useThemeStore,
+  // Gated for the same reason as the theme: the first frame must not be painted
+  // in French for someone who pinned English. The device default is synchronous,
+  // but an override lives in AsyncStorage and has to land first.
+  useLanguageStore,
   useCartStore,
   useFavoritesStore,
   usePreferencesStore,

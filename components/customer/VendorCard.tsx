@@ -6,6 +6,8 @@ import { useThemeColors } from '@/hooks/useColorScheme';
 import { MIN_DELIVERY_FEE_CAD, deliveryFeeFor } from '@/data/deliveryPricing';
 import type { Vendor } from '@/data/types';
 import { formatCad } from '@/lib/format';
+import { useLocalized } from '@/lib/localized';
+import { useT } from '@/lib/i18n/useT';
 import { formatDistance } from '@/lib/geo';
 import { shopDay, shopStatusLine } from '@/lib/shopHours';
 import { shadows } from '@/theme/shadows';
@@ -38,6 +40,8 @@ export function VendorCard({
   width,
   distanceKm,
 }: VendorCardProps) {
+  const t = useT();
+  const L = useLocalized();
   const colors = useThemeColors();
   const row = layout === 'row';
   const day = shopDay(vendor);
@@ -45,7 +49,10 @@ export function VendorCard({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${vendor.name}, ${vendor.specialtyFr}${day.isOpen ? '' : ', fermé'}`}
+      accessibilityLabel={t(day.isOpen ? 'customer.vendorCard.a11y' : 'customer.vendorCard.a11yClosed', {
+        name: vendor.name,
+        specialty: L(vendor.specialty),
+      })}
       onPress={onPress}
       style={[shadows.card, width ? { width } : null]}
       className="rounded-[20px] bg-card p-3"
@@ -63,7 +70,7 @@ export function VendorCard({
             style={{ backgroundColor: 'rgba(12,10,8,0.55)' }}
           >
             <Text variant="caption" weight="bold" className="text-[13px] text-white">
-              {shopStatusLine(day)}
+              {t(shopStatusLine(day))}
             </Text>
           </View>
         )}
@@ -90,7 +97,7 @@ export function VendorCard({
         {/* What the shop sells, then where it is. The CDC asks the list for a
             "type de cuisine"; a neighbourhood alone never answered that. */}
         <Text variant="caption" tone="muted" numberOfLines={1} className="text-[12px]">
-          {vendor.specialtyFr} · {vendor.neighborhood}
+          {L(vendor.specialty)} · {vendor.neighborhood}
         </Text>
 
         <View className="flex-row items-center gap-2 mt-0.5">
@@ -107,7 +114,7 @@ export function VendorCard({
               promise the grid always keeps. */}
           <Text variant="caption" tone="muted" className="text-[12px]">
             {distanceKm === undefined
-              ? `dès ${formatCad(MIN_DELIVERY_FEE_CAD)}`
+              ? t('customer.feeFromLine', { amount: formatCad(MIN_DELIVERY_FEE_CAD) })
               : formatCad(deliveryFeeFor(distanceKm))}
           </Text>
           {vendor.isHalalCertified ? (

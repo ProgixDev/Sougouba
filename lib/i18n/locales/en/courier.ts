@@ -1,0 +1,178 @@
+import type { Widen } from '../../types';
+import type { courier as reference } from '../fr/courier';
+import { plural } from '../plural';
+
+export const courier: Widen<typeof reference> = {
+  tabs: {
+    missions: 'Missions',
+    history: 'Runs',
+    earnings: 'Earnings',
+    profile: 'Profile',
+  },
+  earningsScreen: {
+    title: 'Your earnings',
+    collected: 'Collected',
+    emptyTitle: 'Nothing in this period',
+    payoutNote:
+      'This week’s earnings are deposited on Friday to the account on file. Tips are yours in full.',
+  },
+  historyScreen: {
+    title: 'Your runs',
+    delivered: 'Delivered',
+    emptyTitle: 'No runs yet',
+    emptyBody: 'Your completed deliveries will show here.',
+  },
+  profile: {
+    roleLabel: 'Sougouba courier',
+    approved: 'File approved',
+    phone: 'Phone',
+    yourFile: 'Your file',
+    yourPay: 'Your pay',
+    lifetimeEarnings: 'Lifetime earnings',
+    signOut: 'Sign out',
+  },
+  delivery: {
+    notFound: 'This run no longer exists, or it is not assigned to you.',
+    codeTitle: 'Delivery code',
+    codeHint: 'The customer gives it to you on handover. It is also on their order.',
+    toPickUp: 'To pick up',
+    distance: 'Delivery distance',
+    yourEarnings: 'Your earnings',
+    reportProblem: 'Report a problem with this run',
+    reported: 'Reported',
+  },
+  proof: {
+    title: 'Confirm delivery',
+    takePhoto: 'Take a photo',
+    retakePhoto: 'Retake the photo',
+    tapToShoot: 'Tap to take a photo',
+  },
+  report: {
+    title: 'Report a problem',
+    whatHappened: 'What happened',
+    submit: 'Send the report',
+    note: 'Your report goes to Sougouba. The run stays open — you still have the order.',
+  },
+  gate: {
+    approve: 'Simulate approval',
+    approveBody: 'Approves your file, as an administrator would.',
+    demoLabel: 'Demonstration',
+    pendingBody:
+      'Review usually takes one business day. You will get a notification as soon as your file is approved.',
+  },
+  signup: {
+    confirmed: 'File sent',
+    note: 'These details go to Sougouba for review. Nothing is published.',
+  },
+  signupForm: {
+    phone: 'Phone',
+    cityHint: 'The cities where Sougouba has runs today.',
+    postalHint: 'Must match the city you chose. Used to offer you runs near where you live.',
+    howDoYouDeliver: 'How do you deliver?',
+    plate: 'Licence plate',
+    licence: 'Driving licence number',
+    vehicleInsurance: 'Vehicle insurance',
+    insurer: 'Insurance company',
+    policy: 'Policy number',
+    expiry: 'Expiry (MM/YYYY)',
+    insuranceNote: 'Proof of insurance will be requested during review.',
+    bikeNote:
+      'No vehicle documents are needed to deliver by bike. Photo ID will be requested during review.',
+    bankName: 'Bank name',
+    chooseBank: 'Choose your bank',
+    bankOther: 'Your bank’s name',
+    account: 'Account number',
+    payoutNote: 'Your earnings are paid by direct deposit. These details stay visible to you alone.',
+  },
+  signupSteps: {
+    identity: 'You and your city',
+    vehicle: 'Your vehicle',
+    payout: 'Your payouts',
+  },
+  missionPhase: {
+    to_pickup: 'On the way to the shop',
+    awaiting_pickup: 'On site — collect the order',
+    to_dropoff: 'On the way to the customer',
+    delivered: 'Delivered',
+  },
+  proofSteps: {
+    code: 'The customer gives you their 4-digit code.',
+    photo: 'Photograph the order where you leave it.',
+    signature: 'Have the customer sign on the screen.',
+    signatureCaptured: 'Signature captured on delivery',
+  },
+  reportErrors: {
+    describe: 'Briefly describe what happened.',
+    failed: 'Could not report. A problem may already have been reported.',
+  },
+  sendFailed: 'Could not send. Please try again.',
+  insuranceLine: '%{insurer} — expires %{expiry}',
+  perKm: '%{amount} per kilometre',
+  mapPreview: 'Route preview — the map activates with the Mapbox key.',
+  perRun: 'Per run',
+  baseFarePerRun: '%{amount} per run',
+  allYours: '100% yours',
+  noRunsToday: 'no runs today',
+  bestDay: 'best day · %{label}',
+  tipAmount: '%{amount} tip',
+  wrongCode: 'Wrong code. Ask the customer for it.',
+  yourBank: 'Your bank',
+  ranges: {
+    today: 'Today',
+    week: '7 days',
+    month: '30 days',
+  },
+  missions: {
+    waiting: 'Waiting for a run',
+    offline: 'You are offline',
+    waitingBody: 'We will offer you the next order ready near you.',
+    offlineBody: 'Go online to start receiving run offers.',
+  },
+  gateCopy: {
+    completeBody: 'A few details are still missing before you can deliver: your contact details, your vehicle and your documents.',
+    pendingTitle: 'File pending',
+    completeTitle: 'Complete your file',
+    pendingBody:
+      'Your file has been submitted. A Sougouba administrator must approve it before you can receive runs.',
+  },
+  earningsEmpty: {
+    lifetime: 'You have collected %{amount} since you started. Go online to add to that total.',
+    body: 'Your earnings will show here after your first delivered run.',
+  },
+  reportState: {
+    alreadyTitle: 'Already reported',
+    nothingTitle: 'Nothing to report',
+    alreadyBody: 'A problem has already been reported on this run. Sougouba will get back to you.',
+    nothingBody: 'This run is finished — there is nothing left to unblock.',
+    notFoundTitle: 'Run not found',
+  },
+  signupConfirmed: {
+    body: 'Your courier application has gone for review. Thank you — we will come back to you shortly.',
+    body3: 'While the file is pending, you will not receive any offers.',
+    back: 'Back to missions',
+    body1: 'A Sougouba administrator checks your licence, your insurance and your bank details.',
+    body2: 'Once approved, runs near you start appearing.',
+  },
+  mission: {
+    onSite: 'On site — collect the order',
+    delivered: 'Delivered',
+    accepted: 'Run accepted',
+    yourVehicle: 'Your vehicle',
+  },
+  runCount: plural({ zero: 'no runs', one: '%{count} run', other: '%{count} runs' }),
+  history: {
+    runsWithDistance: '%{runs} · %{distance}',
+  },
+  earnings: {
+    vsPrevious: plural({ one: 'Vs yesterday', other: 'Vs the previous %{count} days' }),
+    vsPreviousShort: plural({ one: 'vs yesterday', other: 'vs %{count}d prev.' }),
+    noComparisonYesterday: 'nothing yesterday',
+    noComparisonPeriod: 'no comparison period',
+    baseFareRow: 'Pickup fee (%{runs})',
+  },
+  chart: {
+    selectedDay: '%{label} · %{runs}',
+    bestDay: 'best day · %{label}',
+    barA11y: '%{label}, %{amount}, %{runs}',
+  },
+};

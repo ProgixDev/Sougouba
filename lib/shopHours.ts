@@ -1,5 +1,6 @@
 import type { Vendor, VendorHours } from '@/data/types';
 import { minutesOfDay } from '@/data/utils/time';
+import type { Message } from '@/lib/i18n';
 
 export interface ShopDay {
   /** Today's entry from the vendor's week, or null if the shop lists no hours for today. */
@@ -60,12 +61,18 @@ export function shopDay(vendor: Vendor, now: Date = new Date()): ShopDay {
  *
  * Phrased as what happens next rather than as a status word — "ferme à 21:00" is
  * actionable where "Ouvert" alone is not.
+ *
+ * Returns the message to render rather than the sentence: three of the four
+ * branches interpolate a time, and picking the branch is this module's job while
+ * saying it in a language is the screen's.
  */
-export function shopStatusLine(day: ShopDay): string {
-  if (day.closedToday) return "Fermé aujourd'hui";
-  if (day.isOpen) return `Ouvert · ferme à ${day.hours!.close}`;
-  if (day.nowMinutes < day.openMinutes) return `Ouvre à ${day.hours!.open}`;
-  return `Fermé · rouvre demain`;
+export function shopStatusLine(day: ShopDay): Message {
+  if (day.closedToday) return { key: 'domain.shopHours.closedToday' };
+  if (day.isOpen) return { key: 'domain.shopHours.openUntil', params: { time: day.hours!.close } };
+  if (day.nowMinutes < day.openMinutes) {
+    return { key: 'domain.shopHours.opensAt', params: { time: day.hours!.open } };
+  }
+  return { key: 'domain.shopHours.reopensTomorrow' };
 }
 
 /**

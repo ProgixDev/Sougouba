@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar, Text } from '@/components/ui';
+import { useT } from '@/lib/i18n/useT';
 import { useColorScheme, useThemeColors } from '@/hooks/useColorScheme';
 import { forest, mustard } from '@/theme/tokens';
 import { SearchField } from './SearchField';
@@ -29,6 +30,7 @@ export interface HomeHeaderProps {
  * the two `VerticalCard`s directly below this panel.
  */
 export function HomeHeader({ fullName, city, onSearchPress, onProfilePress }: HomeHeaderProps) {
+  const t = useT();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { colorScheme } = useColorScheme();
@@ -58,7 +60,7 @@ export function HomeHeader({ fullName, city, onSearchPress, onProfilePress }: Ho
         </View>
         <View className="flex-1">
           <Text variant="caption" tone="muted" className="text-[12px]">
-            Livraison à
+            {t('customer.home.deliverTo')}
           </Text>
           <Text variant="subtitle" weight="bold" numberOfLines={1} className="text-[17px] leading-[22px]">
             {city}
@@ -67,7 +69,7 @@ export function HomeHeader({ fullName, city, onSearchPress, onProfilePress }: Ho
         <Pressable
           hitSlop={6}
           accessibilityRole="button"
-          accessibilityLabel="Votre profil"
+          accessibilityLabel={t('customer.misc.yourProfile')}
           onPress={onProfilePress}
         >
           <Avatar fullName={fullName} size={44} />

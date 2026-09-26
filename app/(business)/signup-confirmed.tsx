@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 
 import { ApplicationSubmitted } from '@/components/onboarding';
+import { useT } from '@/lib/i18n/useT';
 import { routes } from '@/lib/routes';
 
 /**
@@ -15,16 +16,17 @@ import { routes } from '@/lib/routes';
  * re-reads on focus), so this screen only has to say what happened.
  */
 export default function ShopSignupConfirmedScreen() {
+  const t = useT();
   return (
     <ApplicationSubmitted
-      title="Demande envoyée"
-      body="Votre dossier est parti en validation. Merci — nous revenons vers vous rapidement."
+      title={t('business.signup.confirmed')}
+      body={t('business.signupConfirmed.body')}
       next={[
-        'Un administrateur Sougouba vérifie vos documents, généralement en un jour ouvrable.',
-        'Dès la validation, votre boutique apparaît dans l’application et vous pouvez publier votre catalogue.',
-        'Tant qu’elle n’est pas validée, votre boutique n’est visible par aucun client.',
+        t('business.signupConfirmed.body1'),
+        t('business.signupConfirmed.body2'),
+        t('business.signupConfirmed.body3'),
       ]}
-      ctaLabel="Retour à ma boutique"
+      ctaLabel={t('business.signupConfirmed.back')}
       onContinue={() => router.replace(routes.businessDashboard)}
     />
   );

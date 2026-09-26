@@ -1,22 +1,30 @@
 import type { OrderStatus } from '@/data/types';
+import type { Message, MessageKey } from '@/lib/i18n';
 
 type BadgeTone = 'neutral' | 'primary' | 'success' | 'warning' | 'secondary' | 'destructive';
 
-interface StatusMeta {
-  label: string;
-  tone: BadgeTone;
-}
-
-/** French label + badge tone for every order status. One place, so lists and detail agree. */
-export const orderStatusMeta: Record<OrderStatus, StatusMeta> = {
-  pending: { label: 'En attente', tone: 'neutral' },
-  confirmed: { label: 'Confirmée', tone: 'primary' },
-  preparing: { label: 'En préparation', tone: 'warning' },
-  ready: { label: 'Prête', tone: 'primary' },
-  out_for_delivery: { label: 'En livraison', tone: 'secondary' },
-  delivered: { label: 'Livrée', tone: 'success' },
-  cancelled: { label: 'Annulée', tone: 'destructive' },
+/**
+ * Badge tone per order status. One place, so lists and detail agree.
+ *
+ * The label used to live here too, as a French string. It moved to
+ * `domain.orderStatus.*`: a `Record<OrderStatus, string>` built at module scope
+ * is captured at import time and would render the launch language forever, and
+ * `scripts/verify-logic.ts` imports this module under bare `tsx` where no
+ * translator exists. Screens read `t(orderStatusKey(status))`.
+ */
+export const orderStatusTone: Record<OrderStatus, BadgeTone> = {
+  pending: 'neutral',
+  confirmed: 'primary',
+  preparing: 'warning',
+  ready: 'primary',
+  out_for_delivery: 'secondary',
+  delivered: 'success',
+  cancelled: 'destructive',
 };
+
+export function orderStatusKey(status: OrderStatus): MessageKey {
+  return `domain.orderStatus.${status}` as MessageKey;
+}
 
 /**
  * The happy path, in order. `cancelled` is deliberately absent: it is an exit
@@ -37,9 +45,14 @@ export function progressionIndex(status: OrderStatus): number {
   return orderProgression.indexOf(status);
 }
 
-/** Short, human summary for a list row. */
-export function orderSummaryLine(itemCount: number): string {
-  return itemCount === 1 ? '1 article' : `${itemCount} articles`;
+/**
+ * Short, human summary for a list row.
+ *
+ * Returns a `Message` rather than a sentence: the plural forms differ per
+ * language and are chosen by the pluralizer, not by a ternary here.
+ */
+export function orderSummaryLine(itemCount: number): Message {
+  return { key: 'domain.order.itemCount', params: { count: itemCount } };
 }
 
 /** Still in the shop's queue — i.e. not finished and not cancelled. */
@@ -88,38 +101,27 @@ export function nextStatusFor(status: OrderStatus, actor: StatusActor): OrderSta
   return STATUS_ACTOR[status] === actor ? nextStatus(status) : null;
 }
 
-/**
- * The courier's two actions, phrased as things they do rather than states the
- * order enters — same rule as `ADVANCE_LABELS` below.
- */
-const COURIER_ADVANCE_LABELS: Partial<Record<OrderStatus, string>> = {
-  ready: 'J’ai récupéré la commande',
-  out_for_delivery: 'Confirmer la livraison',
-};
+/** The two statuses a courier can advance out of. Wording is `domain.courierAdvance.*`. */
+const COURIER_ADVANCE: OrderStatus[] = ['ready', 'out_for_delivery'];
 
-export function courierActionLabel(status: OrderStatus): string | null {
-  return nextStatusFor(status, 'courier') ? (COURIER_ADVANCE_LABELS[status] ?? null) : null;
+/** The key for the courier's advance button, or null when it is not their move. */
+export function courierActionKey(status: OrderStatus): MessageKey | null {
+  if (!nextStatusFor(status, 'courier') || !COURIER_ADVANCE.includes(status)) return null;
+  return `domain.courierAdvance.${status}` as MessageKey;
 }
 
 /**
- * Imperative label for the advance button, phrased as the action the shop is
- * taking rather than the state it lands in ("Accepter", not "Confirmée") — a
+ * The key for the merchant's advance button, or null at the end of the flow.
+ *
+ * The wording lives in `domain.orderAdvance.*`, phrased as the action the shop
+ * is taking rather than the state it lands in ("Accepter", not "Confirmée") — a
  * button labelled with a past participle reads as a status, not a control.
+ *
+ * `delivered` and `cancelled` have no entry, where the old
+ * `Record<OrderStatus, string>` needed empty strings for them purely to satisfy
+ * its own type. `nextStatus` already returns null there, so the partiality is
+ * now stated once instead of papered over twice.
  */
-const ADVANCE_LABELS: Record<OrderStatus, string> = {
-  pending: 'Accepter la commande',
-  confirmed: 'Commencer la préparation',
-  preparing: 'Marquer comme prête',
-  // Kept because `advanceActionLabel` is defined over every status, but the
-  // merchant no longer reaches it: `STATUS_ACTOR.ready` is the courier, so
-  // `nextStatusFor(status, 'merchant')` returns null here and the button that
-  // used to carry this label is replaced by a waiting line.
-  ready: 'Confier au livreur',
-  out_for_delivery: 'Marquer comme livrée',
-  delivered: '',
-  cancelled: '',
-};
-
-export function advanceActionLabel(status: OrderStatus): string | null {
-  return nextStatus(status) ? ADVANCE_LABELS[status] : null;
+export function advanceActionKey(status: OrderStatus): MessageKey | null {
+  return nextStatus(status) ? (`domain.orderAdvance.${status}` as MessageKey) : null;
 }

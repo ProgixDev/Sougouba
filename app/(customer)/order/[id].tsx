@@ -12,13 +12,15 @@ import { Badge, BackHeader, Button, EmptyState, PriceSummary, Reveal, Skeleton, 
 import { couriersApi, loyaltyApi, ordersApi, vendorsApi } from '@/data/api';
 import type { Courier, DisputeReason, Order, Vendor } from '@/data/types';
 import { formatCad, formatDate, formatTime } from '@/lib/format';
-import { canOpenDispute, disputeReasonLabel } from '@/lib/disputes';
-import { isActiveStatus, orderStatusMeta } from '@/lib/orderStatus';
+import { canOpenDispute, disputeReasonKey } from '@/lib/disputes';
+import { useT } from '@/lib/i18n/useT';
+import { isActiveStatus, orderStatusKey, orderStatusTone } from '@/lib/orderStatus';
 import { routes } from '@/lib/routes';
 import { orderReference } from '@/lib/orderRef';
 import { shadows } from '@/theme/shadows';
 
 export default function OrderDetailScreen() {
+  const t = useT();
   const colors = useThemeColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [order, setOrder] = useState<Order | null>(null);
@@ -101,37 +103,33 @@ export default function OrderDetailScreen() {
         <BackHeader />
         <EmptyState
           icon={ReceiptText}
-          title="Commande introuvable"
-          description="Cette commande n’existe plus ou le lien est expiré."
-          actionLabel="Voir mes commandes"
+          title={t('customer.orderNotFound')}
+          description={t('customer.orderDetail.notFoundBody')}
+          actionLabel={t('customer.orderDetail.seeOrders')}
           onAction={() => router.replace(routes.customerOrders)}
         />
       </SafeAreaView>
     );
   }
 
-  const meta = order ? orderStatusMeta[order.status] : null;
+
 
   async function report(reason: DisputeReason, message: string) {
     if (!order) return;
-    const updated = await ordersApi.openDispute(order.id, {
-      reason,
-      message,
-      at: new Date().toISOString(),
-    });
+    const updated = await ordersApi.openDispute(order.id, { reason, message });
     if (updated) setOrder(updated);
     setReporting(false);
   }
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <BackHeader title={order ? `Commande ${orderReference(order)}` : 'Commande'} />
+      <BackHeader title={order ? t('common.orderRef', { reference: orderReference(order) }) : t('common.order')} />
 
       {pointsEarned !== null ? (
         <Reveal className="px-5 pb-1">
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Vous avez gagné ${pointsEarned} points Sougouba`}
+            accessibilityLabel={t('common.a11y.pointsEarned', { count: pointsEarned })}
             onPress={() => {
               setPointsEarned(null);
               router.push(routes.accountPoints);
@@ -144,7 +142,7 @@ export default function OrderDetailScreen() {
             </View>
             <View className="flex-1">
               <Text variant="caption" weight="bold">
-                Commande livrée
+                {t('customer.orderDetail.delivered')}
               </Text>
               <Text variant="caption" tone="muted" className="text-[12px]">
                 Vous avez gagné {pointsEarned} points Sougouba.
@@ -172,14 +170,16 @@ export default function OrderDetailScreen() {
                   {formatCad(order.totalCad)}
                 </Text>
               </View>
-              {meta ? <Badge label={meta.label} tone={meta.tone} /> : null}
+              {order ? (
+                <Badge label={t(orderStatusKey(order.status))} tone={orderStatusTone[order.status]} />
+              ) : null}
             </View>
 
             {/* The map only earns its place once someone is actually driving:
                 before a courier accepts there is nothing to watch, and after
                 delivery the timeline is the better record. */}
             {progress && progress.phase !== 'delivered' && courier ? (
-              <Section title="Votre livreur">
+              <Section title={t('customer.orderDetail.yourCourier')}>
                 <View className="gap-3">
                   <View className="h-[200px] rounded-[20px] overflow-hidden">
                     <DeliveryMap
@@ -208,15 +208,15 @@ export default function OrderDetailScreen() {
             </Section>
 
             {order.dispute ? (
-              <Section title="Problème signalé">
+              <Section title={t('customer.orderDetail.issueReported')}>
                 <View className="gap-3">
                   <View className="flex-row items-center gap-2">
                     <MessageSquareWarning size={16} color={colors.destructive} strokeWidth={2} />
                     <Text variant="caption" weight="bold" className="flex-1">
-                      {disputeReasonLabel(order.dispute.reason)}
+                      {t(disputeReasonKey(order.dispute.reason))}
                     </Text>
                     <Badge
-                      label={order.dispute.status === 'answered' ? 'Répondu' : 'En attente'}
+                      label={order.dispute.status === 'answered' ? t('customer.answered') : 'En attente'}
                       tone={order.dispute.status === 'answered' ? 'success' : 'warning'}
                       size="sm"
                     />
@@ -230,7 +230,7 @@ export default function OrderDetailScreen() {
                   {order.dispute.merchantReply ? (
                     <View className="rounded-2xl bg-muted p-3 gap-1">
                       <Text variant="label" tone="muted" className="text-[10px]">
-                        Réponse du commerce
+                        {t('customer.orderDetail.shopReply')}
                       </Text>
                       <Text variant="caption" className="text-[13px] leading-[19px]">
                         {order.dispute.merchantReply}
@@ -238,7 +238,7 @@ export default function OrderDetailScreen() {
                     </View>
                   ) : (
                     <Text variant="caption" tone="muted" className="text-[12px]">
-                      Le commerce a été informé. Vous verrez sa réponse ici.
+                      {t('customer.orderDetail.replyPending')}
                     </Text>
                   )}
                 </View>
@@ -263,7 +263,7 @@ export default function OrderDetailScreen() {
               </Section>
             ) : null}
 
-            <Section title="Livraison">
+            <Section title={t('common.delivery')}>
               <View className="flex-row items-start gap-3">
                 <View className="w-10 h-10 items-center justify-center rounded-full bg-muted">
                   <MapPin size={18} color={colors.mutedForeground} strokeWidth={2} />
@@ -307,7 +307,7 @@ export default function OrderDetailScreen() {
             </Section>
             {canOpenDispute(order) ? (
               <Button
-                label="Signaler un problème"
+                label={t('customer.orderDetail.reportProblem')}
                 variant="outline"
                 size="md"
                 fullWidth

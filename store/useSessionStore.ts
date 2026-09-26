@@ -7,6 +7,7 @@ import { useCartStore } from './useCartStore';
 import { useDispatchStore } from './useDispatchStore';
 import { useFavoritesStore } from './useFavoritesStore';
 import { usePreferencesStore } from './usePreferencesStore';
+import { authApi } from '../data/api';
 
 interface SessionState {
   user: User | null;
@@ -47,6 +48,18 @@ export const useSessionStore = create<SessionState>()(
         set((state) => (state.user ? { user: { ...state.user, ...patch } } : state)),
 
       signOut: () => {
+        // ⚠️ Ends the **Supabase** session too, not just this store's copy of
+        // the user. Clearing `user` alone used to be enough — there was no
+        // session to end. Now a stale refresh token left in AsyncStorage would
+        // keep minting access tokens for an account the app believes is signed
+        // out, and the next sign-in would silently resume it.
+        //
+        // Deliberately not awaited: sign-out must not be blocked by the network,
+        // and the local state below is what the UI reacts to. A failure here
+        // leaves a token that expires on its own; a hang would leave a user
+        // staring at a button that did nothing.
+        void authApi.signOut().catch(() => undefined);
+
         // Account-scoped stores must not leak into the next session.
         useCartStore.getState().clear();
         useFavoritesStore.getState().reset();

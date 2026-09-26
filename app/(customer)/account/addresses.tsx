@@ -1,4 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import * as Haptics from 'expo-haptics';
 import { Check, Home, MapPin, Plus, Trash2 } from 'lucide-react-native';
 import { MotiView } from 'moti';
@@ -28,6 +27,8 @@ import {
 import type { Address } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { coordinatesFor } from '@/lib/postalGeo';
+import { useT } from '@/lib/i18n/useT';
+import { i18nResolver } from '@/lib/validation/resolver';
 import {
   type AddressInput,
   type AddressValues,
@@ -36,6 +37,7 @@ import {
 import { useSessionStore } from '@/store/useSessionStore';
 
 export default function AddressesScreen() {
+  const t = useT();
   const colors = useThemeColors();
   const user = useSessionStore((s) => s.user);
   const updateUser = useSessionStore((s) => s.updateUser);
@@ -86,7 +88,7 @@ export default function AddressesScreen() {
   }
 
   function remove(address: Address) {
-    Alert.alert('Supprimer cette adresse ?', `${address.label} — ${address.street}`, [
+    Alert.alert(t('customer.confirmRemoveAddress'), `${address.label} — ${address.street}`, [
       { text: 'Annuler', style: 'cancel' },
       {
         text: 'Supprimer',
@@ -98,14 +100,14 @@ export default function AddressesScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <BackHeader title="Adresses de livraison" />
+      <BackHeader title={t('customer.account.addresses.title')} />
 
       {addresses.length === 0 ? (
         <EmptyState
           icon={MapPin}
-          title="Aucune adresse enregistrée"
-          description="Ajoutez une adresse pour accélérer vos prochaines commandes."
-          actionLabel="Ajouter une adresse"
+          title={t('customer.account.addresses.emptyTitle')}
+          description={t('customer.account.addresses.emptyBody')}
+          actionLabel={t('customer.account.addresses.add')}
           onAction={() => setEditing('new')}
         />
       ) : (
@@ -125,7 +127,7 @@ export default function AddressesScreen() {
                       <Text variant="caption" weight="bold" numberOfLines={1} className="flex-1">
                         {address.label}
                       </Text>
-                      {address.isDefault ? <Badge label="Par défaut" tone="primary" size="sm" /> : null}
+                      {address.isDefault ? <Badge label={t('customer.account.addresses.isDefault')} tone="primary" size="sm" /> : null}
                     </View>
                     <Text variant="caption" tone="muted" className="text-[13px]">
                       {address.street}
@@ -137,10 +139,10 @@ export default function AddressesScreen() {
                 </View>
 
                 <View className="flex-row items-center gap-4 pl-12">
-                  <RowAction label="Modifier" onPress={() => setEditing(address)} />
+                  <RowAction label={t('customer.account.addresses.edit')} onPress={() => setEditing(address)} />
                   {!address.isDefault ? (
                     <RowAction
-                      label="Définir par défaut"
+                      label={t('customer.account.addresses.setDefault')}
                       onPress={() =>
                         persist(addresses.map((a) => ({ ...a, isDefault: a.id === address.id })))
                       }
@@ -150,7 +152,7 @@ export default function AddressesScreen() {
                   <Pressable
                     hitSlop={8}
                     accessibilityRole="button"
-                    accessibilityLabel={`Supprimer ${address.label}`}
+                    accessibilityLabel={t('common.a11y.remove', { name: address.label })}
                     onPress={() => remove(address)}
                   >
                     <Trash2 size={17} color={colors.destructive} strokeWidth={2} />
@@ -167,7 +169,7 @@ export default function AddressesScreen() {
           >
             <Plus size={17} color={colors.primary} strokeWidth={2.4} />
             <Text variant="caption" weight="bold" tone="primary">
-              Ajouter une adresse
+              {t('customer.account.addresses.add')}
             </Text>
           </Pressable>
         </ScrollView>
@@ -212,13 +214,14 @@ function AddressFormSheet({
   onClose: () => void;
   onSave: (values: AddressValues, existing: Address | null) => void;
 }) {
+  const t = useT();
   const insets = useSafeAreaInsets();
   const {
     control,
     handleSubmit,
     formState: { errors },
   } = useForm<AddressInput, unknown, AddressValues>({
-    resolver: zodResolver(addressSchema),
+    resolver: i18nResolver(t, addressSchema),
     defaultValues: {
       label: address?.label ?? '',
       street: address?.street ?? '',
@@ -236,7 +239,7 @@ function AddressFormSheet({
           transition={{ type: 'timing', duration: 180 }}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10, 32, 24, 0.45)' }}
         >
-          <Pressable className="flex-1" accessibilityLabel="Fermer" onPress={onClose} />
+          <Pressable className="flex-1" accessibilityLabel={t('common.ui.close')} onPress={onClose} />
         </MotiView>
 
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -264,7 +267,7 @@ function AddressFormSheet({
                 name="label"
                 render={({ field: { onChange, onBlur, value } }) => (
                   <Input
-                    label="Nom (ex. Domicile)"
+                    label={t('customer.account.addresses.fieldLabel')}
                     value={value}
                     onChangeText={onChange}
                     onBlur={onBlur}
@@ -278,7 +281,7 @@ function AddressFormSheet({
                 name="street"
                 render={({ field: { onChange, onBlur, value } }) => (
                   <Input
-                    label="Numéro et rue"
+                    label={t('customer.account.addresses.fieldStreet')}
                     value={value}
                     onChangeText={onChange}
                     onBlur={onBlur}
@@ -304,14 +307,14 @@ function AddressFormSheet({
                 name="postalCode"
                 render={({ field: { onChange, onBlur, value } }) => (
                   <Input
-                    label="Code postal"
+                    label={t('customer.account.addresses.fieldPostalCode')}
                     value={value}
                     onChangeText={onChange}
                     onBlur={onBlur}
                     error={errors.postalCode?.message}
                     autoCapitalize="characters"
                     textContentType="postalCode"
-                    helperText="Doit correspondre à la ville choisie."
+                    helperText={t('customer.account.addresses.postalHint')}
                   />
                 )}
               />
@@ -326,7 +329,7 @@ function AddressFormSheet({
                 icon={<Check size={18} color="#fff" strokeWidth={2.4} />}
                 onPress={handleSubmit((values) => onSave(values, address))}
               />
-              <Button label="Annuler" variant="ghost" size="lg" fullWidth onPress={onClose} />
+              <Button label={t('common.cancel')} variant="ghost" size="lg" fullWidth onPress={onClose} />
             </View>
           </MotiView>
         </KeyboardAvoidingView>

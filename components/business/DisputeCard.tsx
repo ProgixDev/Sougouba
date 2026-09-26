@@ -5,7 +5,8 @@ import { View } from 'react-native';
 import { Badge, Button, Input, Text } from '@/components/ui';
 import type { OrderDispute } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
-import { disputeReasonLabel } from '@/lib/disputes';
+import { disputeReasonKey } from '@/lib/disputes';
+import { useT } from '@/lib/i18n/useT';
 import { formatDate, formatTime } from '@/lib/format';
 
 export interface DisputeCardProps {
@@ -27,6 +28,7 @@ const MIN_REPLY = 5;
  * so this offers no button that would imply otherwise.
  */
 export function DisputeCard({ dispute, onReply }: DisputeCardProps) {
+  const t = useT();
   const colors = useThemeColors();
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -53,14 +55,14 @@ export function DisputeCard({ dispute, onReply }: DisputeCardProps) {
         </View>
         <View className="flex-1 gap-0.5">
           <Text variant="caption" weight="bold">
-            {disputeReasonLabel(dispute.reason)}
+            {t(disputeReasonKey(dispute.reason))}
           </Text>
           <Text variant="caption" tone="muted" className="text-[12px]">
             Signalé le {formatDate(dispute.openedAt)} à {formatTime(dispute.openedAt)}
           </Text>
         </View>
         <Badge
-          label={answered ? 'Répondu' : 'À traiter'}
+          label={answered ? t('business.disputeStatus.answered') : t('business.disputeStatus.open')}
           tone={answered ? 'success' : 'warning'}
           size="sm"
         />
@@ -73,7 +75,7 @@ export function DisputeCard({ dispute, onReply }: DisputeCardProps) {
       {answered ? (
         <View className="rounded-2xl bg-muted p-3 gap-1">
           <Text variant="label" tone="muted" className="text-[10px]">
-            Votre réponse
+            {t('business.dispute.yourReply')}
           </Text>
           <Text variant="caption" className="text-[13px] leading-[19px]">
             {dispute.merchantReply}
@@ -82,14 +84,14 @@ export function DisputeCard({ dispute, onReply }: DisputeCardProps) {
       ) : (
         <View className="gap-2.5">
           <Input
-            label="Répondre au client"
+            label={t('business.dispute.reply')}
             value={message}
             onChangeText={setMessage}
             multiline
             autoCapitalize="sentences"
           />
           <Button
-            label="Envoyer la réponse"
+            label={t('business.dispute.send')}
             variant="primary"
             size="md"
             fullWidth
@@ -99,7 +101,7 @@ export function DisputeCard({ dispute, onReply }: DisputeCardProps) {
             onPress={send}
           />
           <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
-            Le litige reste ouvert jusqu’à son traitement par Sougouba.
+            {t('business.dispute.stillOpen')}
           </Text>
         </View>
       )}

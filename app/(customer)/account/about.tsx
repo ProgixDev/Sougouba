@@ -7,19 +7,21 @@ import { Linking, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MerchantSignupSheet } from '@/components/onboarding';
+import { useT } from '@/lib/i18n/useT';
 import { BackHeader, Reveal, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
 
 const SUPPORT_EMAIL = 'soutien@sougouba.ca';
 
 export default function AboutScreen() {
+  const t = useT();
   const colors = useThemeColors();
   const version = Constants.expoConfig?.version ?? '1.0.0';
   const [signupSheet, setSignupSheet] = useState(false);
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <BackHeader title="Aide et informations" />
+      <BackHeader title={t('customer.account.about.title')} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="px-5 pt-2 pb-10 gap-6">
         <Reveal>
@@ -34,7 +36,7 @@ export default function AboutScreen() {
                 Sougouba
               </Text>
               <Text variant="caption" tone="muted">
-                Version {version}
+                {t('customer.account.about.version', { version })}
               </Text>
             </View>
           </View>
@@ -43,12 +45,10 @@ export default function AboutScreen() {
         <Reveal delay={70}>
           <View className="rounded-[20px] bg-card p-5 gap-2">
             <Text variant="caption" weight="bold">
-              Les épiceries africaines et maghrébines du Grand Montréal
+              {t('customer.account.about.tagline')}
             </Text>
             <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
-              Sougouba relie les épiceries, boucheries et cuisines africaines et maghrébines de
-              Montréal, Montréal-Nord, Laval et Longueuil aux gens qui cherchent leurs produits.
-              Commandez auprès du commerce, suivez la préparation, recevez à la maison.
+              {t('customer.account.about.body')}
             </Text>
           </View>
         </Reveal>
@@ -57,7 +57,7 @@ export default function AboutScreen() {
           <View className="rounded-[20px] bg-card overflow-hidden">
             <LinkRow
               icon={Mail}
-              label="Écrire au soutien"
+              label={t('customer.account.about.support')}
               detail={SUPPORT_EMAIL}
               onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
             />
@@ -69,8 +69,8 @@ export default function AboutScreen() {
                 changing role. */}
             <LinkRow
               icon={Store}
-              label="Inscrire mon commerce"
-              detail="Comment vendre sur Sougouba"
+              label={t('customer.account.about.registerShop')}
+              detail={t('customer.account.about.registerShopDetail')}
               onPress={() => setSignupSheet(true)}
             />
           </View>
@@ -81,14 +81,11 @@ export default function AboutScreen() {
             <View className="flex-row items-center gap-2">
               <ShieldCheck size={15} color={colors.mutedForeground} strokeWidth={2} />
               <Text variant="label" tone="muted">
-                Prototype de démonstration
+                {t('customer.account.about.prototypeLabel')}
               </Text>
             </View>
             <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
-              Cette version fonctionne entièrement hors ligne, sur des données de démonstration.
-              Les comptes, commandes et paiements ne quittent pas l’appareil, et aucune transaction
-              réelle n’est effectuée. Les photographies proviennent de Pexels, sous licence
-              d’utilisation commerciale.
+              {t('customer.account.about.prototypeBody')}
             </Text>
           </View>
         </Reveal>

@@ -10,12 +10,14 @@ import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { ordersApi, vendorsApi } from '@/data/api';
 import type { ID, Order } from '@/data/types';
 import { formatCad, formatDate } from '@/lib/format';
-import { orderStatusMeta, orderSummaryLine } from '@/lib/orderStatus';
+import { orderStatusKey, orderStatusTone, orderSummaryLine } from '@/lib/orderStatus';
+import { useT } from '@/lib/i18n/useT';
 import { dynamicRoutes, routes } from '@/lib/routes';
 import { useSessionStore } from '@/store/useSessionStore';
 import { orderReference } from '@/lib/orderRef';
 
 export default function CustomerOrdersScreen() {
+  const t = useT();
   const tabBarInset = useTabBarInset();
   const colors = useThemeColors();
   const user = useSessionStore((s) => s.user);
@@ -58,7 +60,7 @@ export default function CustomerOrdersScreen() {
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <View className="px-5 pt-2 pb-5">
         <Text variant="title" weight="bold" className="text-[26px]">
-          Commandes
+          {t('customer.ordersScreen.title')}
         </Text>
       </View>
 
@@ -71,9 +73,9 @@ export default function CustomerOrdersScreen() {
       ) : orders.length === 0 ? (
         <EmptyState
           icon={ReceiptText}
-          title="Aucune commande"
-          description="Vos commandes passées apparaîtront ici avec leur suivi en direct."
-          actionLabel="Découvrir les commerces"
+          title={t('customer.ordersScreen.emptyTitle')}
+          description={t('customer.ordersScreen.emptyBody')}
+          actionLabel={t('customer.ordersScreen.emptyAction')}
           onAction={() => router.replace(routes.customerHome)}
         />
       ) : (
@@ -87,12 +89,15 @@ export default function CustomerOrdersScreen() {
           contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: tabBarInset + 24, gap: 12 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           renderItem={({ item: order, index }) => {
-            const meta = orderStatusMeta[order.status];
+            const statusLabel = t(orderStatusKey(order.status));
             return (
               <Reveal index={index}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Commande ${orderReference(order)}, ${meta.label}`}
+                accessibilityLabel={t('customer.orders.rowA11y', {
+                  reference: orderReference(order),
+                  status: statusLabel,
+                })}
                 onPress={() =>
                   router.push({ pathname: dynamicRoutes.orderDetail, params: { id: order.id } })
                 }
@@ -101,12 +106,15 @@ export default function CustomerOrdersScreen() {
                 <View className="flex-1 gap-1.5">
                   <View className="flex-row items-center gap-2">
                     <Text variant="caption" weight="bold" numberOfLines={1} className="flex-1">
-                      {vendorNames[order.vendorId] ?? 'Commerce'}
+                      {vendorNames[order.vendorId] ?? t('common.genericShop')}
                     </Text>
-                    <Badge label={meta.label} tone={meta.tone} size="sm" />
+                    <Badge label={statusLabel} tone={orderStatusTone[order.status]} size="sm" />
                   </View>
                   <Text variant="caption" tone="muted" className="text-[12px]">
-                    {formatDate(order.createdAt)} · {orderSummaryLine(order.items.length)}
+                    {t('customer.orders.summaryLine', {
+                      date: formatDate(order.createdAt),
+                      items: t(orderSummaryLine(order.items.length)),
+                    })}
                   </Text>
                   <Text weight="bold" className="text-[15px]">
                     {formatCad(order.totalCad)}

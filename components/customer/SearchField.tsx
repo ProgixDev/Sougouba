@@ -2,6 +2,7 @@ import { Search, SlidersHorizontal } from 'lucide-react-native';
 import { Pressable, TextInput, View } from 'react-native';
 
 import { Text } from '@/components/ui';
+import { useT } from '@/lib/i18n/useT';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { darkColors, lightColors } from '@/theme/colors';
 
@@ -30,8 +31,11 @@ export function SearchField({
   onFilterPress,
   activeFilterCount = 0,
   onPress,
-  placeholder = 'Rechercher un produit, un commerce…',
+  placeholder,
 }: SearchFieldProps) {
+  const t = useT();
+  // See `CitySelect` — resolved inside, so the placeholder follows the language.
+  const resolvedPlaceholder = placeholder ?? t('customer.searchField.placeholder');
   const { colorScheme } = useColorScheme();
   const colors = colorScheme === 'dark' ? darkColors : lightColors;
   const readOnly = Boolean(onPress);
@@ -45,7 +49,7 @@ export function SearchField({
       <Search size={20} color={colors.mutedForeground} strokeWidth={2} />
       <TextInput
         className="flex-1 text-base text-foreground font-sans-medium"
-        placeholder={placeholder}
+        placeholder={resolvedPlaceholder}
         placeholderTextColor={colors.mutedForeground}
         value={value}
         onChangeText={onChangeText}
@@ -62,7 +66,9 @@ export function SearchField({
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={
-            activeFilterCount > 0 ? `Filtres, ${activeFilterCount} actifs` : 'Filtres'
+            activeFilterCount > 0
+              ? t('customer.searchField.filtersActive', { count: activeFilterCount })
+              : t('customer.searchField.filters')
           }
           onPress={onFilterPress}
           className="w-9 h-9 items-center justify-center rounded-full"
@@ -105,7 +111,7 @@ export function SearchField({
   if (!readOnly) return body;
 
   return (
-    <Pressable accessibilityRole="search" accessibilityLabel={placeholder} onPress={onPress}>
+    <Pressable accessibilityRole="search" accessibilityLabel={resolvedPlaceholder} onPress={onPress}>
       {body}
     </Pressable>
   );

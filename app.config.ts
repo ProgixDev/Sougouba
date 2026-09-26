@@ -46,8 +46,29 @@ const config = {
     favicon: './assets/favicon.png',
     bundler: 'metro',
   },
+  /**
+   * Per-language `InfoPlist.strings`, so the two permission prompts are asked in
+   * the phone's language instead of always in French.
+   *
+   * **iOS only.** Android shows no developer-supplied rationale at the OS
+   * prompt, so there is no counterpart to add there. The French strings stay on
+   * the plugin options below as the base `Info.plist` value — that is the
+   * fallback for any language not listed here, and French is the right fallback
+   * for this app.
+   *
+   * These reach the binary only through `expo prebuild`; `ios/` is committed, so
+   * editing this file alone changes nothing until the native project is
+   * regenerated.
+   */
+  locales: {
+    fr: './lib/i18n/native/fr.json',
+    en: './lib/i18n/native/en.json',
+  },
   plugins: [
     'expo-router',
+    // Sets `CFBundleAllowMixedLocalizations`, which is what lets the app present
+    // English strings on a device whose region is fr_CA.
+    'expo-localization',
     [
       'expo-splash-screen',
       {

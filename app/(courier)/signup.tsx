@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CourierSignupForm, type CourierSignupValues } from '@/components/courier';
+import { useT } from '@/lib/i18n/useT';
 import { BackHeader, Text } from '@/components/ui';
 import { couriersApi } from '@/data/api';
 import { coordinatesFor } from '@/lib/postalGeo';
@@ -24,6 +25,7 @@ import { useSessionStore } from '@/store/useSessionStore';
  * word reads as a form that failed rather than one that was sent.
  */
 export default function CourierSignupScreen() {
+  const t = useT();
   const user = useSessionStore((s) => s.user);
 
   async function submit(values: CourierSignupValues) {
@@ -71,7 +73,7 @@ export default function CourierSignupScreen() {
       <BackHeader title="Devenir livreur" />
       <View className="px-5 pb-1">
         <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
-          Ces informations sont transmises à Sougouba pour validation. Rien n’est publié.
+              {t('courier.signup.note')}
         </Text>
       </View>
       <CourierSignupForm defaultFullName={user?.fullName} onSubmit={submit} />

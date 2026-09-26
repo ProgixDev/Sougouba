@@ -7,6 +7,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 
 import { Skeleton, Text } from '@/components/ui';
 import type { Vertical } from '@/lib/verticals';
+import { useT } from '@/lib/i18n/useT';
 import { shadows } from '@/theme/shadows';
 
 export interface VerticalCardProps {
@@ -41,6 +42,8 @@ const ACCENT_WIDTH = 5;
  * shared card shadow.
  */
 export function VerticalCard({ vertical, shopCount, fastestEtaMin, onPress }: VerticalCardProps) {
+  const t = useT();
+  const label = t(`domain.vertical.${vertical.type}.label`);
   const scale = useSharedValue(1);
   const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
@@ -51,7 +54,12 @@ export function VerticalCard({ vertical, shopCount, fastestEtaMin, onPress }: Ve
     <AnimatedPressable
       accessibilityRole="button"
       accessibilityLabel={
-        ready ? `${vertical.labelFr}, ${shopCount} ${vertical.pluralFr}` : vertical.labelFr
+        ready
+          ? t('customer.verticalCard.a11y', {
+              label,
+              count: t(`domain.vertical.${vertical.type}.count`, { count: shopCount }),
+            })
+          : label
       }
       onPress={() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -102,14 +110,18 @@ export function VerticalCard({ vertical, shopCount, fastestEtaMin, onPress }: Ve
           <View className="flex-row items-center gap-2">
             <Icon size={19} color="#FFFFFF" strokeWidth={2.1} />
             <Text variant="title" weight="bold" className="text-[25px] leading-[30px] text-white">
-              {vertical.labelFr}
+              {label}
             </Text>
           </View>
 
           {ready ? (
             <Text variant="caption" weight="medium" className="text-[13px] text-white/85">
-              {shopCount} {vertical.pluralFr}
-              {fastestEtaMin !== undefined ? ` · livraison dès ${fastestEtaMin} min` : ''}
+              {fastestEtaMin !== undefined
+                ? t('customer.verticalCard.countWithEta', {
+                    shops: t(`domain.vertical.${vertical.type}.count`, { count: shopCount }),
+                    minutes: fastestEtaMin,
+                  })
+                : t(`domain.vertical.${vertical.type}.count`, { count: shopCount })}
             </Text>
           ) : (
             // Sized to the line it replaces, so the card does not resettle when

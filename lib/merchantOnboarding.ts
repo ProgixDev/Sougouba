@@ -11,18 +11,9 @@
  *
  * The document list is indicative and still to be confirmed with the client, as
  * the CDC itself flags.
+ *
+ * The steps are keys, in order; the wording is `onboarding.merchant.*`.
  */
-export const MERCHANT_SIGNUP_STEPS = [
-  {
-    title: 'Votre commerce',
-    body: 'Le nom de votre boutique, sa catégorie — épicerie ou restaurant — et sa spécialité.',
-  },
-  {
-    title: 'Adresse et livraison',
-    body: 'Où vous êtes et le délai que vous annoncez à vos clients. Les frais de livraison sont fixés par Sougouba selon la distance.',
-  },
-  {
-    title: 'Documents et validation',
-    body: 'Votre numéro d’entreprise, la personne responsable, et le permis MAPAQ pour un restaurant. Un administrateur valide avant la mise en ligne.',
-  },
-];
+export const MERCHANT_SIGNUP_STEPS = ['business', 'address', 'documents'] as const;
+
+export type MerchantSignupStep = (typeof MERCHANT_SIGNUP_STEPS)[number];

@@ -9,6 +9,7 @@ import { Chip, EmptyState, Text } from '@/components/ui';
 import { categoriesApi, productsApi, vendorsApi } from '@/data/api';
 import type { Category, ID, Product, Vendor } from '@/data/types';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useT } from '@/lib/i18n/useT';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import {
   activeFilterCount,
@@ -17,11 +18,14 @@ import {
   type ProductFilters,
 } from '@/lib/productFilters';
 import { dynamicRoutes } from '@/lib/routes';
+import { useLocalized } from '@/lib/localized';
 import { useCartStore } from '@/store/useCartStore';
 
 const BROWSE_LIMIT = 24;
 
 export default function SearchScreen() {
+  const t = useT();
+  const L = useLocalized();
   const tabBarInset = useTabBarInset();
   const addItem = useCartStore((s) => s.addItem);
 
@@ -135,7 +139,7 @@ export default function SearchScreen() {
         {categories.map((category) => (
           <Chip
             key={category.id}
-            label={category.shortNameFr}
+            label={L(category.shortName)}
             selected={categoryId === category.id}
             onPress={() => setCategoryId((current) => (current === category.id ? null : category.id))}
           />
@@ -153,10 +157,13 @@ export default function SearchScreen() {
             {searching
               ? 'Recherche…'
               : browseTruncated
-                ? `Suggestions — ${visible.length} produits, cherchez pour voir le reste`
-                : `${visible.length} ${visible.length === 1 ? 'résultat' : 'résultats'}${
-                    hasQuery ? ` pour « ${debouncedQuery.trim()} »` : ''
-                  }`}
+                ? t('customer.browseTruncated', { count: visible.length })
+                : hasQuery
+                  ? t('customer.search.resultsForQuery', {
+                      count: visible.length,
+                      query: debouncedQuery.trim(),
+                    })
+                  : t('customer.search.results', { count: visible.length })}
           </Text>
           {filterCount > 0 ? (
             <Text
@@ -164,10 +171,10 @@ export default function SearchScreen() {
               weight="semibold"
               tone="secondary"
               accessibilityRole="button"
-              accessibilityLabel="Effacer les filtres"
+              accessibilityLabel={t('customer.filters.clear')}
               onPress={() => setFilters(emptyFilters)}
             >
-              Effacer les filtres
+              {t('customer.filters.clear')}
             </Text>
           ) : null}
         </View>
@@ -175,15 +182,15 @@ export default function SearchScreen() {
         {!searching && visible.length === 0 ? (
           <EmptyState
             icon={SearchX}
-            title="Aucun résultat"
+            title={t('customer.filters.noResults')}
             description={
               filterCount > 0
-                ? 'Aucun produit ne correspond à vos filtres. Élargissez-les pour voir plus de résultats.'
+                ? t('customer.emptyStates.searchNoFilterMatch')
                 : categoryId && hasQuery
-                  ? 'Essayez un autre mot-clé ou retirez le filtre de catégorie.'
-                  : 'Essayez un autre mot-clé.'
+                  ? t('customer.emptyStates.searchTryAnotherWithCategory')
+                  : t('customer.emptyStates.searchTryAnother')
             }
-            actionLabel={filterCount > 0 ? 'Effacer les filtres' : undefined}
+            actionLabel={filterCount > 0 ? t('customer.filters.clear') : undefined}
             onAction={filterCount > 0 ? () => setFilters(emptyFilters) : undefined}
           />
         ) : (

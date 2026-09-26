@@ -5,6 +5,7 @@ import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CartItemRow } from '@/components/customer';
+import { useT } from '@/lib/i18n/useT';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { Button, EmptyState, PriceSummary, Reveal, Skeleton, Text } from '@/components/ui';
@@ -16,6 +17,7 @@ import { routes } from '@/lib/routes';
 import { useCartStore } from '@/store/useCartStore';
 
 export default function CartScreen() {
+  const t = useT();
   const tabBarInset = useTabBarInset();
   const colors = useThemeColors();
   const {
@@ -50,9 +52,9 @@ export default function CartScreen() {
         <Header onClear={undefined} />
         <EmptyState
           icon={ShoppingCart}
-          title="Votre panier est vide"
-          description="Parcourez les commerces près de chez vous pour commencer."
-          actionLabel="Découvrir les commerces"
+          title={t('customer.cart.emptyTitle')}
+          description={t('customer.cart.emptyBody')}
+          actionLabel={t('customer.cart.emptyAction')}
           onAction={() => router.replace(routes.customerHome)}
         />
       </SafeAreaView>
@@ -129,7 +131,7 @@ export default function CartScreen() {
         style={{ paddingBottom: tabBarInset + 12 }}
       >
         <Button
-          label={`Passer à la caisse — ${formatCad(totalCad)}`}
+          label={t('customer.cartCta', { total: formatCad(totalCad) })}
           variant="cta"
           size="lg"
           fullWidth
@@ -143,10 +145,11 @@ export default function CartScreen() {
 }
 
 function Header({ onClear }: { onClear?: () => void }) {
+  const t = useT();
   return (
     <View className="flex-row items-center justify-between px-5 pt-2 pb-5">
       <Text variant="title" weight="bold" className="text-[26px]">
-        Panier
+        {t('customer.cart.title')}
       </Text>
       {onClear ? (
         <Text
@@ -156,7 +159,7 @@ function Header({ onClear }: { onClear?: () => void }) {
           accessibilityRole="button"
           onPress={onClear}
         >
-          Vider
+          {t('customer.cart.clear')}
         </Text>
       ) : null}
     </View>

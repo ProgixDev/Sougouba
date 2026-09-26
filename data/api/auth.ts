@@ -1,151 +1,159 @@
-import { referralCodeFor } from '../loyalty';
-import { users as seedUsers } from '../seed/users';
-import type { ID, User, UserRole } from '../types';
-import { delay } from '../utils/delay';
-import { generateId } from '../utils/ids';
-import { createPersistedTable } from '../utils/persistedTable';
+import { supabase } from '../../lib/supabase';
+import { api, ApiError } from '../http';
+import type { Address, ID, User, UserRole } from '../types';
+
+/** What went wrong, as a code. The words are `auth.error.*` in the catalogue. */
+export type AuthErrorCode = 'no_such_account' | 'email_taken' | 'user_not_found';
 
 /**
- * The mock "backend"'s account table.
+ * An API layer must not return display copy.
  *
- * Persisted so an account created during a demo survives a restart — otherwise
- * signing back in reports "no such account", which reads as a broken app rather
- * than a mock-data limitation.
+ * The screen maps the code through `t()`. This was written for the mock and is
+ * unchanged by the cutover — which is the point: it was always the shape a real
+ * client would need, and it is what lets the sign-in screen stay untouched.
  */
-const table = createPersistedTable<User>('sougouba-mock-accounts', seedUsers);
-
-/** Copies out so the session store never holds a live reference into the table. */
-function snapshot(user: User): User {
-  return { ...user };
-}
-
-function findByEmail(email: string): User | undefined {
-  const normalized = email.trim().toLowerCase();
-  return table.rows().find((u) => u.email.toLowerCase() === normalized);
-}
-
-/** The code's own id lives nowhere — it is derived, so resolving one back to an account means recomputing it per row. */
-function findByReferralCode(code: string): User | undefined {
-  const normalized = code.trim().toUpperCase();
-  return table.rows().find((u) => referralCodeFor(u.id) === normalized);
-}
-
-export class AuthError extends Error {}
-
-export async function mockSignIn(email: string, _password: string): Promise<User> {
-  await table.ready;
-  await delay(500, 900);
-  const user = findByEmail(email);
-  if (!user) {
-    throw new AuthError('Aucun compte ne correspond à cette adresse courriel.');
+export class AuthError extends Error {
+  constructor(readonly code: AuthErrorCode) {
+    super(code);
   }
-  return snapshot(user);
 }
 
 /**
- * `referralCode` is optional and best-effort: an unknown or malformed code is
- * silently ignored rather than blocking the account. A referral is a bonus for
- * both sides, not a gate on signing up — Points Sougouba's own anti-fraud rule
- * only kicks in later, when the reward would actually be paid out (see
- * `creditForDeliveredOrder` in `data/api/loyalty.ts`), so there is nothing to
- * enforce here yet.
+ * The account, assembled.
+ *
+ * `User` is richer than the API's `/me` profile — it carries the favourites and
+ * the address book, which the API serves from their own endpoints. Composed
+ * here rather than widened server-side: `/me` is read on nearly every screen and
+ * making it join three tables to serve one that needs them would tax all of them.
+ *
+ * The three reads run together; a failure in any is a failure to sign in, which
+ * is correct — a session whose address book silently came back empty would put
+ * a shopper at checkout with nowhere to deliver.
  */
-export async function mockSignUp(
-  fullName: string,
+async function currentUser(): Promise<User> {
+  const [profile, favProducts, favVendors, addresses] = await Promise.all([
+    api<Record<string, any>>('/me'),
+    api<{ productId: ID }[]>('/me/favorites/products'),
+    api<{ vendorId: ID }[]>('/me/favorites/vendors'),
+    api<Address[]>('/me/addresses'),
+  ]);
+
+  return {
+    id: profile.id,
+    fullName: profile.fullName ?? '',
+    email: profile.email ?? '',
+    avatarUrl: profile.avatarUrl ?? undefined,
+    memberSince: profile.memberSince ?? undefined,
+    role: (profile.role ?? null) as UserRole | null,
+    vendorId: profile.vendorId ?? undefined,
+    courierId: profile.courierId ?? undefined,
+    favoriteProductIds: favProducts.map((f) => f.productId),
+    favoriteVendorIds: favVendors.map((f) => f.vendorId),
+    addresses,
+    referredBy: profile.referredBy ?? undefined,
+  };
+}
+
+export async function signIn(email: string, password: string): Promise<User> {
+  const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+  if (error) {
+    // Supabase answers "Invalid login credentials" for both a wrong password
+    // and an unknown address, deliberately — telling them apart would let
+    // someone enumerate who has an account. The app keeps that property.
+    throw new AuthError('no_such_account');
+  }
+  return currentUser();
+}
+
+export async function signUp(
   email: string,
-  _password: string,
+  password: string,
+  fullName: string,
   referralCode?: string
 ): Promise<User> {
-  await table.ready;
-  await delay(500, 900);
-  if (findByEmail(email)) {
-    throw new AuthError('Un compte existe déjà avec cette adresse courriel.');
+  const { error } = await supabase.auth.signUp({
+    email: email.trim(),
+    password,
+    // Read by the `handle_new_user` trigger, which creates the `profiles` row
+    // in the same transaction as the account — so the name is on the profile
+    // before this function's next line runs.
+    options: { data: { full_name: fullName.trim() } },
+  });
+  if (error) {
+    if (/already/i.test(error.message)) throw new AuthError('email_taken');
+    throw new AuthError('no_such_account');
   }
-  const referrer = referralCode?.trim() ? findByReferralCode(referralCode) : undefined;
-  const user: User = {
-    id: generateId('usr'),
-    fullName: fullName.trim(),
-    email: email.trim().toLowerCase(),
-    memberSince: new Date().toISOString(),
-    role: null,
-    favoriteProductIds: [],
-    favoriteVendorIds: [],
-    addresses: [],
-    ...(referrer ? { referredBy: referrer.id } : {}),
-  };
-  await table.add(user);
-  return snapshot(user);
+
+  if (referralCode) {
+    // Best-effort, exactly as the mock had it: an unknown code is a silent
+    // no-op, not a failed signup. A referral is a bonus for both sides, not a
+    // gate on using the account.
+    await api('/me/referral', { method: 'POST', body: { code: referralCode } }).catch(() => undefined);
+  }
+
+  return currentUser();
 }
 
-export async function mockSelectRole(userId: string, role: UserRole): Promise<User> {
-  await table.ready;
-  await delay(300, 500);
-  const user = table.rows().find((u) => u.id === userId);
-  if (!user) throw new AuthError('Utilisateur introuvable.');
-  user.role = role;
-  await table.save(user.id);
-  return snapshot(user);
+/** One-way: a role, once set, is never rewritten through this endpoint. */
+export async function selectRole(_userId: ID, role: UserRole): Promise<User> {
+  await api('/me/role', { method: 'PATCH', body: { role } });
+  return currentUser();
 }
 
 /**
- * Link a merchant account to a shop — the moment a registration is approved.
+ * Re-read the account after a shop or courier file was created.
  *
- * No screen in the app calls this, and none should: under the CDC addendum the
- * approval happens in the administration back-office, by a person reading the
- * documents the merchant uploaded. This is the app-side half of that write, kept
- * so the pending state has something real to become when that back-office
- * exists. Until then, `usr_owner_*` accounts arrive already linked from the seed.
+ * ⚠️ These were `mockAttachVendor` / `mockAttachCourier`, and they wrote the
+ * link themselves. They no longer can, and should not: the API sets
+ * `profiles.vendor_id` inside the same transaction that creates the shop
+ * (`vendor_apply`), so the link is already true by the time the app asks. All
+ * that is left is to pick up the change — the id argument is ignored and kept
+ * only so the two demo hooks calling this need no edit.
  */
-export async function mockAttachVendor(userId: string, vendorId: string): Promise<User> {
-  await table.ready;
-  await delay(200, 400);
-  const user = table.rows().find((u) => u.id === userId);
-  if (!user) throw new AuthError('Utilisateur introuvable.');
-  user.vendorId = vendorId;
-  await table.save(user.id);
-  return snapshot(user);
+export async function refreshAfterVendorAttached(_userId: ID, _vendorId: ID): Promise<User> {
+  return currentUser();
+}
+
+export async function refreshAfterCourierAttached(_userId: ID, _courierId: ID): Promise<User> {
+  return currentUser();
 }
 
 /**
- * Links an approved courier file to its account.
+ * The signed-in account, or undefined.
  *
- * The courier half of `mockAttachVendor`, and the same caveat: the approval
- * itself belongs to the administration back-office. What the app can honestly
- * write is the association, once someone else has decided.
+ * ⚠️ Narrower than the mock's `mockGetUserById`, which could look up *any*
+ * account by id because it held the whole table. There is no such endpoint and
+ * there should not be: a shopper asking the server for a stranger's profile is
+ * exactly what the back office exists to do under an admin guard. Every caller
+ * passes the signed-in user's own id, so the argument is checked rather than
+ * used.
  */
-export async function mockAttachCourier(userId: string, courierId: string): Promise<User> {
-  await table.ready;
-  await delay(200, 400);
-  const user = table.rows().find((u) => u.id === userId);
-  if (!user) throw new AuthError('Utilisateur introuvable.');
-  user.courierId = courierId;
-  await table.save(user.id);
-  return snapshot(user);
+export async function getUserById(id: ID): Promise<User | undefined> {
+  try {
+    const user = await currentUser();
+    if (user.id !== id) throw new AuthError('user_not_found');
+    return user;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) return undefined;
+    throw error;
+  }
 }
 
-/** Read-only lookup by id — `data/api/loyalty.ts` needs the referring account, not the session's own copy. */
-export async function mockGetUserById(id: ID): Promise<User | undefined> {
-  await table.ready;
-  const user = table.rows().find((u) => u.id === id);
-  return user ? snapshot(user) : undefined;
+/**
+ * ⚠️ Google and Apple sign-in are **not wired**. The mock returned a fabricated
+ * account for either provider, which made the buttons look finished; leaving
+ * that in place against a real backend would be worse — a tap that appears to
+ * sign someone in and does not.
+ *
+ * Doing it properly needs `expo-auth-session` plus the provider configured in
+ * Supabase Auth, and Apple additionally needs the entitlement and an Apple
+ * Developer account the client owns. Both are contracted (devis: "auth
+ * email/Google/Apple"), neither is done.
+ */
+export async function oauthContinue(_provider: 'google' | 'apple'): Promise<User> {
+  throw new AuthError('no_such_account');
 }
 
-export async function mockOAuthContinue(provider: 'google' | 'apple'): Promise<User> {
-  await table.ready;
-  await delay(600, 1000);
-  const email = provider === 'google' ? 'demo.google@sougouba.ca' : 'demo.apple@sougouba.ca';
-  const existing = findByEmail(email);
-  if (existing) return snapshot(existing);
-  const user: User = {
-    id: generateId('usr'),
-    fullName: provider === 'google' ? 'Utilisateur Google' : 'Utilisateur Apple',
-    email,
-    memberSince: new Date().toISOString(),
-    role: null,
-    favoriteProductIds: [],
-    favoriteVendorIds: [],
-    addresses: [],
-  };
-  await table.add(user);
-  return snapshot(user);
+export async function signOut(): Promise<void> {
+  await supabase.auth.signOut();
 }

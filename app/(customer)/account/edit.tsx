@@ -1,4 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
@@ -11,9 +10,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, BackHeader, Button, Input, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { type ProfileValues, profileSchema } from '@/lib/validation/profile';
+import { useT } from '@/lib/i18n/useT';
+import { i18nResolver } from '@/lib/validation/resolver';
 import { useSessionStore } from '@/store/useSessionStore';
 
 export default function EditProfileScreen() {
+  const t = useT();
   const colors = useThemeColors();
   const user = useSessionStore((s) => s.user);
   const updateUser = useSessionStore((s) => s.updateUser);
@@ -26,7 +28,7 @@ export default function EditProfileScreen() {
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<ProfileValues>({
-    resolver: zodResolver(profileSchema),
+    resolver: i18nResolver(t, profileSchema),
     defaultValues: { fullName: user?.fullName ?? '', email: user?.email ?? '' },
   });
 
@@ -34,8 +36,8 @@ export default function EditProfileScreen() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       Alert.alert(
-        'Accès aux photos refusé',
-        'Autorisez l’accès à vos photos dans les réglages de l’appareil pour changer votre portrait.'
+        t('customer.profile.photoDeniedTitle'),
+        t('customer.profile.photoDeniedBody')
       );
       return;
     }
@@ -56,13 +58,13 @@ export default function EditProfileScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <BackHeader title="Modifier le profil" />
+      <BackHeader title={t('customer.account.edit.title')} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         <ScrollView contentContainerClassName="px-6 pt-4 pb-10 gap-7" keyboardShouldPersistTaps="handled">
           <View className="items-center gap-3">
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Changer la photo de profil"
+              accessibilityLabel={t('customer.account.edit.changePhotoA11y')}
               onPress={pickPhoto}
             >
               <Avatar fullName={user?.fullName ?? '?'} uri={avatarUrl} size={104} />
@@ -75,7 +77,7 @@ export default function EditProfileScreen() {
             </Pressable>
             <Pressable onPress={pickPhoto} hitSlop={6} accessibilityRole="button">
               <Text variant="caption" weight="semibold" tone="primary">
-                Changer la photo
+                {t('customer.account.edit.changePhoto')}
               </Text>
             </Pressable>
           </View>
@@ -86,7 +88,7 @@ export default function EditProfileScreen() {
               name="fullName"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Nom complet"
+                  label={t('auth.field.fullName')}
                   icon={UserIcon}
                   value={value}
                   onChangeText={onChange}
@@ -102,7 +104,7 @@ export default function EditProfileScreen() {
               name="email"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Adresse courriel"
+                  label={t('auth.field.email')}
                   icon={Mail}
                   value={value}
                   onChangeText={onChange}
@@ -117,11 +119,11 @@ export default function EditProfileScreen() {
           </View>
 
           <Text variant="caption" tone="muted">
-            Votre adresse courriel sert à vous connecter et à recevoir les confirmations de commande.
+              {t('customer.account.edit.emailHint')}
           </Text>
 
           <Button
-            label="Enregistrer"
+            label={t('common.save')}
             variant="primary"
             size="lg"
             fullWidth

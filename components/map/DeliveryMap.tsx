@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
 
 import type { LatLng } from '@/data/types';
+import { useT } from '@/lib/i18n/useT';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { splitPath } from '@/lib/courierRoute';
 import { MAP_STYLES, initMapbox, mapboxReady } from '@/lib/mapbox';
@@ -75,6 +76,7 @@ export function DeliveryMap({
   interactive = true,
   padding,
 }: DeliveryMapProps) {
+  const t = useT();
   const { colorScheme } = useColorScheme();
   const cameraRef = useRef<Camera>(null);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
@@ -164,7 +166,7 @@ export function DeliveryMap({
         bearing={bearing}
         route={route}
         progress={progressStep}
-        notice="Aperçu du trajet — la carte s’activera avec la clé Mapbox."
+        notice={t('courier.mapPreview')}
       />
     );
   }

@@ -5,8 +5,10 @@ import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Text } from '@/components/ui';
+import { useT } from '@/lib/i18n/useT';
 
 export default function AuthLandingScreen() {
+  const t = useT();
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <View className="flex-1 items-center justify-center px-8">
@@ -30,10 +32,10 @@ export default function AuthLandingScreen() {
           className="items-center gap-3 mt-8"
         >
           <Text variant="title" weight="bold" className="text-center">
-            Bienvenue sur Sougouba
+            {t('auth.welcome.title')}
           </Text>
           <Text variant="body" tone="muted" className="text-center">
-            Les saveurs d’Afrique et du Maghreb, livrées près de chez vous au Québec.
+            {t('auth.welcome.body')}
           </Text>
         </MotiView>
       </View>
@@ -45,10 +47,10 @@ export default function AuthLandingScreen() {
         className="px-8 pb-4 gap-3"
       >
         <Link href="/(auth)/sign-up" asChild>
-          <Button label="Créer un compte" variant="primary" size="lg" fullWidth />
+          <Button label={t('auth.signUp.submit')} variant="primary" size="lg" fullWidth />
         </Link>
         <Link href="/(auth)/sign-in" asChild>
-          <Button label="Se connecter" variant="outline" size="lg" fullWidth />
+          <Button label={t('auth.signIn.submit')} variant="outline" size="lg" fullWidth />
         </Link>
       </MotiView>
     </SafeAreaView>

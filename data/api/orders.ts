@@ -1,651 +1,287 @@
-import { courierEarnings } from '../courierPay';
-import { deliveryPin, legDurationMin } from '../delivery';
-import { deliveryFeeBetween } from '../deliveryPricing';
-import { maxRedeemablePoints, pointsToDiscountCad } from '../loyalty';
-import { defaultDeliveryAddress } from '../seed/addresses';
-import { buildOrder, orderAddresses, orders as seedOrders, type OrderSpec } from '../seed/orders';
-import { products as seedProducts } from '../seed/products';
-import { users as seedUsers } from '../seed/users';
-import { vendors as seedVendors } from '../seed/vendors';
-import { orderTotal, roundCad, taxesOn } from '../taxes';
+import { api, ApiError, type Page } from '../http';
 import type {
   Address,
   Courier,
-  CourierIssue,
-  CourierIssueReason,
-  DeliveryProof,
-  DisputeReason,
   ID,
-  LatLng,
   Order,
   OrderItem,
   OrderStatus,
-  VehicleType,
 } from '../types';
-import { delay } from '../utils/delay';
-import { generateId } from '../utils/ids';
-import { distanceKm } from '../utils/geo';
-import { createPersistedTable } from '../utils/persistedTable';
-import { getVendorById } from './vendors';
-import * as loyaltyApi from './loyalty';
-import { hashString, mulberry32 } from '../utils/random';
-import { localIsoAt, localMinutesAgo } from '../utils/time';
 
 /**
- * Orders persist across restarts: placing one, killing the app and finding it
- * gone reads as a bug, and Phase 3's dashboard aggregates the same records.
+ * Orders — the domain where the cutover changes the most, because it is the one
+ * where the mock was allowed to do things a client must never do.
+ *
+ * Three rules the server now owns outright, each of which used to run here:
+ *
+ * 1. **What an order costs.** `createOrder` recomputed the subtotal, taxes and
+ *    delivery fee itself, which was already the right instinct. The API does the
+ *    same recomputation from its own catalogue and its own distance grid — and
+ *    because that happens after the client has been quoted, a price that moved
+ *    in between is caught rather than honoured.
+ * 2. **Whether it was paid for.** An order is written only after Stripe confirms
+ *    the money moved, and `assertPaidBy` re-checks the amount and the payer.
+ * 3. **Points and coupons.** Both are claimed inside the order's own
+ *    transaction, so a checkout that fails cannot spend either.
  */
-// The key carries a version because `Order` gained TPS/TVQ: rows written before
-// that change have no tax lines and a total that predates them, and a receipt
-// whose figures do not add up is worse than one that is simply gone.
-const table = createPersistedTable<Order>('sougouba-mock-orders-v2', seedOrders);
 
-/** Copies out, so callers can't mutate the table by holding a reference. */
-function snapshot(order: Order): Order {
-  return {
-    ...order,
-    items: [...order.items],
-    statusHistory: [...order.statusHistory],
-    ...(order.dispute ? { dispute: { ...order.dispute } } : {}),
-    ...(order.courierIssue ? { courierIssue: { ...order.courierIssue } } : {}),
-    ...(order.delivery
-      ? {
-          delivery: {
-            ...order.delivery,
-            ...(order.delivery.proof ? { proof: { ...order.delivery.proof } } : {}),
-          },
-        }
-      : {}),
-  };
+/** One customer's order list is tens of rows; the orders tab shows it whole. */
+const ALL = 100;
+
+// ── reads ───────────────────────────────────────────────────────────────────
+
+/** ⚠️ `customerId` is ignored — the API answers from the token. Kept so screens need no edit. */
+export async function getOrdersByCustomer(_customerId: ID): Promise<Order[]> {
+  const page = await api<Page<Order>>('/orders', { query: { limit: ALL } });
+  return page.items;
 }
 
-export async function getOrdersByCustomer(customerId: ID): Promise<Order[]> {
-  await table.ready;
-  await delay();
-  return table
-    .rows()
-    .filter((o) => o.customerId === customerId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .map(snapshot);
+/** ⚠️ Likewise `vendorId`: a merchant reads their own shop's queue, resolved from the token. */
+export async function getOrdersByVendor(_vendorId: ID): Promise<Order[]> {
+  const page = await api<Page<Order>>('/vendors/me/orders', { query: { limit: ALL } });
+  return page.items;
 }
 
-export async function getOrdersByVendor(vendorId: ID): Promise<Order[]> {
-  await table.ready;
-  await delay();
-  return table
-    .rows()
-    .filter((o) => o.vendorId === vendorId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .map(snapshot);
-}
-
+/**
+ * One order.
+ *
+ * Tries the shopper's view, then the merchant's — the two are different
+ * endpoints because they are different claims, and the API checks each against
+ * the row rather than trusting it. A 404 either way: an order that exists but
+ * is not yours must not be distinguishable from one that does not.
+ */
 export async function getOrderById(id: ID): Promise<Order | undefined> {
-  await table.ready;
-  await delay(150, 300);
-  const found = table.rows().find((o) => o.id === id);
-  return found ? snapshot(found) : undefined;
+  const asCustomer = await tryGet<Order>(`/orders/${id}`);
+  if (asCustomer) return asCustomer;
+  return (await tryGet<Order>(`/vendors/me/orders/${id}`)) ?? undefined;
 }
 
-export async function createOrder(input: {
+async function tryGet<T>(path: string): Promise<T | undefined> {
+  try {
+    return await api<T>(path);
+  } catch (error) {
+    if (error instanceof ApiError && (error.status === 404 || error.status === 403 || error.status === 401)) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+// ── checkout ────────────────────────────────────────────────────────────────
+
+export type Cart = {
+  vendorId: ID;
+  addressId: ID;
+  items: { productId: ID; qty: number }[];
+  redeemPoints?: number;
+  couponCode?: string;
+};
+
+/** What the checkout screen shows before the payment sheet opens — priced by the server. */
+export async function quoteCart(cart: Cart): Promise<{
+  subtotalCad: number;
+  gstCad: number;
+  qstCad: number;
+  deliveryFeeCad: number;
+  pointsRedeemed: number;
+  pointsDiscountCad: number;
+  couponCode: string | null;
+  couponDiscountCad: number;
+  totalCad: number;
+  items: { productId: ID; name: string; qty: number; unitPriceCad: number }[];
+}> {
+  return api('/orders/quote', { method: 'POST', body: cart });
+}
+
+/** Step 2: a PaymentIntent for the same cart, priced again server-side. No order row is written yet. */
+export async function createPaymentIntent(cart: Cart): Promise<{
+  clientSecret: string;
+  paymentIntentId: string;
+  quote: Awaited<ReturnType<typeof quoteCart>>;
+}> {
+  return api('/orders/payment-intent', { method: 'POST', body: cart });
+}
+
+/** Step 3, after Stripe confirms: the order is written, or refused if the price moved. */
+export async function placeOrder(cart: Cart & { paymentIntentId: string }): Promise<Order> {
+  return api<Order>('/orders', { method: 'POST', body: cart });
+}
+
+/**
+ * ⚠️ **The old one-step checkout is gone, and this throws.**
+ *
+ * `createOrder` wrote an order directly. It cannot any more, and should not: an
+ * order that exists without a payment is an order the merchant will pack and
+ * nobody paid for. The replacement is the three steps above, with Stripe's
+ * confirmation between the second and the third.
+ *
+ * **What is missing to finish it:** `@stripe/stripe-react-native` is not
+ * installed, so nothing in the app can confirm a PaymentIntent. The publishable
+ * key is already in `.env`. Until the payment sheet is wired,
+ * `app/(customer)/checkout.tsx` has no way to complete an order — which is why
+ * this throws a sentence saying so rather than failing at the API with
+ * "assertPaidBy refused".
+ */
+export async function createOrder(_input: {
   customerId: ID;
   customerName?: string;
   vendorId: ID;
   items: OrderItem[];
   deliveryAddress: Address;
   createdAt: string;
-  /** Points the shopper asked to redeem at checkout — clamped below, never trusted as-is. */
   redeemPoints?: number;
 }): Promise<Order> {
-  await table.ready;
-  await delay(500, 900);
-  const subtotalCad = roundCad(input.items.reduce((sum, item) => sum + item.unitPriceCad * item.qty, 0));
-  // Recomputed here rather than accepted from the caller: the checkout quotes a
-  // total, but what the order is worth is the backend's answer, not the screen's.
-  // The delivery fee joined that rule when it stopped being a number the shop
-  // typed and became a function of the distance — which this side can measure
-  // for itself, so there is no reason to take the client's word for it.
-  const taxes = taxesOn(subtotalCad);
-  const vendor = await getVendorById(input.vendorId);
-  if (!vendor) throw new Error(`Commande impossible : boutique ${input.vendorId} introuvable`);
-  const deliveryFeeCad = deliveryFeeBetween(vendor.address, input.deliveryAddress);
-
-  // Points redemption gets the same treatment: the checkout screen shows a
-  // preview of what a shopper *could* spend, but what actually clears is
-  // computed here against their real balance and the brief's 20 % cap
-  // ("Utilisation — Maximum 20 % du sous-total"), and only ever against the
-  // subtotal — never the tax or delivery lines this order also carries.
-  const balance = input.redeemPoints ? await loyaltyApi.getBalance(input.customerId) : 0;
-  const pointsRedeemed = input.redeemPoints
-    ? maxRedeemablePoints(subtotalCad, Math.min(input.redeemPoints, balance))
-    : 0;
-  const pointsDiscountCad = pointsRedeemed > 0 ? pointsToDiscountCad(pointsRedeemed) : 0;
-
-  const order: Order = {
-    id: generateId('ord'),
-    customerId: input.customerId,
-    customerName: input.customerName,
-    vendorId: input.vendorId,
-    items: input.items,
-    status: 'pending',
-    subtotalCad,
-    ...taxes,
-    deliveryFeeCad,
-    ...(pointsRedeemed > 0 ? { pointsRedeemed, pointsDiscountCad } : {}),
-    totalCad: roundCad(orderTotal(subtotalCad, taxes, deliveryFeeCad) - pointsDiscountCad),
-    deliveryAddress: input.deliveryAddress,
-    createdAt: input.createdAt,
-    statusHistory: [{ status: 'pending', at: input.createdAt }],
-  };
-  await table.add(order);
-  if (pointsRedeemed > 0) {
-    await loyaltyApi.debitForRedemption(input.customerId, pointsRedeemed, order.id);
-  }
-  return snapshot(order);
-}
-
-export async function updateOrderStatus(id: ID, status: OrderStatus, at: string): Promise<Order | undefined> {
-  await table.ready;
-  await delay();
-  const order = table.rows().find((o) => o.id === id);
-  if (!order) return undefined;
-  order.status = status;
-  order.statusHistory.push({ status, at });
-  await table.save(order.id);
-  return snapshot(order);
-}
-
-/**
- * Report a problem on a finished order (CDC addendum v1.1, §04).
- *
- * Writes onto the order rather than into a table of its own: a dispute has no
- * life independent of the order it is about, every screen that shows one already
- * holds the order, and the platform back-office that will trade in disputes
- * proper is a later sprint. When it arrives this is the record it reads.
- */
-export async function openDispute(
-  id: ID,
-  input: { reason: DisputeReason; message: string; at: string }
-): Promise<Order | undefined> {
-  await table.ready;
-  await delay(400, 700);
-  const order = table.rows().find((o) => o.id === id);
-  if (!order) return undefined;
-  // Deliberately not an update: reopening would overwrite what the shopper
-  // originally said, which is the one part of a dispute nobody should be able
-  // to rewrite.
-  if (order.dispute) return snapshot(order);
-  order.dispute = {
-    reason: input.reason,
-    message: input.message,
-    openedAt: input.at,
-    status: 'open',
-  };
-  await table.save(order.id);
-  return snapshot(order);
-}
-
-/** The merchant's answer. Settling the dispute is the back-office's call, not theirs. */
-export async function replyToDispute(
-  id: ID,
-  input: { message: string; at: string }
-): Promise<Order | undefined> {
-  await table.ready;
-  await delay(300, 600);
-  const order = table.rows().find((o) => o.id === id);
-  if (!order?.dispute) return undefined;
-  order.dispute = {
-    ...order.dispute,
-    status: 'answered',
-    merchantReply: input.message,
-    answeredAt: input.at,
-  };
-  await table.save(order.id);
-  return snapshot(order);
-}
-
-/**
- * How far back each demo order sits, and where it has got to.
- *
- * Offsets are relative to the moment the account first opens the app, not fixed
- * dates: a prototype demoed weeks from now would otherwise show a "live"
- * delivery timestamped last month. Three closed orders give Commandes a history
- * to show; the two still moving give the tracking timeline something to track.
- */
-const DEMO_ORDERS: {
-  minutesAgo: number;
-  vendorId: ID;
-  lines: [productId: string, qty: number][];
-  status: OrderStatus;
-}[] = [
-  { minutesAgo: 60 * 24 * 14, vendorId: 'vnd_saveurs_dakar', lines: [['prd_thieboudienne', 1], ['prd_jus_bissap', 2]], status: 'delivered' },
-  { minutesAgo: 60 * 24 * 9, vendorId: 'vnd_boulangerie_tanit', lines: [['prd_msemen', 2], ['prd_cafe_turc', 1]], status: 'delivered' },
-  { minutesAgo: 60 * 24 * 4, vendorId: 'vnd_douceurs_maghreb', lines: [['prd_cornes_gazelle', 1], ['prd_lben', 2]], status: 'delivered' },
-  { minutesAgo: 55, vendorId: 'vnd_marche_bamako', lines: [['prd_mangue_kent', 3], ['prd_banane_plantain', 2], ['prd_gombo_frais', 1]], status: 'out_for_delivery' },
-  { minutesAgo: 14, vendorId: 'vnd_epicerie_atlas', lines: [['prd_couscous_moyen', 1], ['prd_ras_el_hanout', 1], ['prd_harissa_artisanale', 2]], status: 'preparing' },
-];
-
-/**
- * Give an account without any order history a plausible one.
- *
- * The seed only knows four hard-coded customers, so anyone signing up in the app
- * lands on an empty Commandes tab and an empty tracking flow — the prototype
- * looks unfinished at exactly the screens it is meant to show off. This runs
- * once per account and is idempotent by construction: it does nothing when the
- * customer already has orders, and after the first call they always do.
- *
- * Returns the orders it created, or an empty array when it did nothing.
- */
-export async function ensureDemoOrders(customerId: ID, customerName: string, address?: Address): Promise<Order[]> {
-  await table.ready;
-  if (table.rows().some((o) => o.customerId === customerId)) return [];
-
-  const now = Date.now();
-  const created = DEMO_ORDERS.map((demo, index) => {
-    const spec: OrderSpec = {
-      id: `ord_demo_${customerId}_${index}`,
-      customerId,
-      customerName,
-      vendorId: demo.vendorId,
-      address: address ?? defaultDeliveryAddress,
-      lines: demo.lines,
-      status: demo.status,
-      createdAt: localMinutesAgo(demo.minutesAgo, now),
-    };
-    return buildOrder(spec);
-  });
-
-  for (const order of created) {
-    await table.add(order);
-  }
-  return created;
-}
-
-/**
- * Give an account's *existing* delivered orders the points they would have
- * earned along the way.
- *
- * Points Sougouba shipped after the order history it applies to already
- * existed — the four seeded shoppers and their 45 days of generated orders,
- * plus whatever `ensureDemoOrders` gave a fresh account. None of those rows
- * ever passed through `completeDelivery`, so none of them were ever credited.
- * Rather than hand-write a second, parallel points history to match, this
- * replays the real one: every delivered order this customer has, oldest
- * first, through the same `creditForDeliveredOrder` the live delivery flow
- * uses. Idempotent by construction — `creditForDeliveredOrder` is idempotent
- * per order, so calling this on every launch costs nothing once the first
- * pass has run.
- */
-export async function ensureLoyaltyBackfill(customerId: ID): Promise<void> {
-  await table.ready;
-  const delivered = table
-    .rows()
-    .filter((o) => o.customerId === customerId && o.status === 'delivered')
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  for (let i = 0; i < delivered.length; i++) {
-    await loyaltyApi.creditForDeliveredOrder(snapshot(delivered[i]), { isFirstDeliveredOrder: i === 0 });
-  }
-}
-
-// ── the delivery side ───────────────────────────────────────────────────────
-
-/**
- * Everything a given courier has ever carried, newest first.
- *
- * Queried by `courierId` rather than by account: an order records the file that
- * delivered it, and the two are not the same thing (see the note on `Courier`).
- */
-export async function getOrdersForCourier(courierId: ID): Promise<Order[]> {
-  await table.ready;
-  await delay();
-  return table
-    .rows()
-    .filter((o) => o.delivery?.courierId === courierId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .map(snapshot);
-}
-
-/**
- * How far back a seeded courier history reaches, and how busy it is.
- *
- * Thirty days rather than the seed's forty-five: a courier who joined this
- * morning cannot plausibly have six weeks of runs, and thirty still fills the
- * 7-day chart, the range comparison behind it, and a history worth scrolling.
- */
-const RUN_HISTORY_DAYS = 30;
-/** Shops close enough to the courier's base to be a night's work rather than a commute. */
-const RUN_SHOP_POOL = 6;
-/** Drop-offs are drawn from the addresses nearest each shop, so a run is a run and not a road trip. */
-const RUN_ADDRESS_POOL = 5;
-
-/** Where a courier's shifts sit in the day. Evenings carry the trade; mornings are quiet. */
-const RUN_HOURS: { from: number; to: number; weight: number }[] = [
-  { from: 11, to: 14, weight: 0.34 },
-  { from: 14, to: 17, weight: 0.16 },
-  { from: 17, to: 21, weight: 0.5 },
-];
-
-/**
- * Give a courier without any runs a plausible history behind them.
- *
- * The courier twin of `ensureDemoOrders`, and it exists for exactly the same
- * reason: only the eight seeded couriers appear on any delivery, so a courier
- * who registers in the app lands on an empty Courses tab, a Gains screen reading
- * 0,00 $, and a profile that says "nouveau" forever. Three of the four courier
- * screens are then demonstrating nothing.
- *
- * Idempotent by construction — it does nothing once this courier is on an
- * order, and after the first call they always are. No separate "seeded" flag,
- * for the reason `ensureDemoOrders` gives.
- *
- * Everything is derived rather than invented: the shops are the ones nearest
- * this courier's base, the drop-offs are the addresses nearest those shops, and
- * the pay comes out of `buildOrder` through `data/courierPay.ts` like every
- * other run in the app. Seeded from the courier id, so a demo shows the same
- * history each launch instead of a number that moves when nothing happened.
- *
- * Returns the runs it created, or an empty array when it did nothing.
- */
-export async function ensureDemoRuns(
-  courier: Pick<Courier, 'id' | 'base' | 'vehicle'>
-): Promise<Order[]> {
-  await table.ready;
-  if (table.rows().some((o) => o.delivery?.courierId === courier.id)) return [];
-
-  const rng = mulberry32(hashString(`runs:${courier.id}`));
-
-  // Shops this courier would actually be offered, by the same measure the
-  // dispatcher ranks with — so the history matches the work they get sent.
-  const shops = [...seedVendors]
-    .sort((a, b) => distanceKm(courier.base, a.address) - distanceKm(courier.base, b.address))
-    .slice(0, RUN_SHOP_POOL)
-    .filter((vendor) => seedProducts.some((p) => p.vendorId === vendor.id));
-  if (shops.length === 0) return [];
-
-  // Precomputed per shop: sorting the address book inside the day loop would
-  // redo the same work ~75 times for no benefit.
-  const dropoffsByShop = new Map(
-    shops.map((vendor) => [
-      vendor.id,
-      [...orderAddresses]
-        .sort((a, b) => distanceKm(vendor.address, a) - distanceKm(vendor.address, b))
-        .slice(0, RUN_ADDRESS_POOL),
-    ])
+  throw new Error(
+    'Checkout is now quote → PaymentIntent → confirm → placeOrder. ' +
+      'Install @stripe/stripe-react-native and wire the payment sheet; see quoteCart/createPaymentIntent/placeOrder.'
   );
-
-  const shoppers = seedUsers.filter((u) => u.role === 'customer').map((u) => u.id);
-  if (shoppers.length === 0) return [];
-
-  const specs: OrderSpec[] = [];
-  let n = 0;
-
-  const buildSpec = (createdAt: string): OrderSpec | null => {
-    const vendor = shops[Math.floor(rng() * shops.length) % shops.length];
-    const pool = seedProducts.filter((p) => p.vendorId === vendor.id);
-    if (pool.length === 0) return null;
-    const dropoffs = dropoffsByShop.get(vendor.id) ?? orderAddresses;
-    const address = dropoffs[Math.floor(rng() * dropoffs.length) % dropoffs.length];
-
-    const lineCount = 1 + Math.floor(rng() * rng() * 3);
-    const chosen = new Set<string>();
-    const lines: [string, number][] = [];
-    for (let i = 0; i <= lineCount; i++) {
-      const product = pool[Math.floor(rng() * pool.length) % pool.length];
-      if (chosen.has(product.id)) continue;
-      chosen.add(product.id);
-      lines.push([product.id, rng() < 0.68 ? 1 : 2]);
-    }
-
-    return {
-      id: `ord_run_${courier.id}_${String(n++).padStart(3, '0')}`,
-      // The basket belonged to a shopper; only the delivery leg is this
-      // courier's. Attributing it to the courier's own account would put these
-      // rows in their Commandes tab if they ever opened the customer app.
-      customerId: shoppers[Math.floor(rng() * shoppers.length) % shoppers.length],
-      vendorId: vendor.id,
-      address,
-      lines,
-      status: 'delivered',
-      courier,
-      createdAt,
-    };
-  };
-
-  // ── The days behind ──
-  for (let daysAgo = RUN_HISTORY_DAYS; daysAgo >= 1; daysAgo--) {
-    // Couriers take days off. Without this every bar on the chart is the same
-    // height and the history reads as generated, which it is.
-    if (rng() < 0.18) continue;
-    const weekday = new Date(Date.now() - daysAgo * 86400000).getDay();
-    // Friday and Saturday are the delivery nights; Sunday and Monday are thin.
-    const busy = weekday === 5 || weekday === 6 ? 1.6 : weekday === 0 || weekday === 1 ? 0.7 : 1;
-    const count = Math.max(1, Math.round((2 + rng() * 2.4) * busy));
-
-    for (let i = 0; i < count; i++) {
-      const slot = pickHour(rng);
-      const hour = Math.floor(slot);
-      const minute = Math.floor((slot - hour) * 60);
-      const spec = buildSpec(localIsoAt(daysAgo, hour, minute));
-      if (spec) specs.push(spec);
-    }
-  }
-
-  // ── Today ──
-  // Placed by minutes-ago rather than by clock time: a run has to be old enough
-  // that its own delivered step (+57 min in the happy path) has already passed,
-  // or the history opens with a delivery timestamped in the future.
-  const minutesOpen = new Date().getHours() * 60 + new Date().getMinutes();
-  for (const minutesAgo of [95, 215, 340]) {
-    if (minutesAgo + 70 > minutesOpen) continue;
-    const spec = buildSpec(localMinutesAgo(minutesAgo));
-    if (spec) specs.push(spec);
-  }
-
-  const created = specs.map(buildOrder);
-  for (const order of created) {
-    await table.add(order);
-  }
-  return created;
 }
 
-/** Weighted pick of an hour-of-day, as a fractional hour. */
-function pickHour(rng: () => number): number {
-  let roll = rng();
-  let slot = RUN_HOURS[RUN_HOURS.length - 1];
-  for (const candidate of RUN_HOURS) {
-    if (roll < candidate.weight) {
-      slot = candidate;
-      break;
-    }
-    roll -= candidate.weight;
+// ── the merchant's queue ────────────────────────────────────────────────────
+
+/**
+ * Advance or cancel an order, as the merchant.
+ *
+ * ⚠️ `at` is ignored. The timestamp is the server's — a client-supplied one is
+ * how an order gets a history that runs backwards.
+ */
+export async function updateOrderStatus(id: ID, status: OrderStatus, _at: string): Promise<Order | undefined> {
+  return (await tryPost<Order>(`/vendors/me/orders/${id}/status`, { status }, 'PATCH')) ?? undefined;
+}
+
+export async function openDispute(
+  orderId: ID,
+  input: { reason: string; message: string }
+): Promise<Order | undefined> {
+  return (await tryPost<Order>(`/orders/${orderId}/dispute`, input)) ?? undefined;
+}
+
+export async function replyToDispute(orderId: ID, message: string): Promise<Order | undefined> {
+  return (await tryPost<Order>(`/vendors/me/orders/${orderId}/dispute/reply`, { message })) ?? undefined;
+}
+
+async function tryPost<T>(path: string, body: unknown, method: 'POST' | 'PATCH' = 'POST'): Promise<T | undefined> {
+  try {
+    return await api<T>(path, { method, body });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return undefined;
+    throw error;
   }
-  return slot.from + rng() * (slot.to - slot.from);
+}
+
+// ── the courier's day ───────────────────────────────────────────────────────
+
+/**
+ * ⚠️ `courierId` ignored — `/couriers/me/runs` is resolved from the token.
+ *
+ * ⚠️ And it returns a **bare array**, not the `Page` envelope every other list
+ * on this API uses. So do `/me/loyalty/history` and `/couriers/me/offers`. The
+ * inconsistency is the API's; treating them alike is how a caller ends up
+ * reading `.items` off an array and getting `undefined` with no error.
+ */
+export async function getOrdersForCourier(_courierId: ID): Promise<Order[]> {
+  return api<Order[]>('/couriers/me/runs', { query: { limit: ALL } });
 }
 
 /**
- * What the dispatcher is allowed to offer.
+ * Live offers for the signed-in courier.
  *
- * `ready` and nobody assigned: the shop has finished packing and no courier has
- * accepted. An order still `preparing` is not offerable — a courier who arrives
- * before the food does is a courier standing in a kitchen.
+ * ⚠️ Renamed in spirit: the mock's `getDispatchableOrders` returned every order
+ * *anyone* could take, and ranked them on the device. Dispatch is the server's
+ * now — it picks the nearest eligible courier and offers the run to them
+ * specifically, so this returns only what has been offered to this courier.
  */
 export async function getDispatchableOrders(): Promise<Order[]> {
-  await table.ready;
-  await delay(200, 400);
-  return table
-    .rows()
-    .filter((o) => o.status === 'ready' && !o.delivery)
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    .map(snapshot);
+  return api<Order[]>('/couriers/me/offers');
 }
 
 export interface AcceptQuote {
-  /** Courier's position when they accepted, for the leg to the shop. */
-  from: LatLng;
-  pickup: LatLng;
-  dropoff: LatLng;
-  vehicle: VehicleType;
-  tipCad?: number;
+  distanceKm: number;
+  earningsCad: number;
 }
 
 /**
- * A courier takes the run.
+ * Take a run.
  *
- * Deliberately refuses an order that already has a courier rather than
- * overwriting: two couriers can tap Accepter within the same second, and the
- * loser needs to be told, not silently handed a delivery someone else is
- * already driving. Note this does **not** advance the status — picking the food
- * up is a separate act, and `ready` is still the truth until it happens.
+ * ⚠️ Takes the **offer** id now, not a courier id and an order id. The claim is
+ * the server's insert, so two couriers tapping Accepter in the same second get
+ * one winner and one told why — which the mock could only guarantee by being
+ * single-threaded.
  */
-export async function assignCourier(
-  orderId: ID,
-  courierId: ID,
-  at: string,
-  quote: AcceptQuote
-): Promise<Order | undefined> {
-  await table.ready;
-  await delay(300, 600);
-  const order = table.rows().find((o) => o.id === orderId);
-  if (!order || order.delivery) return undefined;
-
-  const runKm = Math.round(distanceKm(quote.pickup, quote.dropoff) * 100) / 100;
-  const tipCad = quote.tipCad ?? 0;
-  order.delivery = {
-    courierId,
-    acceptedAt: at,
-    pickupEtaMin: legDurationMin(distanceKm(quote.from, quote.pickup), quote.vehicle),
-    dropoffEtaMin: legDurationMin(runKm, quote.vehicle),
-    distanceKm: runKm,
-    pin: deliveryPin(orderId),
-    tipCad,
-    earningsCad: courierEarnings(runKm, tipCad),
-  };
-  await table.save(order.id);
-  return snapshot(order);
+export async function assignCourier(offerId: ID): Promise<Order | undefined> {
+  const result = await tryPost<{ orderId: ID }>(`/couriers/me/offers/${offerId}/accept`, {});
+  return result ? getOrderById(result.orderId) : undefined;
 }
 
-/** The courier has the bag. Paired with the `ready` -> `out_for_delivery` advance. */
-export async function markPickedUp(orderId: ID, at: string): Promise<Order | undefined> {
-  await table.ready;
-  await delay();
-  const order = table.rows().find((o) => o.id === orderId);
-  if (!order?.delivery) return undefined;
-  order.delivery.pickedUpAt = at;
-  order.status = 'out_for_delivery';
-  order.statusHistory.push({ status: 'out_for_delivery', at });
-  await table.save(order.id);
-  return snapshot(order);
+export async function markPickedUp(orderId: ID, _at: string): Promise<Order | undefined> {
+  return (await tryPost<Order>(`/couriers/me/runs/${orderId}/pickup`, {})) ?? undefined;
 }
 
-/**
- * The run is finished, with evidence.
- *
- * Proof and status land in one call on purpose: an order marked delivered with
- * no proof is exactly the state a dispute turns on, and letting the two drift
- * apart would make it reachable by closing a screen at the wrong moment.
- */
 export async function completeDelivery(
   orderId: ID,
-  proof: DeliveryProof,
-  at: string
+  input: { method: 'pin' | 'photo' | 'signature'; pin?: string; imagePath?: string; note?: string; tipCad?: number }
 ): Promise<Order | undefined> {
-  await table.ready;
-  await delay(300, 600);
-  const order = table.rows().find((o) => o.id === orderId);
-  if (!order?.delivery) return undefined;
-  order.delivery.proof = proof;
-  order.delivery.deliveredAt = at;
-  order.status = 'delivered';
-  order.statusHistory.push({ status: 'delivered', at });
-  await table.save(order.id);
-
-  // Points Sougouba credits "après livraison réussie" and nowhere earlier —
-  // this is the one place in the app an order actually becomes delivered.
-  const isFirstDeliveredOrder = !table
-    .rows()
-    .some((o) => o.customerId === order.customerId && o.id !== order.id && o.status === 'delivered');
-  await loyaltyApi.creditForDeliveredOrder(snapshot(order), { isFirstDeliveredOrder });
-
-  return snapshot(order);
+  return (await tryPost<Order>(`/couriers/me/runs/${orderId}/complete`, input)) ?? undefined;
 }
 
-/**
- * The courier flags a problem.
- *
- * Writes onto the order and changes nothing else — see `CourierIssue`. The run
- * stays open, because a courier standing outside a locked building still has
- * someone's dinner and the order is not resolved until it is somewhere.
- */
 export async function reportCourierIssue(
-  id: ID,
-  reason: CourierIssueReason,
-  message: string,
-  at: string
+  orderId: ID,
+  input: { reason: string; message: string }
 ): Promise<Order | undefined> {
-  await table.ready;
-  await delay(400, 700);
-  const order = table.rows().find((o) => o.id === id);
-  if (!order || order.courierIssue) return undefined;
-  const issue: CourierIssue = { reason, message, at };
-  order.courierIssue = issue;
-  await table.save(order.id);
-  return snapshot(order);
+  return (await tryPost<Order>(`/couriers/me/runs/${orderId}/issue`, input)) ?? undefined;
 }
 
-/**
- * The catalogue's best sellers, platform-wide.
- *
- * The home screen used to head this section "Populaires" over a list sorted by
- * whether the item happened to carry a struck-through price — a deals rail
- * wearing a popularity label. The client asked for "Articles les + vendus", so
- * it is now counted: units sold across every shop, cancelled orders excluded,
- * because a cancelled order sold nothing.
- *
- * Ids rather than products, the way `getVendorStats.topProductIds` returns them
- * — orders hold a snapshot of the name and price at the time, and the caller
- * wants today's catalogue row, not that snapshot.
- */
-export async function getTopProductIds(limit = 6): Promise<ID[]> {
-  await table.ready;
-  await delay();
-  const qtyByProduct = new Map<ID, number>();
-  for (const order of table.rows()) {
-    if (order.status === 'cancelled') continue;
-    for (const item of order.items) {
-      qtyByProduct.set(item.productId, (qtyByProduct.get(item.productId) ?? 0) + item.qty);
-    }
-  }
-  return [...qtyByProduct.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([productId]) => productId);
-}
+// ── merchant analytics ──────────────────────────────────────────────────────
 
 export interface VendorStats {
   revenueCad: number;
   orderCount: number;
   avgBasketCad: number;
-  topProductIds: ID[];
+  activeProductCount?: number;
 }
 
-/** Aggregated from the same order records the Orders tabs read, so Dashboard numbers stay honest. */
-export async function getVendorStats(vendorId: ID): Promise<VendorStats> {
-  await table.ready;
-  await delay();
-  const vendorOrders = table.rows().filter((o) => o.vendorId === vendorId && o.status !== 'cancelled');
-  const revenueCad = vendorOrders.reduce((sum, o) => sum + o.totalCad, 0);
-  const orderCount = vendorOrders.length;
-  const avgBasketCad = orderCount > 0 ? revenueCad / orderCount : 0;
+/**
+ * ⚠️ `revenueCad` is the product **subtotal**, not the order total — delivery
+ * pays the courier and TPS/TVQ is collected for the government. Reading the
+ * total instead overstates a merchant's revenue by around 20 %, which is why
+ * the API computes it and this does not.
+ */
+export async function getVendorStats(_vendorId: ID): Promise<VendorStats> {
+  const a = await api<{ revenueCad: number; orderCount: number; avgBasketCad: number }>(
+    '/vendors/me/analytics',
+    { query: { days: 30 } }
+  );
+  return { revenueCad: a.revenueCad, orderCount: a.orderCount, avgBasketCad: a.avgBasketCad };
+}
 
-  const qtyByProduct = new Map<ID, number>();
-  for (const order of vendorOrders) {
-    for (const item of order.items) {
-      qtyByProduct.set(item.productId, (qtyByProduct.get(item.productId) ?? 0) + item.qty);
-    }
-  }
-  const topProductIds = [...qtyByProduct.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([productId]) => productId);
+/**
+ * ⚠️ **No endpoint yet.** The home screen's "Articles les + vendus" ranked
+ * products by units sold across every shop; the API has that aggregate only
+ * per-merchant (`/vendors/me/analytics`), behind the merchant's own token.
+ *
+ * A platform-wide version is a small addition — `admin_overview` already does
+ * the same shape — but it does not exist, so this returns an empty list and the
+ * home screen falls back to its deals ordering, exactly as it does when the
+ * catalogue has no sales to rank.
+ */
+export async function getTopProductIds(_limit = 6): Promise<ID[]> {
+  return [];
+}
 
-  return { revenueCad, orderCount, avgBasketCad, topProductIds };
+// ── demo scaffolding: gone ──────────────────────────────────────────────────
+
+const DEMO_REMOVED =
+  'Demo data is seeded server-side now — see sougouba-api/scripts/seed. ' +
+  'The app cannot fabricate orders, runs or ledger entries against a real database.';
+
+export async function ensureDemoOrders(_customerId: ID, _customerName: string, _address?: Address): Promise<Order[]> {
+  throw new Error(DEMO_REMOVED);
+}
+
+export async function ensureDemoRuns(_courier: Courier, ..._rest: unknown[]): Promise<number> {
+  throw new Error(DEMO_REMOVED);
+}
+
+export async function ensureLoyaltyBackfill(_customerId: ID): Promise<void> {
+  throw new Error(DEMO_REMOVED);
 }

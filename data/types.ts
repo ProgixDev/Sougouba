@@ -1,5 +1,29 @@
 export type ID = string;
 
+/** The languages the app ships. Declared here because `data/` must not import from `lib/`. */
+export type Locale = 'fr' | 'en';
+
+/**
+ * A string owned by a back-office or by a merchant, in the languages it has
+ * actually been written in.
+ *
+ * `fr` is required rather than optional because it *is* the fallback; a type
+ * that let it be missing would push a `?? '—'` into every read site. A third
+ * language is one more union member, not a schema migration — which is why this
+ * is a record and not an `nameEn` sitting beside an `nameFr`.
+ *
+ * Merchant-authored text arrives as `{ fr: 'Épicerie maghrébine' }` and stays
+ * that way: the app cannot translate what a shopkeeper typed, and a field shaped
+ * to pretend otherwise would be a lie with better types. Read it through
+ * `localized()` / `useLocalized()` in `lib/localized.ts`.
+ *
+ * Note this is deliberately *not* how the closed sets work. `Vertical` and the
+ * order-status vocabulary are code, so their words live in the message
+ * catalogue; these are rows in a table someone will edit, so a catalogue key
+ * would render literally on screen the day a new row appears.
+ */
+export type LocalizedText = { fr: string } & Partial<Record<Locale, string>>;
+
 export interface NutritionInfo {
   calories: number;
   proteinG: number;
@@ -10,9 +34,9 @@ export interface NutritionInfo {
 export interface Category {
   id: ID;
   slug: string;
-  nameFr: string;
+  name: LocalizedText;
   /** Compact one-word label for tight spaces (category circles, chips). */
-  shortNameFr: string;
+  shortName: LocalizedText;
   icon: string;
   colorToken: string;
 }
@@ -66,7 +90,8 @@ export type VendorType = 'grocery' | 'restaurant';
  */
 export interface VendorSection {
   id: ID;
-  nameFr: string;
+  /** The merchant's own heading — single-language in practice. See `LocalizedText`. */
+  name: LocalizedText;
 }
 
 /**
@@ -108,7 +133,7 @@ export interface Vendor {
    * trade for a grocery. The CDC calls for a "type de cuisine" on the shop list,
    * and a grocery needs the same slot filled with something true of a grocery.
    */
-  specialtyFr: string;
+  specialty: LocalizedText;
   logoUrl: string;
   coverUrl: string;
   categoryIds: ID[];

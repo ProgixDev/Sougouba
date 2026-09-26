@@ -18,6 +18,8 @@ import { deliveryFeeBetween } from '@/data/deliveryPricing';
 import type { Category, Product, Vendor } from '@/data/types';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { deliveryAddressFor } from '@/lib/deliveryAddress';
+import { useLocalized } from '@/lib/localized';
+import { useT } from '@/lib/i18n/useT';
 import { formatCad } from '@/lib/format';
 import { dynamicRoutes, routes } from '@/lib/routes';
 import { shopDay, shopStatusLine } from '@/lib/shopHours';
@@ -54,6 +56,8 @@ const AnimatedSectionList = Animated.createAnimatedComponent(
  * headings, with a rail that pins itself to the top once the cover scrolls away.
  */
 export default function VendorDetailScreen() {
+  const t = useT();
+  const L = useLocalized();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
@@ -121,7 +125,7 @@ export default function VendorDetailScreen() {
         const rows: SectionRow[] = isRestaurant
           ? items.map((item) => [item])
           : chunk(items, GRID_COLUMNS);
-        return { id: section.id, title: section.nameFr, data: rows };
+        return { id: section.id, title: L(section.name), data: rows };
       })
       .filter((section) => section.data.length > 0);
   }, [vendor, products, isRestaurant]);
@@ -168,9 +172,9 @@ export default function VendorDetailScreen() {
       <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
         <EmptyState
           icon={StoreIcon}
-          title="Commerce introuvable"
-          description="Ce commerce n’est plus référencé ou le lien est expiré."
-          actionLabel="Retour à l’accueil"
+          title={t('customer.vendor.notFoundTitle')}
+          description={t('customer.vendor.notFoundBody')}
+          actionLabel={t('customer.orderConfirmed.home')}
           onAction={() => router.replace(routes.customerHome)}
         />
       </View>
@@ -223,10 +227,10 @@ export default function VendorDetailScreen() {
                         {vendor.name}
                       </Text>
                       <Text variant="caption" tone="muted">
-                        {vendor.specialtyFr}
+                        {L(vendor.specialty)}
                       </Text>
                     </View>
-                    {vendor.isHalalCertified ? <Badge label="Halal" tone="success" /> : null}
+                    {vendor.isHalalCertified ? <Badge label={t('customer.vendor.halal')} tone="success" /> : null}
                   </View>
 
                   <View className="flex-row items-center gap-1.5">
@@ -260,10 +264,10 @@ export default function VendorDetailScreen() {
                   {day && !day.isOpen ? (
                     <View className="rounded-2xl bg-muted px-4 py-3">
                       <Text variant="caption" weight="semibold">
-                        {shopStatusLine(day)}
+                        {t(shopStatusLine(day))}
                       </Text>
                       <Text variant="caption" tone="muted" className="text-[12px]">
-                        Vous pouvez parcourir la carte, mais pas commander pour l’instant.
+                        {t('customer.misc.browseOnly')}
                       </Text>
                     </View>
                   ) : null}
@@ -344,8 +348,8 @@ export default function VendorDetailScreen() {
           loading ? null : (
             <EmptyState
               icon={StoreIcon}
-              title="Catalogue vide"
-              description="Ce commerce n’a pas encore ajouté de produits."
+              title={t('customer.vendor.emptyCatalogTitle')}
+              description={t('customer.vendor.emptyCatalogBody')}
             />
           )
         }
@@ -360,7 +364,7 @@ export default function VendorDetailScreen() {
         <Pressable
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="Retour"
+          accessibilityLabel={t('common.ui.back')}
           onPress={() => (router.canGoBack() ? router.back() : router.replace(routes.customerHome))}
           className="w-11 h-11 items-center justify-center rounded-full bg-card"
         >
@@ -369,7 +373,7 @@ export default function VendorDetailScreen() {
         <Pressable
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel={isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+          accessibilityLabel={isFavorite ? t('customer.favorite.remove') : t('customer.favorite.add')}
           onPress={() => {
             if (!id) return;
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

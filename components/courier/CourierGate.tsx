@@ -8,6 +8,7 @@ import { useThemeColors } from '@/hooks/useColorScheme';
 import { useDemoCourierApproval } from '@/hooks/useDemoCourierApproval';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { COURIER_SIGNUP_STEPS } from '@/lib/courierOnboarding';
+import { useT } from '@/lib/i18n/useT';
 import { routes } from '@/lib/routes';
 
 export interface CourierGateProps {
@@ -30,6 +31,7 @@ export interface CourierGateProps {
  * they are the same account in the same state.
  */
 export function CourierGate({ state, onApproved }: CourierGateProps) {
+  const t = useT();
   const colors = useThemeColors();
   const tabBarInset = useTabBarInset();
   const { approve, approving } = useDemoCourierApproval(onApproved);
@@ -54,19 +56,19 @@ export function CourierGate({ state, onApproved }: CourierGateProps) {
           </View>
           <View className="gap-2">
             <Text variant="title" weight="bold" className="text-[26px]">
-              {applied ? 'Dossier en attente' : 'Complétez votre dossier'}
+              {t(applied ? 'courier.gateCopy.pendingTitle' : 'courier.gateCopy.completeTitle')}
             </Text>
             <Text variant="body" tone="muted">
               {applied
-                ? 'Votre dossier est déposé. Un administrateur Sougouba doit le valider avant que vous puissiez recevoir des courses.'
-                : 'Il reste quelques informations avant de pouvoir livrer : vos coordonnées, votre véhicule et vos documents.'}
+                ? t('courier.gateCopy.pendingBody')
+                : t('courier.gateCopy.completeBody')}
             </Text>
           </View>
         </View>
 
         <View className="rounded-[20px] bg-card p-5 gap-5">
           {COURIER_SIGNUP_STEPS.map((step, index) => (
-            <View key={step.title} className="flex-row gap-3.5">
+            <View key={step} className="flex-row gap-3.5">
               <View className="w-7 h-7 rounded-full bg-secondary/10 items-center justify-center mt-0.5">
                 <Text variant="caption" weight="bold" tone="secondary" className="text-[12px]">
                   {index + 1}
@@ -74,10 +76,10 @@ export function CourierGate({ state, onApproved }: CourierGateProps) {
               </View>
               <View className="flex-1 gap-1">
                 <Text variant="caption" weight="bold">
-                  {step.title}
+                  {t(`onboarding.courier.${step}.title`)}
                 </Text>
                 <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
-                  {step.body}
+                  {t(`onboarding.courier.${step}.body`)}
                 </Text>
               </View>
             </View>
@@ -93,8 +95,7 @@ export function CourierGate({ state, onApproved }: CourierGateProps) {
               className="mt-0.5"
             />
             <Text variant="caption" tone="muted" className="flex-1 text-[13px] leading-[19px]">
-              La validation prend généralement un jour ouvrable. Vous recevrez une notification dès
-              que votre dossier est approuvé.
+              {t('courier.gate.pendingBody')}
             </Text>
           </View>
         ) : (
@@ -113,10 +114,10 @@ export function CourierGate({ state, onApproved }: CourierGateProps) {
         {applied ? (
           <View className="gap-2 pt-2 border-t border-border">
             <Text variant="label" tone="muted" className="text-[10px]">
-              Démonstration
+              {t('courier.gate.demoLabel')}
             </Text>
             <Button
-              label="Simuler l’approbation"
+              label={t('courier.gate.approve')}
               variant="outline"
               size="md"
               fullWidth
@@ -124,7 +125,7 @@ export function CourierGate({ state, onApproved }: CourierGateProps) {
               onPress={approve}
             />
             <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
-              Approuve votre dossier, comme le ferait un administrateur.
+              {t('courier.gate.approveBody')}
             </Text>
           </View>
         ) : null}

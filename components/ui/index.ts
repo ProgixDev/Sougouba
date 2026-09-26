@@ -14,6 +14,7 @@ export { QuantityStepper } from './QuantityStepper';
 export { Reveal } from './Reveal';
 export { Skeleton, SkeletonCircle, SkeletonCard } from './Skeleton';
 export { EmptyState } from './EmptyState';
+export { LanguageToggle } from './LanguageToggle';
 export { SectionHeader } from './SectionHeader';
 export { SelectField } from './SelectField';
 export type { SelectOption } from './SelectField';

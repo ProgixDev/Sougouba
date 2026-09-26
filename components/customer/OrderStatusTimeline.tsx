@@ -4,7 +4,8 @@ import { View } from 'react-native';
 import { Text } from '@/components/ui';
 import type { Order } from '@/data/types';
 import { formatDate, formatTime } from '@/lib/format';
-import { orderProgression, orderStatusMeta, progressionIndex } from '@/lib/orderStatus';
+import { orderProgression, orderStatusKey, progressionIndex } from '@/lib/orderStatus';
+import { useT } from '@/lib/i18n/useT';
 import { neutral } from '@/theme/tokens';
 
 export interface OrderStatusTimelineProps {
@@ -30,6 +31,7 @@ export interface OrderStatusTimelineProps {
  * step is more reassuring for saying which.
  */
 export function OrderStatusTimeline({ order, courierName }: OrderStatusTimelineProps) {
+  const t = useT();
   const timeByStatus = Object.fromEntries(order.statusHistory.map((e) => [e.status, e.at]));
 
   if (order.status === 'cancelled') {
@@ -41,7 +43,7 @@ export function OrderStatusTimeline({ order, courierName }: OrderStatusTimelineP
         </View>
         <View className="flex-1 gap-0.5">
           <Text variant="caption" weight="bold" tone="destructive">
-            {orderStatusMeta.cancelled.label}
+            {t(orderStatusKey('cancelled'))}
           </Text>
           {at ? (
             <Text variant="caption" tone="muted" className="text-[12px]">
@@ -92,11 +94,11 @@ export function OrderStatusTimeline({ order, courierName }: OrderStatusTimelineP
                 weight={isCurrent ? 'bold' : 'medium'}
                 tone={done ? 'default' : 'muted'}
               >
-                {orderStatusMeta[status].label}
+                {t(orderStatusKey(status))}
               </Text>
               {status === 'out_for_delivery' && courierName && done ? (
                 <Text variant="caption" tone="muted" className="text-[12px]">
-                  Avec {courierName}
+                  {t('customer.orderTimeline.withCourier', { name: courierName })}
                 </Text>
               ) : null}
               {at ? (

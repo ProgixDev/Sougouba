@@ -11,6 +11,7 @@ import type { Vendor, VendorType } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { deliveryAddressFor } from '@/lib/deliveryAddress';
+import { useT } from '@/lib/i18n/useT';
 import { distanceKm } from '@/lib/geo';
 import { dynamicRoutes, routes } from '@/lib/routes';
 import { shopDay } from '@/lib/shopHours';
@@ -19,11 +20,8 @@ import { useSessionStore } from '@/store/useSessionStore';
 
 type FilterKey = 'open' | 'halal' | 'fast';
 
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'open', label: 'Ouvert' },
-  { key: 'halal', label: 'Halal' },
-  { key: 'fast', label: 'Livraison rapide' },
-];
+/** Keys, not sentences — module scope. Wording is `customer.vendorFilters.*`. */
+const FILTERS: FilterKey[] = ['open', 'halal', 'fast'];
 
 /** What "livraison rapide" means, in minutes. */
 const FAST_ETA_MIN = 30;
@@ -37,6 +35,7 @@ const FAST_ETA_MIN = 30;
  * the filters and the scroll position they left behind.
  */
 export default function VerticalScreen() {
+  const t = useT();
   const { type } = useLocalSearchParams<{ type: string }>();
   const vertical = verticalFor(type);
   const colors = useThemeColors();
@@ -99,9 +98,9 @@ export default function VerticalScreen() {
       <SafeAreaView className="flex-1 bg-background" edges={['top']}>
         <EmptyState
           icon={StoreIcon}
-          title="Catégorie introuvable"
-          description="Sougouba couvre l’épicerie et le restaurant."
-          actionLabel="Retour à l’accueil"
+          title={t('customer.verticalScreen.notFoundTitle')}
+          description={t('customer.verticalScreen.notFoundBody')}
+          actionLabel={t('customer.orderConfirmed.home')}
           onAction={() => router.replace(routes.customerHome)}
         />
       </SafeAreaView>
@@ -114,7 +113,7 @@ export default function VerticalScreen() {
         <Pressable
           hitSlop={10}
           accessibilityRole="button"
-          accessibilityLabel="Retour"
+          accessibilityLabel={t('common.ui.back')}
           // Not `BackHeader`: its no-history fallback is the auth welcome
           // screen, which is the wrong destination for a shopper who opened
           // this list from a link.
@@ -127,14 +126,15 @@ export default function VerticalScreen() {
 
       <View className="px-5 pb-4 gap-1">
         <Text variant="title" weight="bold" className="text-[26px]">
-          {vertical.titleFr}
+          {t(`domain.vertical.${vertical.type}.title`)}
         </Text>
         {loading ? (
           <Skeleton height={16} width={140} radius={6} />
         ) : (
           <Text variant="caption" tone="muted">
-            {listed.length} {listed.length === 1 ? vertical.labelFr.toLowerCase() : vertical.pluralFr}
-            {' · les plus proches d’abord'}
+            {t('customer.vertical.listSummary', {
+              shops: t(`domain.vertical.${vertical.type}.count`, { count: listed.length }),
+            })}
           </Text>
         )}
       </View>
@@ -142,10 +142,10 @@ export default function VerticalScreen() {
       <View className="flex-row gap-2 px-5 pb-4">
         {FILTERS.map((filter) => (
           <Chip
-            key={filter.key}
-            label={filter.label}
-            selected={active.includes(filter.key)}
-            onPress={() => toggle(filter.key)}
+            key={filter}
+            label={t(`customer.vendorFilters.${filter}`)}
+            selected={active.includes(filter)}
+            onPress={() => toggle(filter)}
           />
         ))}
       </View>
@@ -184,9 +184,9 @@ export default function VerticalScreen() {
           ListEmptyComponent={
             <EmptyState
               icon={SearchX}
-              title="Rien ne correspond"
-              description="Aucun commerce de cette catégorie ne passe les filtres choisis."
-              actionLabel="Effacer les filtres"
+              title={t('customer.verticalScreen.noMatchTitle')}
+              description={t('customer.verticalScreen.noMatchBody')}
+              actionLabel={t('customer.filters.clear')}
               onAction={() => setActive([])}
             />
           }

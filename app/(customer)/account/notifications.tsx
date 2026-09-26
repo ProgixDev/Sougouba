@@ -4,6 +4,7 @@ import { ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BackHeader, Reveal, Text } from '@/components/ui';
+import { useT } from '@/lib/i18n/useT';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import {
   usePreferencesStore,
@@ -15,39 +16,15 @@ import {
  * préparation, livraison" is checkable against your own phone in a way that
  * "mises à jour transactionnelles" is not.
  */
-const rows: {
-  key: keyof NotificationPreferences;
-  icon: LucideIcon;
-  label: string;
-  description: string;
-}[] = [
-  {
-    key: 'orderUpdates',
-    icon: PackageCheck,
-    label: 'Suivi de commande',
-    description: 'Confirmation, préparation et commande prête à partir.',
-  },
-  {
-    key: 'deliveryAlerts',
-    icon: Truck,
-    label: 'Livraison en approche',
-    description: 'Un avis quand le livreur part et quand il arrive chez vous.',
-  },
-  {
-    key: 'promotions',
-    icon: Tag,
-    label: 'Promotions',
-    description: 'Rabais et offres des commerces où vous avez déjà commandé.',
-  },
-  {
-    key: 'newVendors',
-    icon: Store,
-    label: 'Nouveaux commerces',
-    description: 'Quand une épicerie ouvre la livraison dans votre quartier.',
-  },
+const rows: { key: keyof NotificationPreferences; icon: LucideIcon }[] = [
+  { key: 'orderUpdates', icon: PackageCheck },
+  { key: 'deliveryAlerts', icon: Truck },
+  { key: 'promotions', icon: Tag },
+  { key: 'newVendors', icon: Store },
 ];
 
 export default function NotificationsScreen() {
+  const t = useT();
   const colors = useThemeColors();
   const notifications = usePreferencesStore((s) => s.notifications);
   const setNotification = usePreferencesStore((s) => s.setNotification);
@@ -56,7 +33,7 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <BackHeader title="Notifications" />
+      <BackHeader title={t('customer.account.notifications.title')} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="px-5 pt-2 pb-8 gap-3">
         <Reveal>
@@ -65,9 +42,7 @@ export default function NotificationsScreen() {
               <Bell size={18} color={colors.primary} strokeWidth={2} />
             </View>
             <Text variant="caption" tone="muted" className="flex-1 text-[13px] leading-[18px]">
-              {activeCount === 0
-                ? 'Toutes les notifications sont désactivées. Vous ne recevrez aucun avis de livraison.'
-                : `${activeCount} type${activeCount > 1 ? 's' : ''} d’avis activé${activeCount > 1 ? 's' : ''}.`}
+              {t('customer.notifications.activeCount', { count: activeCount })}
             </Text>
           </View>
         </Reveal>
@@ -82,16 +57,16 @@ export default function NotificationsScreen() {
                 </View>
                 <View className="flex-1 gap-0.5 pr-2">
                   <Text variant="caption" weight="semibold">
-                    {row.label}
+                    {t(`customer.notificationRows.${row.key}.label`)}
                   </Text>
                   <Text variant="caption" tone="muted" className="text-[12px] leading-[17px]">
-                    {row.description}
+                    {t(`customer.notificationRows.${row.key}.body`)}
                   </Text>
                 </View>
                 <Switch
                   value={notifications[row.key]}
                   onValueChange={(next) => setNotification(row.key, next)}
-                  accessibilityLabel={row.label}
+                  accessibilityLabel={t(`customer.notificationRows.${row.key}.label`)}
                   trackColor={{ false: colors.border, true: colors.primary }}
                 />
               </View>
@@ -100,8 +75,7 @@ export default function NotificationsScreen() {
         </View>
 
         <Text variant="caption" tone="muted" className="px-1 text-[12px] leading-[17px]">
-          Ces préférences sont enregistrées sur cet appareil. Le prototype n’envoie pas de
-          notifications réelles.
+              {t('customer.account.notifications.footnote')}
         </Text>
       </ScrollView>
     </SafeAreaView>

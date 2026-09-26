@@ -104,7 +104,11 @@ export default function MerchantDetailPage() {
             <StatusBadge label={meta.label} tone={meta.tone} />
           </div>
           <Text variant="body" tone="muted" className="mt-1">
-            {vendor.specialtyFr} · {vendor.vendorType === 'restaurant' ? 'Restaurant' : 'Épicerie'}
+            {/* `.fr` explicitly: the back-office is French-only (see
+                docs/LANDING-MASTER-PROMPT.md), so it reads the language it
+                displays rather than following a device locale it does not have. */}
+            {vendor.specialty.fr} ·{' '}
+            {vendor.vendorType === 'restaurant' ? 'Restaurant' : 'Épicerie'}
           </Text>
         </div>
         <div className="flex gap-2.5">

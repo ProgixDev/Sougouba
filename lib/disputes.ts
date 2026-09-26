@@ -1,24 +1,32 @@
 import type { CourierIssueReason, DisputeReason, Order, OrderDispute } from '@/data/types';
+import type { MessageKey, TFunction } from '@/lib/i18n';
 
 /**
  * The reasons a shopper can pick, in the order they are offered.
  *
  * Ordered by how often they actually happen in grocery delivery — a missing item
  * is the common case and belongs first, "Autre" last because a list that opens
- * with an escape hatch gets nothing but escape hatches.
+ * with an escape hatch gets nothing but escape hatches. That ordering is
+ * editorial and stays here; the words are `domain.disputeReason.*`.
  */
-export const disputeReasons: { key: DisputeReason; label: string }[] = [
-  { key: 'missing_items', label: 'Articles manquants' },
-  { key: 'wrong_order', label: 'Commande incorrecte' },
-  { key: 'quality', label: 'Qualité du produit' },
-  { key: 'late', label: 'Livraison en retard' },
-  { key: 'other', label: 'Autre' },
+export const disputeReasons: DisputeReason[] = [
+  'missing_items',
+  'wrong_order',
+  'quality',
+  'late',
+  'other',
 ];
 
-const labelByReason = new Map(disputeReasons.map((r) => [r.key, r.label]));
-
-export function disputeReasonLabel(reason: DisputeReason): string {
-  return labelByReason.get(reason) ?? 'Autre';
+/**
+ * The key naming a reason.
+ *
+ * The old lookup fell back to "Autre" for an unrecognised reason. There is no
+ * fallback now because there is no longer a way to miss: `DisputeReason` is a
+ * closed union and an unhandled member is a missing catalogue key, caught by
+ * `tsc` rather than shown to a shopper as the wrong reason.
+ */
+export function disputeReasonKey(reason: DisputeReason): MessageKey {
+  return `domain.disputeReason.${reason}` as MessageKey;
 }
 
 /**
@@ -34,11 +42,18 @@ export function canOpenDispute(order: Order): boolean {
   return order.status === 'delivered' || order.status === 'cancelled';
 }
 
-/** One line for a list row — what the merchant sees before opening the ticket. */
-export function disputeSummary(dispute: OrderDispute): string {
-  return dispute.status === 'answered'
-    ? `${disputeReasonLabel(dispute.reason)} · répondu`
-    : disputeReasonLabel(dispute.reason);
+/**
+ * One line for a list row — what the merchant sees before opening the ticket.
+ *
+ * Takes `t` rather than returning a `Message` because it *composes*: the
+ * answered form interpolates an already-translated reason, and i18n-js resolves
+ * one message per call, so the inner one has to be rendered first. The whole
+ * sentence is a single key rather than a reason with " · répondu" appended, so a
+ * language can reorder it or use its own separator.
+ */
+export function disputeSummary(t: TFunction, dispute: OrderDispute): string {
+  const reason = t(disputeReasonKey(dispute.reason));
+  return dispute.status === 'answered' ? t('domain.dispute.answered', { reason }) : reason;
 }
 
 // ── the courier's side ──────────────────────────────────────────────────────
@@ -50,19 +65,17 @@ export function disputeSummary(dispute: OrderDispute): string {
  * the same reason it is last in `disputeReasons`: a list that opens with an
  * escape hatch collects nothing but escape hatches.
  */
-export const courierIssueReasons: { key: CourierIssueReason; label: string }[] = [
-  { key: 'customer_absent', label: 'Client absent' },
-  { key: 'wrong_address', label: 'Adresse incorrecte' },
-  { key: 'access_problem', label: 'Accès impossible' },
-  { key: 'shop_not_ready', label: 'Commande pas prête' },
-  { key: 'order_incomplete', label: 'Commande incomplète' },
-  { key: 'other', label: 'Autre' },
+export const courierIssueReasons: CourierIssueReason[] = [
+  'customer_absent',
+  'wrong_address',
+  'access_problem',
+  'shop_not_ready',
+  'order_incomplete',
+  'other',
 ];
 
-const labelByIssue = new Map(courierIssueReasons.map((r) => [r.key, r.label]));
-
-export function courierIssueLabel(reason: CourierIssueReason): string {
-  return labelByIssue.get(reason) ?? 'Autre';
+export function courierIssueKey(reason: CourierIssueReason): MessageKey {
+  return `domain.courierIssueReason.${reason}` as MessageKey;
 }
 
 /**

@@ -2,6 +2,7 @@ import { ChevronRight, CornerDownRight, Coins, Route } from 'lucide-react-native
 import { Pressable, View } from 'react-native';
 
 import { Badge, Text } from '@/components/ui';
+import { useT } from '@/lib/i18n/useT';
 import type { Order } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { formatCad, formatTime } from '@/lib/format';
@@ -43,6 +44,7 @@ const DOT_TOP = 26;
  * a log file.
  */
 export function RunRow({ order, vendorName, first = false, last = false, onPress }: RunRowProps) {
+  const t = useT();
   const colors = useThemeColors();
   const delivery = order.delivery;
   const at = delivery?.deliveredAt ?? order.createdAt;
@@ -96,13 +98,16 @@ export function RunRow({ order, vendorName, first = false, last = false, onPress
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Course chez ${vendorName ?? 'un commerce'}, ${formatCad(delivery?.earningsCad ?? 0)}`}
+        accessibilityLabel={t('common.a11y.runAt', {
+          shop: vendorName ?? t('common.genericShop'),
+          amount: formatCad(delivery?.earningsCad ?? 0),
+        })}
         onPress={onPress}
         className="flex-1 rounded-[18px] bg-card p-3.5 mb-2.5 gap-2 active:opacity-80"
       >
         <View className="flex-row items-baseline gap-3">
           <Text variant="subtitle" weight="bold" numberOfLines={1} className="flex-1 text-[15px]">
-            {vendorName ?? 'Commerce'}
+            {vendorName ?? t('common.genericShop')}
           </Text>
           <Text
             weight="bold"
@@ -144,7 +149,7 @@ export function RunRow({ order, vendorName, first = false, last = false, onPress
             />
           ) : null}
           <View className="flex-1" />
-          {order.courierIssue ? <Badge label="Signalé" tone="warning" size="sm" /> : null}
+          {order.courierIssue ? <Badge label={t('courier.delivery.reported')} tone="warning" size="sm" /> : null}
         </View>
       </Pressable>
     </View>

@@ -24,6 +24,7 @@ import {
   summariseRuns,
 } from '@/lib/courierAnalytics';
 import { formatCad, formatDate } from '@/lib/format';
+import { useT } from '@/lib/i18n/useT';
 import { formatDistance } from '@/lib/geo';
 import { mustard } from '@/theme/tokens';
 
@@ -43,10 +44,11 @@ type Range = 'today' | 'week' | 'month';
  */
 const ACCENT_DELTA = mustard[600];
 
-const RANGES: { key: Range; label: string; days: number }[] = [
-  { key: 'today', label: 'Aujourd’hui', days: 1 },
-  { key: 'week', label: '7 jours', days: 7 },
-  { key: 'month', label: '30 jours', days: 30 },
+/** Day counts and keys; the labels are `courier.ranges.*`. */
+const RANGES: { key: Range; days: number }[] = [
+  { key: 'today', days: 1 },
+  { key: 'week', days: 7 },
+  { key: 'month', days: 30 },
 ];
 
 /**
@@ -65,6 +67,7 @@ const RANGES: { key: Range; label: string; days: number }[] = [
  * completion.
  */
 export default function CourierEarningsScreen() {
+  const t = useT();
   const tabBarInset = useTabBarInset();
   const colors = useThemeColors();
   const { courier, loading: profileLoading, missing, pending, reload } = useCourierProfile();
@@ -118,17 +121,24 @@ export default function CourierEarningsScreen() {
           />
         }
       >
-        <CourierSlab title="Vos gains" eyebrow={selected.label}>
-          <SlabSegmented options={RANGES} value={range} onChange={setRange} />
+        <CourierSlab title={t('courier.earningsScreen.title')} eyebrow={t(`courier.ranges.${selected.key}`)}>
+          <SlabSegmented
+            options={RANGES.map((r) => ({ key: r.key, label: t(`courier.ranges.${r.key}`) }))}
+            value={range}
+            onChange={setRange}
+          />
 
           <View className="flex-row items-end justify-between gap-4">
             <SlabFigure
-              label="Encaissé"
+              label={t('courier.earningsScreen.collected')}
               value={formatCad(summary.earningsCad)}
               hint={
                 summary.runCount === 0
-                  ? 'aucune course'
-                  : `${summary.runCount} ${summary.runCount === 1 ? 'course' : 'courses'} · ${formatDistance(summary.distanceKm)}`
+                  ? t('courier.runCount', { count: 0 })
+                  : t('courier.history.runsWithDistance', {
+                      runs: t('courier.runCount', { count: summary.runCount }),
+                      distance: formatDistance(summary.distanceKm),
+                    })
               }
               hero
             />
@@ -146,11 +156,13 @@ export default function CourierEarningsScreen() {
           <View className="px-5 pt-10">
             <EmptyState
               icon={Wallet}
-              title="Rien sur cette période"
+              title={t('courier.earningsScreen.emptyTitle')}
               description={
                 allTime.runCount > 0
-                  ? `Vous avez encaissé ${formatCad(allTime.earningsCad)} depuis vos débuts. Passez en ligne pour ajouter à ce total.`
-                  : 'Vos gains apparaîtront ici dès votre première course livrée.'
+                  ? t('courier.earningsEmpty.lifetime', {
+                      amount: formatCad(allTime.earningsCad),
+                    })
+                  : t('courier.earningsEmpty.body')
               }
             />
           </View>
@@ -162,7 +174,7 @@ export default function CourierEarningsScreen() {
             <Reveal>
               <View className="rounded-[20px] bg-card px-4 py-4 gap-3.5">
                 <Text variant="label" tone="muted" className="text-[10px]">
-                  {selected.days === 1 ? 'Contre hier' : `Contre les ${selected.days} jours précédents`}
+                  {t('courier.earnings.vsPrevious', { count: selected.days })}
                 </Text>
                 <View className="flex-row">
                   <Column
@@ -171,7 +183,7 @@ export default function CourierEarningsScreen() {
                     pct={comparison.runDeltaPct}
                   />
                   <Column
-                    label="Par course"
+                    label={t('courier.perRun')}
                     value={formatCad(summary.avgPerRunCad)}
                     pct={comparison.avgDeltaPct}
                     divided
@@ -190,7 +202,7 @@ export default function CourierEarningsScreen() {
             </Reveal>
 
             <Reveal index={2}>
-              <EarningsSummary runs={rangeRuns} rangeLabel={selected.label.toLowerCase()} />
+              <EarningsSummary runs={rangeRuns} rangeLabel={t(`courier.ranges.${selected.key}`).toLowerCase()} />
             </Reveal>
 
             {/* Says when the money moves. A payout screen that only shows a
@@ -223,8 +235,7 @@ export default function CourierEarningsScreen() {
                   </Text>
                 </View>
                 <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
-                  Les gains de la semaine en cours sont déposés le vendredi sur le compte
-                  enregistré dans votre dossier. Les pourboires vous reviennent intégralement.
+              {t('courier.earningsScreen.payoutNote')}
                 </Text>
               </View>
             </Reveal>
@@ -243,10 +254,13 @@ export default function CourierEarningsScreen() {
  * separating them by a scroll makes the courier hold the first in their head.
  */
 function SlabDelta({ pct, days }: { pct: number | null; days: number }) {
+  const t = useT();
   if (pct === null) {
     return (
       <Text variant="caption" style={{ color: onCourierSlab.muted }} className="text-[11px] pb-1">
-        {days === 1 ? 'rien hier' : 'pas de période à comparer'}
+        {days === 1
+          ? t('courier.earnings.noComparisonYesterday')
+          : t('courier.earnings.noComparisonPeriod')}
       </Text>
     );
   }
@@ -276,7 +290,7 @@ function SlabDelta({ pct, days }: { pct: number | null; days: number }) {
         </Text>
       </View>
       <Text variant="caption" style={{ color: onCourierSlab.muted }} className="text-[10px]">
-        {days === 1 ? 'vs hier' : `vs ${days} j préc.`}
+        {t('courier.earnings.vsPreviousShort', { count: days })}
       </Text>
     </View>
   );

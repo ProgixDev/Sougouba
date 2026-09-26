@@ -5,6 +5,7 @@ import { Alert, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ProductForm } from '@/components/business';
+import { useT } from '@/lib/i18n/useT';
 import { BackHeader, EmptyState, Skeleton } from '@/components/ui';
 import { productsApi } from '@/data/api';
 import type { Product } from '@/data/types';
@@ -12,6 +13,7 @@ import { useOwnerVendor } from '@/hooks/useOwnerVendor';
 import { routes } from '@/lib/routes';
 
 export default function EditProductScreen() {
+  const t = useT();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { vendor, missing } = useOwnerVendor();
   const [product, setProduct] = useState<Product | null>(null);
@@ -36,8 +38,8 @@ export default function EditProductScreen() {
   function confirmDelete() {
     if (!product) return;
     Alert.alert(
-      'Supprimer ce produit ?',
-      `« ${product.name} » disparaîtra du catalogue. Cette action est définitive.`,
+      t('business.queue.deleteProductTitle'),
+      t('business.confirmations.deleteProduct', { name: product.name }),
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -72,8 +74,8 @@ export default function EditProductScreen() {
         <EmptyState
           icon={PackageX}
           title="Produit introuvable"
-          description="Ce produit a peut-être déjà été supprimé."
-          actionLabel="Retour au catalogue"
+          description={t('business.productDetail.notFoundBody')}
+          actionLabel={t('business.productDetail.backToCatalog')}
           onAction={() => router.replace(routes.businessCatalog)}
         />
       </SafeAreaView>
@@ -82,7 +84,7 @@ export default function EditProductScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <BackHeader title="Modifier le produit" />
+      <BackHeader title={t('business.productDetail.edit')} />
       <ProductForm
         vendor={vendor}
         product={product}

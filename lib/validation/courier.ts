@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { OTHER_BANK_ID, banks } from '@/data/banks';
+import type { MessageKey } from '@/lib/i18n';
 
 import { citySchema, postalCodeSchema, refinePostalCodeCity } from './address';
 
@@ -19,15 +20,15 @@ import { citySchema, postalCodeSchema, refinePostalCodeCity } from './address';
 
 export const courierIdentitySchema = z
   .object({
-    fullName: z.string().trim().min(2, 'Nom complet requis'),
+    fullName: z.string().trim().min(2, 'validation.fullName.required'),
     phone: z
       .string()
       .trim()
-      .min(10, 'Numéro de téléphone requis')
+      .min(10, 'validation.phone.required')
       // Deliberately loose: Québec numbers get written +1 514…, (514) …, 514-… and
       // all three are the same number. Rejecting a real number over its spacing is
       // a worse failure than accepting a badly formatted one.
-      .regex(/^[\d\s()+.-]+$/, 'Numéro de téléphone invalide'),
+      .regex(/^[\d\s()+.-]+$/, 'validation.phone.invalid'),
     city: citySchema,
     postalCode: postalCodeSchema,
   })
@@ -37,7 +38,7 @@ export type CourierIdentityValues = z.output<typeof courierIdentitySchema>;
 
 export const courierVehicleSchema = z
   .object({
-    vehicle: z.enum(['bike', 'scooter', 'car'], { message: 'Choisissez un véhicule' }),
+    vehicle: z.enum(['bike', 'scooter', 'car'], { message: 'validation.courier.vehicleRequired' }),
     plate: z.string().trim().optional(),
     licenceNumber: z.string().trim().optional(),
     /** Insurer, policy number and expiry — asked of moto and voiture only. */
@@ -53,32 +54,32 @@ export const courierVehicleSchema = z
     // the list at the client's request — it was only ever promised in a helper
     // line that said it would be asked for "à la validation".
     if (!values.plate || values.plate.length < 4) {
-      ctx.addIssue({ code: 'custom', path: ['plate'], message: 'Plaque requise' });
+      ctx.addIssue({ code: 'custom', path: ['plate'], message: 'validation.courier.plateRequired' });
     }
     if (!values.licenceNumber || values.licenceNumber.length < 5) {
-      ctx.addIssue({ code: 'custom', path: ['licenceNumber'], message: 'Numéro de permis requis' });
+      ctx.addIssue({ code: 'custom', path: ['licenceNumber'], message: 'validation.courier.licenceRequired' });
     }
     if (!values.insurerName || values.insurerName.length < 2) {
-      ctx.addIssue({ code: 'custom', path: ['insurerName'], message: 'Assureur requis' });
+      ctx.addIssue({ code: 'custom', path: ['insurerName'], message: 'validation.courier.insurerRequired' });
     }
     if (!values.insurancePolicy || values.insurancePolicy.length < 4) {
       ctx.addIssue({
         code: 'custom',
         path: ['insurancePolicy'],
-        message: 'Numéro de police requis',
+        message: 'validation.courier.policyRequired',
       });
     }
     if (!values.insuranceExpiry || !/^(0[1-9]|1[0-2])\/\d{4}$/.test(values.insuranceExpiry)) {
       ctx.addIssue({
         code: 'custom',
         path: ['insuranceExpiry'],
-        message: 'Échéance au format MM/AAAA',
+        message: 'validation.courier.expiryFormat',
       });
     } else if (isExpired(values.insuranceExpiry)) {
       ctx.addIssue({
         code: 'custom',
         path: ['insuranceExpiry'],
-        message: 'Cette police est échue',
+        message: 'validation.courier.policyExpired',
       });
     }
   });
@@ -106,15 +107,15 @@ export const courierPayoutSchema = z
      * reconcile a deposit against. `other` keeps the escape hatch the client
      * asked for.
      */
-    bankId: z.string().min(1, 'Choisissez votre banque'),
+    bankId: z.string().min(1, 'validation.courier.bankRequired'),
     bankNameOther: z.string().trim().optional(),
-    transit: z.string().trim().regex(/^\d{5}$/, 'Transit à 5 chiffres'),
-    account: z.string().trim().regex(/^\d{7,12}$/, 'Numéro de compte invalide'),
+    transit: z.string().trim().regex(/^\d{5}$/, 'validation.courier.transitFormat'),
+    account: z.string().trim().regex(/^\d{7,12}$/, 'validation.courier.accountFormat'),
   })
   .superRefine((values, ctx) => {
     if (values.bankId !== OTHER_BANK_ID) {
       if (!banks.some((b) => b.id === values.bankId)) {
-        ctx.addIssue({ code: 'custom', path: ['bankId'], message: 'Banque inconnue' });
+        ctx.addIssue({ code: 'custom', path: ['bankId'], message: 'validation.courier.bankUnknown' });
       }
       return;
     }
@@ -122,7 +123,7 @@ export const courierPayoutSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['bankNameOther'],
-        message: 'Nom de la banque requis',
+        message: 'validation.courier.bankOtherRequired',
       });
     }
   });
@@ -142,12 +143,13 @@ export type CourierValues = z.infer<typeof courierSchema>;
  * `data/delivery.ts` and it sits in every seeded courier row and every
  * persisted application, so renaming it would be a data migration to change a
  * word on a button. What the courier is asked, and what every screen shows, is
- * the label.
+ * the label — which now lives in `domain.vehicle.*`, where English can honestly
+ * say "Scooter" while French says "Moto".
  */
-export const VEHICLE_LABELS: Record<CourierVehicleValues['vehicle'], string> = {
-  bike: 'Vélo',
-  scooter: 'Moto',
-  car: 'Voiture',
+export const VEHICLE_KEYS: Record<CourierVehicleValues['vehicle'], MessageKey> = {
+  bike: 'domain.vehicle.bike',
+  scooter: 'domain.vehicle.scooter',
+  car: 'domain.vehicle.car',
 };
 
 /** Vehicles the platform treats as motorised: plate, licence and insurance. */

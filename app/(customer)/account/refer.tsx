@@ -14,6 +14,7 @@ import {
   referralCodeFor,
 } from '@/data/loyalty';
 import { useThemeColors } from '@/hooks/useColorScheme';
+import { useT } from '@/lib/i18n/useT';
 import { formatCad } from '@/lib/format';
 import { useSessionStore } from '@/store/useSessionStore';
 
@@ -26,6 +27,7 @@ import { useSessionStore } from '@/store/useSessionStore';
 const REFERRAL_LINK_BASE = 'https://sougouba.ca/?ref=';
 
 export default function ReferScreen() {
+  const t = useT();
   const colors = useThemeColors();
   const user = useSessionStore((s) => s.user);
   const [stats, setStats] = useState({ referredCount: 0, pointsFromReferrals: 0 });
@@ -50,19 +52,28 @@ export default function ReferScreen() {
   const code = referralCodeFor(user.id);
   const link = `${REFERRAL_LINK_BASE}${code}`;
   const rewardCad = formatCad(pointsToDiscountCad(REFERRAL_REWARD_POINTS));
-  const message = `Rejoins-moi sur Sougouba et gagne ${REFERRAL_REWARD_POINTS} points (${rewardCad}) sur ta première commande de ${REFERRAL_MIN_FIRST_ORDER_CAD} $ et plus. Mon code : ${code} — ${link}`;
+  const message = t('customer.referShare', {
+    points: REFERRAL_REWARD_POINTS,
+    amount: rewardCad,
+    minimum: REFERRAL_MIN_FIRST_ORDER_CAD,
+    code,
+    link,
+  });
 
   async function share(url: string) {
     try {
       await Linking.openURL(url);
     } catch {
-      Alert.alert('Impossible d’ouvrir l’application', 'Réessayez, ou copiez votre code manuellement.');
+      Alert.alert(
+        t('customer.account.refer.shareFailedTitle'),
+        t('customer.account.refer.shareFailedBody')
+      );
     }
   }
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <BackHeader title="Parrainer un proche" />
+      <BackHeader title={t('customer.account.refer.title')} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="px-5 pt-2 pb-8 gap-5">
         <Reveal>
@@ -80,7 +91,7 @@ export default function ReferScreen() {
         <Reveal delay={60}>
           <View className="rounded-[20px] bg-card p-5 items-center gap-3">
             <Text variant="label" tone="muted">
-              Votre code
+              {t('customer.account.refer.yourCode')}
             </Text>
             <Text
               selectable
@@ -92,7 +103,7 @@ export default function ReferScreen() {
               {code}
             </Text>
             <Text variant="caption" tone="muted" className="text-center text-[12px]">
-              Appuyez longuement sur le code pour le copier.
+              {t('customer.account.refer.copyHint')}
             </Text>
           </View>
         </Reveal>
@@ -101,7 +112,7 @@ export default function ReferScreen() {
           <View className="gap-2.5">
             <ShareButton
               icon={<MessageCircle size={19} color="#fff" strokeWidth={2.2} />}
-              label="Partager via WhatsApp"
+              label={t('customer.account.refer.whatsapp')}
               backgroundColor="#25D366"
               onPress={() => share(`https://wa.me/?text=${encodeURIComponent(message)}`)}
             />
@@ -113,7 +124,7 @@ export default function ReferScreen() {
                   f
                 </Text>
               }
-              label="Partager sur Facebook"
+              label={t('customer.account.refer.facebook')}
               backgroundColor="#1877F2"
               onPress={() =>
                 share(
@@ -132,18 +143,16 @@ export default function ReferScreen() {
               <Users size={18} color={colors.primary} strokeWidth={2} />
             </View>
             <Text variant="caption" tone="muted" className="flex-1 text-[13px] leading-[18px]">
-              {stats.referredCount === 0
-                ? 'Aucun ami parrainé pour l’instant.'
-                : `${stats.referredCount} ami${stats.referredCount > 1 ? 's' : ''} parrainé${
-                    stats.referredCount > 1 ? 's' : ''
-                  } · ${stats.pointsFromReferrals} points gagnés grâce au parrainage.`}
+              {t('customer.refer.summary', {
+                count: stats.referredCount,
+                points: t('customer.points.count', { count: stats.pointsFromReferrals }),
+              })}
             </Text>
           </View>
         </Reveal>
 
         <Text variant="caption" tone="muted" className="px-1 text-[12px] leading-[17px]">
-          Une récompense par nouveau client. Les points sont crédités une fois la commande de votre
-          ami livrée — jamais avant.
+          {t('customer.account.refer.terms')}
         </Text>
       </ScrollView>
     </SafeAreaView>

@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import { House, ReceiptText, Search, ShoppingCart, User } from 'lucide-react-native';
 
 import { TabBarBackground, TabBarIcon } from '@/components/ui';
+import { useT } from '@/lib/i18n/useT';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { useCartStore } from '@/store/useCartStore';
 import { darkColors, lightColors } from '@/theme/colors';
@@ -9,6 +10,7 @@ import { darkColors, lightColors } from '@/theme/colors';
 export const unstable_settings = { anchor: 'home' };
 
 export default function CustomerTabsLayout() {
+  const t = useT();
   const { colorScheme } = useColorScheme();
   const colors = colorScheme === 'dark' ? darkColors : lightColors;
 
@@ -39,21 +41,21 @@ export default function CustomerTabsLayout() {
       <Tabs.Screen
         name="home"
         options={{
-          title: 'Accueil',
+          title: t('customer.tabs.home'),
           tabBarIcon: (props) => <TabBarIcon icon={House} {...props} />,
         }}
       />
       <Tabs.Screen
         name="search"
         options={{
-          title: 'Recherche',
+          title: t('customer.tabs.search'),
           tabBarIcon: (props) => <TabBarIcon icon={Search} {...props} />,
         }}
       />
       <Tabs.Screen
         name="cart"
         options={{
-          title: 'Panier',
+          title: t('customer.tabs.cart'),
           tabBarIcon: (props) => <TabBarIcon icon={ShoppingCart} {...props} />,
           tabBarBadge: cartCount > 0 ? cartCount : undefined,
           tabBarBadgeStyle: { backgroundColor: colors.secondary, fontSize: 11 },
@@ -62,14 +64,14 @@ export default function CustomerTabsLayout() {
       <Tabs.Screen
         name="orders"
         options={{
-          title: 'Commandes',
+          title: t('customer.tabs.orders'),
           tabBarIcon: (props) => <TabBarIcon icon={ReceiptText} {...props} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profil',
+          title: t('customer.tabs.profile'),
           tabBarIcon: (props) => <TabBarIcon icon={User} {...props} />,
         }}
       />

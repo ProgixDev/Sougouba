@@ -8,7 +8,8 @@ import { BackHeader, Button, EmptyState, Input, Skeleton, Text } from '@/compone
 import { ordersApi } from '@/data/api';
 import type { CourierIssueReason, Order } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
-import { canReportIssue, courierIssueReasons } from '@/lib/disputes';
+import { canReportIssue, courierIssueKey, courierIssueReasons } from '@/lib/disputes';
+import { useT } from '@/lib/i18n/useT';
 
 /**
  * Something went wrong on the road.
@@ -23,6 +24,7 @@ import { canReportIssue, courierIssueReasons } from '@/lib/disputes';
  * be the worst possible surprise.
  */
 export default function CourierReportScreen() {
+  const t = useT();
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useThemeColors();
 
@@ -48,20 +50,18 @@ export default function CourierReportScreen() {
   async function submit() {
     if (!order || !reason || busy) return;
     if (message.trim().length < 5) {
-      setError('Décrivez brièvement ce qui s’est passé.');
+      setError(t('courier.reportErrors.describe'));
       return;
     }
     setError(null);
     setBusy(true);
     try {
-      const updated = await ordersApi.reportCourierIssue(
-        order.id,
+      const updated = await ordersApi.reportCourierIssue(order.id, {
         reason,
-        message.trim(),
-        new Date().toISOString()
-      );
+        message: message.trim(),
+      });
       if (!updated) {
-        setError('Signalement impossible. Un problème a peut-être déjà été signalé.');
+        setError(t('courier.reportErrors.failed'));
         return;
       }
       router.back();
@@ -74,7 +74,7 @@ export default function CourierReportScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <BackHeader title="Signaler un problème" />
+      <BackHeader title={t('courier.report.title')} />
 
       {loading ? (
         <View className="px-5 gap-4">
@@ -85,19 +85,19 @@ export default function CourierReportScreen() {
         <View className="flex-1 items-center justify-center">
           <EmptyState
             icon={TriangleAlert}
-            title="Course introuvable"
-            description="Cette course n’existe plus ou ne vous est pas attribuée."
+            title={t('courier.reportState.notFoundTitle')}
+            description={t('courier.delivery.notFound')}
           />
         </View>
       ) : !reportable ? (
         <View className="flex-1 items-center justify-center">
           <EmptyState
             icon={TriangleAlert}
-            title={order.courierIssue ? 'Déjà signalé' : 'Rien à signaler'}
+            title={order.courierIssue ? t('courier.reportState.alreadyTitle') : t('courier.reportState.nothingTitle')}
             description={
               order.courierIssue
-                ? 'Un problème a déjà été signalé sur cette course. Sougouba revient vers vous.'
-                : 'Cette course est terminée — il n’y a plus rien à débloquer.'
+                ? t('courier.reportState.alreadyBody')
+                : t('courier.reportState.nothingBody')
             }
           />
         </View>
@@ -112,12 +112,12 @@ export default function CourierReportScreen() {
             contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 20 }}
           >
             <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
-              Votre signalement est transmis à Sougouba. La course reste ouverte — vous avez
-              toujours la commande.
+              {t('courier.report.note')}
             </Text>
 
             <View className="gap-2.5">
-              {courierIssueReasons.map(({ key, label }) => {
+              {courierIssueReasons.map((key) => {
+                const label = t(courierIssueKey(key));
                 const selected = reason === key;
                 return (
                   <Pressable
@@ -150,10 +150,10 @@ export default function CourierReportScreen() {
             </View>
 
             <Input
-              label="Ce qui s’est passé"
+              label={t('courier.report.whatHappened')}
               value={message}
-              onChangeText={(t) => {
-                setMessage(t);
+              onChangeText={(text) => {
+                setMessage(text);
                 setError(null);
               }}
               multiline
@@ -162,7 +162,7 @@ export default function CourierReportScreen() {
             />
 
             <Button
-              label="Envoyer le signalement"
+              label={t('courier.report.submit')}
               variant="primary"
               size="lg"
               fullWidth

@@ -8,6 +8,7 @@ import Svg, { Path } from 'react-native-svg';
 import { runOnJS } from 'react-native-reanimated';
 
 import { Button, Text } from '@/components/ui';
+import { useT } from '@/lib/i18n/useT';
 import type { DeliveryProof, ProofMethod } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { forest } from '@/theme/tokens';
@@ -19,10 +20,14 @@ export interface ProofCaptureProps {
   busy?: boolean;
 }
 
-const METHODS: { key: ProofMethod; label: string; icon: typeof Camera; hint: string }[] = [
-  { key: 'pin', label: 'Code', icon: ShieldCheck, hint: 'Le client vous donne son code à 4 chiffres.' },
-  { key: 'photo', label: 'Photo', icon: Camera, hint: 'Photographiez la commande à l’endroit où vous la laissez.' },
-  { key: 'signature', label: 'Signature', icon: PenLine, hint: 'Faites signer le client sur l’écran.' },
+/**
+ * Keys, not sentences — module scope. The labels ("Code", "Photo", "Signature")
+ * are the same word in both languages, so they stay inline.
+ */
+const METHODS: { key: ProofMethod; label: string; icon: typeof Camera }[] = [
+  { key: 'pin', label: 'Code', icon: ShieldCheck },
+  { key: 'photo', label: 'Photo', icon: Camera },
+  { key: 'signature', label: 'Signature', icon: PenLine },
 ];
 
 /**
@@ -39,6 +44,7 @@ const METHODS: { key: ProofMethod; label: string; icon: typeof Camera; hint: str
  * courier and the customer were in the same place.
  */
 export function ProofCapture({ expectedPin, onSubmit, busy = false }: ProofCaptureProps) {
+  const t = useT();
   const colors = useThemeColors();
   const [method, setMethod] = useState<ProofMethod>('pin');
   const [pin, setPin] = useState('');
@@ -83,7 +89,7 @@ export function ProofCapture({ expectedPin, onSubmit, busy = false }: ProofCaptu
   function submit() {
     if (method === 'pin') {
       if (pin !== expectedPin) {
-        setPinError('Code incorrect. Demandez-le au client.');
+        setPinError(t('courier.wrongCode'));
         return;
       }
       return void onSubmit({ method: 'pin' });
@@ -96,7 +102,7 @@ export function ProofCapture({ expectedPin, onSubmit, busy = false }: ProofCaptu
     // The drawing is not persisted as a file — there is no backend to upload it
     // to. What is recorded is that a signature was given, which is what the
     // dispute record needs to know.
-    return void onSubmit({ method: 'signature', note: 'Signature recueillie à la livraison' });
+    return void onSubmit({ method: 'signature', note: t('courier.proofSteps.signatureCaptured') });
   }
 
   const ready =
@@ -104,7 +110,7 @@ export function ProofCapture({ expectedPin, onSubmit, busy = false }: ProofCaptu
     (method === 'photo' && Boolean(photoUri)) ||
     (method === 'signature' && strokes.length > 0);
 
-  const hint = METHODS.find((m) => m.key === method)!.hint;
+  const hint = t(`courier.proofSteps.${method === 'pin' ? 'code' : method}`);
 
   return (
     <View className="gap-5">
@@ -168,7 +174,7 @@ export function ProofCapture({ expectedPin, onSubmit, busy = false }: ProofCaptu
         <View className="gap-3">
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Prendre une photo"
+            accessibilityLabel={t('courier.proof.takePhoto')}
             onPress={takePhoto}
             className="h-[220px] rounded-[20px] border-[1.5px] border-dashed border-borderStrong items-center justify-center overflow-hidden bg-card"
           >
@@ -178,13 +184,13 @@ export function ProofCapture({ expectedPin, onSubmit, busy = false }: ProofCaptu
               <View className="items-center gap-2">
                 <Camera size={26} color={colors.mutedForeground} strokeWidth={1.6} />
                 <Text variant="caption" tone="muted">
-                  Toucher pour photographier
+                  {t('courier.proof.tapToShoot')}
                 </Text>
               </View>
             )}
           </Pressable>
           {photoUri ? (
-            <Button label="Reprendre la photo" variant="ghost" size="sm" onPress={takePhoto} />
+            <Button label={t('courier.proof.retakePhoto')} variant="ghost" size="sm" onPress={takePhoto} />
           ) : null}
         </View>
       ) : null}
@@ -222,7 +228,7 @@ export function ProofCapture({ expectedPin, onSubmit, busy = false }: ProofCaptu
       ) : null}
 
       <Button
-        label="Confirmer la livraison"
+        label={t('courier.proof.title')}
         variant="primary"
         size="lg"
         fullWidth

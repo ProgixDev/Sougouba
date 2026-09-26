@@ -21,18 +21,22 @@ import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { ProfileHeader } from '@/components/customer';
-import { Reveal, Text } from '@/components/ui';
+import { LanguageToggle, Reveal, Text } from '@/components/ui';
 import { loyaltyApi, ordersApi } from '@/data/api';
 import { useColorScheme, useThemeColors } from '@/hooks/useColorScheme';
 import { useCustomerStats } from '@/hooks/useCustomerStats';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { formatCad, formatMonthYear } from '@/lib/format';
+import { useT } from '@/lib/i18n/useT';
 import { routes } from '@/lib/routes';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 import { useSessionStore } from '@/store/useSessionStore';
 import { useThemeStore } from '@/store/useThemeStore';
 
 export default function CustomerProfileScreen() {
+  // `useT` also subscribes to the language, which the locale-formatted money
+  // and dates on this screen need.
+  const t = useT();
   const tabBarInset = useTabBarInset();
   const colors = useThemeColors();
   const user = useSessionStore((s) => s.user);
@@ -73,8 +77,8 @@ export default function CustomerProfileScreen() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       Alert.alert(
-        'Accès aux photos refusé',
-        'Autorisez l’accès à vos photos dans les réglages de l’appareil pour changer votre portrait.'
+        t('customer.profile.photoDeniedTitle'),
+        t('customer.profile.photoDeniedBody')
       );
       return;
     }
@@ -103,18 +107,20 @@ export default function CustomerProfileScreen() {
           email={user?.email ?? ''}
           avatarUrl={user?.avatarUrl}
           memberSinceLabel={
-            user?.memberSince ? `Membre depuis ${formatMonthYear(user.memberSince)}` : undefined
+            user?.memberSince
+              ? t('customer.profile.memberSince', { date: formatMonthYear(user.memberSince) })
+              : undefined
           }
           onChangePhoto={pickPhoto}
         />
 
         <Reveal delay={60}>
           <View className="mx-5 mt-5 flex-row rounded-[20px] bg-card px-2 py-4">
-            <Stat label="Commandes" value={String(orderCount)} />
+            <Stat label={t('customer.profile.statOrders')} value={String(orderCount)} />
             <StatDivider />
-            <Stat label="Favoris" value={String(favoriteCount)} />
+            <Stat label={t('customer.profile.statFavorites')} value={String(favoriteCount)} />
             <StatDivider />
-            <Stat label="Dépensé" value={formatCad(spentCad)} />
+            <Stat label={t('customer.profile.statSpent')} value={formatCad(spentCad)} />
           </View>
         </Reveal>
 
@@ -126,7 +132,7 @@ export default function CustomerProfileScreen() {
           >
             <Pencil size={16} color={colors.foreground} strokeWidth={2} />
             <Text variant="caption" weight="bold">
-              Modifier le profil
+              {t('customer.profile.editProfile')}
             </Text>
           </Pressable>
         </Reveal>
@@ -134,7 +140,7 @@ export default function CustomerProfileScreen() {
         <Reveal delay={130}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`${pointsBalance} points Sougouba — voir mon solde`}
+            accessibilityLabel={t('customer.profile.pointsA11y', { count: pointsBalance })}
             onPress={() => router.push(routes.accountPoints)}
             className="mx-5 mt-3 flex-row items-center gap-3 rounded-[20px] bg-primary/10 p-4 active:opacity-80"
           >
@@ -143,57 +149,57 @@ export default function CustomerProfileScreen() {
             </View>
             <View className="flex-1">
               <Text variant="caption" weight="bold" tone="primary">
-                {pointsBalance} points Sougouba
+                {t('customer.profile.pointsBalance', { count: pointsBalance })}
               </Text>
               <Text variant="caption" tone="muted" className="text-[12px]">
-                Voir mon solde et mon historique
+                {t('customer.profile.pointsDetail')}
               </Text>
             </View>
             <ChevronRight size={17} color={colors.primary} strokeWidth={2} />
           </Pressable>
         </Reveal>
 
-        <Section title="Récompenses" delay={145}>
-          <NavRow icon={Gift} label="Parrainer un proche" onPress={() => router.push(routes.accountRefer)} />
+        <Section title={t('customer.profile.rewards')} delay={145}>
+          <NavRow icon={Gift} label={t('customer.account.refer.title')} onPress={() => router.push(routes.accountRefer)} />
         </Section>
 
-        <Section title="Mes achats" delay={160}>
+        <Section title={t('customer.profile.purchases')} delay={160}>
           <NavRow
             icon={ReceiptText}
-            label="Mes commandes"
+            label={t('customer.profile.myOrders')}
             value={orderCount > 0 ? String(orderCount) : undefined}
             onPress={() => router.push(routes.customerOrders)}
           />
           <Divider />
           <NavRow
             icon={Heart}
-            label="Favoris"
+            label={t('customer.favorites.title')}
             value={favoriteCount > 0 ? String(favoriteCount) : undefined}
             onPress={() => router.push(routes.favorites)}
           />
         </Section>
 
-        <Section title="Livraison et paiement" delay={200}>
+        <Section title={t('customer.profile.deliveryAndPayment')} delay={200}>
           <NavRow
             icon={MapPin}
-            label="Adresses de livraison"
-            value={addressCount > 0 ? String(addressCount) : 'Aucune'}
+            label={t('customer.account.addresses.title')}
+            value={addressCount > 0 ? String(addressCount) : t('customer.profile.noAddress')}
             onPress={() => router.push(routes.accountAddresses)}
           />
           <Divider />
           <NavRow
             icon={CreditCard}
-            label="Moyens de paiement"
+            label={t('customer.account.payment.title')}
             value={String(cardCount)}
             onPress={() => router.push(routes.accountPayment)}
           />
         </Section>
 
-        <Section title="Préférences" delay={240}>
+        <Section title={t('common.preferences.title')} delay={240}>
           <NavRow
             icon={Bell}
-            label="Notifications"
-            value={`${activeNotifications} sur 4`}
+            label={t('customer.account.notifications.title')}
+            value={t('customer.profile.notificationsValue', { count: activeNotifications })}
             onPress={() => router.push(routes.accountNotifications)}
           />
           <Divider />
@@ -206,29 +212,31 @@ export default function CustomerProfileScreen() {
               )}
             </View>
             <Text variant="caption" weight="semibold" className="flex-1">
-              Mode sombre
+              {t('common.preferences.darkMode')}
             </Text>
             <Switch
               value={isDark}
               onValueChange={(next) => setPreference(next ? 'dark' : 'light')}
               trackColor={{ false: colors.border, true: colors.primary }}
-              accessibilityLabel="Activer le mode sombre"
+              accessibilityLabel={t('common.preferences.darkModeA11y')}
             />
           </View>
+          <Divider />
+          <LanguageToggle />
         </Section>
 
-        <Section title="À propos" delay={280}>
-          <NavRow icon={Info} label="Aide et informations" onPress={() => router.push(routes.accountAbout)} />
+        <Section title={t('customer.profile.about')} delay={280}>
+          <NavRow icon={Info} label={t('customer.account.about.title')} onPress={() => router.push(routes.accountAbout)} />
         </Section>
 
         <Reveal delay={320}>
           <View className="mt-6 mx-5 rounded-[20px] bg-card overflow-hidden">
-            <NavRow icon={LogOut} label="Se déconnecter" destructive onPress={signOut} />
+            <NavRow icon={LogOut} label={t('customer.profile.signOut')} destructive onPress={signOut} />
           </View>
 
           <Text variant="caption" tone="muted" className="text-center mt-6 text-[11px]">
             Sougouba — prototype de démonstration ·{' '}
-            {colorScheme === 'dark' ? 'thème sombre' : 'thème clair'}
+            {colorScheme === 'dark' ? t('customer.themeDark') : t('customer.themeLight')}
           </Text>
         </Reveal>
       </ScrollView>

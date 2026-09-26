@@ -8,30 +8,30 @@ import {
   type ServedCity,
   servedCities,
 } from '../cities';
-import { delay } from '../utils/delay';
-
 /**
- * Address checks, on the same side of the line as every other rule the app does
- * not let the screen decide.
+ * Address checks.
  *
- * The client asked for the city to be "validée en back". There is no server in
- * this prototype — `data/api/` is what stands in for one, and it is where the
- * rules that must not be re-implemented per screen already live (taxes, order
- * totals, the delivery grid). This is the address rule, in the same place.
+ * ⚠️ **This module deliberately does not call the API, and that is not a gap.**
  *
- * The form schemas call the pure helpers in `data/cities.ts` directly, because a
- * zod resolver is synchronous; this module is what a screen calls when it wants
- * the round trip — the city selector reads its options here rather than hard
- * coding four names.
+ * The client asked for the city to be "validée en back", and it is: every write
+ * that carries an address — `POST /me/addresses`, `vendor_apply`,
+ * `courier_apply` — is re-validated server-side against the same rule before
+ * anything is stored, and `POST /geo/coordinates` refuses an unserved city
+ * outright. What is here is the *affordance*: telling someone their postal code
+ * belongs to Laval while they are still typing, without a round trip per
+ * keystroke.
+ *
+ * The served-city list is static reference data (`data/cities.ts`), the same
+ * source the API's own schemas were ported from, so a fetch would buy a network
+ * dependency and no additional truth. If the two ever diverge the server wins,
+ * because it is the one that refuses the write.
  */
 
 export async function getServedCities(): Promise<ServedCity[]> {
-  await delay(80, 180);
   return servedCities.map((c) => ({ name: c.name, fsas: [...c.fsas] }));
 }
 
 export async function getCityNames(): Promise<string[]> {
-  await delay(80, 180);
   return [...cityNames];
 }
 
@@ -57,7 +57,6 @@ export async function validateAddress(input: {
   city: string;
   postalCode: string;
 }): Promise<AddressCheck> {
-  await delay(120, 260);
   const postalCode = normalizePostalCode(input.postalCode);
   const city = input.city.trim();
 

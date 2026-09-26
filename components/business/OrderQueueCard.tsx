@@ -3,13 +3,15 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { Badge, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
+import { useT } from '@/lib/i18n/useT';
 import type { Order } from '@/data/types';
 import { formatCad, formatElapsed } from '@/lib/format';
 import {
-  advanceActionLabel,
+  advanceActionKey,
   isActiveStatus,
   nextStatusFor,
-  orderStatusMeta,
+  orderStatusKey,
+  orderStatusTone,
 } from '@/lib/orderStatus';
 
 export interface OrderQueueCardProps {
@@ -45,13 +47,13 @@ export function OrderQueueCard({
   advancing = false,
   courierName,
 }: OrderQueueCardProps) {
+  const t = useT();
   const colors = useThemeColors();
-  const meta = orderStatusMeta[order.status];
+  const statusLabel = t(orderStatusKey(order.status));
   // Only what the shop can actually do. At `ready` the queue row shows the
   // waiting line below instead of a button nobody behind the counter can honour.
-  const actionLabel = nextStatusFor(order.status, 'merchant')
-    ? advanceActionLabel(order.status)
-    : null;
+  const actionKey = nextStatusFor(order.status, 'merchant') ? advanceActionKey(order.status) : null;
+  const actionLabel = actionKey ? t(actionKey) : null;
   const showAction = Boolean(onAdvance) && isActiveStatus(order.status) && Boolean(actionLabel);
   // The counter's half of the hand-off. Between packing the bag and the courier
   // driving off there is a real wait, and a ticket that simply loses its button
@@ -61,27 +63,31 @@ export function OrderQueueCard({
       ? order.delivery
         ? {
             icon: Bike,
-            label: courierName ? `${courierName} · en route` : 'Livreur en route',
+            label: courierName
+              ? t('business.orderQueue.courierEnRoute', { name: courierName })
+              : t('business.orderQueue.courierOnTheWay'),
           }
         : order.status === 'ready'
-          ? { icon: Clock3, label: 'En attente d’un livreur' }
+          ? { icon: Clock3, label: t('business.queue.awaitingCourier') }
           : null
       : null;
 
   const preview = order.items
-    .map((item) => (item.qty > 1 ? `${item.name} ×${item.qty}` : item.name))
-    .join(', ');
+    .map((item) =>
+      item.qty > 1 ? t('business.orderQueue.itemWithQty', { name: item.name, qty: item.qty }) : item.name
+    )
+    .join(t('common.listSeparator'));
 
   return (
     <View className="rounded-[20px] bg-card overflow-hidden">
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Commande de ${customerName}, ${meta.label}`}
+        accessibilityLabel={t('business.orderQueue.a11y', { customer: customerName, status: statusLabel })}
         onPress={onPress}
         className="p-4 gap-2.5"
       >
         <View className="flex-row items-center gap-2">
-          <Badge label={meta.label} tone={meta.tone} size="sm" />
+          <Badge label={statusLabel} tone={orderStatusTone[order.status]} size="sm" />
           {/* An unanswered complaint outranks the status: it is the reason to
               open this ticket ahead of the others. */}
           {order.dispute && order.dispute.status !== 'answered' ? (

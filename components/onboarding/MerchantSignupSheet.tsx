@@ -5,6 +5,7 @@ import { Modal, Pressable, View } from 'react-native';
 import { Button, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { MERCHANT_SIGNUP_STEPS } from '@/lib/merchantOnboarding';
+import { useT } from '@/lib/i18n/useT';
 
 export interface MerchantSignupSheetProps {
   visible: boolean;
@@ -30,6 +31,7 @@ export interface MerchantSignupSheetProps {
  * why the scrim and the close button do the same thing.
  */
 export function MerchantSignupSheet({ visible, onClose, onContinue }: MerchantSignupSheetProps) {
+  const t = useT();
   const colors = useThemeColors();
 
   return (
@@ -57,18 +59,17 @@ export function MerchantSignupSheet({ visible, onClose, onContinue }: MerchantSi
               </View>
               <View className="gap-2">
                 <Text variant="subtitle" weight="bold" className="text-[21px]">
-                  Inscrire ma boutique
+                  {t('onboarding.onboardingSheet.merchantTitle')}
                 </Text>
                 <Text variant="body" tone="muted">
-                  Trois étapes, directement dans l’application. Un administrateur valide ensuite
-                  votre dossier avant la mise en ligne de votre boutique.
+                {t('onboarding.onboardingSheet.body')}
                 </Text>
               </View>
             </View>
 
             <View className="gap-4">
               {MERCHANT_SIGNUP_STEPS.map((step, index) => (
-                <View key={step.title} className="flex-row gap-3.5">
+                <View key={step} className="flex-row gap-3.5">
                   <View className="w-7 h-7 rounded-full bg-primary/10 items-center justify-center mt-0.5">
                     <Text variant="caption" weight="bold" tone="primary" className="text-[12px]">
                       {index + 1}
@@ -76,10 +77,10 @@ export function MerchantSignupSheet({ visible, onClose, onContinue }: MerchantSi
                   </View>
                   <View className="flex-1 gap-1">
                     <Text variant="caption" weight="bold">
-                      {step.title}
+                      {t(`onboarding.merchant.${step}.title`)}
                     </Text>
                     <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
-                      {step.body}
+                      {t(`onboarding.merchant.${step}.body`)}
                     </Text>
                   </View>
                 </View>
@@ -98,7 +99,7 @@ export function MerchantSignupSheet({ visible, onClose, onContinue }: MerchantSi
                 }}
               />
               {onContinue ? (
-                <Button label="Plus tard" variant="ghost" size="md" fullWidth onPress={onClose} />
+                <Button label={t('common.later')} variant="ghost" size="md" fullWidth onPress={onClose} />
               ) : null}
             </View>
           </Pressable>

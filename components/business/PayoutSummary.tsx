@@ -1,7 +1,8 @@
 import { View } from 'react-native';
 
 import { Text } from '@/components/ui';
-import { formatCad } from '@/lib/format';
+import { useT } from '@/lib/i18n/useT';
+import { formatCad, formatPercent } from '@/lib/format';
 import { COMMISSION_RATE, MONTHLY_SUBSCRIPTION_CAD } from '@/lib/monetization';
 
 export interface PayoutSummaryProps {
@@ -27,6 +28,7 @@ export interface PayoutSummaryProps {
  * invent a number that appears on no invoice.
  */
 export function PayoutSummary({ salesCad, commissionCad, netCad, rangeLabel }: PayoutSummaryProps) {
+  const t = useT();
   return (
     <View className="rounded-[20px] bg-card p-4 gap-3">
       <Text variant="label" tone="muted" className="text-[10px]">
@@ -41,7 +43,7 @@ export function PayoutSummary({ salesCad, commissionCad, netCad, rangeLabel }: P
           minor
         />
         <View className="h-px bg-border mt-0.5" />
-        <Row label="Net des ventes" value={formatCad(netCad)} emphasis />
+        <Row label={t('business.payout.netSales')} value={formatCad(netCad)} emphasis />
       </View>
 
       <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
@@ -62,10 +64,11 @@ function Row({
   minor?: boolean;
   emphasis?: boolean;
 }) {
+  const t = useT();
   return (
     <View
       accessible
-      accessibilityLabel={`${label} : ${value}`}
+      accessibilityLabel={t('common.ui.labelledValue', { label, value })}
       className="flex-row items-baseline justify-between gap-3"
     >
       <Text
@@ -93,11 +96,6 @@ function Row({
       )}
     </View>
   );
-}
-
-/** "12 %" — French spacing, and no trailing zeros on a whole percentage. */
-function formatPercent(rate: number): string {
-  return `${new Intl.NumberFormat('fr-CA', { maximumFractionDigits: 2 }).format(rate * 100)} %`;
 }
 
 /** Matches `components/ui/PriceSummary.tsx`: a right-aligned money column must not wobble. */

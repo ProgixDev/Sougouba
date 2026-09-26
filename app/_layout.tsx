@@ -1,5 +1,9 @@
 // Must precede every other import — see the module's own note on why.
 import '@/lib/devLogs';
+// Binds `i18n.locale` to the language store before anything renders. A
+// side-effect import rather than a hook because a hook is one frame too late —
+// see the module's own note.
+import '@/lib/i18n/sync';
 
 import '../global.css';
 

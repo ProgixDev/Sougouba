@@ -6,12 +6,20 @@ import type { VendorType } from '@/data/types';
 import { forest, terracotta } from '@/theme/tokens';
 
 export interface Vertical {
+  /**
+   * Also the catalogue key: the words live at `domain.vertical.<type>.*`.
+   *
+   * They used to be `labelFr` / `titleFr` / `pluralFr` fields right here. They
+   * belong in the catalogue rather than in a `LocalizedText` because this is
+   * *code*, not a row — each entry carries a `LucideIcon`, a hex accent and an
+   * `ImageSourcePropType`, none of which crosses a JSON boundary, and
+   * `VendorType` is a closed union a back-office cannot extend.
+   *
+   * Dropping `pluralFr` also deleted a `.toLowerCase()` at the one call site
+   * that used it: a linguistic transformation applied to stored data, which is
+   * wrong for English nouns. Casing is authored now, per form, per language.
+   */
   type: VendorType;
-  labelFr: string;
-  /** Heading for the shop list, where the screen is about all of them. */
-  titleFr: string;
-  /** Plural, for counts: "6 épiceries". */
-  pluralFr: string;
   icon: LucideIcon;
   /** Distinguishes the two entry cards without tinting the photograph behind them. */
   accent: string;
@@ -34,18 +42,12 @@ export interface Vertical {
 export const verticals: Vertical[] = [
   {
     type: 'grocery',
-    labelFr: 'Épicerie',
-    titleFr: 'Épiceries',
-    pluralFr: 'épiceries',
     icon: ShoppingBasket,
     accent: forest[600],
     cover: vendorImages.vnd_souk_medina,
   },
   {
     type: 'restaurant',
-    labelFr: 'Restaurant',
-    titleFr: 'Restaurants',
-    pluralFr: 'restaurants',
     icon: UtensilsCrossed,
     accent: terracotta[600],
     cover: productImages.prd_thieboudienne,

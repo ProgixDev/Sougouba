@@ -6,6 +6,7 @@ import { View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
 import { Button, Text } from '@/components/ui';
+import { useLocale } from '@/lib/i18n/useT';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { formatCad } from '@/lib/format';
 import { formatDistance } from '@/lib/geo';
@@ -47,6 +48,9 @@ export function OfferCard({
   onDecline,
   busy = false,
 }: OfferCardProps) {
+  // Formats money here but renders no translated string of its own; this is
+  // the subscription that re-runs those formatters on a language switch.
+  useLocale();
   const colors = useThemeColors();
   const [remaining, setRemaining] = useState(() => offerRemainingMs(offer, Date.now()));
 

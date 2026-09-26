@@ -13,6 +13,7 @@ import Animated, {
 import { Text } from '@/components/ui';
 import type { Category } from '@/data/types';
 import { categoryIcons } from '@/lib/categoryIcons';
+import { useLocalized } from '@/lib/localized';
 import { categoryImages } from '@/lib/categoryImages';
 import { categoryPalette } from '@/theme/colors';
 import { forest } from '@/theme/tokens';
@@ -46,6 +47,7 @@ const SPRING = { damping: 14, stiffness: 200, mass: 0.6 };
  * as a gap in the image, and the brand green is unambiguous on all eight.
  */
 export function CategoryCircle({ category, selected = false, onPress, size = 68 }: CategoryCircleProps) {
+  const L = useLocalized();
   const reducedMotion = useReducedMotion();
   const scale = useSharedValue(1);
   const selection = useSharedValue(selected ? 1 : 0);
@@ -75,7 +77,7 @@ export function CategoryCircle({ category, selected = false, onPress, size = 68 
     <AnimatedPressable
       accessibilityRole="button"
       accessibilityState={{ selected }}
-      accessibilityLabel={category.nameFr}
+      accessibilityLabel={L(category.name)}
       onPress={() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onPress?.();
@@ -141,7 +143,7 @@ export function CategoryCircle({ category, selected = false, onPress, size = 68 
         numberOfLines={1}
         style={{ maxWidth: size + 14 }}
       >
-        {category.shortNameFr}
+        {L(category.shortName)}
       </Text>
     </AnimatedPressable>
   );

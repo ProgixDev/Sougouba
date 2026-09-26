@@ -3,6 +3,7 @@ import { Minus, Plus, Trash2 } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { useT } from '@/lib/i18n/useT';
 import { darkColors, lightColors } from '@/theme/colors';
 import { Text } from './Text';
 
@@ -22,6 +23,7 @@ export interface QuantityStepperProps {
  * already filters out non-positive quantities.
  */
 export function QuantityStepper({ qty, onChange, min = 1, max = 99 }: QuantityStepperProps) {
+  const t = useT();
   const { colorScheme } = useColorScheme();
   const colors = colorScheme === 'dark' ? darkColors : lightColors;
 
@@ -38,7 +40,7 @@ export function QuantityStepper({ qty, onChange, min = 1, max = 99 }: QuantitySt
       <Pressable
         hitSlop={4}
         accessibilityRole="button"
-        accessibilityLabel={atMin ? 'Retirer du panier' : 'Diminuer la quantité'}
+        accessibilityLabel={t(atMin ? 'common.ui.removeFromCart' : 'common.ui.decrease')}
         onPress={() => step(atMin ? 0 : qty - 1)}
         className="w-7 h-7 items-center justify-center rounded-full bg-card"
       >
@@ -52,7 +54,7 @@ export function QuantityStepper({ qty, onChange, min = 1, max = 99 }: QuantitySt
       <Text
         weight="bold"
         className="text-[13px] min-w-[22px] text-center"
-        accessibilityLabel={`Quantité : ${qty}`}
+        accessibilityLabel={t('common.ui.quantity', { qty })}
       >
         {qty}
       </Text>
@@ -61,7 +63,7 @@ export function QuantityStepper({ qty, onChange, min = 1, max = 99 }: QuantitySt
         hitSlop={4}
         disabled={atMax}
         accessibilityRole="button"
-        accessibilityLabel="Augmenter la quantité"
+        accessibilityLabel={t('common.ui.increase')}
         onPress={() => step(qty + 1)}
         className={`w-7 h-7 items-center justify-center rounded-full ${atMax ? 'bg-card opacity-40' : 'bg-card'}`}
       >

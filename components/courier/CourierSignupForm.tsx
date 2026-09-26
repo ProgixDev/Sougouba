@@ -1,4 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import { Check } from 'lucide-react-native';
 import { MotiView } from 'moti';
 import { useState } from 'react';
@@ -8,8 +7,10 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 import { Button, CitySelect, Input, SelectField, Text } from '@/components/ui';
 import { OTHER_BANK_ID, banks } from '@/data/banks';
 import { useThemeColors } from '@/hooks/useColorScheme';
+import { i18nResolver } from '@/lib/validation/resolver';
+import { useT } from '@/lib/i18n/useT';
 import {
-  VEHICLE_LABELS,
+  VEHICLE_KEYS,
   courierIdentitySchema,
   courierPayoutSchema,
   courierVehicleSchema,
@@ -38,7 +39,11 @@ export interface CourierSignupFormProps {
   onSubmit: (values: CourierSignupValues) => Promise<void>;
 }
 
-const STEP_TITLES = ['Vous et votre ville', 'Votre véhicule', 'Vos versements'];
+/**
+ * Keys, not sentences: this is module scope, so a `t()` here would resolve once
+ * at import and freeze the launch language for the life of the process.
+ */
+const STEP_KEYS = ['identity', 'vehicle', 'payout'] as const;
 
 /**
  * Registration, in three steps rather than one long scroll.
@@ -52,6 +57,7 @@ const STEP_TITLES = ['Vous et votre ville', 'Votre véhicule', 'Vos versements']
  * to change a vehicle must not silently clear a bank account.
  */
 export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFormProps) {
+  const t = useT();
   const colors = useThemeColors();
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -60,13 +66,13 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
   const [vehicle, setVehicle] = useState<CourierVehicleValues | null>(null);
 
   const identityForm = useForm<CourierIdentityInput, unknown, CourierIdentityValues>({
-    resolver: zodResolver(courierIdentitySchema),
+    resolver: i18nResolver(t, courierIdentitySchema),
     // Montréal rather than blank: it is where most of the fleet is, and the
     // selector shows the alternatives anyway.
     defaultValues: { fullName: defaultFullName ?? '', phone: '', city: 'Montréal', postalCode: '' },
   });
   const vehicleForm = useForm<CourierVehicleValues>({
-    resolver: zodResolver(courierVehicleSchema),
+    resolver: i18nResolver(t, courierVehicleSchema),
     defaultValues: {
       vehicle: 'bike',
       plate: '',
@@ -77,7 +83,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
     },
   });
   const payoutForm = useForm<CourierPayoutValues>({
-    resolver: zodResolver(courierPayoutSchema),
+    resolver: i18nResolver(t, courierPayoutSchema),
     defaultValues: { bankId: '', bankNameOther: '', transit: '', account: '' },
   });
 
@@ -91,7 +97,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
     try {
       await onSubmit({ identity, vehicle, payout });
     } catch {
-      setFormError('Envoi impossible. Veuillez réessayer.');
+      setFormError(t('courier.sendFailed'));
       setSubmitting(false);
     }
   }
@@ -107,7 +113,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
             and it shows how much is left without asking anyone to read it. */}
         <View className="gap-2.5">
           <View className="flex-row gap-1.5">
-            {STEP_TITLES.map((title, index) => (
+            {STEP_KEYS.map((title, index) => (
               <MotiView
                 key={title}
                 className="flex-1 h-1 rounded-full"
@@ -117,7 +123,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
             ))}
           </View>
           <Text variant="label" tone="muted" className="text-[10px]">
-            Étape {step + 1} — {STEP_TITLES[step]}
+            Étape {step + 1} — {t(`courier.signupSteps.${STEP_KEYS[step]}`)}
           </Text>
         </View>
 
@@ -142,7 +148,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
               name="phone"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Téléphone"
+                  label={t('courier.signupForm.phone')}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
@@ -160,7 +166,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
                   value={value}
                   onChange={onChange}
                   error={identityForm.formState.errors.city?.message}
-                  helperText="Les villes où Sougouba a des courses aujourd’hui."
+                  helperText={t('courier.signupForm.cityHint')}
                 />
               )}
             />
@@ -169,14 +175,14 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
               name="postalCode"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Code postal"
+                  label={t('business.shopForm.postalCode')}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
                   autoCapitalize="characters"
                   error={identityForm.formState.errors.postalCode?.message}
                   required
-                  helperText="Doit correspondre à la ville choisie. Sert à vous proposer les courses près de chez vous."
+                  helperText={t('courier.signupForm.postalHint')}
                 />
               )}
             />
@@ -187,14 +193,14 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
           <View className="gap-5">
             <View className="gap-3">
               <Text variant="label" tone="muted">
-                Comment livrez-vous ?
+                {t('courier.signupForm.howDoYouDeliver')}
               </Text>
               <Controller
                 control={vehicleForm.control}
                 name="vehicle"
                 render={({ field: { onChange, value } }) => (
                   <View className="flex-row gap-2.5">
-                    {(Object.keys(VEHICLE_LABELS) as (keyof typeof VEHICLE_LABELS)[]).map((key) => {
+                    {(Object.keys(VEHICLE_KEYS) as (keyof typeof VEHICLE_KEYS)[]).map((key) => {
                       const selected = value === key;
                       return (
                         <Pressable
@@ -207,7 +213,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
                           }`}
                         >
                           <Text variant="caption" weight={selected ? 'bold' : 'medium'}>
-                            {VEHICLE_LABELS[key]}
+                            {t(VEHICLE_KEYS[key])}
                           </Text>
                           {selected ? (
                             <Check size={14} color={colors.secondary} strokeWidth={3} />
@@ -225,8 +231,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
             {!isMotorised(chosenVehicle) ? (
               <View className="rounded-2xl border border-border p-4">
                 <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
-                  Aucun document de véhicule n’est demandé pour une livraison à vélo. Une pièce
-                  d’identité vous sera demandée à la validation.
+              {t('courier.signupForm.bikeNote')}
                 </Text>
               </View>
             ) : (
@@ -236,7 +241,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
                   name="plate"
                   render={({ field: { onChange, onBlur, value } }) => (
                     <Input
-                      label="Plaque d’immatriculation"
+                      label={t('courier.signupForm.plate')}
                       value={value ?? ''}
                       onChangeText={onChange}
                       onBlur={onBlur}
@@ -251,7 +256,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
                   name="licenceNumber"
                   render={({ field: { onChange, onBlur, value } }) => (
                     <Input
-                      label="Numéro de permis de conduire"
+                      label={t('courier.signupForm.licence')}
                       value={value ?? ''}
                       onChangeText={onChange}
                       onBlur={onBlur}
@@ -267,14 +272,14 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
                     cannot approve, and finding that out a day later wastes
                     everybody's. */}
                 <Text variant="label" tone="muted">
-                  Assurance du véhicule
+                  {t('courier.signupForm.vehicleInsurance')}
                 </Text>
                 <Controller
                   control={vehicleForm.control}
                   name="insurerName"
                   render={({ field: { onChange, onBlur, value } }) => (
                     <Input
-                      label="Compagnie d’assurance"
+                      label={t('courier.signupForm.insurer')}
                       value={value ?? ''}
                       onChangeText={onChange}
                       onBlur={onBlur}
@@ -288,7 +293,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
                   name="insurancePolicy"
                   render={({ field: { onChange, onBlur, value } }) => (
                     <Input
-                      label="Numéro de police"
+                      label={t('courier.signupForm.policy')}
                       value={value ?? ''}
                       onChangeText={onChange}
                       onBlur={onBlur}
@@ -303,14 +308,14 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
                   name="insuranceExpiry"
                   render={({ field: { onChange, onBlur, value } }) => (
                     <Input
-                      label="Échéance (MM/AAAA)"
+                      label={t('courier.signupForm.expiry')}
                       value={value ?? ''}
                       onChangeText={onChange}
                       onBlur={onBlur}
                       keyboardType="numbers-and-punctuation"
                       error={vehicleForm.formState.errors.insuranceExpiry?.message}
                       required
-                      helperText="Une preuve d’assurance vous sera demandée à la validation."
+                      helperText={t('courier.signupForm.insuranceNote')}
                     />
                   )}
                 />
@@ -322,20 +327,19 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
         {step === 2 ? (
           <View className="gap-4">
             <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
-              Vos gains sont versés par dépôt direct. Ces informations restent visibles de vous
-              seul.
+              {t('courier.signupForm.payoutNote')}
             </Text>
             <Controller
               control={payoutForm.control}
               name="bankId"
               render={({ field: { onChange, value } }) => (
                 <SelectField
-                  label="Nom de la banque"
-                  sheetTitle="Votre banque"
+                  label={t('courier.signupForm.bankName')}
+                  sheetTitle={t('courier.yourBank')}
                   options={BANK_OPTIONS}
                   value={value}
                   onChange={onChange}
-                  placeholder="Choisir votre banque"
+                  placeholder={t('courier.signupForm.chooseBank')}
                   error={payoutForm.formState.errors.bankId?.message}
                   required
                 />
@@ -349,7 +353,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
                 name="bankNameOther"
                 render={({ field: { onChange, onBlur, value } }) => (
                   <Input
-                    label="Nom de votre banque"
+                    label={t('courier.signupForm.bankOther')}
                     value={value ?? ''}
                     onChangeText={onChange}
                     onBlur={onBlur}
@@ -379,7 +383,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
               name="account"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Numéro de compte"
+                  label={t('courier.signupForm.account')}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}

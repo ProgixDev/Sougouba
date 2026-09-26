@@ -6,6 +6,7 @@ import { useReducedMotion } from 'react-native-reanimated';
 import { Text } from '@/components/ui';
 import { useColorScheme, useThemeColors } from '@/hooks/useColorScheme';
 import type { RunBucket } from '@/lib/courierAnalytics';
+import { useT } from '@/lib/i18n/useT';
 import { formatCad } from '@/lib/format';
 import { mustard } from '@/theme/tokens';
 
@@ -50,6 +51,7 @@ const SELECTABLE_MAX = 14;
  * with fewer ticks.
  */
 export function EarningsChart({ buckets, bestDay }: EarningsChartProps) {
+  const t = useT();
   const colors = useThemeColors();
   const { colorScheme } = useColorScheme();
   const reducedMotion = useReducedMotion();
@@ -100,8 +102,11 @@ export function EarningsChart({ buckets, bestDay }: EarningsChartProps) {
             </Text>
             <Text variant="caption" tone="muted" className="text-[11px]">
               {selected
-                ? `${shown.label} · ${shown.runCount} ${shown.runCount === 1 ? 'course' : 'courses'}`
-                : `meilleur jour · ${shown.label}`}
+                ? t('courier.chart.selectedDay', {
+                    label: shown.label,
+                    runs: t('courier.runCount', { count: shown.runCount }),
+                  })
+                : t('courier.bestDay', { label: shown.label })}
             </Text>
           </View>
         ) : null}
@@ -166,7 +171,11 @@ export function EarningsChart({ buckets, bestDay }: EarningsChartProps) {
               key={bucket.date}
               accessibilityRole="button"
               accessibilityState={{ selected: isSelected }}
-              accessibilityLabel={`${bucket.label}, ${formatCad(bucket.earningsCad)}, ${bucket.runCount} ${bucket.runCount === 1 ? 'course' : 'courses'}`}
+              accessibilityLabel={t('courier.chart.barA11y', {
+                label: bucket.label,
+                amount: formatCad(bucket.earningsCad),
+                runs: t('courier.runCount', { count: bucket.runCount }),
+              })}
               // The whole column is the target, not the bar: an empty day is
               // still a day someone taps to confirm it was empty.
               hitSlop={{ top: 8, bottom: 8 }}

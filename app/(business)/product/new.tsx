@@ -4,12 +4,14 @@ import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ProductForm } from '@/components/business';
+import { useT } from '@/lib/i18n/useT';
 import { BackHeader, EmptyState, Skeleton } from '@/components/ui';
 import { productsApi } from '@/data/api';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
 import { routes } from '@/lib/routes';
 
 export default function NewProductScreen() {
+  const t = useT();
   const { vendor, missing } = useOwnerVendor();
 
   // The form is built from the shop's own sections, so it cannot be rendered
@@ -33,8 +35,8 @@ export default function NewProductScreen() {
         <BackHeader />
         <EmptyState
           icon={Store}
-          title="Aucune boutique associée"
-          description="Impossible d’ajouter un produit sans boutique rattachée."
+          title={t('business.productDetail.noShopTitle')}
+          description={t('business.productDetail.noShopBody')}
         />
       </SafeAreaView>
     );
@@ -45,7 +47,7 @@ export default function NewProductScreen() {
       <BackHeader title="Nouveau produit" />
       <ProductForm
         vendor={vendor}
-        submitLabel="Ajouter au catalogue"
+        submitLabel={t('business.queue.addToCatalog')}
         onSubmit={async (values, tags) => {
           await productsApi.createProduct({
             vendorId: vendor.id,

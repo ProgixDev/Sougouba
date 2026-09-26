@@ -6,6 +6,7 @@ import { BackHandler, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Text } from '@/components/ui';
+import { useT } from '@/lib/i18n/useT';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { ordersApi, vendorsApi } from '@/data/api';
 import type { Order, Vendor } from '@/data/types';
@@ -14,6 +15,7 @@ import { dynamicRoutes, routes } from '@/lib/routes';
 import { orderReference } from '@/lib/orderRef';
 
 export default function OrderConfirmedScreen() {
+  const t = useT();
   const colors = useThemeColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [order, setOrder] = useState<Order | null>(null);
@@ -65,12 +67,12 @@ export default function OrderConfirmedScreen() {
           className="items-center gap-3"
         >
           <Text variant="title" weight="bold" className="text-center">
-            Commande confirmée
+            {t('customer.orderConfirmed.title')}
           </Text>
           <Text variant="body" tone="muted" className="text-center">
             {vendor
-              ? `${vendor.name} prépare votre commande. Vous recevrez une notification à chaque étape.`
-              : 'Votre commande est en préparation.'}
+              ? t('customer.orderConfirmed.bodyNamed', { vendor: vendor.name })
+              : t('customer.orderConfirmed.bodyGeneric')}
           </Text>
         </MotiView>
 
@@ -83,7 +85,7 @@ export default function OrderConfirmedScreen() {
           >
             <View className="flex-row items-center justify-between">
               <Text variant="caption" tone="muted">
-                Numéro de commande
+                {t('customer.orderConfirmed.orderNumber')}
               </Text>
               <Text variant="caption" weight="bold">
                 {orderReference(order)}
@@ -91,7 +93,7 @@ export default function OrderConfirmedScreen() {
             </View>
             <View className="flex-row items-center justify-between">
               <Text variant="caption" tone="muted">
-                Total
+                {t('customer.orderConfirmed.total')}
               </Text>
               <Text variant="caption" weight="bold">
                 {formatCad(order.totalCad)}
@@ -100,7 +102,7 @@ export default function OrderConfirmedScreen() {
             {order.pointsDiscountCad ? (
               <View className="flex-row items-center justify-between">
                 <Text variant="caption" tone="muted">
-                  Points utilisés
+                  {t('customer.orderConfirmed.pointsUsed')}
                 </Text>
                 <Text variant="caption" weight="bold" tone="primary">
                   {order.pointsRedeemed} pts · -{formatCad(order.pointsDiscountCad)}
@@ -110,7 +112,7 @@ export default function OrderConfirmedScreen() {
             {vendor ? (
               <View className="flex-row items-center justify-between">
                 <Text variant="caption" tone="muted">
-                  Livraison estimée
+                  {t('customer.orderConfirmed.estimatedDelivery')}
                 </Text>
                 <View className="flex-row items-center gap-1.5">
                   <Clock size={13} color={colors.primary} strokeWidth={2} />
@@ -126,7 +128,7 @@ export default function OrderConfirmedScreen() {
 
       <View className="px-6 pb-4 gap-2">
         <Button
-          label="Suivre ma commande"
+          label={t('customer.orderConfirmed.track')}
           variant="primary"
           size="lg"
           fullWidth
@@ -137,7 +139,7 @@ export default function OrderConfirmedScreen() {
           }
         />
         <Button
-          label="Retour à l’accueil"
+          label={t('customer.orderConfirmed.home')}
           variant="ghost"
           size="lg"
           fullWidth

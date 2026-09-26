@@ -8,14 +8,15 @@ import { Button, Text } from '@/components/ui';
 import type { Vendor } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import {
+  PRICE_BANDS,
+  SORT_KEYS,
   activeFilterCount,
   emptyFilters,
-  priceBandLabels,
-  sortLabels,
-  type PriceBand,
+  priceBandLabel,
+  sortKey,
   type ProductFilters,
-  type SortKey,
 } from '@/lib/productFilters';
+import { useT } from '@/lib/i18n/useT';
 
 export interface FilterSheetProps {
   visible: boolean;
@@ -47,6 +48,7 @@ export function FilterSheet({
   onClose,
   onDraftChange,
 }: FilterSheetProps) {
+  const t = useT();
   const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState(filters);
 
@@ -78,7 +80,7 @@ export function FilterSheet({
           transition={{ type: 'timing', duration: 180 }}
           style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10, 32, 24, 0.45)' }]}
         >
-          <Pressable className="flex-1" accessibilityLabel="Fermer les filtres" onPress={onClose} />
+          <Pressable className="flex-1" accessibilityLabel={t('customer.filters.close')} onPress={onClose} />
         </MotiView>
 
         <MotiView
@@ -110,11 +112,11 @@ export function FilterSheet({
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="px-5 pb-4 gap-7">
-            <Group title="Trier par">
-              {(Object.keys(sortLabels) as SortKey[]).map((key) => (
+            <Group title={t('customer.sortBy')}>
+              {SORT_KEYS.map((key) => (
                 <OptionRow
                   key={key}
-                  label={sortLabels[key]}
+                  label={t(sortKey(key))}
                   selected={draft.sort === key}
                   onPress={() => update({ sort: key })}
                 />
@@ -123,10 +125,10 @@ export function FilterSheet({
 
             <Group title="Prix">
               <View className="flex-row flex-wrap gap-2">
-                {(Object.keys(priceBandLabels) as PriceBand[]).map((band) => (
+                {PRICE_BANDS.map((band) => (
                   <SelectChip
                     key={band}
-                    label={priceBandLabels[band]}
+                    label={priceBandLabel(t, band)}
                     selected={draft.priceBand === band}
                     onPress={() => update({ priceBand: band })}
                   />
@@ -156,12 +158,12 @@ export function FilterSheet({
 
             <Group title="Afficher seulement">
               <ToggleRow
-                label="Les articles en promotion"
+                label={t('customer.filters.onSale')}
                 value={draft.onSale}
                 onValueChange={(next) => update({ onSale: next })}
               />
               <ToggleRow
-                label="Les articles disponibles"
+                label={t('customer.filters.inStock')}
                 value={draft.inStockOnly}
                 onValueChange={(next) => update({ inStockOnly: next })}
               />
@@ -173,11 +175,7 @@ export function FilterSheet({
             style={{ paddingBottom: insets.bottom + 12 }}
           >
             <Button
-              label={
-                resultCount === 0
-                  ? 'Aucun résultat'
-                  : `Voir ${resultCount} ${resultCount === 1 ? 'produit' : 'produits'}`
-              }
+              label={t('customer.filters.applyCta', { count: resultCount })}
               variant="cta"
               size="lg"
               fullWidth

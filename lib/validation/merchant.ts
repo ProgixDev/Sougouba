@@ -17,27 +17,27 @@ import { citySchema, postalCodeSchema, refinePostalCodeCity } from './address';
  */
 
 export const shopIdentitySchema = z.object({
-  name: z.string().trim().min(2, 'Nom de la boutique requis'),
-  vendorType: z.enum(['grocery', 'restaurant'], { message: 'Choisissez une catégorie' }),
+  name: z.string().trim().min(2, 'validation.merchant.nameRequired'),
+  vendorType: z.enum(['grocery', 'restaurant'], { message: 'validation.merchant.typeRequired' }),
   specialtyFr: z
     .string()
     .trim()
-    .min(3, 'Spécialité requise')
-    .max(40, 'Trop long — une ligne sous le nom de la boutique'),
+    .min(3, 'validation.merchant.specialtyRequired')
+    .max(40, 'validation.merchant.specialtyTooLong'),
   isHalalCertified: z.boolean(),
 });
 export type ShopIdentityValues = z.infer<typeof shopIdentitySchema>;
 
 export const shopAddressSchema = z
   .object({
-    street: z.string().trim().min(4, 'Adresse requise'),
+    street: z.string().trim().min(4, 'validation.address.streetRequired'),
     city: citySchema,
     postalCode: postalCodeSchema,
     deliveryEtaMin: z
       .string()
       .trim()
-      .regex(/^\d{1,3}$/, 'Délai en minutes')
-      .refine((v) => Number(v) >= 10 && Number(v) <= 180, 'Entre 10 et 180 minutes'),
+      .regex(/^\d{1,3}$/, 'validation.merchant.etaFormat')
+      .refine((v) => Number(v) >= 10 && Number(v) <= 180, 'validation.merchant.etaRange'),
   })
   .superRefine(refinePostalCodeCity);
 export type ShopAddressInput = z.input<typeof shopAddressSchema>;
@@ -50,13 +50,13 @@ export const shopDocumentsSchema = z
       .string()
       .trim()
       .transform((v) => v.replace(/\s/g, ''))
-      .refine((v) => /^\d{10}$/.test(v), 'NEQ à 10 chiffres'),
-    contactName: z.string().trim().min(2, 'Nom du responsable requis'),
+      .refine((v) => /^\d{10}$/.test(v), 'validation.merchant.neqFormat'),
+    contactName: z.string().trim().min(2, 'validation.merchant.contactRequired'),
     contactPhone: z
       .string()
       .trim()
-      .min(10, 'Téléphone requis')
-      .regex(/^[\d\s()+.-]+$/, 'Numéro de téléphone invalide'),
+      .min(10, 'validation.phone.required')
+      .regex(/^[\d\s()+.-]+$/, 'validation.phone.invalid'),
     mapaqNumber: z.string().trim().optional(),
     /** Carried from step one so the MAPAQ rule can see it. */
     vendorType: z.enum(['grocery', 'restaurant']),
@@ -70,7 +70,7 @@ export const shopDocumentsSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['mapaqNumber'],
-        message: 'Permis MAPAQ requis pour un restaurant',
+        message: 'validation.merchant.mapaqRequired',
       });
     }
   });

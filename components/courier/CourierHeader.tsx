@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/ui';
+import { useLocale, useT } from '@/lib/i18n/useT';
 import { useColorScheme, useThemeColors } from '@/hooks/useColorScheme';
 import { formatCad } from '@/lib/format';
 import { semantic } from '@/theme/tokens';
@@ -41,6 +42,10 @@ export function CourierHeader({
   earningsTodayCad,
   runsToday,
 }: CourierHeaderProps) {
+  const t = useT();
+  // Formats money here but renders no translated string of its own; this is
+  // the subscription that re-runs those formatters on a language switch.
+  useLocale();
   const colors = useThemeColors();
   const { colorScheme } = useColorScheme();
   const insets = useSafeAreaInsets();
@@ -101,7 +106,7 @@ export function CourierHeader({
             </Text>
             <Text variant="caption" tone="muted" className="text-[11px]">
               {runsToday === 0
-                ? 'aucune course aujourd’hui'
+                ? t('courier.noRunsToday')
                 : runsToday === 1
                   ? '1 course aujourd’hui'
                   : `${runsToday} courses aujourd’hui`}

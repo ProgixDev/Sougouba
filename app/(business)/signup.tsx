@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ShopSignupForm, type ShopSignupValues } from '@/components/business';
+import { useT } from '@/lib/i18n/useT';
 import { BackHeader, Text } from '@/components/ui';
 import { vendorsApi } from '@/data/api';
 import { coordinatesFor } from '@/lib/postalGeo';
@@ -24,6 +25,7 @@ import { useSessionStore } from '@/store/useSessionStore';
  * `push`, so a filled-in form cannot be stepped back into and submitted twice.
  */
 export default function ShopSignupScreen() {
+  const t = useT();
   const user = useSessionStore((s) => s.user);
 
   async function submit(values: ShopSignupValues) {
@@ -33,7 +35,8 @@ export default function ShopSignupScreen() {
       ownerId: user.id,
       name: values.identity.name,
       vendorType: values.identity.vendorType,
-      specialtyFr: values.identity.specialtyFr,
+      // The merchant typed one language; it is stored as that language.
+      specialty: { fr: values.identity.specialtyFr },
       isHalalCertified: values.identity.isHalalCertified,
       address: {
         id: `addr_${user.id}_shop`,
@@ -62,10 +65,10 @@ export default function ShopSignupScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <BackHeader title="Inscrire ma boutique" />
+      <BackHeader title={t('business.signup.title')} />
       <View className="px-5 pb-1">
         <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
-          Votre boutique n’est visible par personne tant qu’un administrateur ne l’a pas validée.
+            {t('business.signup.privacyNote')}
         </Text>
       </View>
       <ShopSignupForm onSubmit={submit} />
