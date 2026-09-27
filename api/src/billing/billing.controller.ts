@@ -1,0 +1,115 @@
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
+
+import { AdminGuard } from '../auth/admin.guard.js';
+import { CurrentUser } from '../auth/current-user.decorator.js';
+import { SupabaseAuthGuard } from '../auth/supabase-auth.guard.js';
+import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
+import { CouriersService } from '../courier/couriers.service.js';
+import { AnalyticsService } from './analytics.service.js';
+import { ConnectService } from './connect.service.js';
+import { PayoutsService } from './payouts.service.js';
+
+const analyticsQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(90).default(7),
+});
+type AnalyticsQuery = z.infer<typeof analyticsQuerySchema>;
+
+/**
+ * Where the onboarding flow sends the browser back to.
+ *
+ * Both are required and both are validated as URLs: Stripe redirects to
+ * whatever it is given, so an unvalidated value here is an open redirect
+ * wearing a payments URL.
+ */
+const onboardSchema = z.object({
+  returnUrl: z.url('URL de retour requise'),
+  refreshUrl: z.url('URL de reprise requise'),
+});
+type OnboardInput = z.infer<typeof onboardSchema>;
+
+@ApiTags('merchant')
+@ApiBearerAuth()
+@UseGuards(SupabaseAuthGuard)
+@Controller('vendors/me')
+export class MerchantBillingController {
+  constructor(
+    private readonly analytics: AnalyticsService,
+    private readonly connect: ConnectService
+  ) {}
+
+  /** The merchant dashboard's numbers, computed server-side instead of shipped as raw rows. */
+  @Get('analytics')
+  analyticsFor(@CurrentUser() userId: string, @Query(new ZodValidationPipe(analyticsQuerySchema)) query: AnalyticsQuery) {
+    return this.analytics.forOwner(userId, query.days);
+  }
+
+  @Post('stripe/onboard')
+  onboard(@CurrentUser() userId: string, @Body(new ZodValidationPipe(onboardSchema)) body: OnboardInput) {
+    return this.connect.onboardVendor(userId, body.returnUrl, body.refreshUrl);
+  }
+
+  @Get('stripe/status')
+  status(@CurrentUser() userId: string) {
+    return this.connect.vendorStatus(userId);
+  }
+}
+
+@ApiTags('courier')
+@ApiBearerAuth()
+@UseGuards(SupabaseAuthGuard)
+@Controller('couriers/me')
+export class CourierBillingController {
+  constructor(
+    private readonly connect: ConnectService,
+    private readonly payouts: PayoutsService,
+    private readonly couriers: CouriersService
+  ) {}
+
+  /**
+   * Replaces the bank-details form entirely.
+   *
+   * The mobile app's courier signup collects a transit and account number as
+   * plain strings; this API never accepts them and never stores them. Stripe's
+   * hosted onboarding collects the banking, and what comes back is an id.
+   */
+  @Post('stripe/onboard')
+  onboard(@CurrentUser() userId: string, @Body(new ZodValidationPipe(onboardSchema)) body: OnboardInput) {
+    return this.connect.onboardCourier(userId, body.returnUrl, body.refreshUrl);
+  }
+
+  @Get('stripe/status')
+  status(@CurrentUser() userId: string) {
+    return this.connect.courierStatus(userId);
+  }
+
+  /** What is owed but not yet paid — the real version of `pendingPayoutCad`, which never moved a cent. */
+  @Get('payouts/pending')
+  async pending(@CurrentUser() userId: string) {
+    const courierId = await this.couriers.courierIdFor(userId);
+    return this.payouts.pendingFor(courierId);
+  }
+}
+
+@ApiTags('admin')
+@ApiBearerAuth()
+@UseGuards(SupabaseAuthGuard, AdminGuard)
+@Controller('admin/payouts')
+export class AdminPayoutsController {
+  constructor(private readonly payouts: PayoutsService) {}
+
+  /**
+   * Run the weekly batch by hand.
+   *
+   * The scheduled job is the normal path; this exists because a batch that
+   * failed halfway — one courier's transfer erroring after three succeeded —
+   * needs a way to be finished without waiting a week. Safe to re-run: the
+   * per-courier idempotency key makes a repeat within the same day a no-op at
+   * Stripe rather than a second payment.
+   */
+  @Post('run')
+  run() {
+    return this.payouts.runBatch();
+  }
+}

@@ -1,0 +1,216 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1788053445894,
+      "tag": "0000_init_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788053445895,
+      "tag": "0001_enable_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788053744074,
+      "tag": "0002_add_query_pattern_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788053980000,
+      "tag": "0003_create_storage_buckets",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788054304000,
+      "tag": "0004_profile_creation_trigger",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788054340000,
+      "tag": "0005_identity_rls_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788054600000,
+      "tag": "0006_avatars_bucket_and_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788310000000,
+      "tag": "0007_seed_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788310060000,
+      "tag": "0008_catalog_rls_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788310120000,
+      "tag": "0009_catalog_column_privileges",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788310180000,
+      "tag": "0010_move_catalog_policy_helpers_to_private_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788396741593,
+      "tag": "0011_add_order_stripe_payment_intent",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788397065390,
+      "tag": "0012_vendors_one_shop_per_owner",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788397300000,
+      "tag": "0013_orders_rls_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788399868374,
+      "tag": "0014_loyalty_idempotency_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1788399997963,
+      "tag": "0015_order_coupon_snapshot",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1788400100000,
+      "tag": "0016_loyalty_rls_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788400345156,
+      "tag": "0017_coupon_used_count",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788401046713,
+      "tag": "0018_courier_shift_and_dispatch_constraints",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788401200000,
+      "tag": "0019_courier_rls_and_realtime",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788401780366,
+      "tag": "0020_order_refund_record",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788401900000,
+      "tag": "0021_disputes_admin_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788402000000,
+      "tag": "0022_identity_column_privileges",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788402348181,
+      "tag": "0023_application_review",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788403000000,
+      "tag": "0024_column_grant_audit_fixes",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788437850837,
+      "tag": "0025_courier_payout_tracking",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788403800000,
+      "tag": "0026_billing_rls_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1788441436088,
+      "tag": "0027_products_section_belongs_to_vendor",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788442817343,
+      "tag": "0028_admin_audit_log",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1788448730923,
+      "tag": "0029_retention_periods",
+      "breakpoints": true
+    }
+  ]
+}

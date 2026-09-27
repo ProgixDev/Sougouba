@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test
+
+      # ── The drift check that used to be here is gone, not replaced ──────────
+      #
+      # It ran `drizzle-kit generate` and failed on an uncommitted diff, which
+      # compared *schema files → migration snapshot*. Both sides of that
+      # comparison no longer exist: `src/db/schema/` is deleted, Drizzle is
+      # uninstalled, and migrations are applied straight to Supabase.
+      #
+      # ⚠️ Nothing checks schema drift now, and it is worth being plain about
+      # what that costs rather than leaving a green tick implying otherwise.
+      # The check that would actually catch it is a **live introspection diff**
+      # — generate the types from the running project and fail if
+      # `src/db/database.types.ts` moves — which needs a Supabase access token
+      # in CI. That is a real gap, tracked rather than papered over.
+      #
+      # The old check could not see this class of problem either: it compared
+      # files to files, and a statement applied straight to the database with
+      # no file behind it was invisible to it. That is exactly how the extra
+      # `align_review_fk_constraint_names` row in Supabase's ledger came to
+      # exist (see PROGRESS.md). So this removes a check that was already
+      # blind to the drift that actually happened here.
