@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { CheckCircle2, XCircle, Ban, MapPin, Phone, FileText, Star } from 'lucide-react';
+import { CheckCircle2, XCircle, Ban, MapPin, Phone, FileText, Star, ExternalLink, Landmark } from 'lucide-react';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
@@ -104,10 +104,9 @@ export default function MerchantDetailPage() {
             <StatusBadge label={meta.label} tone={meta.tone} />
           </div>
           <Text variant="body" tone="muted" className="mt-1">
-            {/* `.fr` explicitly: the back-office is French-only (see
-                docs/LANDING-MASTER-PROMPT.md), so it reads the language it
-                displays rather than following a device locale it does not have. */}
-            {vendor.specialty.fr} ·{' '}
+            {/* `specialtyFr`, not the mobile app's `specialty.fr`: this is the
+                API's admin shape, which carries the column as it is stored. */}
+            {vendor.specialtyFr} ·{' '}
             {vendor.vendorType === 'restaurant' ? 'Restaurant' : 'Épicerie'}
           </Text>
         </div>
@@ -147,13 +146,74 @@ export default function MerchantDetailPage() {
             Dossier d&apos;inscription
           </Text>
           {vendor.registration ? (
-            <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Numéro d'entreprise (NEQ)" value={vendor.registration.neq} icon={FileText} />
-              <Field label="Personne responsable" value={vendor.registration.contactName} icon={FileText} />
-              <Field label="Téléphone" value={vendor.registration.contactPhone} icon={Phone} />
-              {vendor.registration.mapaqNumber && <Field label="Permis MAPAQ" value={vendor.registration.mapaqNumber} icon={FileText} />}
-              {vendor.registration.submittedAt && <Field label="Soumis le" value={formatDate(vendor.registration.submittedAt)} icon={FileText} />}
-            </dl>
+            <div className="flex flex-col gap-6">
+              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {vendor.registration.legalName && <Field label="Nom légal" value={vendor.registration.legalName} icon={FileText} />}
+                <Field label="Numéro d'entreprise (NEQ)" value={vendor.registration.neq ?? 'Non fourni — voir la preuve d’immatriculation'} icon={FileText} />
+                {vendor.registration.gstNumber && <Field label="Numéro de TPS" value={vendor.registration.gstNumber} icon={FileText} />}
+                {vendor.registration.qstNumber && <Field label="Numéro de TVQ" value={vendor.registration.qstNumber} icon={FileText} />}
+                {vendor.registration.mapaqNumber && <Field label="Permis MAPAQ" value={vendor.registration.mapaqNumber} icon={FileText} />}
+                {vendor.registration.mapaqExpiresOn && (
+                  <Field
+                    label="Permis MAPAQ — expiration"
+                    // Checked at review time, not only at submission: a file can
+                    // sit in the queue past the date it was valid on.
+                    value={`${formatDate(vendor.registration.mapaqExpiresOn)}${
+                      vendor.registration.mapaqExpiresOn <= new Date().toISOString().slice(0, 10) ? ' — expiré' : ''
+                    }`}
+                    icon={FileText}
+                  />
+                )}
+                <Field label="Dirigeant autorisé" value={vendor.registration.contactName} icon={FileText} />
+                <Field label="Téléphone" value={vendor.registration.contactPhone} icon={Phone} />
+                {vendor.registration.payoutMethod && (
+                  <Field
+                    label="Versements"
+                    value={
+                      vendor.registration.payoutMethod === 'stripe'
+                        ? 'Stripe Connect — à configurer après approbation'
+                        : 'Document bancaire joint'
+                    }
+                    icon={Landmark}
+                  />
+                )}
+                {vendor.registration.submittedAt && <Field label="Soumis le" value={formatDate(vendor.registration.submittedAt)} icon={FileText} />}
+              </dl>
+
+              {vendor.registration.documents.length > 0 && (
+                <div>
+                  <Text variant="label" tone="muted" className="mb-2">
+                    Documents joints
+                  </Text>
+                  <ul className="flex flex-col divide-y divide-border rounded-xl border border-border">
+                    {vendor.registration.documents.map((doc) => (
+                      <li key={doc.path} className="flex items-center justify-between gap-3 px-4 py-3">
+                        <Text variant="body" className="font-medium">
+                          {DOCUMENT_LABELS[doc.kind]}
+                        </Text>
+                        {doc.url ? (
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline"
+                          >
+                            Ouvrir <ExternalLink size={14} />
+                          </a>
+                        ) : (
+                          <Text variant="caption" tone="muted">
+                            Lien indisponible — rechargez la page
+                          </Text>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  <Text variant="caption" tone="muted" className="mt-2">
+                    Liens valides dix minutes. Rechargez la page pour en obtenir de nouveaux.
+                  </Text>
+                </div>
+              )}
+            </div>
           ) : (
             <Text variant="body" tone="muted">
               Ce commerce n&apos;a pas de dossier d&apos;inscription (compte antérieur à l&apos;inscription en ligne).
@@ -193,6 +253,13 @@ export default function MerchantDetailPage() {
     </div>
   );
 }
+
+const DOCUMENT_LABELS: Record<'id' | 'business_number' | 'mapaq' | 'bank', string> = {
+  id: 'Pièce d’identité du dirigeant',
+  business_number: 'Preuve d’immatriculation',
+  mapaq: 'Permis MAPAQ',
+  bank: 'Document bancaire',
+};
 
 function Field({ label, value, icon: Icon }: { label: string; value: string; icon: typeof FileText }) {
   return (

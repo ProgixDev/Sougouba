@@ -6,6 +6,7 @@ import { ShopSignupForm, type ShopSignupValues } from '@/components/business';
 import { useT } from '@/lib/i18n/useT';
 import { BackHeader, Text } from '@/components/ui';
 import { vendorsApi } from '@/data/api';
+import type { PickedDocument } from '@/lib/validation/merchant';
 import { coordinatesFor } from '@/lib/postalGeo';
 import { routes } from '@/lib/routes';
 import { useSessionStore } from '@/store/useSessionStore';
@@ -31,6 +32,20 @@ export default function ShopSignupScreen() {
   async function submit(values: ShopSignupValues) {
     if (!user) return;
     const { street, city, postalCode, deliveryEtaMin } = values.address;
+    const { documents, payout } = values;
+
+    // Uploaded only now, all together, so stepping back through the form never
+    // strands a file in Storage. Each one is a signed-URL hop the API chose the
+    // path for; `vendor_apply` refuses any path with nothing behind it.
+    const upload = (kind: vendorsApi.RegistrationDocumentKind, doc: PickedDocument | null) =>
+      doc ? vendorsApi.uploadRegistrationDocument(kind, doc) : Promise.resolve(undefined);
+    const [idDocumentPath, businessNumberDocumentPath, mapaqDocumentPath, bankDocumentPath] = await Promise.all([
+      upload('id', documents.idDocument),
+      upload('business_number', documents.registrationProof),
+      upload('mapaq', documents.mapaqPermit),
+      upload('bank', payout.payoutMethod === 'bank_document' ? payout.bankDocument : null),
+    ]);
+
     await vendorsApi.submitShopApplication({
       ownerId: user.id,
       name: values.identity.name,
@@ -52,12 +67,20 @@ export default function ShopSignupScreen() {
       },
       deliveryEtaMin: Number(deliveryEtaMin),
       registration: {
-        neq: values.documents.neq,
-        contactName: values.documents.contactName,
-        contactPhone: values.documents.contactPhone,
-        ...(values.documents.mapaqNumber
-          ? { mapaqNumber: values.documents.mapaqNumber }
-          : {}),
+        legalName: documents.legalName,
+        ...(documents.neq ? { neq: documents.neq } : {}),
+        gstNumber: documents.gstNumber,
+        qstNumber: documents.qstNumber,
+        contactName: documents.contactName,
+        contactPhone: documents.contactPhone,
+        mapaqNumber: documents.mapaqNumber,
+        mapaqExpiresOn: documents.mapaqExpiresOn,
+        payoutMethod: payout.payoutMethod,
+        // Required by the schema, so present — narrowed for the compiler.
+        idDocumentPath: idDocumentPath!,
+        mapaqDocumentPath: mapaqDocumentPath!,
+        ...(businessNumberDocumentPath ? { businessNumberDocumentPath } : {}),
+        ...(bankDocumentPath ? { bankDocumentPath } : {}),
       },
     });
     router.replace(routes.businessSignupConfirmed);

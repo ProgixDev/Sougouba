@@ -1,5 +1,10 @@
-import { api, type Page } from '../http';
-import type { Address, ID, LocalizedText, ShopRegistration, Vendor, VendorStatus, VendorType } from '../types';
+import { File } from 'expo-file-system';
+import { fetch } from 'expo/fetch';
+
+import type { PickedDocument } from '../../lib/validation/merchant';
+
+import { ApiError, api, type Page } from '../http';
+import type { Address, ID, LocalizedText, Vendor, VendorStatus, VendorType } from '../types';
 import { toVendor } from './mappers';
 
 /**
@@ -73,7 +78,54 @@ export interface ShopApplication {
   isHalalCertified: boolean;
   address: Address;
   deliveryEtaMin: number;
-  registration: Omit<ShopRegistration, 'submittedAt'>;
+  registration: {
+    legalName: string;
+    /** Absent when a proof of registration was attached instead. */
+    neq?: string;
+    gstNumber: string;
+    qstNumber: string;
+    contactName: string;
+    contactPhone: string;
+    mapaqNumber: string;
+    /** `YYYY-MM-DD`. */
+    mapaqExpiresOn: string;
+    payoutMethod: 'stripe' | 'bank_document';
+    /** Storage paths returned by {@link uploadRegistrationDocument}. */
+    idDocumentPath: string;
+    businessNumberDocumentPath?: string;
+    mapaqDocumentPath: string;
+    bankDocumentPath?: string;
+  };
+}
+
+export type RegistrationDocumentKind = 'id' | 'business_number' | 'mapaq' | 'bank';
+
+/**
+ * Upload one registration document and return where it landed.
+ *
+ * Two hops, on purpose: the API picks the path and signs a one-shot upload URL
+ * for it (merchants hold no Storage policy on this bucket — nothing on the
+ * device can overwrite a document once an administrator has read it), then the
+ * file goes straight to Storage rather than through the API. `vendor_apply`
+ * later refuses any path with nothing behind it.
+ */
+export async function uploadRegistrationDocument(
+  kind: RegistrationDocumentKind,
+  document: PickedDocument
+): Promise<string> {
+  const { path, uploadUrl } = await api<{ path: string; uploadUrl: string }>('/vendors/apply/documents', {
+    method: 'POST',
+    body: { kind, contentType: document.mimeType },
+  });
+  const response = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': document.mimeType },
+    body: new File(document.uri),
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, 'Envoi du document impossible. Veuillez réessayer.');
+  }
+  return path;
 }
 
 /**
@@ -100,10 +152,7 @@ export async function submitShopApplication(input: ShopApplication): Promise<Ven
       city: input.address.city,
       postalCode: input.address.postalCode,
       deliveryEtaMin: input.deliveryEtaMin,
-      neq: input.registration.neq,
-      contactName: input.registration.contactName,
-      contactPhone: input.registration.contactPhone,
-      mapaqNumber: input.registration.mapaqNumber,
+      ...input.registration,
     },
   });
   return toVendor(created);

@@ -38,6 +38,7 @@ import {
 } from '../lib/productFilters';
 import { DELIVERY_TIERS, deliveryFeeFor } from '../data/deliveryPricing';
 import { addressSchema } from '../lib/validation/profile';
+import { parseDayMonthYear, shopDocumentsSchema, shopPayoutSchema } from '../lib/validation/merchant';
 import { parseTags, productSchema } from '../lib/validation/product';
 
 let failures = 0;
@@ -622,6 +623,48 @@ check('every filter set counts once', activeFilterCount({ sort: 'name', priceBan
     [0, 1, 2, 3, 5, 6, 8, 9, 12, 13, 40].every(
       (km, i, all) => i === 0 || deliveryFeeFor(km) >= deliveryFeeFor(all[i - 1]!)
     ));
+}
+
+// ── merchant registration (client's list, 2026-09-27) ───────────────────────
+{
+  const doc = { uri: 'file:///x.pdf', name: 'x.pdf', mimeType: 'application/pdf' as const };
+  const good = {
+    legalName: '9123-4567 Québec inc.',
+    neq: '1234 567 890',
+    registrationProof: null,
+    gstNumber: '123456789 rt0001',
+    qstNumber: '1234567890 TQ 0001',
+    mapaqNumber: 'MAP-12345',
+    mapaqExpiry: '31/12/2099',
+    mapaqPermit: doc,
+    contactName: 'Awa Diallo',
+    contactPhone: '514 555-0101',
+    idDocument: doc,
+  };
+  const parsed = shopDocumentsSchema.safeParse(good);
+  check('a complete file parses', parsed.success, JSON.stringify(parsed.error?.issues ?? []));
+  check('GST/QST are normalised', parsed.success && parsed.data.gstNumber === '123456789RT0001'
+    && parsed.data.qstNumber === '1234567890TQ0001');
+  check('expiry handed on as ISO', parsed.success && parsed.data.mapaqExpiresOn === '2099-12-31');
+  check('NEQ or proof: neither is refused',
+    !shopDocumentsSchema.safeParse({ ...good, neq: '' }).success);
+  check('NEQ or proof: proof alone is enough',
+    shopDocumentsSchema.safeParse({ ...good, neq: '', registrationProof: doc }).success);
+  check('a malformed GST is refused', !shopDocumentsSchema.safeParse({ ...good, gstNumber: '123456789' }).success);
+  check('a QST in GST format is refused',
+    !shopDocumentsSchema.safeParse({ ...good, qstNumber: '123456789RT0001' }).success);
+  check('an expired permit is refused', !shopDocumentsSchema.safeParse({ ...good, mapaqExpiry: '01/01/2020' }).success);
+  check('a missing permit copy is refused', !shopDocumentsSchema.safeParse({ ...good, mapaqPermit: null }).success);
+  check('a missing ID is refused', !shopDocumentsSchema.safeParse({ ...good, idDocument: null }).success);
+  check('31/02 is not a day', parseDayMonthYear('31/02/2030') === null);
+  check('ISO input is not DD/MM/YYYY', parseDayMonthYear('2030-02-01') === null);
+
+  check('Stripe needs no bank document',
+    shopPayoutSchema.safeParse({ payoutMethod: 'stripe', bankDocument: null }).success);
+  check('bank_document needs the document',
+    !shopPayoutSchema.safeParse({ payoutMethod: 'bank_document', bankDocument: null }).success);
+  check('bank_document with the document parses',
+    shopPayoutSchema.safeParse({ payoutMethod: 'bank_document', bankDocument: doc }).success);
 }
 
 console.log(failures === 0 ? '\nALL LOGIC CHECKS PASS' : `\n${failures} FAILURES`);

@@ -2,6 +2,7 @@ export { CounterHeader, SlabMetric, onSlab } from './CounterHeader';
 export { DayStrip } from './DayStrip';
 export { DeliveryGrid } from './DeliveryGrid';
 export { DisputeCard } from './DisputeCard';
+export { DocumentField } from './DocumentField';
 export { OrderQueueCard } from './OrderQueueCard';
 export { PayoutSummary } from './PayoutSummary';
 export { PendingApproval } from './PendingApproval';

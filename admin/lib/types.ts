@@ -217,6 +217,7 @@ export interface AdminVendorListItem {
   createdAt: string;
   ownerName: string;
   /** Registration paperwork — null for a shop predating the flow. */
+  legalName: string | null;
   neq: string | null;
   contactName: string | null;
   contactPhone: string | null;
@@ -245,14 +246,21 @@ export interface AdminVendorDetail {
   reviewedAt: string | null;
   reviewer: { id: ID; fullName: string } | null;
   owner: { id: ID; fullName: string; email: string | null; avatarUrl: string | null; memberSince: string };
+  /** The fields added with the client's 2026-09-27 list are null on files submitted before it. */
   registration: {
-    neq: string;
+    legalName: string | null;
+    neq: string | null;
+    gstNumber: string | null;
+    qstNumber: string | null;
     contactName: string;
     contactPhone: string;
     mapaqNumber: string | null;
+    /** `YYYY-MM-DD`. */
+    mapaqExpiresOn: string | null;
+    payoutMethod: 'stripe' | 'bank_document' | null;
     submittedAt: string | null;
-    /** Paths in a private bucket — not renderable without a signed URL, which does not exist yet. */
-    documents: { kind: 'id' | 'business_number' | 'mapaq'; path: string }[];
+    /** `url` is signed for ten minutes — reload the page for a fresh one. Null if signing failed. */
+    documents: { kind: 'id' | 'business_number' | 'mapaq' | 'bank'; path: string; url: string | null }[];
   } | null;
   categories: { id: ID; slug: string; nameFr: string }[];
   hours: { day: number; open: string; close: string; closed: boolean }[];
