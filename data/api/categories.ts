@@ -1,5 +1,6 @@
 import { api } from '../http';
 import type { Category, ID } from '../types';
+import { toCategory } from './mappers';
 
 /**
  * The platform taxonomy — eight rows, read on nearly every screen.
@@ -8,7 +9,8 @@ import type { Category, ID } from '../types';
  * lookup means the home screen's first paint does not wait on AsyncStorage.
  */
 export async function getCategories(): Promise<Category[]> {
-  return api<Category[]>('/categories', { anonymous: true });
+  const rows = await api<Parameters<typeof toCategory>[0][]>('/categories', { anonymous: true });
+  return rows.map(toCategory);
 }
 
 /**

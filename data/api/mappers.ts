@@ -1,4 +1,4 @@
-import type { Product, Vendor } from '../types';
+import type { Category, Product, Vendor } from '../types';
 
 /**
  * The API's row shapes → the app's domain types.
@@ -13,6 +13,32 @@ import type { Product, Vendor } from '../types';
  *    `address_street`/`address_city`/… because an order snapshots them
  *    individually; the app groups them because every screen shows them together.
  */
+
+type CategoryRow = {
+  id: string;
+  slug: string;
+  nameFr: string;
+  shortNameFr: string;
+  icon: string;
+  colorToken: string;
+};
+
+/**
+ * Same lift as `specialty`: the API stores `name_fr`/`short_name_fr`, the app
+ * reads `LocalizedText`. Passing the row through unmapped left `name` and
+ * `shortName` undefined, and `L(category.shortName)` then threw on every screen
+ * that draws a category chip — the Search tab crashed the app on open.
+ */
+export function toCategory(row: CategoryRow): Category {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: { fr: row.nameFr },
+    shortName: { fr: row.shortNameFr },
+    icon: row.icon,
+    colorToken: row.colorToken,
+  };
+}
 
 type VendorRow = {
   id: string;
