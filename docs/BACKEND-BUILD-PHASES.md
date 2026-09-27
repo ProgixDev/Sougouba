@@ -7,8 +7,9 @@ each phase is actually finished.
 
 **Stack**: NestJS on the Fastify adapter (`@nestjs/platform-fastify`), Supabase
 (Postgres + Auth + Storage + Realtime) as the managed data/identity layer, Stripe
-Connect for payments and merchant payouts. New repo, separate from this one —
-referenced below as `sougouba-api/`.
+Connect for payments and merchant payouts. Built as a separate repository, and
+moved into this one as `api/` on 2026-09-27 (history preserved). Older sections
+below still say `sougouba-api/` — read it as `api/`.
 
 **Sources this plan is grounded in** (read in full before writing this doc, 2026-08-30):
 every file under `data/`, `data/api/`, `lib/`, `store/`, `hooks/`, and the customer/
@@ -60,7 +61,7 @@ and `devis-contract-scope` for the condensed facts pulled from the two PDFs.
 
 | Phase | State |
 |---|---|
-| 0 · Foundations & infra | **Done** (2026-08-30) — see `sougouba-api/PROGRESS.md` |
+| 0 · Foundations & infra | **Done** (2026-08-30) — see `api/PROGRESS.md` |
 | 1 · Identity & accounts | **Done** (2026-08-30) — API side only; mobile app not yet wired to real Supabase Auth |
 | 2 · Catalog | **Done** (2026-09-03) — API side only; mobile app not yet wired |
 | 3 · Cart → checkout → orders → payments | **Done and walked** (2026-09-08) — `verify:stripe` 12/12 on the payment path, `verify:orders` 17/17 on the order-writing half, including the rollback when a line sells out mid-checkout |
@@ -72,7 +73,7 @@ and `devis-contract-scope` for the condensed facts pulled from the two PDFs.
 | 9 · Notifications & AI support assistant | Not started |
 | 10 · Hardening, observability & launch | **Started** (2026-09-03) — rate limiting done, column-grant audit closed; logging/Sentry, load test, staging and deploy outstanding |
 
-Repo: `sougouba-api/` (sibling to this one) — NestJS + Fastify, all 30 tables live
+Code: `api/` in this repository — NestJS + Fastify, all 30 tables live
 in Supabase project `wyjkaiquugoblvvzpjnq`, Storage buckets created, CI wired.
 The identity (`profiles`, `addresses`, favorites) and catalog (`vendors`,
 `products`, `categories`, sections, hours, registrations) domains have real RLS
@@ -138,7 +139,7 @@ and `vendors` carry column-scoped UPDATE, each matching its migration exactly.
 
 The pattern is consistent enough to be worth stating as a rule: **on this
 project, static checks have never once caught the bug that mattered.** Full
-detail and what is verified vs. merely written is in `sougouba-api/PROGRESS.md` —
+detail and what is verified vs. merely written is in `api/PROGRESS.md` —
 this file stays the phase-by-phase plan, that one is the build log.
 
 **Waiting on**: ~~a real `DATABASE_URL`~~ (removed — see the data-layer note below),
@@ -181,7 +182,7 @@ token before launch.
 The longest-standing blocker on this plan was removed by changing the
 architecture rather than by obtaining the password. **The API talks to Postgres
 through PostgREST now** (`supabase-js` + the service-role key); nothing in
-`sougouba-api/` opens a TCP connection.
+`api/` opens a TCP connection.
 
 The trade, stated plainly: `service_role` bypasses RLS entirely, so the app still
 holds one god-mode secret — a different name, not a smaller blast radius. What it

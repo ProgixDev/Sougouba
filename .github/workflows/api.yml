@@ -1,13 +1,20 @@
-name: CI
+name: API
 
+# The API lives in api/ since it moved into this repository; only changes
+# there need its checks.
 on:
   pull_request:
+    paths: ['api/**', '.github/workflows/api.yml']
   push:
     branches: [main]
+    paths: ['api/**', '.github/workflows/api.yml']
 
 jobs:
   ci:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
     steps:
       - uses: actions/checkout@v4
 
@@ -15,6 +22,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: api/package-lock.json
 
       - run: npm ci
 

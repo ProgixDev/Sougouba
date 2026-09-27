@@ -3,7 +3,7 @@
 import { supabase } from '../supabase';
 
 /**
- * The HTTP layer between this dashboard and `sougouba-api`.
+ * The HTTP layer between this dashboard and the API (`api/`).
  *
  * Replaces `storage.ts`'s localStorage tables. Every call carries the signed-in
  * administrator's Supabase access token; the API verifies it against the

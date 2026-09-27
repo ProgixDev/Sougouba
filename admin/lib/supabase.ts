@@ -6,7 +6,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
  * The browser Supabase client, used for **authentication only**.
  *
  * This dashboard never reads data through PostgREST. Every row it shows comes
- * from the NestJS API (`sougouba-api`), which talks to Postgres directly over
+ * from the NestJS API (`api/`), which talks to Postgres directly over
  * Drizzle and authorises in `AdminGuard` rather than in RLS policies. Supabase's
  * job here is narrow: sign the administrator in, and hand back an access token
  * the API can verify against the project's JWKS.

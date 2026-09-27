@@ -20,6 +20,7 @@
     "scripts",
     "node_modules",
     "admin",
-    "web"
+    "web",
+    "api"
   ]
 }

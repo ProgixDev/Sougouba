@@ -64,7 +64,7 @@ export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
  * officer's ID and contact details. The bank account is its own step — see
  * `shopPayoutSchema`.
  *
- * `sougouba-api`'s `applyVendorSchema` holds the same rules; this copy exists
+ * `api/`'s `applyVendorSchema` holds the same rules; this copy exists
  * so errors land on the field as it is left rather than after a round trip.
  */
 export const shopDocumentsSchema = z

@@ -271,7 +271,7 @@ export async function getTopProductIds(_limit = 6): Promise<ID[]> {
 // ── demo scaffolding: gone ──────────────────────────────────────────────────
 
 const DEMO_REMOVED =
-  'Demo data is seeded server-side now — see sougouba-api/scripts/seed. ' +
+  'Demo data is seeded server-side now — see api/scripts/seed. ' +
   'The app cannot fabricate orders, runs or ledger entries against a real database.';
 
 export async function ensureDemoOrders(_customerId: ID, _customerName: string, _address?: Address): Promise<Order[]> {
