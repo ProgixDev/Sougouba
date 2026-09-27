@@ -4,7 +4,6 @@ import { router, useFocusEffect } from 'expo-router';
 import {
   Bell,
   ChevronRight,
-  CreditCard,
   Gift,
   Heart,
   Info,
@@ -48,7 +47,6 @@ export default function CustomerProfileScreen() {
   const { colorScheme } = useColorScheme();
 
   const notifications = usePreferencesStore((s) => s.notifications);
-  const cardCount = usePreferencesStore((s) => s.paymentMethods.length);
 
   const { orderCount, favoriteCount, spentCad } = useCustomerStats();
   const isDark = preference === 'dark';
@@ -185,13 +183,6 @@ export default function CustomerProfileScreen() {
             label={t('customer.account.addresses.title')}
             value={addressCount > 0 ? String(addressCount) : t('customer.profile.noAddress')}
             onPress={() => router.push(routes.accountAddresses)}
-          />
-          <Divider />
-          <NavRow
-            icon={CreditCard}
-            label={t('customer.account.payment.title')}
-            value={String(cardCount)}
-            onPress={() => router.push(routes.accountPayment)}
           />
         </Section>
 

@@ -82,6 +82,9 @@ const config = {
     'expo-image',
     'expo-video',
     'expo-web-browser',
+    // No `merchantIdentifier` yet: Apple Pay needs a merchant ID registered on
+    // the client's own Apple Developer account. Cards work without it.
+    ['@stripe/stripe-react-native', { enableGooglePay: false }],
     [
       'expo-image-picker',
       {

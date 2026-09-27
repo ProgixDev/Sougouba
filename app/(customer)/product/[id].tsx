@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { NutritionRow } from '@/components/customer';
+import { CartPill, NutritionRow } from '@/components/customer';
 import { useT } from '@/lib/i18n/useT';
 import { Badge, Button, CatalogImage, EmptyState, Skeleton, Text } from '@/components/ui';
 import { categoriesApi, productsApi, vendorsApi } from '@/data/api';
@@ -31,6 +31,10 @@ export default function ProductDetailScreen() {
   const colors = colorScheme === 'dark' ? darkColors : lightColors;
 
   const addItem = useCartStore((s) => s.addItem);
+  // How many of this product the cart holds, and how many times it was added
+  // from this page — the second drives the button's confirmation and bump.
+  const inCartQty = useCartStore((s) => s.items.find((i) => i.productId === id)?.qty ?? 0);
+  const [addedCount, setAddedCount] = useState(0);
   const isFavorite = useFavoritesStore((s) => (id ? s.productIds.includes(id) : false));
   const toggleProduct = useFavoritesStore((s) => s.toggleProduct);
 
@@ -138,6 +142,7 @@ export default function ProductDetailScreen() {
             >
               <CatalogImage
                 id={product.id}
+          path={product.imageUrl}
                 kind="product"
                 icon={category ? categoryIcons[category.icon] : undefined}
                 radius={28}
@@ -223,22 +228,29 @@ export default function ProductDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* Pinned CTA: the price is on the button so the decision needs no scroll-back. */}
-      <View
-        className="px-6 pt-3 bg-card border-t border-border"
-        style={{ paddingBottom: insets.bottom + 10 }}
-      >
-        <Button
+      {/* Pinned CTA, in the same pill as the floating cart bar: the price is on
+          the button so the decision needs no scroll-back, and after an add it
+          says so — with the running count — instead of changing nothing. */}
+      <View className="px-5 pt-3" style={{ paddingBottom: insets.bottom + 10 }}>
+        <CartPill
           label={
-            product && product.isAvailable
-              ? t('customer.addToCartPrice', { price: formatCad(product.priceCad) })
-              : t('customer.misc.productOutOfStock')
+            product && !product.isAvailable
+              ? t('customer.misc.productOutOfStock')
+              : t('customer.addToCart')
           }
-          variant="cta"
-          size="lg"
-          fullWidth
-          disabled={!product || !product.isAvailable}
-          loading={loading}
+          caption={
+            addedCount > 0
+              ? inCartQty > 0
+                ? t('customer.addedAgain', { count: inCartQty })
+                : t('customer.addedToCart')
+              : undefined
+          }
+          price={product ? formatCad(product.priceCad) : undefined}
+          disabled={!product || !product.isAvailable || loading}
+          bumpKey={addedCount}
+          accessibilityLabel={
+            product ? t('customer.addToCartPrice', { price: formatCad(product.priceCad) }) : undefined
+          }
           onPress={() => {
             if (!product) return;
             addItem({
@@ -246,6 +258,9 @@ export default function ProductDetailScreen() {
               vendorId: product.vendorId,
               unitPriceCad: product.priceCad,
             });
+            // A cart from another shop parks the add behind the switch dialog —
+            // nothing was added yet, so nothing is confirmed.
+            if (!useCartStore.getState().pendingItem) setAddedCount((n) => n + 1);
           }}
         />
       </View>

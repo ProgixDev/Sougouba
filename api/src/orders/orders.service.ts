@@ -202,6 +202,22 @@ export class OrdersService {
     // one payment — and check before calling Stripe, so a retry is cheap.
     if (existing) return this.byId(customerId, existing.id, 'customer');
 
+    try {
+      return await this.write(customerId, input);
+    } catch (error) {
+      // The shopper paid before this was called. If no order came of it, the
+      // money goes back — unless a concurrent retry of this same checkout did
+      // write the order, in which case this failure is only the loser of that
+      // race and the payment is spent correctly.
+      const written = await unwrap<{ id: string } | null>(
+        this.db.from('orders').select('id').eq('stripe_payment_intent_id', input.paymentIntentId).maybeSingle()
+      ).catch(() => null);
+      if (!written) await this.payments.refundUnplacedOrder(input.paymentIntentId, customerId);
+      throw error;
+    }
+  }
+
+  private async write(customerId: string, input: PlaceOrderInput) {
     const { priced, address } = await this.quote(customerId, input);
 
     await this.payments.assertPaidBy(input.paymentIntentId, {
@@ -265,12 +281,8 @@ export class OrdersService {
       }),
       (error) => {
         if (error.code === SOLD_OUT) {
-          // The whole order rolled back, but the shopper has already been
-          // charged — logged loudly because it needs a refund, and Phase 6's
-          // refund flow is where that becomes automatic.
-          this.logger.error(
-            `Order rolled back after payment ${input.paymentIntentId}: ${error.message} REFUND REQUIRED.`
-          );
+          // The whole order rolled back after the shopper was charged; `place`
+          // refunds it on the way out.
           throw new ConflictException(error.message);
         }
         if (error.code === COUPON_EXHAUSTED || error.code === COUPON_ALREADY_USED) {

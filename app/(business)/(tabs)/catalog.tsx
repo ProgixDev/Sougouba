@@ -210,6 +210,7 @@ export default function BusinessCatalogScreen() {
                 >
                   <CatalogImage
                     id={product.id}
+          path={product.imageUrl}
                     kind="product"
                     icon={categoryIcons[iconByCategory[product.categoryId]]}
                     radius={12}

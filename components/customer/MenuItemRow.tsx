@@ -71,6 +71,7 @@ export function MenuItemRow({ product, categoryIcon, onPress, onAdd }: MenuItemR
       <View>
         <CatalogImage
           id={product.id}
+          path={product.imageUrl}
           kind="product"
           icon={Icon}
           height={THUMB}

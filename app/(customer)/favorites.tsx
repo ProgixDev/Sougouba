@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ProductGrid, VendorCard } from '@/components/customer';
+import { ProductGrid, VendorCard, useCartBarInset } from '@/components/customer';
 import { useT } from '@/lib/i18n/useT';
 import { BackHeader, EmptyState, SectionHeader, Skeleton } from '@/components/ui';
 import { categoriesApi, productsApi, vendorsApi } from '@/data/api';
@@ -14,6 +14,7 @@ import { useCartStore } from '@/store/useCartStore';
 import { useFavoritesStore } from '@/store/useFavoritesStore';
 
 export default function FavoritesScreen() {
+  const cartBarInset = useCartBarInset();
   const t = useT();
   const productIds = useFavoritesStore((s) => s.productIds);
   const vendorIds = useFavoritesStore((s) => s.vendorIds);
@@ -78,7 +79,7 @@ export default function FavoritesScreen() {
           onAction={() => router.replace(routes.customerHome)}
         />
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24, gap: 28 }}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: cartBarInset + 24, gap: 28 }}>
           {favoriteVendors.length > 0 ? (
             <View className="gap-4">
               <SectionHeader title={t('customer.favorites.shops')} />
@@ -100,6 +101,7 @@ export default function FavoritesScreen() {
             <View className="gap-4">
               <SectionHeader title={t('customer.favorites.products')} />
               <ProductGrid
+                vendors={vendors}
                 products={favoriteProducts}
                 iconByCategory={iconByCategory}
                 onPressProduct={(product) =>

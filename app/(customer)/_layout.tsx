@@ -1,6 +1,6 @@
 import { Redirect, Stack } from 'expo-router';
 
-import { VendorSwitchDialog } from '@/components/customer';
+import { CartBar, VendorSwitchDialog } from '@/components/customer';
 import { useDemoSeed } from '@/hooks/useDemoSeed';
 import { homeRouteForRole, routes } from '@/lib/routes';
 import { useSessionStore } from '@/store/useSessionStore';
@@ -31,6 +31,8 @@ export default function CustomerLayout() {
       {/* Mounted once for the whole group: add-to-cart lives on Home, Vendor and
           Product Detail, and all three need the single-vendor confirmation. */}
       <VendorSwitchDialog />
+      {/* Floats over the browsing screens only — see `cartBarPlacement`. */}
+      <CartBar />
     </>
   );
 }

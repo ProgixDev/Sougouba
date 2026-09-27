@@ -34,9 +34,12 @@ import {
   DISPUTE_MESSAGES,
   DISPUTE_REASONS,
   ITEM_BANK,
+  ITEM_IMAGES,
   SECTION_NAMES,
   VENDORS,
+  VENDOR_IMAGES,
 } from './fixtures.js';
+import { productImagePath, vendorImagePath } from './image-paths.js';
 import { Family, isSeedEmail, seedEmail, seedId, SEED_ID_PREFIX } from './ids.js';
 import { cents, hashString, intBetween, mulberry32, pick } from './rng.js';
 
@@ -247,6 +250,9 @@ async function seed(): Promise<void> {
         rating: (3.9 + rand() * 1.0).toFixed(1),
         reviewCount: intBetween(rand, 12, 340),
         deliveryEtaMin: intBetween(rand, 25, 60),
+        // Paths only — the files are uploaded by `npm run db:seed:images`.
+        logoUrl: vendorImagePath(vendorId, VENDOR_IMAGES[v.key]!),
+        coverUrl: vendorImagePath(vendorId, VENDOR_IMAGES[v.key]!),
         isHalalCertified: v.categoryKeys.includes('viandeHalal'),
         ownerId: id(`vendor:${v.key}`),
         status: v.status,
@@ -308,6 +314,7 @@ async function seed(): Promise<void> {
           name: item.name,
           description: `${item.name} — sélection ${v.name}.`,
           priceCad: cents(item.priceCents),
+          imageUrl: productImagePath(vendorId, ITEM_IMAGES[item.name]!),
           stockQty: intBetween(rand, 4, 90),
           isAvailable: true,
         })

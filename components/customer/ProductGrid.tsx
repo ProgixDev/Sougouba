@@ -1,7 +1,7 @@
 import { useWindowDimensions, View } from 'react-native';
 
 import { Reveal, SkeletonCard } from '@/components/ui';
-import type { Product } from '@/data/types';
+import type { Product, Vendor } from '@/data/types';
 import { ProductCard } from './ProductCard';
 
 export const GRID_GUTTER = 14;
@@ -11,6 +11,8 @@ export interface ProductGridProps {
   products: Product[];
   /** Maps categoryId → Lucide key, for image placeholders. */
   iconByCategory: Record<string, string>;
+  /** Lets each card name its shop. Optional: a single-shop grid needs no label. */
+  vendors?: Vendor[];
   loading?: boolean;
   skeletonCount?: number;
   onPressProduct?: (product: Product) => void;
@@ -37,12 +39,14 @@ export function useCardWidth() {
 export function ProductGrid({
   products,
   iconByCategory,
+  vendors,
   loading = false,
   skeletonCount = 4,
   onPressProduct,
   onAddProduct,
 }: ProductGridProps) {
   const cardWidth = useCardWidth();
+  const vendorNames = new Map((vendors ?? []).map((v) => [v.id, v.name]));
 
   if (loading) {
     return (
@@ -73,6 +77,7 @@ export function ProductGrid({
             product={product}
             width={cardWidth}
             categoryIcon={iconByCategory[product.categoryId]}
+            vendorName={vendorNames.get(product.vendorId)}
             onPress={() => onPressProduct?.(product)}
             onAdd={() => onAddProduct?.(product)}
           />

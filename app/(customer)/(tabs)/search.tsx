@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Keyboard, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { FilterSheet, ProductGrid, SearchField } from '@/components/customer';
+import { FilterSheet, ProductGrid, SearchField, useCartBarInset } from '@/components/customer';
 import { Chip, EmptyState, Text } from '@/components/ui';
 import { categoriesApi, productsApi, vendorsApi } from '@/data/api';
 import type { Category, ID, Product, Vendor } from '@/data/types';
@@ -24,6 +24,7 @@ import { useCartStore } from '@/store/useCartStore';
 const BROWSE_LIMIT = 24;
 
 export default function SearchScreen() {
+  const cartBarInset = useCartBarInset();
   const t = useT();
   const L = useLocalized();
   const tabBarInset = useTabBarInset();
@@ -148,7 +149,7 @@ export default function SearchScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: tabBarInset + 24 }}
+        contentContainerStyle={{ paddingBottom: tabBarInset + cartBarInset + 24 }}
         keyboardShouldPersistTaps="handled"
         onScrollBeginDrag={Keyboard.dismiss}
       >
@@ -195,6 +196,7 @@ export default function SearchScreen() {
           />
         ) : (
           <ProductGrid
+                vendors={vendors}
             products={visible}
             iconByCategory={iconByCategory}
             loading={searching}

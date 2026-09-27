@@ -11,7 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { MenuItemRow, ProductCard, useCardWidth } from '@/components/customer';
+import { MenuItemRow, ProductCard, useCardWidth, useCartBarInset } from '@/components/customer';
 import { Badge, CatalogImage, Chip, EmptyState, Skeleton, Text } from '@/components/ui';
 import { categoriesApi, productsApi, vendorsApi } from '@/data/api';
 import { deliveryFeeBetween } from '@/data/deliveryPricing';
@@ -56,6 +56,7 @@ const AnimatedSectionList = Animated.createAnimatedComponent(
  * headings, with a rail that pins itself to the top once the cover scrolls away.
  */
 export default function VendorDetailScreen() {
+  const cartBarInset = useCartBarInset();
   const t = useT();
   const L = useLocalized();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -193,7 +194,7 @@ export default function VendorDetailScreen() {
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={16}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + cartBarInset + 32 }}
         onScrollToIndexFailed={() => {
           // Rows are content-sized, so a long jump can outrun the measured
           // window. Landing at the top beats not moving at all.
@@ -210,7 +211,7 @@ export default function VendorDetailScreen() {
             {loading || !vendor ? (
               <Skeleton height={COVER_HEIGHT} radius={0} />
             ) : (
-              <CatalogImage id={vendor.id} kind="vendor" radius={0} height={COVER_HEIGHT} />
+              <CatalogImage id={vendor.id} kind="vendor" path={vendor.coverUrl} radius={0} height={COVER_HEIGHT} />
             )}
 
             <View className="-mt-6 rounded-t-[28px] bg-background px-5 pt-6 gap-5">

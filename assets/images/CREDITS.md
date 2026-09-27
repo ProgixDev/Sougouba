@@ -115,3 +115,4 @@ curl -o assets/images/onboarding/<name>.jpg \
 | `onboarding/spices` | Épices au souk de Marrakech | Moussa Idrissi — Pexels | Pexels Licence | https://www.pexels.com/photo/vibrant-moroccan-spices-at-marrakech-market-35185310/ |
 | `onboarding/table` | Couscous servi | Lisa from Pexels — Pexels | Pexels Licence | https://www.pexels.com/photo/homemade-couscous-dish-on-plate-21531369/ |
 | `onboarding/shopping` | Choisir ses courses au marché | Pexels | Pexels Licence | https://www.pexels.com/photo/vibrant-local-market-scene-with-vegetables-and-eggs-32162465/ |
+| `prd_cube_bouillon` | Cubes de bouillon | Rainer Zenz — Wikimedia Commons | CC BY-SA 3.0 | https://commons.wikimedia.org/wiki/File:Br%C3%BChw%C3%BCrfel-1.jpg |

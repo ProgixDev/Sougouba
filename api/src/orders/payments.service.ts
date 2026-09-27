@@ -117,7 +117,7 @@ export class PaymentsService {
   async assertPaidBy(paymentIntentId: string, expected: { amountCents: number; customerId: string }): Promise<void> {
     let intent: Stripe.PaymentIntent;
     try {
-      intent = await this.client().paymentIntents.retrieve(paymentIntentId);
+      intent = await this.client().paymentIntents.retrieve(paymentIntentId, { expand: ['latest_charge'] });
     } catch (error) {
       // Never echo Stripe's message back — it distinguishes "no such intent"
       // from "belongs to another account", which is an id-probing oracle.
@@ -140,6 +140,43 @@ export class PaymentsService {
     if (intent.metadata?.customerId !== expected.customerId) {
       this.logger.warn(`PaymentIntent ${paymentIntentId} belongs to another customer`);
       throw new BadRequestException('Payment could not be verified');
+    }
+    // A refunded payment still reads `succeeded` with its full `amount_received`.
+    // Without this, a checkout that was refunded by `refundUnplacedOrder` could
+    // be retried into an order nobody paid for.
+    const charge = intent.latest_charge;
+    if (charge && typeof charge !== 'string' && charge.amount_refunded > 0) {
+      throw new BadRequestException('This payment has been refunded');
+    }
+  }
+
+  /**
+   * Give the money back for a payment that never became an order.
+   *
+   * The payment sheet charges first and the order is written after — so a
+   * failure in between (an item sold out, a coupon used up, a price that moved,
+   * the database unreachable) leaves a shopper charged for nothing. This is the
+   * other half of that sequence.
+   *
+   * Refunds only what is provably this shopper's own completed, unrefunded
+   * payment — never on the strength of an id alone, which would let anyone
+   * refund someone else's order. The idempotency key makes a repeated call a
+   * no-op at Stripe rather than a second refund. Never throws: the caller is
+   * already on an error path and must surface *that* error.
+   */
+  async refundUnplacedOrder(paymentIntentId: string, customerId: string): Promise<void> {
+    try {
+      const intent = await this.client().paymentIntents.retrieve(paymentIntentId, { expand: ['latest_charge'] });
+      const charge = intent.latest_charge;
+      const alreadyRefunded = charge && typeof charge !== 'string' && charge.amount_refunded > 0;
+      if (intent.status !== 'succeeded' || intent.metadata?.customerId !== customerId || alreadyRefunded) return;
+      const refund = await this.client().refunds.create(
+        { payment_intent: paymentIntentId, reason: 'requested_by_customer' },
+        { idempotencyKey: `unplaced-order-${paymentIntentId}` }
+      );
+      this.logger.warn(`Order not written after payment ${paymentIntentId} — refunded in full (${refund.id}).`);
+    } catch (error) {
+      this.logger.error(`Order not written after payment ${paymentIntentId} and the refund FAILED: ${String(error)}. REFUND BY HAND.`);
     }
   }
 

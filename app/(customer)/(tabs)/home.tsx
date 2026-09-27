@@ -3,7 +3,7 @@ import { PackageOpen } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 
-import { HomeHeader, ProductGrid, VendorCard, VerticalCard } from '@/components/customer';
+import { HomeHeader, ProductGrid, VendorCard, VerticalCard, useCartBarInset } from '@/components/customer';
 import { useT } from '@/lib/i18n/useT';
 import { EmptyState, Reveal, SectionHeader, SkeletonCard, Text } from '@/components/ui';
 import { categoriesApi, ordersApi, productsApi, vendorsApi } from '@/data/api';
@@ -21,6 +21,7 @@ const NEARBY_LIMIT = 6;
 const VENDOR_CARD_WIDTH = 232;
 
 export default function CustomerHomeScreen() {
+  const cartBarInset = useCartBarInset();
   const t = useT();
   const tabBarInset = useTabBarInset();
   const user = useSessionStore((s) => s.user);
@@ -129,7 +130,7 @@ export default function CustomerHomeScreen() {
     <View className="flex-1 bg-background">
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: tabBarInset + 28 }}
+        contentContainerStyle={{ paddingBottom: tabBarInset + cartBarInset + 28 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <HomeHeader
@@ -174,6 +175,7 @@ export default function CustomerHomeScreen() {
             />
           ) : (
             <ProductGrid
+                vendors={vendors}
               products={bestSellers}
               iconByCategory={iconByCategory}
               loading={loading}

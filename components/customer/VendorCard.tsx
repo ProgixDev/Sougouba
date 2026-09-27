@@ -58,7 +58,7 @@ export function VendorCard({
       className="rounded-[20px] bg-card p-3"
     >
       <View>
-        <CatalogImage id={vendor.id} kind="vendor" radius={14} height={COVER_HEIGHT[layout]} />
+        <CatalogImage id={vendor.id} kind="vendor" path={vendor.coverUrl} radius={14} height={COVER_HEIGHT[layout]} />
 
         {/* A closed shop stays in the list — hiding it answers "where did they
             go?" with nothing — but says so over its own photograph rather than

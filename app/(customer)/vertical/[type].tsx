@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { VendorCard } from '@/components/customer';
+import { VendorCard, useCartBarInset } from '@/components/customer';
 import { Chip, EmptyState, Reveal, Skeleton, Text } from '@/components/ui';
 import { vendorsApi } from '@/data/api';
 import type { Vendor, VendorType } from '@/data/types';
@@ -35,6 +35,7 @@ const FAST_ETA_MIN = 30;
  * the filters and the scroll position they left behind.
  */
 export default function VerticalScreen() {
+  const cartBarInset = useCartBarInset();
   const t = useT();
   const { type } = useLocalSearchParams<{ type: string }>();
   const vertical = verticalFor(type);
@@ -162,7 +163,7 @@ export default function VerticalScreen() {
           keyExtractor={({ vendor }) => vendor.id}
           contentContainerStyle={{
             paddingHorizontal: 20,
-            paddingBottom: tabBarInset + 28,
+            paddingBottom: tabBarInset + cartBarInset + 28,
             gap: 16,
           }}
           showsVerticalScrollIndicator={false}

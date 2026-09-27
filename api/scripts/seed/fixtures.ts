@@ -156,6 +156,58 @@ export const ITEM_BANK: ItemFixture[] = [
   { name: 'Yaourt nature 1 L', priceCents: 549, categoryKey: 'produitsLaitiers', sectionName: 'Produits laitiers' },
 ];
 
+/**
+ * The photo for each item, by name — a file in the app's
+ * `assets/images/catalog/` (credits in `assets/images/CREDITS.md`).
+ *
+ * The app bundled these long before the database existed, keyed by the mock's
+ * own ids (`prd_riz_brise`), which match nothing here — so every product
+ * rendered as a placeholder icon. `npm run db:seed:images` uploads each one into
+ * its shop's `product-media` folder and writes the path onto the row.
+ *
+ * Two are near matches rather than exact: the shoulder uses the leg-of-lamb
+ * photo, and attiéké the attiéké-and-fish plate.
+ */
+export const ITEM_IMAGES: Record<string, string> = {
+  'Riz brisé parfumé 5 kg': 'prd_riz_brise',
+  'Attiéké frais 1 kg': 'prd_attieke_poisson',
+  'Huile de palme rouge 1 L': 'prd_huile_palme',
+  'Pâte d’arachide 500 g': 'prd_pate_arachide',
+  'Cube Maggi (paquet de 60)': 'prd_cube_bouillon',
+  'Ras el hanout 100 g': 'prd_ras_el_hanout',
+  'Épaule d’agneau halal 1 kg': 'prd_gigot_agneau',
+  'Poulet fermier halal entier': 'prd_poulet_fermier',
+  'Tilapia entier surgelé 1 kg': 'prd_tilapia_entier',
+  'Igname fraîche 2 kg': 'prd_igname',
+  'Gombo frais 500 g': 'prd_gombo_frais',
+  'Bissap séché 200 g': 'prd_bissap_sec',
+  'Thé à la menthe Maghreb 250 g': 'prd_the_menthe',
+  'Msemen (paquet de 6)': 'prd_msemen',
+  'Yaourt nature 1 L': 'prd_yaourt_maison',
+};
+
+/**
+ * Each shop's cover (also its logo), by fixture key. The five shops the mobile
+ * seed never had borrow a product photo that says what they sell.
+ */
+export const VENDOR_IMAGES: Record<string, string> = {
+  bamako: 'vnd_marche_bamako',
+  atlas: 'vnd_epicerie_atlas',
+  sahel: 'vnd_boucherie_sahel',
+  dakar: 'vnd_saveurs_dakar',
+  maghreb: 'vnd_douceurs_maghreb',
+  teranga: 'vnd_teranga',
+  medina: 'vnd_souk_medina',
+  kilimandjaro: 'vnd_kilimandjaro',
+  tanit: 'vnd_boulangerie_tanit',
+  adjoa: 'vnd_mama_adjoa',
+  kabylie: 'prd_olives_beldi',
+  abidjan: 'prd_brochettes_poulet',
+  nil: 'prd_dattes_deglet',
+  zanzibar: 'prd_safran',
+  casbah: 'prd_tajine_agneau',
+};
+
 /** Deduplicated aisle names, in a stable order — every product must sit in one. */
 export const SECTION_NAMES = [...new Set(ITEM_BANK.map((i) => i.sectionName))];
 

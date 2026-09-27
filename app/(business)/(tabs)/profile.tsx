@@ -65,7 +65,7 @@ export default function BusinessProfileScreen() {
         ) : approved && vendor ? (
           <>
             <Reveal className="mx-5 rounded-[20px] bg-card overflow-hidden">
-              <CatalogImage id={vendor.id} kind="vendor" radius={0} height={130} />
+              <CatalogImage id={vendor.id} kind="vendor" path={vendor.coverUrl} radius={0} height={130} />
               <View className="p-4 gap-2.5">
                 <View className="flex-row items-start justify-between gap-3">
                   <Text variant="subtitle" weight="bold" className="flex-1" numberOfLines={1}>

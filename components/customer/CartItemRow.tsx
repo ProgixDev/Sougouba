@@ -22,6 +22,7 @@ export function CartItemRow({ item, product, categoryIcon, onChangeQty }: CartIt
     <View className="flex-row items-center gap-3">
       <CatalogImage
         id={product.id}
+          path={product.imageUrl}
         kind="product"
         icon={categoryIcon ? categoryIcons[categoryIcon] : undefined}
         radius={12}

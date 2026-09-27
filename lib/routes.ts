@@ -29,7 +29,6 @@ export const routes = {
   // more chance for Expo Router to resolve the wrong leaf.
   accountEdit: '/(customer)/account/edit',
   accountAddresses: '/(customer)/account/addresses',
-  accountPayment: '/(customer)/account/payment',
   accountNotifications: '/(customer)/account/notifications',
   accountAbout: '/(customer)/account/about',
   accountPoints: '/(customer)/account/points',

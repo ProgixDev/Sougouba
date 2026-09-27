@@ -5,12 +5,19 @@ import { ImageOff } from 'lucide-react-native';
 import { View } from 'react-native';
 
 import { productImages, vendorImages } from '@/data/images.generated';
+import { mediaUrl } from '@/lib/media';
 import { forest, mustard, terracotta } from '@/theme/tokens';
 
 export interface CatalogImageProps {
   /** A product or vendor id — the key into the generated image map. */
   id: string;
   kind: 'product' | 'vendor';
+  /**
+   * The row's own image — `product.imageUrl`, `vendor.coverUrl` — as the API
+   * returns it (a Storage path). Preferred over the bundled set, which is keyed
+   * by the old mock ids and only covers the prototype's catalogue.
+   */
+  path?: string | null;
   /** Category icon, used by the placeholder so an image-less card still reads as food. */
   icon?: LucideIcon;
   height: number;
@@ -50,8 +57,10 @@ export function CatalogImage({
   width,
   radius = 16,
   contentFit = 'cover',
+  path,
 }: CatalogImageProps) {
-  const source = kind === 'product' ? productImages[id] : vendorImages[id];
+  const remote = mediaUrl(path);
+  const source = remote ? { uri: remote } : kind === 'product' ? productImages[id] : vendorImages[id];
 
   // Sizing goes through `style`, never `className`: expo-image is a third-party
   // component and this project registers no cssInterop, so NativeWind classes
@@ -59,7 +68,17 @@ export function CatalogImage({
   const box = { width: width ?? ('100%' as const), height, borderRadius: radius };
 
   if (source) {
-    return <Image source={source} style={box} contentFit={contentFit} transition={200} />;
+    // A soft tint shows while a remote photo loads, rather than an empty box.
+    return (
+      <Image
+        source={source}
+        style={[box, { backgroundColor: tintFor(id).to }]}
+        contentFit={contentFit}
+        transition={200}
+        cachePolicy="memory-disk"
+        recyclingKey={id}
+      />
+    );
   }
 
   const tint = tintFor(id);

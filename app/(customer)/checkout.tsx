@@ -1,6 +1,7 @@
 import { useFocusEffect, router } from 'expo-router';
-import { CreditCard, MapPin, PlusCircle, Sparkles, Store } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useStripe } from '@stripe/stripe-react-native';
+import { Lock, MapPin, Sparkles, Store } from 'lucide-react-native';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -10,21 +11,12 @@ import { useThemeColors } from '@/hooks/useColorScheme';
 import { ordersApi, loyaltyApi } from '@/data/api';
 import { maxRedeemablePoints, pointsToDiscountCad } from '@/data/loyalty';
 import { roundCad } from '@/data/taxes';
-import type { OrderItem } from '@/data/types';
 import { useCartDetails } from '@/hooks/useCartDetails';
-import { deliveryAddressFor } from '@/lib/deliveryAddress';
 import { formatCad } from '@/lib/format';
 import { dynamicRoutes, routes } from '@/lib/routes';
 import { useCartStore } from '@/store/useCartStore';
-import { usePreferencesStore, type PaymentBrand } from '@/store/usePreferencesStore';
 import { useSessionStore } from '@/store/useSessionStore';
-import { forest, neutral } from '@/theme/tokens';
-
-const cardBrandLabels: Record<PaymentBrand, string> = {
-  visa: 'Visa',
-  mastercard: 'Mastercard',
-  interac: 'Interac',
-};
+import { ApiError } from '@/data/http';
 
 export default function CheckoutScreen() {
   const t = useT();
@@ -42,26 +34,18 @@ export default function CheckoutScreen() {
     totalCad,
   } = useCartDetails();
 
-  // Cash on delivery is gone (client, août 2026): every order is paid in the
-  // app, so a card is not one option among two — it is the precondition. With
-  // none saved the screen says so and the CTA refuses rather than quietly
-  // falling back to something the platform no longer settles.
-  const cards = usePreferencesStore((s) => s.paymentMethods);
-  const [cardId, setCardId] = useState<string | null>(null);
-  const card = cards.find((c) => c.id === cardId) ?? cards.find((c) => c.isDefault) ?? cards[0];
-
-  // Adding or removing cards in Moyens de paiement and coming straight back
-  // must not leave a selection pointing at a card that is no longer there.
-  useEffect(() => {
-    if (cardId && !cards.some((c) => c.id === cardId)) setCardId(null);
-  }, [cards, cardId]);
+  // Every order is paid in the app, through Stripe's payment sheet. Sougouba
+  // never holds a card: the sheet collects it, Stripe keeps it, and this screen
+  // only ever sees "paid" or "not paid".
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // The same address `useCartDetails` measured the delivery fee against — two
-  // copies of this rule would price one journey and deliver another.
-  const address = deliveryAddressFor(user);
+  // One of the shopper's own saved addresses — the API refuses anything else,
+  // because it prices the delivery from the geocoded point it stored. An account
+  // with none is sent to add one rather than paying for a delivery to nowhere.
+  const address = user?.addresses.find((a) => a.isDefault) ?? user?.addresses[0] ?? null;
 
   // Points Sougouba. `redeemablePoints` is a preview only — the same 20 % cap
   // (`maxRedeemablePoints`) is recomputed and enforced for real inside
@@ -92,38 +76,46 @@ export default function CheckoutScreen() {
   const discountedTotalCad = roundCad(totalCad - pointsDiscountCad);
 
   async function placeOrder() {
-    if (!user || !vendor || !card || lines.length === 0) return;
+    if (!user || !vendor || !address || lines.length === 0) return;
     setError(null);
     setPlacing(true);
+    const cart: ordersApi.Cart = {
+      vendorId: vendor.id,
+      addressId: address.id,
+      items: lines.map(({ item }) => ({ productId: item.productId, qty: item.qty })),
+      ...(usePoints && redeemablePoints > 0 ? { redeemPoints: redeemablePoints } : {}),
+    };
     try {
-      // Snapshot names and prices into the order: the catalogue is mutable at
-      // runtime (business catalogue edits), and an order must not change after
-      // it is placed.
-      const items: OrderItem[] = lines.map(({ item, product }) => ({
-        productId: product.id,
-        name: product.name,
-        qty: item.qty,
-        unitPriceCad: item.unitPriceCad,
-      }));
+      // 1. The server prices the cart and opens a PaymentIntent for exactly that.
+      const { clientSecret, paymentIntentId } = await ordersApi.createPaymentIntent(cart);
 
-      const order = await ordersApi.createOrder({
-        customerId: user.id,
-        // The shop only knows the four seeded customers by id; anyone who signed
-        // up in-app has to carry their own name onto the order.
-        customerName: user.fullName,
-        vendorId: vendor.id,
-        items,
-        deliveryAddress: address,
-        createdAt: new Date().toISOString(),
-        redeemPoints: usePoints ? redeemablePoints : undefined,
+      // 2. Stripe's own sheet takes the card (and any 3-D Secure step).
+      const init = await initPaymentSheet({
+        merchantDisplayName: 'Sougouba',
+        paymentIntentClientSecret: clientSecret,
+        returnURL: 'sougouba://stripe-redirect',
+        defaultBillingDetails: { name: user.fullName, email: user.email },
+        allowsDelayedPaymentMethods: false,
       });
+      if (init.error) throw new Error(init.error.message);
+      const paid = await presentPaymentSheet();
+      if (paid.error) {
+        // Closing the sheet is a choice, not a failure — nothing was charged.
+        if (paid.error.code !== 'Canceled') setError(paid.error.message);
+        setPlacing(false);
+        return;
+      }
 
+      // 3. Paid: the order is written. If that fails the API refunds in full.
+      const order = await ordersApi.placeOrder({ ...cart, paymentIntentId });
       clearCart();
       // `replace`, not `push`: backing into a checkout for an order that has
       // already been placed would let it be submitted twice.
       router.replace({ pathname: dynamicRoutes.orderConfirmed, params: { id: order.id } });
-    } catch {
-      setError(t('customer.checkoutFailed'));
+    } catch (caught) {
+      setError(
+        caught instanceof ApiError && caught.isClientError ? caught.message : t('customer.checkoutFailed')
+      );
       setPlacing(false);
     }
   }
@@ -144,15 +136,23 @@ export default function CheckoutScreen() {
                 <MapPin size={18} color={colors.primary} strokeWidth={2} />
               </View>
               <View className="flex-1 gap-0.5">
-                <Text variant="caption" weight="bold">
-                  {address.label}
-                </Text>
-                <Text variant="caption" tone="muted">
-                  {address.street}
-                </Text>
-                <Text variant="caption" tone="muted">
-                  {address.city}, {address.postalCode}
-                </Text>
+                {address ? (
+                  <>
+                    <Text variant="caption" weight="bold">
+                      {address.label}
+                    </Text>
+                    <Text variant="caption" tone="muted">
+                      {address.street}
+                    </Text>
+                    <Text variant="caption" tone="muted">
+                      {address.city}, {address.postalCode}
+                    </Text>
+                  </>
+                ) : (
+                  <Text variant="caption" weight="bold">
+                    {t('customer.checkout.noAddress')}
+                  </Text>
+                )}
               </View>
             </View>
           </Section>
@@ -175,44 +175,20 @@ export default function CheckoutScreen() {
             </Section>
           ) : null}
 
-          <Section
-            title={t('customer.checkout.payment')}
-            actionLabel={cards.length ? t('customer.manage') : undefined}
-            onAction={cards.length ? () => router.push(routes.accountPayment) : undefined}
-          >
-            {cards.length ? (
-              <View className="gap-2">
-                {cards.map((method) => (
-                  <PaymentOption
-                    key={method.id}
-                    icon={CreditCard}
-                    label={`${cardBrandLabels[method.brand]} •••• ${method.last4}`}
-                    caption={`${method.holder} — expire ${method.expiry}`}
-                    selected={method.id === card?.id}
-                    onPress={() => setCardId(method.id)}
-                  />
-                ))}
+          <Section title={t('customer.checkout.payment')}>
+            <View className="flex-row items-center gap-3">
+              <View className="w-10 h-10 items-center justify-center rounded-full bg-primary/10">
+                <Lock size={18} color={colors.primary} strokeWidth={2} />
               </View>
-            ) : (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t('customer.checkout.addPayment')}
-                onPress={() => router.push(routes.accountPayment)}
-                className="flex-row items-center gap-3 active:opacity-70"
-              >
-                <View className="w-10 h-10 items-center justify-center rounded-full bg-primary/10">
-                  <PlusCircle size={18} color={colors.primary} strokeWidth={2} />
-                </View>
-                <View className="flex-1">
-                  <Text variant="caption" weight="bold">
-                    {t('customer.checkout.addPayment')}
-                  </Text>
-                  <Text variant="caption" tone="muted" className="text-[12px]">
-                    {t('customer.misc.paymentsInApp')}
-                  </Text>
-                </View>
-              </Pressable>
-            )}
+              <View className="flex-1 gap-0.5">
+                <Text variant="caption" weight="bold">
+                  {t('customer.checkout.stripeTitle')}
+                </Text>
+                <Text variant="caption" tone="muted" className="text-[12px] leading-[16px]">
+                  {t('customer.checkout.stripeBody')}
+                </Text>
+              </View>
+            </View>
           </Section>
 
           <Section title={`Articles (${lines.length})`}>
@@ -283,21 +259,19 @@ export default function CheckoutScreen() {
       <View className="px-5 pt-3 border-t border-border bg-card">
         <Button
           label={
-            card
+            address
               ? t('customer.checkout.confirm', { total: formatCad(discountedTotalCad) })
-              : t('customer.checkout.addPayment')
+              : t('customer.checkout.addAddress')
           }
           variant="cta"
           size="lg"
           fullWidth
           loading={placing}
           disabled={lines.length === 0 || !vendor}
-          onPress={card ? placeOrder : () => router.push(routes.accountPayment)}
+          onPress={address ? placeOrder : () => router.push(routes.accountAddresses)}
         />
         <Text variant="caption" tone="muted" className="text-center mt-2 mb-1 text-[11px]">
-          {card
-            ? t('customer.simulatedPayment')
-            : t('customer.cardRequired')}
+          {t('customer.checkout.securedByStripe')}
         </Text>
       </View>
     </SafeAreaView>
@@ -331,47 +305,5 @@ function Section({
       </View>
       <View className="rounded-2xl bg-card p-4">{children}</View>
     </View>
-  );
-}
-
-function PaymentOption({
-  icon: Icon,
-  label,
-  caption,
-  selected,
-  onPress,
-}: {
-  icon: typeof CreditCard;
-  label: string;
-  caption: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      className={`flex-row items-center gap-3 rounded-xl border-[1.5px] p-3 ${
-        selected ? 'border-primary bg-primary/5' : 'border-border'
-      }`}
-    >
-      <Icon size={19} color={selected ? forest[600] : neutral[500]} strokeWidth={2} />
-      <View className="flex-1">
-        <Text variant="caption" weight="semibold">
-          {label}
-        </Text>
-        <Text variant="caption" tone="muted" className="text-[12px]">
-          {caption}
-        </Text>
-      </View>
-      <View
-        className={`w-5 h-5 rounded-full border-2 items-center justify-center ${
-          selected ? 'border-primary' : 'border-border'
-        }`}
-      >
-        {selected ? <View className="w-2.5 h-2.5 rounded-full bg-primary" /> : null}
-      </View>
-    </Pressable>
   );
 }

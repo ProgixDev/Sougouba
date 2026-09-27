@@ -1,3 +1,5 @@
+export { CartBar, useCartBarInset } from './CartBar';
+export { CartPill } from './CartPill';
 export { CartItemRow } from './CartItemRow';
 export { CategoryCircle } from './CategoryCircle';
 export { CategoryRow } from './CategoryRow';

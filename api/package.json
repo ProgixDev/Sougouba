@@ -27,7 +27,8 @@
     "verify:dispatch": "node --env-file=.env scripts/verify-dispatch.mjs",
     "verify:registration": "node --env-file=.env scripts/verify-registration.mjs",
     "db:seed": "node --env-file=.env --import tsx scripts/seed/index.ts",
-    "db:seed:reset": "node --env-file=.env --import tsx scripts/seed/index.ts --reset"
+    "db:seed:reset": "node --env-file=.env --import tsx scripts/seed/index.ts --reset",
+    "db:seed:images": "node --env-file=.env --import tsx scripts/seed/upload-images.ts"
   },
   "dependencies": {
     "@fastify/rate-limit": "^11.2.0",
