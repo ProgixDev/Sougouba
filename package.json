@@ -25,6 +25,7 @@
     "verify:admin": "node --env-file=.env scripts/verify-admin-audit.mjs",
     "verify:catalog": "node --env-file=.env scripts/verify-catalog.mjs",
     "verify:dispatch": "node --env-file=.env scripts/verify-dispatch.mjs",
+    "verify:registration": "node --env-file=.env scripts/verify-registration.mjs",
     "db:seed": "node --env-file=.env --import tsx scripts/seed/index.ts",
     "db:seed:reset": "node --env-file=.env --import tsx scripts/seed/index.ts --reset"
   },

@@ -42,6 +42,36 @@ in the mobile repo (`sougouba/`) — this file only tracks what's actually built
 > `verify:stripe` 12/12 · `verify:orders` 17/17 · `verify:admin` 22/22 ·
 > `verify:catalog` 17/17 · `verify:dispatch` 12/12.
 
+## Merchant registration documents (2026-09-27)
+
+The client sent the list a merchant must provide to register: legal name,
+address, NEQ **or** proof of registration, TPS/TVQ numbers, a valid MAPAQ
+permit, the authorised officer's ID and contact details, and a business bank
+account. The bank account is the merchant's choice — **Stripe Connect** (set up
+after approval; `ConnectService` refuses an unapproved shop) or an **official
+document from the bank**.
+
+- **Migration `0030_merchant_registration_documents`** (applied via MCP, mirrored
+  in `drizzle/`): new `vendor_registrations` columns, `neq` now nullable,
+  `merchant-documents` capped at 10 MB of PDF/JPEG/PNG/HEIC, and `vendor_apply`
+  rewritten to take the new fields and **refuse any document path outside
+  `applications/<owner>/` or with no object behind it**, in the same transaction.
+- **The `merchant_documents_own_folder` policy is gone.** It let an owner read,
+  overwrite and delete anything in their shop's folder — including, after
+  approval, the permit the approval was granted on. Merchants now hold no policy
+  on the bucket: `POST /vendors/apply/documents` issues a one-shot signed upload
+  URL for a path the API chose, and the admin detail signs 10-minute read URLs.
+- **Verified live, 17/17**: `npm run verify:registration` (needs the API running
+  and `SUPABASE_ANON_KEY`). It attacks the bucket from a merchant session
+  (upload, overwrite, read, list — all refused) and `vendor_apply` (missing file,
+  someone else's folder), then submits a complete file and opens its documents
+  through signed URLs. Creates and deletes exactly one throwaway user.
+
+Open: uploads from a merchant who never submits are not purged; the in-app
+"set up Stripe" step after approval is not built (and cannot work until Connect
+is enabled on the Stripe account); a file already in the queue can outlive its
+MAPAQ expiry — the admin page flags it, nothing re-checks it automatically.
+
 ## First boot of the ported API (2026-09-09)
 
 Booted against the live project and served real requests. **`GET /health/db`

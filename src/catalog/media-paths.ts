@@ -22,6 +22,8 @@ import { BadRequestException } from '@nestjs/common';
  */
 
 export const VENDOR_MEDIA_BUCKET = 'vendor-media';
+/** Private: identity papers, permits, bank letters. Read only through signed URLs. */
+export const MERCHANT_DOCUMENTS_BUCKET = 'merchant-documents';
 export const PRODUCT_MEDIA_BUCKET = 'product-media';
 
 /**

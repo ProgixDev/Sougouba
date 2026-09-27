@@ -1323,35 +1323,53 @@ export type Database = {
       }
       vendor_registrations: {
         Row: {
+          bank_document_path: string | null
           business_number_document_path: string | null
           contact_name: string
           contact_phone: string
+          gst_number: string | null
           id_document_path: string | null
+          legal_name: string | null
           mapaq_document_path: string | null
+          mapaq_expires_on: string | null
           mapaq_number: string | null
-          neq: string
+          neq: string | null
+          payout_method: string | null
+          qst_number: string | null
           submitted_at: string
           vendor_id: string
         }
         Insert: {
+          bank_document_path?: string | null
           business_number_document_path?: string | null
           contact_name: string
           contact_phone: string
+          gst_number?: string | null
           id_document_path?: string | null
+          legal_name?: string | null
           mapaq_document_path?: string | null
+          mapaq_expires_on?: string | null
           mapaq_number?: string | null
-          neq: string
+          neq?: string | null
+          payout_method?: string | null
+          qst_number?: string | null
           submitted_at?: string
           vendor_id: string
         }
         Update: {
+          bank_document_path?: string | null
           business_number_document_path?: string | null
           contact_name?: string
           contact_phone?: string
+          gst_number?: string | null
           id_document_path?: string | null
+          legal_name?: string | null
           mapaq_document_path?: string | null
+          mapaq_expires_on?: string | null
           mapaq_number?: string | null
-          neq?: string
+          neq?: string | null
+          payout_method?: string | null
+          qst_number?: string | null
           submitted_at?: string
           vendor_id?: string
         }
@@ -1919,20 +1937,29 @@ export type Database = {
       }
       vendor_apply: {
         Args: {
+          p_bank_document_path: string
+          p_business_number_document_path: string
           p_city: string
           p_contact_name: string
           p_contact_phone: string
           p_default_hours: Json
           p_default_sections: string[]
           p_delivery_eta_min: number
+          p_gst_number: string
+          p_id_document_path: string
           p_is_halal_certified: boolean
           p_lat: number
+          p_legal_name: string
           p_lng: number
+          p_mapaq_document_path: string
+          p_mapaq_expires_on: string
           p_mapaq_number: string
           p_name: string
           p_neq: string
           p_owner_id: string
+          p_payout_method: string
           p_postal_code: string
+          p_qst_number: string
           p_slug_base: string
           p_specialty_fr: string
           p_street: string

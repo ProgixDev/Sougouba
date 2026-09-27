@@ -27,10 +27,12 @@ import {
 } from './dto/product.dto.js';
 import {
   applyVendorSchema,
+  documentUploadSchema,
   sectionSchema,
   setHoursSchema,
   updateVendorSchema,
   type ApplyVendorInput,
+  type DocumentUploadInput,
   type SectionInput,
   type SetHoursInput,
   type UpdateVendorInput,
@@ -58,6 +60,15 @@ export class VendorMeController {
   @Post('apply')
   apply(@CurrentUser() userId: string, @Body(new ZodValidationPipe(applyVendorSchema)) body: ApplyVendorInput) {
     return this.vendors.apply(userId, body);
+  }
+
+  /** A signed upload URL for one registration document — called before `apply`, once per file. */
+  @Post('apply/documents')
+  documentUpload(
+    @CurrentUser() userId: string,
+    @Body(new ZodValidationPipe(documentUploadSchema)) body: DocumentUploadInput
+  ) {
+    return this.vendors.createDocumentUpload(userId, body);
   }
 
   @Get('me')

@@ -15,6 +15,7 @@ import { camelize } from '../db/case.js';
 import { DB } from '../db/db.module.js';
 import { one } from '../db/embed.js';
 import { unwrap, unwrapRpc } from '../db/unwrap.js';
+import { MERCHANT_DOCUMENTS_BUCKET } from '../catalog/media-paths.js';
 import { type AdminAction } from './audit.service.js';
 import { num, type AdminCourierDetail, type AdminUserDetail, type AdminVendorDetail } from './dto/admin-detail.dto.js';
 import type { ReviewDecisionInput, ReviewQuery, UserQuery } from './dto/admin.dto.js';
@@ -65,6 +66,9 @@ export function assertDecision(from: ApplicationStatus, to: ApplicationStatus): 
   }
 }
 
+/** How long a reviewer's link to a registration document stays valid. */
+const DOCUMENT_URL_TTL_SECONDS = 10 * 60;
+
 /**
  * The registration queue — CDC addendum §02's human between "someone applied"
  * and "they are on the platform".
@@ -91,7 +95,7 @@ export class ApprovalsService {
          addressStreet:address_street, addressPostalCode:address_postal_code,
          status, statusReason:status_reason, reviewedAt:reviewed_at, createdAt:created_at,
          profiles!inner(ownerName:full_name),
-         vendor_registrations(neq, contactName:contact_name, contactPhone:contact_phone,
+         vendor_registrations(legalName:legal_name, neq, contactName:contact_name, contactPhone:contact_phone,
                               mapaqNumber:mapaq_number, submittedAt:submitted_at)`,
         { count: 'exact' }
       );
@@ -125,6 +129,7 @@ export class ApprovalsService {
           reviewedAt: r.reviewedAt,
           createdAt: r.createdAt,
           ownerName: owner?.ownerName ?? null,
+          legalName: reg?.legalName ?? null,
           neq: reg?.neq ?? null,
           contactName: reg?.contactName ?? null,
           contactPhone: reg?.contactPhone ?? null,
@@ -141,13 +146,13 @@ export class ApprovalsService {
   /**
    * One merchant file, with everything a reviewer needs to decide it.
    *
-   * `documents` folds the three separate path columns into one array with a
-   * `kind` discriminator — that is the shape a documents card renders, and it
-   * means adding a fourth document later is a backend-only change.
+   * `documents` folds the separate path columns into one array with a `kind`
+   * discriminator — that is the shape a documents card renders.
    *
-   * ⚠️ Those paths point into the **private** `merchant-documents` bucket, so
-   * they are not directly renderable. Signing them is deliberately left out of
-   * this change; the card should show a disabled control until it lands.
+   * Each carries a signed URL into the **private** `merchant-documents`
+   * bucket, valid for {@link DOCUMENT_URL_TTL_SECONDS}. Short on purpose: these
+   * are identity papers and bank letters, and a URL pasted into a chat should
+   * stop working before anyone else opens it. The page re-fetches to renew.
    */
   async vendorDetail(id: string): Promise<AdminVendorDetail> {
     // `profiles` twice — the owner, and whoever reviewed the file — which
@@ -216,11 +221,27 @@ export class ApprovalsService {
       mapaqDocumentPath: reg?.mapaqDocumentPath ?? null,
     };
 
-    const documents = [
-      { kind: 'id' as const, path: base.idDocumentPath },
-      { kind: 'business_number' as const, path: base.businessNumberDocumentPath },
-      { kind: 'mapaq' as const, path: base.mapaqDocumentPath },
-    ].filter((d): d is { kind: 'id' | 'business_number' | 'mapaq'; path: string } => d.path !== null);
+    type DocumentKind = 'id' | 'business_number' | 'mapaq' | 'bank';
+    const documentPaths = [
+      { kind: 'id' as const, path: reg?.idDocumentPath ?? null },
+      { kind: 'business_number' as const, path: reg?.businessNumberDocumentPath ?? null },
+      { kind: 'mapaq' as const, path: reg?.mapaqDocumentPath ?? null },
+      { kind: 'bank' as const, path: reg?.bankDocumentPath ?? null },
+    ].filter((d): d is { kind: DocumentKind; path: string } => d.path !== null);
+
+    const signed = documentPaths.length
+      ? await this.db.storage
+          .from(MERCHANT_DOCUMENTS_BUCKET)
+          .createSignedUrls(documentPaths.map((d) => d.path), DOCUMENT_URL_TTL_SECONDS)
+      : { data: [], error: null };
+    if (signed.error) this.logger.warn(`Could not sign documents for vendor ${id}: ${signed.error.message}`);
+    // A file that fails to sign still appears, with no URL — the reviewer
+    // should see that a document was submitted and cannot be opened, not that
+    // none was submitted.
+    const documents = documentPaths.map((d) => ({
+      ...d,
+      url: signed.data?.find((s) => s.path === d.path && !s.error)?.signedUrl ?? null,
+    }));
 
     return {
       id: base.id,
@@ -255,13 +276,18 @@ export class ApprovalsService {
         avatarUrl: base.ownerAvatarUrl,
         memberSince: base.ownerMemberSince,
       },
-      registration: base.neq
+      registration: reg
         ? {
-            neq: base.neq,
-            contactName: base.contactName ?? '',
-            contactPhone: base.contactPhone ?? '',
-            mapaqNumber: base.mapaqNumber,
-            submittedAt: base.submittedAt,
+            legalName: reg.legalName ?? null,
+            neq: reg.neq ?? null,
+            gstNumber: reg.gstNumber ?? null,
+            qstNumber: reg.qstNumber ?? null,
+            contactName: reg.contactName ?? '',
+            contactPhone: reg.contactPhone ?? '',
+            mapaqNumber: reg.mapaqNumber ?? null,
+            mapaqExpiresOn: reg.mapaqExpiresOn ?? null,
+            payoutMethod: reg.payoutMethod ?? null,
+            submittedAt: reg.submittedAt ?? null,
             documents,
           }
         : null,

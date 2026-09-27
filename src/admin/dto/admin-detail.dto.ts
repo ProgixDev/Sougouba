@@ -169,19 +169,25 @@ export interface AdminVendorDetail {
   owner: { id: string; fullName: string; email: string | null; avatarUrl: string | null; memberSince: Date };
 
   /**
-   * Null when the shop predates the registration flow.
+   * Null when the shop predates the registration flow. The fields added with
+   * the client's 2026-09-27 document list are null on files submitted before it.
    *
-   * `documents[].path` points into the **private** `merchant-documents`
-   * bucket, so it is not directly renderable — it needs a signed URL, which is
-   * not built yet.
+   * `documents[].url` is a signed URL into the private `merchant-documents`
+   * bucket, valid for ten minutes — null if signing failed.
    */
   registration: {
-    neq: string;
+    legalName: string | null;
+    neq: string | null;
+    gstNumber: string | null;
+    qstNumber: string | null;
     contactName: string;
     contactPhone: string;
     mapaqNumber: string | null;
+    /** `YYYY-MM-DD`. */
+    mapaqExpiresOn: string | null;
+    payoutMethod: 'stripe' | 'bank_document' | null;
     submittedAt: Date | null;
-    documents: { kind: 'id' | 'business_number' | 'mapaq'; path: string }[];
+    documents: { kind: 'id' | 'business_number' | 'mapaq' | 'bank'; path: string; url: string | null }[];
   } | null;
 
   categories: { id: string; slug: string; nameFr: string }[];

@@ -1,4 +1,7 @@
+import { randomUUID } from 'node:crypto';
+
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Inject,
@@ -13,11 +16,19 @@ import { DB } from '../db/db.module.js';
 import { snakeize } from '../db/case.js';
 import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import { GeoService } from '../geo/geo.service.js';
-import type { ApplyVendorInput, SectionInput, SetHoursInput, UpdateVendorInput, VendorQuery } from './dto/vendor.dto.js';
+import {
+  REGISTRATION_DOCUMENT_TYPES,
+  type ApplyVendorInput,
+  type DocumentUploadInput,
+  type SectionInput,
+  type SetHoursInput,
+  type UpdateVendorInput,
+  type VendorQuery,
+} from './dto/vendor.dto.js';
 import type { Page } from './dto/query.dto.js';
 import { containsPattern } from '../common/sql/like.js';
 import { orIlike } from '../common/sql/postgrest.js';
-import { assertMediaPath, VENDOR_MEDIA_BUCKET } from './media-paths.js';
+import { assertMediaPath, MERCHANT_DOCUMENTS_BUCKET, VENDOR_MEDIA_BUCKET } from './media-paths.js';
 import { toVendor, type VendorResponse, type VendorRow } from './mappers.js';
 import { slugify } from './slugify.js';
 
@@ -263,6 +274,36 @@ export class VendorsService {
   // ── registration ──────────────────────────────────────────────────────────
 
   /**
+   * Somewhere to upload one registration document, before the shop exists.
+   *
+   * The shop's id does not exist until `apply` commits, so documents go under
+   * the *owner's* id instead: `applications/<userId>/<kind>-<uuid>.<ext>`. The
+   * API picks the whole path — the client never names a file — and hands back a
+   * one-shot signed upload URL for exactly that path. Merchants hold no Storage
+   * policy on this bucket at all (see migration `0030`), so this URL is the only
+   * way a file gets in, and nothing a merchant holds can overwrite or delete a
+   * document after an administrator has read it.
+   *
+   * `vendor_apply` then refuses any path outside this owner's folder or with no
+   * object behind it, in the same transaction as the insert.
+   *
+   * ⚠️ A merchant who uploads and never submits leaves files behind. Bounded by
+   * the rate limiter, but nothing purges them yet.
+   */
+  async createDocumentUpload(userId: string, input: DocumentUploadInput) {
+    const existing = await unwrap<{ id: string } | null>(
+      this.db.from('vendors').select('id').eq('owner_id', userId).maybeSingle()
+    );
+    if (existing) throw new ConflictException('This account already has a shop');
+
+    const ext = REGISTRATION_DOCUMENT_TYPES[input.contentType];
+    const path = `applications/${userId}/${input.kind}-${randomUUID()}.${ext}`;
+    const { data, error } = await this.db.storage.from(MERCHANT_DOCUMENTS_BUCKET).createSignedUploadUrl(path);
+    if (error || !data) throw new InternalServerErrorException('Could not prepare the upload');
+    return { path, uploadUrl: data.signedUrl, contentType: input.contentType };
+  }
+
+  /**
    * A merchant registers their shop.
    *
    * Created `pending` and kept out of every customer-facing list until an
@@ -314,10 +355,21 @@ export class VendorsService {
         p_lng: lng,
         p_delivery_eta_min: input.deliveryEtaMin,
         p_is_halal_certified: input.isHalalCertified,
-        p_neq: input.neq,
+        p_legal_name: input.legalName,
+        p_neq: (input.neq ?? null) as string,
+        p_gst_number: input.gstNumber,
+        p_qst_number: input.qstNumber,
         p_contact_name: input.contactName,
         p_contact_phone: input.contactPhone,
-        p_mapaq_number: (input.mapaqNumber ?? null) as string,
+        p_mapaq_number: input.mapaqNumber,
+        p_mapaq_expires_on: input.mapaqExpiresOn,
+        p_payout_method: input.payoutMethod,
+        p_id_document_path: input.idDocumentPath,
+        p_business_number_document_path: (input.businessNumberDocumentPath ?? null) as string,
+        p_mapaq_document_path: input.mapaqDocumentPath,
+        // Only kept when it is how the merchant is paid — a bank letter
+        // attached and then un-chosen is not a file the platform should hold.
+        p_bank_document_path: (input.payoutMethod === 'bank_document' ? input.bankDocumentPath : null) as string,
         p_default_hours: DEFAULT_HOURS,
         p_default_sections: defaultSectionNames(input.vendorType),
       }),
@@ -334,6 +386,11 @@ export class VendorsService {
           // free slug. Rare enough to answer with "try again" rather than to
           // serialise every registration behind a lock.
           throw new ConflictException('That shop name was just taken — please submit again');
+        }
+        // `vendor_apply`'s own check: a document path outside this owner's
+        // folder, or with nothing uploaded behind it.
+        if (error.code === '22023' && error.message.startsWith('document_not_found:')) {
+          throw new BadRequestException('Un document joint est introuvable — ajoutez-le de nouveau');
         }
         throw unexpectedDbError(error);
       }

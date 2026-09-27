@@ -56,32 +56,91 @@ export const applyVendorSchema = z
       .min(10, 'Entre 10 et 180 minutes')
       .max(180, 'Entre 10 et 180 minutes'),
 
+    legalName: z.string().trim().min(2, 'Nom légal de l’entreprise requis'),
     // The registraire prints it as 10 digits; people paste it with spaces.
+    // Optional on its own: the client accepts the NEQ *or* a proof of
+    // registration, and the refinement below insists on one of the two.
     neq: z
       .string()
       .trim()
       .transform((v) => v.replace(/\s/g, ''))
-      .refine((v) => /^\d{10}$/.test(v), 'NEQ à 10 chiffres'),
+      .refine((v) => v === '' || /^\d{10}$/.test(v), 'NEQ à 10 chiffres')
+      .transform((v) => v || undefined)
+      .optional(),
+    // Revenu Québec prints them as `123456789 RT0001` and `1234567890 TQ0001`.
+    gstNumber: z
+      .string()
+      .trim()
+      .transform((v) => v.replace(/\s/g, '').toUpperCase())
+      .refine((v) => /^\d{9}RT\d{4}$/.test(v), 'Numéro de TPS au format 123456789 RT0001'),
+    qstNumber: z
+      .string()
+      .trim()
+      .transform((v) => v.replace(/\s/g, '').toUpperCase())
+      .refine((v) => /^\d{10}TQ\d{4}$/.test(v), 'Numéro de TVQ au format 1234567890 TQ0001'),
     contactName: z.string().trim().min(2, 'Nom du responsable requis'),
     contactPhone: z
       .string()
       .trim()
       .min(10, 'Téléphone requis')
       .regex(/^[\d\s()+.-]+$/, 'Numéro de téléphone invalide'),
-    mapaqNumber: z.string().trim().optional(),
+    // Every shop that sells food in Quebec holds one, grocery or restaurant.
+    mapaqNumber: z.string().trim().min(4, 'Numéro de permis MAPAQ requis'),
+    mapaqExpiresOn: z.iso.date('Date d’expiration du permis MAPAQ invalide'),
+
+    idDocumentPath: z.string().min(1, 'Pièce d’identité du dirigeant requise'),
+    businessNumberDocumentPath: z.string().min(1).optional(),
+    mapaqDocumentPath: z.string().min(1, 'Copie du permis MAPAQ requise'),
+
+    payoutMethod: z.enum(['stripe', 'bank_document'], { message: 'Choisissez comment recevoir vos paiements' }),
+    bankDocumentPath: z.string().min(1).optional(),
   })
   .superRefine((values, ctx) => {
     refinePostalCodeCity(values, ctx);
-    // A restaurant without a MAPAQ permit is a file an administrator would send
-    // straight back, so it is refused here rather than sitting in the queue for
-    // a day first. Same rule as `shopDocumentsSchema`'s.
-    if (values.vendorType !== 'restaurant') return;
-    if (!values.mapaqNumber || values.mapaqNumber.length < 4) {
-      ctx.addIssue({ code: 'custom', path: ['mapaqNumber'], message: 'Permis MAPAQ requis pour un restaurant' });
+    if (!values.neq && !values.businessNumberDocumentPath) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['neq'],
+        message: 'Indiquez votre NEQ ou joignez une preuve d’immatriculation',
+      });
+    }
+    // Compared as ISO strings, which sort as dates. An expired permit is a file
+    // an administrator would send straight back.
+    if (values.mapaqExpiresOn <= new Date().toISOString().slice(0, 10)) {
+      ctx.addIssue({ code: 'custom', path: ['mapaqExpiresOn'], message: 'Le permis MAPAQ est expiré' });
+    }
+    if (values.payoutMethod === 'bank_document' && !values.bankDocumentPath) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['bankDocumentPath'],
+        message: 'Joignez un document officiel de votre banque',
+      });
     }
   });
 
 export type ApplyVendorInput = z.infer<typeof applyVendorSchema>;
+
+/**
+ * A request for somewhere to put one registration document.
+ *
+ * The content type is declared up front because the signed URL is issued for
+ * a path whose extension the API chooses — the file never names itself.
+ */
+export const REGISTRATION_DOCUMENT_TYPES = {
+  'application/pdf': 'pdf',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/heic': 'heic',
+} as const;
+
+export const documentUploadSchema = z.object({
+  kind: z.enum(['id', 'business_number', 'mapaq', 'bank']),
+  contentType: z.enum(Object.keys(REGISTRATION_DOCUMENT_TYPES) as [keyof typeof REGISTRATION_DOCUMENT_TYPES], {
+    message: 'Format accepté : PDF, JPEG, PNG ou HEIC',
+  }),
+});
+
+export type DocumentUploadInput = z.infer<typeof documentUploadSchema>;
 
 // ── merchant self-service ───────────────────────────────────────────────────
 
