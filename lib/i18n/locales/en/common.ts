@@ -27,6 +27,9 @@ export const common: Widen<typeof reference> = {
   order: 'Order',
   orderRef: 'Order %{reference}',
   delivery: 'Delivery',
+  tracking: 'Tracking',
+  dateAtTime: '%{date} at %{time}',
+  stepLabel: 'Step %{step} — %{title}',
   a11y: {
     edit: 'Edit %{name}',
     navigateTo: 'Navigate to %{name}',

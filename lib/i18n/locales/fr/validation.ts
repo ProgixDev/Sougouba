@@ -42,7 +42,6 @@ export const validation = {
     nameRequired: 'Nom de la boutique requis',
     typeRequired: 'Choisissez une catégorie',
     specialtyRequired: 'Spécialité requise',
-    specialtyTooLong: 'Trop long — une ligne sous le nom de la boutique',
     etaFormat: 'Délai en minutes',
     etaRange: 'Entre 10 et 180 minutes',
     neqFormat: 'NEQ à 10 chiffres',

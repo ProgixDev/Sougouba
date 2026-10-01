@@ -125,10 +125,15 @@ export default function BusinessCatalogScreen() {
   return (
     <View className="flex-1 bg-background">
       <CounterHeader
-        title="Catalogue"
+        title={t('business.tabs.catalog')}
         eyebrow={
           products.length > 0
-            ? `${products.length} produits${outOfStock > 0 ? ` · ${outOfStock} à réapprovisionner` : ''}`
+            ? outOfStock > 0
+              ? t('business.catalog.summary', {
+                  products: t('business.catalog.productCount', { count: products.length }),
+                  restock: t('business.catalog.toRestock', { count: outOfStock }),
+                })
+              : t('business.catalog.productCount', { count: products.length })
             : vendor?.name
         }
         right={
@@ -141,7 +146,7 @@ export default function BusinessCatalogScreen() {
           >
             <Plus size={16} color={onSlab.text} strokeWidth={2.5} />
             <Text variant="caption" weight="bold" style={{ color: onSlab.text }}>
-              Ajouter
+              {t('business.catalog.add')}
             </Text>
           </Pressable>
         }
@@ -183,7 +188,7 @@ export default function BusinessCatalogScreen() {
           ListEmptyComponent={
             <EmptyState
               icon={PackagePlus}
-              title={query ? t('business.catalogEmpty.noResults') : 'Catalogue vide'}
+              title={query ? t('business.catalogEmpty.noResults') : t('business.catalogEmpty.emptyTitle')}
               description={
                 query
                   ? t('business.catalogEmpty.noMatch')
@@ -222,15 +227,18 @@ export default function BusinessCatalogScreen() {
                       {product.name}
                     </Text>
                     <Text variant="caption" tone="muted" className="text-[12px]">
-                      {formatCad(product.priceCad)} · {product.stockQty} en stock
+                      {t('business.catalog.stockLine', {
+                        price: formatCad(product.priceCad),
+                        qty: product.stockQty,
+                      })}
                     </Text>
                     <View className="flex-row gap-1.5 mt-0.5">
                       {!product.isAvailable ? (
-                        <Badge label="Hors vente" tone="neutral" size="sm" />
+                        <Badge label={t('business.catalog.offSale')} tone="neutral" size="sm" />
                       ) : lowStock ? (
-                        <Badge label="Stock faible" tone="warning" size="sm" />
+                        <Badge label={t('business.catalog.lowStock')} tone="warning" size="sm" />
                       ) : (
-                        <Badge label="En vente" tone="success" size="sm" />
+                        <Badge label={t('business.catalog.onSale')} tone="success" size="sm" />
                       )}
                     </View>
                   </View>

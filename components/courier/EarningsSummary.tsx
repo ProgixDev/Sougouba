@@ -47,7 +47,7 @@ export function EarningsSummary({ runs, rangeLabel }: EarningsSummaryProps) {
   return (
     <View className="rounded-[20px] bg-card p-4 gap-3">
       <Text variant="label" tone="muted" className="text-[10px]">
-        Gains · {rangeLabel}
+        {t('courier.earnings.title', { range: rangeLabel })}
       </Text>
 
       <View className="gap-2.5">
@@ -57,15 +57,17 @@ export function EarningsSummary({ runs, rangeLabel }: EarningsSummaryProps) {
           })}
           value={formatCad(base)}
         />
-        <Row label={`Distance (${formatDistance(km)})`} value={formatCad(distance)} />
-        <Row label="Pourboires" value={formatCad(tips)} minor />
+        <Row label={t('courier.earnings.distanceRow', { distance: formatDistance(km) })} value={formatCad(distance)} />
+        <Row label={t('courier.earnings.tipsRow')} value={formatCad(tips)} minor />
         <View className="h-px bg-border mt-0.5" />
-        <Row label="Total" value={formatCad(total)} emphasis />
+        <Row label={t('common.price.total')} value={formatCad(total)} emphasis />
       </View>
 
       <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
-        {formatCad(BASE_FARE_CAD)} par course plus {formatCad(PER_KM_CAD)} du kilomètre livré. Les
-        pourboires vous reviennent intégralement.
+        {t('courier.earnings.rateNote', {
+          base: formatCad(BASE_FARE_CAD),
+          perKm: formatCad(PER_KM_CAD),
+        })}
       </Text>
     </View>
   );

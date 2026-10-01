@@ -33,6 +33,7 @@ export const business = {
     noResults: 'Aucun résultat',
     noMatch: 'Aucun produit ne correspond à cette recherche.',
     addFirst: 'Ajoutez votre premier produit pour commencer à vendre.',
+    emptyTitle: 'Catalogue vide',
   },
   ordersEmpty: {
     none: 'Les nouvelles commandes apparaîtront ici dès qu’un client passe commande.',
@@ -45,8 +46,10 @@ export const business = {
   },
   closed: 'Fermé',
   saveFailed: 'Enregistrement impossible. Veuillez réessayer.',
-  specialtyPlaceholderGrocery: 'Ex. « Épicerie maghrébine » — la ligne sous votre nom dans les listes.',
-  specialtyPlaceholderRestaurant: 'Ex. « Cuisine sénégalaise » — la ligne sous votre nom dans les listes.',
+  specialtyHelper: 'La ligne affichée sous votre nom dans les listes.',
+  specialtyChooseGrocery: 'Choisir une spécialité',
+  specialtyChooseRestaurant: 'Choisir une cuisine',
+  specialtyLoadError: 'Impossible de charger la liste. Touchez pour réessayer.',
   metrics: {
     revenue: 'Recettes',
     orders: 'Commandes',
@@ -96,6 +99,14 @@ export const business = {
   catalog: {
     addProduct: 'Ajouter un produit',
     searchPlaceholder: 'Rechercher dans votre catalogue…',
+    add: 'Ajouter',
+    productCount: plural({ one: '%{count} produit', other: '%{count} produits' }),
+    toRestock: plural({ one: '%{count} à réapprovisionner', other: '%{count} à réapprovisionner' }),
+    summary: '%{products} · %{restock}',
+    stockLine: '%{price} · %{qty} en stock',
+    offSale: 'Hors vente',
+    lowStock: 'Stock faible',
+    onSale: 'En vente',
   },
   analyticsScreen: {
     revenueByDay: 'Recettes par jour',
@@ -114,6 +125,11 @@ export const business = {
     noShopBody: 'Inscrivez votre commerce pour commencer à vendre sur Sougouba.',
     pendingBody:
       'Votre boutique sera visible une fois votre dossier validé par un administrateur Sougouba.',
+    feeFrom: 'dès %{amount}',
+    monthlyFee: '%{amount} par mois',
+    commissionLine: 'Plus %{rate} de commission sur chaque commande',
+    account: 'Compte',
+    hoursToday: '%{day} · aujourd’hui',
   },
   orderDetail: {
     notFoundTitle: 'Commande introuvable',
@@ -123,6 +139,7 @@ export const business = {
     toPrepare: 'À préparer',
     reportedByCourier: 'Signalé par le livreur',
     cancelOrder: 'Annuler la commande',
+    courier: 'Livreur',
   },
   productDetail: {
     notFoundBody: 'Ce produit a peut-être déjà été supprimé.',
@@ -143,12 +160,17 @@ export const business = {
   },
   payout: {
     netSales: 'Net des ventes',
+    title: 'Reversement · %{range}',
+    sales: 'Ventes',
+    commission: 'Commission Sougouba (%{rate})',
+    subscriptionNote: 'Abonnement de %{amount} par mois facturé séparément.',
   },
   dispute: {
     reply: 'Répondre au client',
     send: 'Envoyer la réponse',
     yourReply: 'Votre réponse',
     stillOpen: 'Le litige reste ouvert jusqu’à son traitement par Sougouba.',
+    reportedAt: 'Signalé le %{date} à %{time}',
   },
   pending: {
     body: 'La validation prend généralement un jour ouvrable. Vous serez averti dès que votre boutique est en ligne.',

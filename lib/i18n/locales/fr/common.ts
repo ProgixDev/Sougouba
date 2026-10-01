@@ -30,6 +30,9 @@ export const common = {
   order: 'Commande',
   orderRef: 'Commande %{reference}',
   delivery: 'Livraison',
+  tracking: 'Suivi',
+  dateAtTime: '%{date} à %{time}',
+  stepLabel: 'Étape %{step} — %{title}',
   a11y: {
     edit: 'Modifier %{name}',
     navigateTo: 'Naviguer vers %{name}',

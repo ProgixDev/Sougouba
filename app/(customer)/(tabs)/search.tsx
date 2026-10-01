@@ -117,7 +117,7 @@ export default function SearchScreen() {
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <View className="px-5 pt-2 pb-4 gap-4">
         <Text variant="title" weight="bold" className="text-[26px]">
-          Recherche
+          {t('customer.search.title')}
         </Text>
         <SearchField
           value={query}
@@ -156,7 +156,7 @@ export default function SearchScreen() {
         <View className="px-5 pb-3 flex-row items-center gap-3">
           <Text variant="caption" tone="muted" className="flex-1">
             {searching
-              ? 'Recherche…'
+              ? t('customer.search.searching')
               : browseTruncated
                 ? t('customer.browseTruncated', { count: visible.length })
                 : hasQuery

@@ -19,11 +19,8 @@ import { citySchema, postalCodeSchema, refinePostalCodeCity } from './address';
 export const shopIdentitySchema = z.object({
   name: z.string().trim().min(2, 'validation.merchant.nameRequired'),
   vendorType: z.enum(['grocery', 'restaurant'], { message: 'validation.merchant.typeRequired' }),
-  specialtyFr: z
-    .string()
-    .trim()
-    .min(3, 'validation.merchant.specialtyRequired')
-    .max(40, 'validation.merchant.specialtyTooLong'),
+  /** An entry of the back-office list (`specialtiesApi`), no longer free text. */
+  specialtyId: z.string().min(1, 'validation.merchant.specialtyRequired'),
   isHalalCertified: z.boolean(),
 });
 export type ShopIdentityValues = z.infer<typeof shopIdentitySchema>;

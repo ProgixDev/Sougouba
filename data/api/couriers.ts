@@ -5,6 +5,7 @@ import type {
   CourierPayout,
   CourierStatus,
   ID,
+  LatLng,
   VehicleType,
 } from '../types';
 
@@ -29,9 +30,19 @@ export async function getCourierByUserId(_userId: ID): Promise<Courier | undefin
   return getMine();
 }
 
+/**
+ * The API sends the courier's base as flat `baseLat`/`baseLng`; the app reads
+ * `courier.base`. Passed through unmapped, `base` was undefined — so going
+ * online had no position to send and the dispatcher never saw the courier.
+ */
+function toCourier(row: Courier & { baseLat?: number; baseLng?: number }): Courier {
+  const { baseLat, baseLng, ...rest } = row;
+  return baseLat !== undefined && baseLng !== undefined ? { ...rest, base: { lat: baseLat, lng: baseLng } } : row;
+}
+
 async function getMine(): Promise<Courier | undefined> {
   try {
-    return await api<Courier>('/couriers/me');
+    return toCourier(await api<Courier>('/couriers/me'));
   } catch (error) {
     if (error instanceof ApiError && (error.status === 404 || error.status === 401)) return undefined;
     throw error;
@@ -85,7 +96,7 @@ export interface CourierApplication {
  * client-supplied delivery fee.
  */
 export async function submitApplication(input: CourierApplication): Promise<Courier> {
-  return api<Courier>('/couriers/apply', {
+  return toCourier(await api<Courier>('/couriers/apply', {
     method: 'POST',
     body: {
       fullName: input.fullName,
@@ -104,7 +115,7 @@ export async function submitApplication(input: CourierApplication): Promise<Cour
           }
         : {}),
     },
-  });
+  }));
 }
 
 /**
@@ -136,9 +147,41 @@ export async function updateCourier(
 ): Promise<Courier | undefined> {
   const { base: _base, ...sendable } = patch;
   try {
-    return await api<Courier>('/couriers/me', { method: 'PATCH', body: sendable });
+    return toCourier(await api<Courier>('/couriers/me', { method: 'PATCH', body: sendable }));
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return undefined;
     throw error;
   }
+}
+
+// ── shift & dispatch ────────────────────────────────────────────────────────
+
+/**
+ * Going on or off shift, as the server sees it.
+ *
+ * The online switch used to live only in `useDispatchStore`, so the dispatcher —
+ * which runs on the server now — never saw anyone online and never offered a
+ * run. The API refuses to put a pending or suspended courier online.
+ */
+export async function setShift(isOnline: boolean, position?: LatLng): Promise<void> {
+  // Going online requires a position: the dispatcher ranks couriers from it.
+  await api('/couriers/me/shift', { method: 'POST', body: { isOnline, ...(isOnline ? position : {}) } });
+}
+
+/** Keep-alive while waiting for work. The server drops a courier it has not heard from in two minutes. */
+export async function heartbeat(position?: LatLng): Promise<void> {
+  await api('/couriers/me/heartbeat', { method: 'POST', body: position ?? {} });
+}
+
+/**
+ * Where the courier is while carrying `orderId` — what the shopper's tracking
+ * map reads. Also counts as a heartbeat on the server.
+ */
+export async function pingLocation(orderId: ID, position: LatLng): Promise<void> {
+  await api(`/couriers/me/runs/${orderId}/location`, { method: 'POST', body: position });
+}
+
+/** Pass on an offer, so the server re-offers the run to the next courier straight away instead of at expiry. */
+export async function declineOffer(offerId: ID): Promise<void> {
+  await api(`/couriers/me/offers/${offerId}/decline`, { method: 'POST', body: {} });
 }

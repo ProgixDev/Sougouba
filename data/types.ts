@@ -219,7 +219,8 @@ export interface OrderDispute {
   reason: DisputeReason;
   message: string;
   openedAt: string;
-  status: 'open' | 'answered';
+  /** `resolved` is an administrator's decision in the back office, with or without a shop reply. */
+  status: 'open' | 'answered' | 'resolved';
   merchantReply?: string;
   answeredAt?: string;
 }
@@ -394,6 +395,8 @@ export interface DeliveryProof {
   method: ProofMethod;
   /** Local file URI for a photo or a captured signature; absent for a PIN. */
   imageUri?: string;
+  /** The four digits the shopper read out — sent to the server to check, never compared on the phone. */
+  pin?: string;
   note?: string;
   at: string;
 }
@@ -427,6 +430,11 @@ export interface OrderDelivery {
   /** Four digits the shopper reads out. Derived from the order id, so it is stable. */
   pin: string;
   proof?: DeliveryProof;
+  /**
+   * Who is carrying it — sent to the shopper and the shop only, since neither
+   * can read another person's courier file. Absent on the courier's own view.
+   */
+  courier?: Pick<Courier, 'id' | 'fullName' | 'photoUrl' | 'phone' | 'vehicle' | 'plate' | 'rating' | 'deliveryCount'>;
   tipCad: number;
   /** The courier's take for this run. See `lib/courierPay.ts`. */
   earningsCad: number;

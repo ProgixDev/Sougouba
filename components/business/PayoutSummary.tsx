@@ -32,13 +32,13 @@ export function PayoutSummary({ salesCad, commissionCad, netCad, rangeLabel }: P
   return (
     <View className="rounded-[20px] bg-card p-4 gap-3">
       <Text variant="label" tone="muted" className="text-[10px]">
-        Reversement · {rangeLabel}
+        {t('business.payout.title', { range: rangeLabel })}
       </Text>
 
       <View className="gap-2.5">
-        <Row label="Ventes" value={formatCad(salesCad)} />
+        <Row label={t('business.payout.sales')} value={formatCad(salesCad)} />
         <Row
-          label={`Commission Sougouba (${formatPercent(COMMISSION_RATE)})`}
+          label={t('business.payout.commission', { rate: formatPercent(COMMISSION_RATE) })}
           value={`− ${formatCad(commissionCad)}`}
           minor
         />
@@ -47,7 +47,7 @@ export function PayoutSummary({ salesCad, commissionCad, netCad, rangeLabel }: P
       </View>
 
       <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
-        Abonnement de {formatCad(MONTHLY_SUBSCRIPTION_CAD)} par mois facturé séparément.
+        {t('business.payout.subscriptionNote', { amount: formatCad(MONTHLY_SUBSCRIPTION_CAD) })}
       </Text>
     </View>
   );

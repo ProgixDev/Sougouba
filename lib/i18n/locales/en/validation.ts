@@ -36,7 +36,6 @@ export const validation: Widen<typeof reference> = {
     nameRequired: 'Shop name required',
     typeRequired: 'Choose a category',
     specialtyRequired: 'Speciality required',
-    specialtyTooLong: 'Too long — one line under the shop name',
     etaFormat: 'Lead time in minutes',
     etaRange: 'Between 10 and 180 minutes',
     /** NEQ is the Québec business number; it keeps its name in English too. */

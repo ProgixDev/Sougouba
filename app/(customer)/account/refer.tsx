@@ -6,7 +6,7 @@ import { Alert, Linking, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BackHeader, Reveal, Text } from '@/components/ui';
-import { loyaltyApi, ordersApi } from '@/data/api';
+import { loyaltyApi } from '@/data/api';
 import {
   REFERRAL_MIN_FIRST_ORDER_CAD,
   REFERRAL_REWARD_POINTS,
@@ -36,11 +36,12 @@ export default function ReferScreen() {
     useCallback(() => {
       if (!user) return;
       let active = true;
-      ordersApi.ensureLoyaltyBackfill(user.id).then(() =>
-        loyaltyApi.getReferralStats(user.id).then((next) => {
+      loyaltyApi
+        .getReferralStats(user.id)
+        .then((next) => {
           if (active) setStats(next);
         })
-      );
+        .catch(() => undefined);
       return () => {
         active = false;
       };
@@ -79,11 +80,14 @@ export default function ReferScreen() {
         <Reveal>
           <View className="items-center gap-2 px-4">
             <Text variant="title" weight="bold" className="text-center text-[22px]">
-              Offrez {REFERRAL_REWARD_POINTS} points, gagnez {REFERRAL_REWARD_POINTS} points
+              {t('customer.account.refer.headline', { points: REFERRAL_REWARD_POINTS })}
             </Text>
             <Text variant="body" tone="muted" className="text-center">
-              Dès que votre ami termine sa première commande de {formatCad(REFERRAL_MIN_FIRST_ORDER_CAD)} et
-              plus, vous recevez chacun {REFERRAL_REWARD_POINTS} points ({rewardCad}).
+              {t('customer.account.refer.body', {
+                minimum: formatCad(REFERRAL_MIN_FIRST_ORDER_CAD),
+                points: REFERRAL_REWARD_POINTS,
+                amount: rewardCad,
+              })}
             </Text>
           </View>
         </Reveal>

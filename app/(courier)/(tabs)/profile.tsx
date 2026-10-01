@@ -26,7 +26,7 @@ import { useCourierEarnings } from '@/hooks/useCourierEarnings';
 import { useCourierProfile } from '@/hooks/useCourierProfile';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { summariseRuns } from '@/lib/courierAnalytics';
-import { formatCad, formatMonthYear } from '@/lib/format';
+import { formatCad, formatMonthYear, formatRating } from '@/lib/format';
 import { formatDistance } from '@/lib/geo';
 import { useT } from '@/lib/i18n/useT';
 import { VEHICLE_KEYS } from '@/lib/validation/courier';
@@ -173,7 +173,7 @@ export default function CourierProfileScreen() {
                 label="courses"
               />
               <Stat
-                value={rated ? courier.rating.toFixed(1).replace('.', ',') : '—'}
+                value={rated ? formatRating(courier.rating) : '—'}
                 label={rated ? 'note' : 'nouveau'}
                 icon={rated ? Star : undefined}
                 divided

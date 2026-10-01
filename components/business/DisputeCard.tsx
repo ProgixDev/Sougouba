@@ -33,7 +33,7 @@ export function DisputeCard({ dispute, onReply }: DisputeCardProps) {
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
 
-  const answered = dispute.status === 'answered';
+  const answered = dispute.status !== 'open';
 
   async function send() {
     const text = message.trim();
@@ -58,7 +58,10 @@ export function DisputeCard({ dispute, onReply }: DisputeCardProps) {
             {t(disputeReasonKey(dispute.reason))}
           </Text>
           <Text variant="caption" tone="muted" className="text-[12px]">
-            Signalé le {formatDate(dispute.openedAt)} à {formatTime(dispute.openedAt)}
+            {t('business.dispute.reportedAt', {
+              date: formatDate(dispute.openedAt),
+              time: formatTime(dispute.openedAt),
+            })}
           </Text>
         </View>
         <Badge

@@ -8,6 +8,7 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, BackHeader, Button, Input, Text } from '@/components/ui';
+import { api, ApiError } from '@/data/http';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { type ProfileValues, profileSchema } from '@/lib/validation/profile';
 import { useT } from '@/lib/i18n/useT';
@@ -50,8 +51,20 @@ export default function EditProfileScreen() {
     if (!result.canceled) setAvatarUrl(result.assets[0].uri);
   }
 
-  function onSubmit(values: ProfileValues) {
-    updateUser({ ...values, avatarUrl });
+  async function onSubmit(values: ProfileValues) {
+    // Only the name goes to the API. The email is the sign-in identity and is
+    // not editable here; the photo is still a local file URI, and the API takes
+    // an https URL — it stays on this device until photo upload exists.
+    try {
+      await api('/me', { method: 'PATCH', body: { fullName: values.fullName.trim() } });
+    } catch (error) {
+      Alert.alert(
+        t('common.genericError'),
+        error instanceof ApiError && error.isClientError ? error.message : undefined
+      );
+      return;
+    }
+    updateUser({ fullName: values.fullName.trim(), avatarUrl });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     if (router.canGoBack()) router.back();
   }
@@ -113,6 +126,7 @@ export default function EditProfileScreen() {
                   autoCapitalize="none"
                   keyboardType="email-address"
                   textContentType="emailAddress"
+                  editable={false}
                 />
               )}
             />

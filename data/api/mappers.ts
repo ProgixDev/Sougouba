@@ -9,9 +9,11 @@ import type { Category, Product, Vendor } from '../types';
  *    the app models a `LocalizedText` because the back office will eventually
  *    carry translations. `{ fr }` is the honest lift — it says "French is all
  *    we have" rather than pretending a second language exists.
- * 2. **A flat address vs a nested one.** The API stores
- *    `address_street`/`address_city`/… because an order snapshots them
- *    individually; the app groups them because every screen shows them together.
+ * 2. **The address arrives nested.** The database stores `address_street`/
+ *    `address_lat`/… flat, but the API's own mapper nests them as `address` before
+ *    they leave the server. An earlier version of this file read the flat names,
+ *    got `undefined` for all five, and every shop page showed ", Montréal" and
+ *    priced delivery from nowhere — the default $2.99 for every shop.
  */
 
 type CategoryRow = {
@@ -51,10 +53,7 @@ type VendorRow = {
   categoryIds?: string[];
   city: string;
   neighborhood: string;
-  addressStreet: string;
-  addressPostalCode: string;
-  addressLat: number;
-  addressLng: number;
+  address: { street: string; city: string; postalCode: string; lat: number; lng: number };
   rating: number | string;
   reviewCount: number;
   deliveryEtaMin: number;
@@ -78,11 +77,11 @@ export function toVendor(row: VendorRow): Vendor {
     city: row.city,
     neighborhood: row.neighborhood,
     address: {
-      street: row.addressStreet,
-      city: row.city,
-      postalCode: row.addressPostalCode,
-      lat: row.addressLat,
-      lng: row.addressLng,
+      street: row.address.street,
+      city: row.address.city,
+      postalCode: row.address.postalCode,
+      lat: row.address.lat,
+      lng: row.address.lng,
     } as Vendor['address'],
     // `numeric` reaches JSON as a string often enough that coercing here is
     // cheaper than finding the one screen that concatenated a rating.
@@ -90,7 +89,8 @@ export function toVendor(row: VendorRow): Vendor {
     reviewCount: row.reviewCount,
     deliveryEtaMin: row.deliveryEtaMin,
     isHalalCertified: row.isHalalCertified,
-    hours: (row.hours ?? []).map((h) => ({ day: h.day, open: h.open, close: h.close })),
+    // `closed` carried through: dropping it made a shop's day off read as open.
+    hours: (row.hours ?? []).map((h) => ({ day: h.day, open: h.open, close: h.close, closed: h.closed })),
     sections: (row.sections ?? []).map((s) => ({
       id: s.id,
       vendorId: row.id,
@@ -115,22 +115,11 @@ type ProductRow = {
   stockQty: number;
   isAvailable: boolean;
   tags?: string[];
-  nutritionCalories?: number | null;
-  nutritionProteinG?: number | string | null;
-  nutritionFatG?: number | string | null;
-  nutritionWeightG?: number | string | null;
+  /** Nested by the API when set, absent otherwise — never flat columns. */
+  nutrition?: { calories: number; proteinG: number; fatG: number; weightG: number };
 };
 
 export function toProduct(row: ProductRow): Product {
-  // All four or none — a half-set nutrition block would draw the product page's
-  // four-column strip with holes in it, which is the reason the API stores them
-  // together too.
-  const hasNutrition =
-    row.nutritionCalories != null &&
-    row.nutritionProteinG != null &&
-    row.nutritionFatG != null &&
-    row.nutritionWeightG != null;
-
   return {
     id: row.id,
     vendorId: row.vendorId,
@@ -141,13 +130,15 @@ export function toProduct(row: ProductRow): Product {
     priceCad: Number(row.priceCad),
     ...(row.compareAtPriceCad != null ? { compareAtPriceCad: Number(row.compareAtPriceCad) } : {}),
     imageUrl: row.imageUrl ?? '',
-    ...(hasNutrition
+    // The API sends all four or none (it stores them as a set), already nested.
+    // Reading flat `nutritionCalories`-style names here dropped every block.
+    ...(row.nutrition
       ? {
           nutrition: {
-            calories: Number(row.nutritionCalories),
-            proteinG: Number(row.nutritionProteinG),
-            fatG: Number(row.nutritionFatG),
-            weightG: Number(row.nutritionWeightG),
+            calories: Number(row.nutrition.calories),
+            proteinG: Number(row.nutrition.proteinG),
+            fatG: Number(row.nutrition.fatG),
+            weightG: Number(row.nutrition.weightG),
           },
         }
       : {}),

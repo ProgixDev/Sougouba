@@ -8,7 +8,7 @@ import { DisputeCard } from '@/components/business';
 import { OrderStatusTimeline } from '@/components/customer';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { Badge, BackHeader, Button, EmptyState, PriceSummary, Skeleton, Text } from '@/components/ui';
-import { couriersApi, ordersApi } from '@/data/api';
+import { ordersApi } from '@/data/api';
 import type { Courier, Order } from '@/data/types';
 import { customerName } from '@/lib/customerNames';
 import { useT } from '@/lib/i18n/useT';
@@ -44,10 +44,7 @@ export default function BusinessOrderDetailScreen() {
         // Who is carrying it. The shop cannot act on the courier, but "en
         // attente d'un livreur" and "Moussa est en route" are different answers
         // to the customer standing at the counter asking where their order is.
-        if (found?.delivery) {
-          const c = await couriersApi.getCourierById(found.delivery.courierId);
-          if (active) setCourier(c ?? null);
-        }
+        setCourier((found?.delivery?.courier as Courier | undefined) ?? null);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -83,7 +80,7 @@ export default function BusinessOrderDetailScreen() {
       t('business.queue.cancelTitle'),
       t('business.confirmations.cancelBody'),
       [
-        { text: 'Retour', style: 'cancel' },
+        { text: t('common.ui.back'), style: 'cancel' },
         {
           text: t('business.orderDetail.cancelOrder'),
           style: 'destructive',
@@ -137,7 +134,10 @@ export default function BusinessOrderDetailScreen() {
             <View className="flex-row items-center justify-between gap-3">
               <View className="gap-1">
                 <Text variant="caption" tone="muted">
-                  {formatDate(order.createdAt)} à {formatTime(order.createdAt)}
+                  {t('common.dateAtTime', {
+                    date: formatDate(order.createdAt),
+                    time: formatTime(order.createdAt),
+                  })}
                 </Text>
                 <Text variant="title" weight="bold" className="text-[24px]">
                   {formatCad(order.totalCad)}
@@ -209,7 +209,7 @@ export default function BusinessOrderDetailScreen() {
             </Section>
 
             {order.delivery && courier ? (
-              <Section title="Livreur">
+              <Section title={t('business.orderDetail.courier')}>
                 <View className="flex-row items-center gap-3">
                   <View className="w-10 h-10 rounded-full bg-secondary/10 items-center justify-center">
                     {courier.vehicle === 'bike' ? (
@@ -252,7 +252,7 @@ export default function BusinessOrderDetailScreen() {
               </Section>
             ) : null}
 
-            <Section title="Suivi">
+            <Section title={t('common.tracking')}>
               <OrderStatusTimeline order={order} courierName={courier?.fullName} />
             </Section>
           </View>

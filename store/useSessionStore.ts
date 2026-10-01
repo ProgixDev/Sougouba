@@ -7,7 +7,7 @@ import { useCartStore } from './useCartStore';
 import { useDispatchStore } from './useDispatchStore';
 import { useFavoritesStore } from './useFavoritesStore';
 import { usePreferencesStore } from './usePreferencesStore';
-import { authApi } from '../data/api';
+import * as authApi from '../data/api/auth';
 
 interface SessionState {
   user: User | null;
@@ -35,9 +35,15 @@ export const useSessionStore = create<SessionState>()(
     (set) => ({
       user: null,
 
-      signIn: (user) => set({ user }),
+      signIn: (user) => {
+        useFavoritesStore.getState().hydrate(user.favoriteProductIds, user.favoriteVendorIds);
+        set({ user });
+      },
 
-      signUp: (user) => set({ user }),
+      signUp: (user) => {
+        useFavoritesStore.getState().hydrate(user.favoriteProductIds, user.favoriteVendorIds);
+        set({ user });
+      },
 
       setRole: (role) =>
         set((state) => (state.user ? { user: { ...state.user, role } } : state)),

@@ -87,7 +87,7 @@ export interface OrderSpec {
    * Who drove it, when the caller already knows.
    *
    * The seed leaves this unset and lets `buildDelivery` draw a courier from the
-   * ones nearest the shop. Runtime demo history (`ordersApi.ensureDemoRuns`)
+   * ones nearest the shop. Runtime demo history (formerly `ensureDemoRuns`, now seeded server-side)
    * sets it, because the whole point of those rows is that *this* courier
    * delivered them — and a courier who signed up in the app is not in
    * `data/seed/couriers.ts` for the proximity draw to find.

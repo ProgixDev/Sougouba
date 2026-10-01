@@ -56,7 +56,7 @@ export function PriceSummary({
 
       <Line
         label={
-          deliveryDistanceKm === undefined
+          deliveryDistanceKm === undefined || !Number.isFinite(deliveryDistanceKm)
             ? t('common.price.delivery')
             : t('common.price.deliveryWithDistance', {
                 distance: formatDistance(deliveryDistanceKm),

@@ -14,9 +14,12 @@ import { useThemeColors } from '@/hooks/useColorScheme';
 import { forest } from '@/theme/tokens';
 
 export interface ProofCaptureProps {
-  /** The code the shopper reads out. Checked locally against what is typed. */
-  expectedPin: string;
-  onSubmit: (proof: Omit<DeliveryProof, 'at'>) => Promise<void>;
+  /**
+   * Resolves to an error message to show under the proof, or nothing on
+   * success. The PIN is checked by the server — the courier's app never holds
+   * it, or it would prove nothing.
+   */
+  onSubmit: (proof: Omit<DeliveryProof, 'at'>) => Promise<string | void>;
   busy?: boolean;
 }
 
@@ -43,7 +46,7 @@ const METHODS: { key: ProofMethod; label: string; icon: typeof Camera }[] = [
  * `deliveryPin` in `data/delivery.ts`) — it is a hand-off token that proves the
  * courier and the customer were in the same place.
  */
-export function ProofCapture({ expectedPin, onSubmit, busy = false }: ProofCaptureProps) {
+export function ProofCapture({ onSubmit, busy = false }: ProofCaptureProps) {
   const t = useT();
   const colors = useThemeColors();
   const [method, setMethod] = useState<ProofMethod>('pin');
@@ -86,13 +89,12 @@ export function ProofCapture({ expectedPin, onSubmit, busy = false }: ProofCaptu
     if (!result.canceled) setPhotoUri(result.assets[0].uri);
   }
 
-  function submit() {
+  async function submit() {
     if (method === 'pin') {
-      if (pin !== expectedPin) {
-        setPinError(t('courier.wrongCode'));
-        return;
-      }
-      return void onSubmit({ method: 'pin' });
+      setPinError(null);
+      const error = await onSubmit({ method: 'pin', pin });
+      if (error) setPinError(error);
+      return;
     }
     if (method === 'photo') {
       if (!photoUri) return;

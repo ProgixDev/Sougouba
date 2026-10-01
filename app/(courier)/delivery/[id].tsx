@@ -168,24 +168,6 @@ export default function CourierDeliveryScreen() {
                 }
               />
 
-              {/* The code the shopper reads out at the door. Shown here as well
-                  as on the proof screen so it can be checked before knocking. */}
-              <View className="rounded-[20px] bg-card p-4 gap-1.5">
-                <Text variant="label" tone="muted" className="text-[10px]">
-                  {t('courier.delivery.codeTitle')}
-                </Text>
-                <Text
-                  weight="bold"
-                  className="text-[28px] tracking-[6px]"
-                  style={{ fontVariant: ['tabular-nums'] }}
-                >
-                  {order.delivery.pin}
-                </Text>
-                <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
-                  {t('courier.delivery.codeHint')}
-                </Text>
-              </View>
-
               <View className="rounded-[20px] bg-card p-4 gap-3">
                 <Text variant="label" tone="muted" className="text-[10px]">
                   {t('courier.delivery.toPickUp')}

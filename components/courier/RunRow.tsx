@@ -143,7 +143,7 @@ export function RunRow({ order, vendorName, first = false, last = false, onPress
             // colour alone.
             <Meta
               icon={Coins}
-              label={`${formatCad(delivery!.tipCad)} de pourboire`}
+              label={t('courier.history.tip', { amount: formatCad(delivery!.tipCad) })}
               tint={colors.accent}
               emphasis
             />

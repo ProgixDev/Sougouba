@@ -1,3 +1,5 @@
+import type { DeliveryOffer } from '../../lib/dispatch';
+import { useSessionStore } from '../../store/useSessionStore';
 import { api, ApiError, type Page } from '../http';
 import type {
   Address,
@@ -45,15 +47,28 @@ export async function getOrdersByVendor(_vendorId: ID): Promise<Order[]> {
 /**
  * One order.
  *
- * Tries the shopper's view, then the merchant's — the two are different
+ * Tries the shopper's view, then the merchant's, then the courier's — they are different
  * endpoints because they are different claims, and the API checks each against
  * the row rather than trusting it. A 404 either way: an order that exists but
  * is not yours must not be distinguishable from one that does not.
  */
 export async function getOrderById(id: ID): Promise<Order | undefined> {
-  const asCustomer = await tryGet<Order>(`/orders/${id}`);
-  if (asCustomer) return asCustomer;
-  return (await tryGet<Order>(`/vendors/me/orders/${id}`)) ?? undefined;
+  // The signed-in role's own view first — the others are only a fallback, and
+  // asking them first cost a courier two 404s on every screen of a run.
+  const views: Record<string, string> = {
+    customer: `/orders/${id}`,
+    business: `/vendors/me/orders/${id}`,
+    // A courier reads the runs they carry — without the PIN, which is the shopper's.
+    courier: `/couriers/me/runs/${id}`,
+  };
+  const role = useSessionStore.getState().user?.role;
+  const order = [role && views[role], ...Object.values(views).filter((v) => v !== (role && views[role]))];
+  for (const path of order) {
+    if (!path) continue;
+    const found = await tryGet<Order>(path);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 async function tryGet<T>(path: string): Promise<T | undefined> {
@@ -65,6 +80,19 @@ async function tryGet<T>(path: string): Promise<T | undefined> {
     }
     throw error;
   }
+}
+
+export interface CourierPing {
+  lat: number;
+  lng: number;
+  heading: number | null;
+  recordedAt: string;
+}
+
+/** The courier's latest GPS ping on one of the shopper's own orders, or null before the first. */
+export async function getCourierLocation(orderId: ID): Promise<CourierPing | null> {
+  const { location } = await api<{ location: CourierPing | null }>(`/orders/${orderId}/courier-location`);
+  return location;
 }
 
 // ── checkout ────────────────────────────────────────────────────────────────
@@ -189,10 +217,12 @@ export async function getOrdersForCourier(_courierId: ID): Promise<Order[]> {
  * ⚠️ Renamed in spirit: the mock's `getDispatchableOrders` returned every order
  * *anyone* could take, and ranked them on the device. Dispatch is the server's
  * now — it picks the nearest eligible courier and offers the run to them
- * specifically, so this returns only what has been offered to this courier.
+ * specifically, so this returns only what has been offered to this courier —
+ * already priced and timed. Offers, not orders: their `id` is the one
+ * `assignCourier` and `declineOffer` take.
  */
-export async function getDispatchableOrders(): Promise<Order[]> {
-  return api<Order[]>('/couriers/me/offers');
+export async function getDispatchableOrders(): Promise<DeliveryOffer[]> {
+  return api<DeliveryOffer[]>('/couriers/me/offers');
 }
 
 export interface AcceptQuote {
@@ -266,22 +296,4 @@ export async function getVendorStats(_vendorId: ID): Promise<VendorStats> {
  */
 export async function getTopProductIds(_limit = 6): Promise<ID[]> {
   return [];
-}
-
-// ── demo scaffolding: gone ──────────────────────────────────────────────────
-
-const DEMO_REMOVED =
-  'Demo data is seeded server-side now — see api/scripts/seed. ' +
-  'The app cannot fabricate orders, runs or ledger entries against a real database.';
-
-export async function ensureDemoOrders(_customerId: ID, _customerName: string, _address?: Address): Promise<Order[]> {
-  throw new Error(DEMO_REMOVED);
-}
-
-export async function ensureDemoRuns(_courier: Courier, ..._rest: unknown[]): Promise<number> {
-  throw new Error(DEMO_REMOVED);
-}
-
-export async function ensureLoyaltyBackfill(_customerId: ID): Promise<void> {
-  throw new Error(DEMO_REMOVED);
 }

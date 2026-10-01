@@ -3,7 +3,12 @@ import { api, ApiError } from '../http';
 import type { Address, ID, User, UserRole } from '../types';
 
 /** What went wrong, as a code. The words are `auth.error.*` in the catalogue. */
-export type AuthErrorCode = 'no_such_account' | 'email_taken' | 'user_not_found';
+export type AuthErrorCode =
+  | 'user_not_found'
+  | 'code_invalid'
+  | 'code_expired'
+  | 'code_cooldown'
+  | 'oauth_unavailable';
 
 /**
  * An API layer must not return display copy.
@@ -54,43 +59,68 @@ async function currentUser(): Promise<User> {
   };
 }
 
-export async function signIn(email: string, password: string): Promise<User> {
-  const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-  if (error) {
-    // Supabase answers "Invalid login credentials" for both a wrong password
-    // and an unknown address, deliberately — telling them apart would let
-    // someone enumerate who has an account. The app keeps that property.
-    throw new AuthError('no_such_account');
+const normalise = (email: string) => email.trim().toLowerCase();
+
+/**
+ * Step one of the only way in: email a 6-digit code to this address.
+ *
+ * Sign-in and sign-up are the same call — there are no passwords. The API
+ * answers identically whether or not the address has an account, and a
+ * second call inside a minute is refused (`code_cooldown`); this is also the
+ * "resend".
+ */
+export async function startEmail(email: string): Promise<void> {
+  try {
+    await api('/auth/email/start', { method: 'POST', anonymous: true, body: { email: normalise(email) } });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 429) throw new AuthError('code_cooldown');
+    throw error;
   }
-  return currentUser();
 }
 
-export async function signUp(
-  email: string,
-  password: string,
-  fullName: string,
-  referralCode?: string
-): Promise<User> {
-  const { error } = await supabase.auth.signUp({
-    email: email.trim(),
-    password,
-    // Read by the `handle_new_user` trigger, which creates the `profiles` row
-    // in the same transaction as the account — so the name is on the profile
-    // before this function's next line runs.
-    options: { data: { full_name: fullName.trim() } },
-  });
-  if (error) {
-    if (/already/i.test(error.message)) throw new AuthError('email_taken');
-    throw new AuthError('no_such_account');
+/**
+ * Step two: trade the code for a session.
+ *
+ * The API creates the account if there was none and hands back Supabase
+ * tokens, installed here with `setSession` — from then on it is an ordinary
+ * Supabase session, refreshed and persisted like any other.
+ *
+ * `isNewUser` means the profile has no name yet. The caller must not put the
+ * user in the session store until `completeProfile` has run — the store's
+ * user is what the auth gate reads, and it would move on without a name.
+ */
+export async function verifyEmailCode(email: string, code: string): Promise<{ user: User; isNewUser: boolean }> {
+  let session: { accessToken: string; refreshToken: string; isNewUser: boolean };
+  try {
+    session = await api('/auth/email/verify', {
+      method: 'POST',
+      anonymous: true,
+      body: { email: normalise(email), code },
+    });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 400) throw new AuthError('code_invalid');
+    if (error instanceof ApiError && error.status === 410) throw new AuthError('code_expired');
+    throw error;
   }
 
-  if (referralCode) {
+  const { error } = await supabase.auth.setSession({
+    access_token: session.accessToken,
+    refresh_token: session.refreshToken,
+  });
+  if (error) throw error;
+
+  return { user: await currentUser(), isNewUser: session.isNewUser };
+}
+
+/** The last step for a new account: its name, and the referral code if a friend sent them. */
+export async function completeProfile(fullName: string, referralCode?: string): Promise<User> {
+  await api('/me', { method: 'PATCH', body: { fullName: fullName.trim() } });
+  if (referralCode?.trim()) {
     // Best-effort, exactly as the mock had it: an unknown code is a silent
     // no-op, not a failed signup. A referral is a bonus for both sides, not a
     // gate on using the account.
-    await api('/me/referral', { method: 'POST', body: { code: referralCode } }).catch(() => undefined);
+    await api('/me/referral', { method: 'POST', body: { code: referralCode.trim() } }).catch(() => undefined);
   }
-
   return currentUser();
 }
 
@@ -151,7 +181,7 @@ export async function getUserById(id: ID): Promise<User | undefined> {
  * email/Google/Apple"), neither is done.
  */
 export async function oauthContinue(_provider: 'google' | 'apple'): Promise<User> {
-  throw new AuthError('no_such_account');
+  throw new AuthError('oauth_unavailable');
 }
 
 export async function signOut(): Promise<void> {

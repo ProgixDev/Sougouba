@@ -1,133 +1,143 @@
 import { useCallback, useEffect, useRef } from 'react';
 
-import { ordersApi, vendorsApi } from '@/data/api';
-import type { Courier, Order, Vendor } from '@/data/types';
-import { distanceKm } from '@/data/utils/geo';
-import { buildOffer, isOfferExpired } from '@/lib/dispatch';
+import { couriersApi, ordersApi } from '@/data/api';
+import type { Courier } from '@/data/types';
+import { courierPosition } from '@/lib/courierPosition';
+import { isOfferExpired } from '@/lib/dispatch';
 import { useDispatchStore } from '@/store/useDispatchStore';
 
-/** How often the dispatcher looks for work, and checks the countdown. */
+/** How often the countdown on a live offer is checked. */
 const TICK_MS = 1000;
+/**
+ * How often to ask the server for an offer. The API budgets `/courier/offers`
+ * at 20 requests a minute; every 5 s is 12, leaving room for accept/decline.
+ */
+const LOOK_MS = 5000;
+/** Under the server's two-minute roster TTL, with room for one missed beat. */
+const HEARTBEAT_MS = 45_000;
+/** How often a courier carrying a bag reports where they are, for the shopper's map. */
+const PING_MS = 15_000;
 
 /**
- * The dispatcher, standing in for a backend that does not exist.
+ * The courier's side of dispatch.
  *
- * On a real platform this runs server-side and pushes an offer to the phone.
- * Here it polls the mock table on a one-second tick, which is the same shape
- * from the screen's point of view: an offer appears, a countdown runs, and if
- * nobody accepts it goes away.
+ * The dispatcher itself runs on the server: it picks the nearest eligible
+ * courier and writes an offer addressed to them. This hook does the three
+ * things only the phone can:
  *
- * Mounted once, in `app/(courier)/_layout.tsx` — the same place the customer
- * group mounts `useDemoSeed`. Mounting it per screen would run several
- * dispatchers against one store and hand out the same order more than once.
+ *   1. tells the server when the courier goes on or off shift — until it does,
+ *      the courier is not in the pool and is never offered anything;
+ *   2. sends a heartbeat while waiting, because the server drops a courier it
+ *      has not heard from in two minutes — and, while carrying a run, the
+ *      position the shopper's tracking map shows;
+ *   3. polls for the offer addressed to this courier and shows it, then lets
+ *      its countdown run out on screen. Expiry itself is the server's: an offer
+ *      that times out here has already been re-offered there.
  *
- * Three rules, in order:
- *   1. offline, mid-run, or no approved file -> do nothing;
- *   2. an offer on screen -> only check whether it has expired;
- *   3. otherwise -> offer the nearest packed order this courier has not passed
- *      on, with age breaking ties.
+ * It used to be a client-side dispatcher over the mock order table — fetching
+ * "open orders", ranking them against every shop and building the offer on the
+ * phone. Against the API that built offers with made-up ids the server could
+ * not accept, for a courier the server did not know was online.
  *
- * Nearest first, because the leg to the shop is unpaid: ranking purely by age
- * offered a courier in Villeray a pickup in Longueuil while a shop two streets
- * away was also waiting, which is a run nobody accepts. Age still matters — an
- * order going cold should not sit behind a fresher one at the same distance —
- * so it decides between shops within a few hundred metres of each other.
+ * Mounted once, in the missions screen. Mounting it per screen would run
+ * several pollers against one store.
  */
 export function useDispatchEngine(courier: Courier | null): void {
   const online = useDispatchStore((s) => s.online);
   const offer = useDispatchStore((s) => s.offer);
   const activeOrderId = useDispatchStore((s) => s.activeOrderId);
-  const passedOrderIds = useDispatchStore((s) => s.passedOrderIds);
   const receiveOffer = useDispatchStore((s) => s.receiveOffer);
   const clearOffer = useDispatchStore((s) => s.clearOffer);
 
-  // Guards a fetch that outlives its tick: without it a slow mock read can
-  // deliver an offer after the courier has already gone offline or accepted.
   const busy = useRef(false);
+  const lastLook = useRef(0);
 
-  const idle = !online || Boolean(activeOrderId) || courier?.status !== 'approved';
+  const approved = courier?.status === 'approved';
+  const idle = !online || Boolean(activeOrderId) || !approved;
 
+  // Primitives, not `courier.base`: the profile re-reads on focus and hands back
+  // a new object each time, which would re-send the shift on every tab switch.
+  const baseLat = courier?.base?.lat;
+  const baseLng = courier?.base?.lng;
+
+  // 1. The shift, as the server sees it. Re-sent on mount too, so a courier who
+  //    was online when the app was killed is back in the pool on relaunch.
+  //    Going online carries a position — the dispatcher ranks from it.
+  useEffect(() => {
+    if (!approved || baseLat === undefined || baseLng === undefined) return;
+    const base = { lat: baseLat, lng: baseLng };
+    let cancelled = false;
+    (async () => {
+      const position = online ? await courierPosition(base) : undefined;
+      if (!cancelled) await couriersApi.setShift(online, position).catch(() => undefined);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [online, approved, baseLat, baseLng]);
+
+  // 2. Keep-alive while on shift and waiting, with a fresh position.
+  useEffect(() => {
+    if (!online || !approved || baseLat === undefined || baseLng === undefined || activeOrderId) return;
+    const base = { lat: baseLat, lng: baseLng };
+    const id = setInterval(async () => {
+      couriersApi.heartbeat(await courierPosition(base)).catch(() => undefined);
+    }, HEARTBEAT_MS);
+    return () => clearInterval(id);
+  }, [online, approved, baseLat, baseLng, activeOrderId]);
+
+  // 2b. While carrying a run: live position for the shopper's tracking map.
+  //     Strict — no fallback to the base address, which would draw a courier
+  //     parked at home while they are actually on the road.
+  useEffect(() => {
+    if (!activeOrderId) return;
+    const ping = async () => {
+      const position = await courierPosition(null);
+      if (position) couriersApi.pingLocation(activeOrderId, position).catch(() => undefined);
+    };
+    void ping();
+    const id = setInterval(ping, PING_MS);
+    return () => clearInterval(id);
+  }, [activeOrderId]);
+
+  // 3. The offer addressed to this courier.
   const look = useCallback(async () => {
-    if (busy.current) return;
+    if (busy.current || !courier) return;
     busy.current = true;
+    lastLook.current = Date.now();
     try {
-      const open = await ordersApi.getDispatchableOrders();
+      const offers = await ordersApi.getDispatchableOrders();
       const state = useDispatchStore.getState();
-      // Re-read rather than closing over: this resolves a tick or two later and
-      // the courier may have accepted, declined or gone offline in between.
-      if (!state.online || state.offer || state.activeOrderId || !courier) return;
+      // The world may have moved while the request was in flight.
+      if (!state.online || state.offer || state.activeOrderId) return;
 
-      const candidates = open.filter((o) => !state.passedOrderIds.includes(o.id));
-      if (candidates.length === 0) return;
-
-      // One fetch for the whole catalogue rather than one per candidate: the
-      // mock layer delays every call, and this runs on a one-second tick.
-      const vendors = await vendorsApi.getVendors();
-      const byId = new Map(vendors.map((v) => [v.id, v]));
-
-      const picked = pickNearest(candidates, byId, courier);
-      if (!picked) return;
-      const { order: next, vendor } = picked;
-
-      const after = useDispatchStore.getState();
-      if (!after.online || after.offer || after.activeOrderId) return;
-
-      receiveOffer(buildOffer(next, vendor, courier, courier.base, Date.now()));
+      // No `passedOrderIds` filter here: the server never re-offers an order a
+      // courier declined or let expire, so whatever it sends is live. Filtering
+      // again on the phone only ever hid offers the server meant.
+      const next = offers.find((o) => !isOfferExpired(o, Date.now()));
+      if (next) receiveOffer({ ...next, courierId: courier.id });
+    } catch {
+      // A failed poll is retried on the next look; it is not worth a banner.
     } finally {
       busy.current = false;
     }
   }, [courier, receiveOffer]);
 
   useEffect(() => {
-    // Expiry is *not* gated on `idle`. An offer already on screen has to be
-    // able to time out whatever else is true — and it can outlive the state
-    // that produced it, because the store persists it: accepting a run, killing
-    // the app and reopening it restored a live offer over the run in progress,
-    // with a countdown frozen at three seconds and no tick left running to
-    // clear it. Looking for *new* work is the part that waits.
     if (idle && !offer) return;
 
     const tick = () => {
       const current = useDispatchStore.getState().offer;
       if (current) {
-        // Letting it lapse counts as passing on it — same as tapping Refuser,
-        // which is what a courier who ignored it meant.
         if (isOfferExpired(current, Date.now())) clearOffer('expired');
         return;
       }
-      if (idle) return;
+      if (idle || Date.now() - lastLook.current < LOOK_MS) return;
       void look();
     };
 
     tick();
     const id = setInterval(tick, TICK_MS);
     return () => clearInterval(id);
-    // `offer` is in the deps so accepting or declining restarts the loop
-    // immediately rather than waiting out the current interval.
-  }, [idle, offer, passedOrderIds, look, clearOffer]);
-}
-
-/** ~500 m. Inside this the two shops are the same trip, so the older order wins. */
-const TIE_KM = 0.5;
-
-function pickNearest(
-  orders: Order[],
-  vendors: Map<string, Vendor>,
-  courier: Courier
-): { order: Order; vendor: Vendor } | null {
-  const scored = orders
-    .map((order) => {
-      const vendor = vendors.get(order.vendorId);
-      return vendor ? { order, vendor, km: distanceKm(courier.base, vendor.address) } : null;
-    })
-    .filter((x): x is { order: Order; vendor: Vendor; km: number } => x !== null);
-
-  if (scored.length === 0) return null;
-
-  scored.sort((a, b) =>
-    Math.abs(a.km - b.km) < TIE_KM
-      ? a.order.createdAt.localeCompare(b.order.createdAt)
-      : a.km - b.km
-  );
-  return { order: scored[0].order, vendor: scored[0].vendor };
+  }, [idle, offer, look, clearOffer]);
 }

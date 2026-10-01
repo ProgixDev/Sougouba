@@ -80,7 +80,7 @@ export default function CartScreen() {
               <View className="flex-row items-center gap-1.5">
                 <Clock size={12} color={colors.mutedForeground} strokeWidth={2} />
                 <Text variant="caption" tone="muted" className="text-[12px]">
-                  Livraison en {vendor.deliveryEtaMin} min
+                  {t('customer.cart.deliveryEta', { minutes: vendor.deliveryEtaMin })}
                 </Text>
               </View>
             </View>

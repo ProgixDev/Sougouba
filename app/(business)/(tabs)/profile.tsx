@@ -17,17 +17,15 @@ import type { VendorHours } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
-import { formatCad } from '@/lib/format';
+import { formatCad, formatPercent } from '@/lib/format';
 import { useT } from '@/lib/i18n/useT';
 import { COMMISSION_RATE, MONTHLY_SUBSCRIPTION_CAD } from '@/lib/monetization';
 import { routes } from '@/lib/routes';
-import { shopDay, shopStatusLine } from '@/lib/shopHours';
+import { shopDay, shopStatusLine, shopWeekday } from '@/lib/shopHours';
+import { weekdayLongKey } from '@/lib/weekdays';
 import { useSessionStore } from '@/store/useSessionStore';
 import { useThemeStore } from '@/store/useThemeStore';
 import { mustard } from '@/theme/tokens';
-
-/** `VendorHours.day` is 0 = Sunday, matching `Date.getDay()`. */
-const DAY_NAMES = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
 export default function BusinessProfileScreen() {
   // Prices on this screen are locale-formatted — see the note in the customer profile.
@@ -42,7 +40,7 @@ export default function BusinessProfileScreen() {
   const colors = useThemeColors();
   const isDark = preference === 'dark';
 
-  const today = new Date().getDay();
+  const today = shopWeekday();
   const day = vendor ? shopDay(vendor) : null;
 
   return (
@@ -98,7 +96,7 @@ export default function BusinessProfileScreen() {
                   <View className="flex-row items-center gap-1.5">
                     <Truck size={14} color={colors.mutedForeground} strokeWidth={2} />
                     <Text variant="caption" tone="muted">
-                      dès {formatCad(MIN_DELIVERY_FEE_CAD)}
+                      {t('business.shopProfile.feeFrom', { amount: formatCad(MIN_DELIVERY_FEE_CAD) })}
                     </Text>
                   </View>
                 </View>
@@ -137,7 +135,7 @@ export default function BusinessProfileScreen() {
               )}
             </View>
             <Text variant="caption" weight="bold">
-              {missing ? t('business.shopProfile.noShopTitle') : 'Demande en attente'}
+              {missing ? t('business.shopProfile.noShopTitle') : t('business.shopProfile.pendingTitle')}
             </Text>
             <Text variant="caption" tone="muted" className="text-center">
               {missing
@@ -169,10 +167,10 @@ export default function BusinessProfileScreen() {
               </View>
               <View className="flex-1 gap-0.5">
                 <Text variant="caption" weight="semibold">
-                  {formatCad(MONTHLY_SUBSCRIPTION_CAD)} par mois
+                  {t('business.shopProfile.monthlyFee', { amount: formatCad(MONTHLY_SUBSCRIPTION_CAD) })}
                 </Text>
                 <Text variant="caption" tone="muted" className="text-[12px]">
-                  Plus {Math.round(COMMISSION_RATE * 100)} % de commission sur chaque commande
+                  {t('business.shopProfile.commissionLine', { rate: formatPercent(COMMISSION_RATE) })}
                 </Text>
               </View>
             </View>
@@ -181,7 +179,7 @@ export default function BusinessProfileScreen() {
 
         <Reveal delay={120} className="mt-4 mx-5 rounded-[20px] bg-card p-4 gap-3">
           <Text variant="label" tone="muted" className="text-[10px]">
-            Compte
+            {t('business.shopProfile.account')}
           </Text>
           <View className="gap-0.5">
             <Text variant="caption" weight="semibold">
@@ -245,8 +243,9 @@ function HoursRow({ entry, isToday }: { entry: VendorHours; isToday: boolean }) 
         weight={isToday ? 'bold' : 'regular'}
         tone={isToday ? 'default' : 'muted'}
       >
-        {DAY_NAMES[entry.day]}
-        {isToday ? " · aujourd'hui" : ''}
+        {isToday
+          ? t('business.shopProfile.hoursToday', { day: t(weekdayLongKey(entry.day)) })
+          : t(weekdayLongKey(entry.day))}
       </Text>
       <Text
         variant="caption"

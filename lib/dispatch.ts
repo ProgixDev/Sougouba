@@ -32,6 +32,8 @@ export interface DeliveryOffer {
   /** Shop to shopper. What the fare is calculated on. */
   distanceToDropoffKm: number;
   estimatedEarningsCad: number;
+  /** Where the bag is going — sent by the server with the offer. */
+  deliveryAddressCity?: string;
 }
 
 /**

@@ -98,6 +98,11 @@ export const customer = {
       fieldStreet: 'Numéro et rue',
       fieldPostalCode: 'Code postal',
       postalHint: 'Doit correspondre à la ville choisie.',
+      newTitle: 'Nouvelle adresse',
+      editTitle: 'Modifier l’adresse',
+      submitNew: 'Ajouter l’adresse',
+      delete: 'Supprimer',
+      saveFailed: 'Impossible d’enregistrer l’adresse',
     },
     edit: {
       title: 'Modifier le profil',
@@ -131,6 +136,9 @@ export const customer = {
       emptyTitle: 'Aucun mouvement pour l’instant',
       emptyBody: 'Vos points apparaissent ici dès qu’une commande est livrée.',
       refer: 'Parrainer un proche',
+      value: '≈ %{amount} de valeur — jusqu’à %{percent} du sous-total utilisables par commande.',
+      referTeaser: '%{points} points pour vous, %{points} points pour votre ami.',
+      expiryLine: '%{date} · expire en %{expiry}',
     },
     refer: {
       title: 'Parrainer un proche',
@@ -140,6 +148,8 @@ export const customer = {
       shareFailedBody: 'Réessayez, ou copiez votre code manuellement.',
       yourCode: 'Votre code',
       copyHint: 'Appuyez longuement sur le code pour le copier.',
+      headline: 'Offrez %{points} points, gagnez %{points} points',
+      body: 'Dès que votre ami termine sa première commande de %{minimum} et plus, vous recevez chacun %{points} points (%{amount}).',
       terms:
         'Une récompense par nouveau client. Les points sont crédités une fois la commande de votre ami livrée — jamais avant.',
     },
@@ -175,6 +185,16 @@ export const customer = {
     shopReply: 'Réponse du commerce',
     replyPending: 'Le commerce a été informé. Vous verrez sa réponse ici.',
     deliveryCode: 'Code de livraison',
+    codeHint: 'Donnez ce code à %{name} à la remise de votre commande.',
+    callCourier: 'Appeler',
+    messageCourier: 'Message',
+    pointsEarned: plural({
+      one: 'Vous avez gagné %{count} point Sougouba.',
+      other: 'Vous avez gagné %{count} points Sougouba.',
+    }),
+    placedAt: 'Passée le %{date} à %{time}',
+    shop: 'Commerce',
+    disputePending: 'En attente',
   },
   dispute: {
     title: 'Signaler un problème',
@@ -234,6 +254,7 @@ export const customer = {
   manage: 'Gérer',
   simulatedPayment: 'Paiement simulé — aucune transaction réelle.',
   answered: 'Répondu',
+  resolved: 'Résolu',
   feeFromLine: 'dès %{amount}',
   nutrition: {
     calories: 'Calories',
@@ -249,6 +270,7 @@ export const customer = {
   pointsRules: {
     earn: '1 $ d’achats éligibles (hors taxes, livraison et pourboire) = 1 point.',
     expiry: 'Les points sont crédités après livraison et expirent %{months} mois après leur obtention.',
+    redeem: '%{points} points = 1 $ de réduction, jusqu’à %{percent} du sous-total d’une commande.',
   },
   referShare:
     'Rejoins-moi sur Sougouba et gagne %{points} points (%{amount}) sur ta première commande de %{minimum} $ et plus. Mon code : %{code} — %{link}',
@@ -305,6 +327,8 @@ export const customer = {
       '%{points} points disponibles — jusqu’à %{amount} de réduction sur cette commande.',
     pointsTooFew: '%{points} points disponibles — pas encore assez pour une réduction sur ce panier.',
     confirm: 'Confirmer — %{total}',
+    deliveryEta: 'Livraison estimée en %{minutes} min',
+    items: 'Articles (%{count})',
   },
   orderConfirmed: {
     title: 'Commande confirmée',
@@ -330,11 +354,14 @@ export const customer = {
     emptyCatalogTitle: 'Catalogue vide',
     emptyCatalogBody: 'Ce commerce n’a pas encore ajouté de produits.',
     halal: 'Halal',
+    deliveryFee: 'Livraison %{fee}',
   },
   vertical: {
     listSummary: '%{shops} · les plus proches d’abord',
   },
   search: {
+    title: 'Recherche',
+    searching: 'Recherche…',
     results: plural({
       zero: 'Aucun résultat',
       one: '%{count} résultat',

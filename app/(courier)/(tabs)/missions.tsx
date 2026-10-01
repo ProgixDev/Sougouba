@@ -7,7 +7,7 @@ import { CourierGate, CourierHeader, MissionSheet, OfferCard } from '@/component
 import { useT } from '@/lib/i18n/useT';
 import { DeliveryMap } from '@/components/map';
 import { Text } from '@/components/ui';
-import { ordersApi, vendorsApi } from '@/data/api';
+import { couriersApi, ordersApi, vendorsApi } from '@/data/api';
 import type { Order, Vendor } from '@/data/types';
 import { useCourierDemoSeed } from '@/hooks/useCourierDemoSeed';
 import { useCourierEarnings } from '@/hooks/useCourierEarnings';
@@ -81,10 +81,24 @@ export default function MissionsScreen() {
     };
   }, [offer]);
 
+  // Primitives, not `courier`: the profile re-reads on focus and returns a new
+  // object, and a callback keyed on it re-ran the focus effect that re-reads the
+  // profile — a loop that hit the API three times a second until it was rate-limited.
+  const courierId = courier?.id;
+  const courierApproved = courier?.status === 'approved';
+
   const loadRun = useCallback(async () => {
     if (!activeOrderId) {
       setOrder(null);
       setVendor(null);
+      // The run in progress is the server's record, not this phone's: after a
+      // reinstall, a new phone or a cleared store, `activeOrderId` is empty
+      // while the courier is still carrying a bag. Pick it back up.
+      if (courierId && courierApproved) {
+        const runs = await ordersApi.getOrdersForCourier(courierId).catch(() => []);
+        const carrying = runs.find((o) => o.status === 'ready' || o.status === 'out_for_delivery');
+        if (carrying) setActiveOrder(carrying.id);
+      }
       return;
     }
     const found = await ordersApi.getOrderById(activeOrderId);
@@ -95,7 +109,7 @@ export default function MissionsScreen() {
     if (found && (found.status === 'delivered' || found.status === 'cancelled')) {
       setActiveOrder(null);
     }
-  }, [activeOrderId, setActiveOrder]);
+  }, [activeOrderId, courierId, courierApproved, setActiveOrder]);
 
   useFocusEffect(
     useCallback(() => {
@@ -128,6 +142,13 @@ export default function MissionsScreen() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function decline() {
+    if (!offer) return;
+    // Told to the server so the run goes to the next courier now, not in 30 s.
+    couriersApi.declineOffer(offer.id).catch(() => undefined);
+    clearOffer('declined');
   }
 
   async function advance() {
@@ -222,9 +243,9 @@ export default function MissionsScreen() {
             <OfferCard
               offer={offer}
               vendorName={offerVendor.name}
-              dropoffLabel={offerVendor.city}
+              dropoffLabel={offer.deliveryAddressCity ?? offerVendor.city}
               onAccept={accept}
-              onDecline={() => clearOffer('declined')}
+              onDecline={decline}
               busy={busy}
             />
           ) : (

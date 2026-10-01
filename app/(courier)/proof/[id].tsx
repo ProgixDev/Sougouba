@@ -8,6 +8,7 @@ import { ProofCapture } from '@/components/courier';
 import { useT } from '@/lib/i18n/useT';
 import { BackHeader, EmptyState, Skeleton, Text } from '@/components/ui';
 import { ordersApi } from '@/data/api';
+import { ApiError } from '@/data/http';
 import type { DeliveryProof, Order } from '@/data/types';
 import { useDispatchStore } from '@/store/useDispatchStore';
 
@@ -44,13 +45,27 @@ export default function CourierProofScreen() {
     };
   }, [id]);
 
-  async function complete(proof: Omit<DeliveryProof, 'at'>) {
+  async function complete(proof: Omit<DeliveryProof, 'at'>): Promise<string | void> {
     if (!order || busy) return;
     setBusy(true);
     try {
       // `at` is dropped: the delivery time is stamped inside the same
       // transaction that writes the proof, so the two cannot disagree.
-      const updated = await ordersApi.completeDelivery(order.id, proof);
+      let updated: Awaited<ReturnType<typeof ordersApi.completeDelivery>>;
+      try {
+        updated = await ordersApi.completeDelivery(order.id, {
+          method: proof.method,
+          pin: proof.pin,
+          note: proof.note,
+        });
+      } catch (error) {
+        // "NIP incorrect", "Preuve requise"… — the server's reason, in French,
+        // shown where the courier is looking.
+        if (error instanceof ApiError && error.isClientError) {
+          return proof.method === 'pin' && error.status === 400 ? t('courier.wrongCode') : error.message;
+        }
+        throw error;
+      }
       if (!updated) return;
       // The run is over: clear it before leaving, or the missions screen docks a
       // finished delivery until its next focus.
@@ -74,7 +89,7 @@ export default function CourierProofScreen() {
         <View className="flex-1 items-center justify-center">
           <EmptyState
             icon={PackageCheck}
-            title="Course introuvable"
+            title={t('courier.reportState.notFoundTitle')}
             description={t('courier.delivery.notFound')}
           />
         </View>
@@ -95,7 +110,6 @@ export default function CourierProofScreen() {
           </View>
 
           <ProofCapture
-            expectedPin={order.delivery.pin}
             onSubmit={complete}
             busy={busy}
           />

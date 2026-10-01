@@ -6,6 +6,7 @@ import { useT } from '@/lib/i18n/useT';
 import type { Courier, VehicleType } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import type { DeliveryPhase } from '@/hooks/useDeliveryProgress';
+import { formatRating } from '@/lib/format';
 import { mustard } from '@/theme/tokens';
 
 export interface CourierTrackingCardProps {
@@ -55,7 +56,7 @@ export function CourierTrackingCard({ courier, phase, etaMin, pin }: CourierTrac
               <View className="flex-row items-center gap-1">
                 <Star size={12} color={mustard[500]} fill={mustard[500]} strokeWidth={0} />
                 <Text variant="caption" tone="muted" className="text-[12px]">
-                  {courier.rating.toFixed(1).replace('.', ',')}
+                  {formatRating(courier.rating)}
                 </Text>
               </View>
             ) : null}
@@ -84,12 +85,12 @@ export function CourierTrackingCard({ courier, phase, etaMin, pin }: CourierTrac
         <View className="flex-row gap-2.5">
           <ContactButton
             icon={Phone}
-            label="Appeler"
+            label={t('customer.orderDetail.callCourier')}
             onPress={() => Linking.openURL(`tel:${courier.phone.replace(/\s/g, '')}`)}
           />
           <ContactButton
             icon={MessageSquare}
-            label="Message"
+            label={t('customer.orderDetail.messageCourier')}
             onPress={() => Linking.openURL(`sms:${courier.phone.replace(/\s/g, '')}`)}
           />
         </View>
@@ -107,7 +108,7 @@ export function CourierTrackingCard({ courier, phase, etaMin, pin }: CourierTrac
           {pin}
         </Text>
         <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
-          Donnez ce code à {courier.fullName.split(' ')[0]} à la remise de votre commande.
+          {t('customer.orderDetail.codeHint', { name: courier.fullName.split(' ')[0] })}
         </Text>
       </View>
     </View>

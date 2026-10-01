@@ -44,7 +44,7 @@ export function DeliveryGrid() {
               }`}
             >
               <Text variant="caption" tone="muted" className="text-[12px]">
-                {Number.isFinite(tier.maxKm) ? `${from} – ${tier.maxKm} km` : `Plus de ${from} km`}
+                {Number.isFinite(tier.maxKm) ? `${from} – ${tier.maxKm} km` : t('business.deliveryOver', { from })}
               </Text>
               <Text variant="caption" weight="semibold" className="text-[12px]">
                 {formatCad(tier.feeCad)}

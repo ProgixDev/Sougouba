@@ -6,7 +6,7 @@ import { View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
 import { Button, Text } from '@/components/ui';
-import { useLocale } from '@/lib/i18n/useT';
+import { useT } from '@/lib/i18n/useT';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { formatCad } from '@/lib/format';
 import { formatDistance } from '@/lib/geo';
@@ -48,9 +48,7 @@ export function OfferCard({
   onDecline,
   busy = false,
 }: OfferCardProps) {
-  // Formats money here but renders no translated string of its own; this is
-  // the subscription that re-runs those formatters on a language switch.
-  useLocale();
+  const t = useT();
   const colors = useThemeColors();
   const [remaining, setRemaining] = useState(() => offerRemainingMs(offer, Date.now()));
 
@@ -123,13 +121,13 @@ export function OfferCard({
 
         <View className="flex-1 gap-0.5">
           <Text variant="label" tone="muted" className="text-[10px]">
-            Nouvelle course
+            {t('courier.offer.newRun')}
           </Text>
           <Text variant="subtitle" weight="bold" numberOfLines={1} className="text-[19px]">
             {formatCad(offer.estimatedEarningsCad)}
             <Text variant="caption" tone="muted" className="text-[12px]">
               {' '}
-              minimum
+              {t('courier.offer.minimum')}
             </Text>
           </Text>
         </View>
@@ -145,7 +143,7 @@ export function OfferCard({
               {vendorName}
             </Text>
             <Text variant="caption" tone="muted" className="text-[12px]">
-              {formatDistance(offer.distanceToPickupKm)} pour le ramassage
+              {t('courier.offer.toPickup', { distance: formatDistance(offer.distanceToPickupKm) })}
             </Text>
           </View>
         </View>
@@ -159,7 +157,7 @@ export function OfferCard({
               {dropoffLabel}
             </Text>
             <Text variant="caption" tone="muted" className="text-[12px]">
-              {formatDistance(offer.distanceToDropoffKm)} de livraison
+              {t('courier.offer.toDropoff', { distance: formatDistance(offer.distanceToDropoffKm) })}
             </Text>
           </View>
         </View>
@@ -167,10 +165,10 @@ export function OfferCard({
 
       <View className="flex-row gap-2.5">
         <View className="flex-1">
-          <Button label="Refuser" variant="ghost" size="md" fullWidth disabled={busy} onPress={onDecline} />
+          <Button label={t('courier.offer.decline')} variant="ghost" size="md" fullWidth disabled={busy} onPress={onDecline} />
         </View>
         <View className="flex-[1.4]">
-          <Button label="Accepter" variant="primary" size="md" fullWidth loading={busy} onPress={onAccept} />
+          <Button label={t('courier.offer.accept')} variant="primary" size="md" fullWidth loading={busy} onPress={onAccept} />
         </View>
       </View>
     </MotiView>

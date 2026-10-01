@@ -24,9 +24,10 @@ import {
   Reveal,
   Text,
 } from '@/components/ui';
+import { addressesApi } from '@/data/api';
+import { ApiError } from '@/data/http';
 import type { Address } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
-import { coordinatesFor } from '@/lib/postalGeo';
 import { useT } from '@/lib/i18n/useT';
 import { i18nResolver } from '@/lib/validation/resolver';
 import {
@@ -45,55 +46,45 @@ export default function AddressesScreen() {
 
   const addresses = user?.addresses ?? [];
 
-  function persist(next: Address[]) {
-    // Exactly one default, always: the checkout screen picks the default and has
-    // no other way to decide between two.
-    const withDefault =
-      next.length > 0 && !next.some((a) => a.isDefault)
-        ? next.map((a, i) => ({ ...a, isDefault: i === 0 }))
-        : next;
-    updateUser({ addresses: withDefault });
+  const [saving, setSaving] = useState(false);
+
+  /**
+   * Every change goes to the API, then the book is re-read from it. The server
+   * geocodes and decides the default, and `POST /orders` only accepts the id of
+   * an address it holds — so the server's list is the one worth showing.
+   */
+  async function sync(write: () => Promise<unknown>): Promise<boolean> {
+    try {
+      await write();
+      updateUser({ addresses: await addressesApi.list() });
+      return true;
+    } catch (error) {
+      Alert.alert(
+        t('customer.account.addresses.saveFailed'),
+        error instanceof ApiError && error.isClientError ? error.message : t('common.genericError')
+      );
+      return false;
+    }
   }
 
-  function save(values: AddressValues, existing: Address | null) {
-    // `postalCodeSchema` normalises on the way out of the resolver, so the
-    // hand-rolled reformat that used to live here is gone — and the courier and
-    // shop forms now get the same treatment instead of storing whatever was
-    // typed.
-    if (existing) {
-      persist(
-        addresses.map((a) =>
-          a.id === existing.id
-            ? { ...a, ...values, ...coordinatesFor(values.postalCode, values.city) }
-            : a
-        )
-      );
-    } else {
-      persist([
-        ...addresses,
-        {
-          ...values,
-          id: `addr_${Date.now().toString(36)}`,
-          // Approximated from the postal code (see `lib/postalGeo.ts`). These
-          // used to be written as 0,0 — harmless while nothing read them, and
-          // wrong the moment the shop list started sorting by distance, which
-          // then measured from the Gulf of Guinea.
-          ...coordinatesFor(values.postalCode, values.city),
-          isDefault: addresses.length === 0,
-        },
-      ]);
-    }
+  async function save(values: AddressValues, existing: Address | null) {
+    setSaving(true);
+    const ok = await sync(() =>
+      existing ? addressesApi.update(existing.id, values) : addressesApi.create(values)
+    );
+    setSaving(false);
+    if (!ok) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setEditing(null);
   }
 
   function remove(address: Address) {
     Alert.alert(t('customer.confirmRemoveAddress'), `${address.label} — ${address.street}`, [
-      { text: 'Annuler', style: 'cancel' },
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Supprimer',
+        text: t('customer.account.addresses.delete'),
         style: 'destructive',
-        onPress: () => persist(addresses.filter((a) => a.id !== address.id)),
+        onPress: () => sync(() => addressesApi.remove(address.id)),
       },
     ]);
   }
@@ -143,9 +134,7 @@ export default function AddressesScreen() {
                   {!address.isDefault ? (
                     <RowAction
                       label={t('customer.account.addresses.setDefault')}
-                      onPress={() =>
-                        persist(addresses.map((a) => ({ ...a, isDefault: a.id === address.id })))
-                      }
+                      onPress={() => sync(() => addressesApi.update(address.id, { isDefault: true }))}
                     />
                   ) : null}
                   <View className="flex-1" />
@@ -179,6 +168,7 @@ export default function AddressesScreen() {
         key={editing === 'new' ? 'new' : (editing?.id ?? 'closed')}
         address={editing === 'new' ? null : editing}
         visible={editing !== null}
+        saving={saving}
         onClose={() => setEditing(null)}
         onSave={save}
       />
@@ -206,11 +196,13 @@ function RowAction({ label, onPress }: { label: string; onPress: () => void }) {
 function AddressFormSheet({
   address,
   visible,
+  saving,
   onClose,
   onSave,
 }: {
   address: Address | null;
   visible: boolean;
+  saving: boolean;
   onClose: () => void;
   onSave: (values: AddressValues, existing: Address | null) => void;
 }) {
@@ -259,7 +251,7 @@ function AddressFormSheet({
               style={{ maxHeight: 460 }}
             >
               <Text variant="subtitle" weight="bold" className="text-[20px]">
-                {address ? 'Modifier l’adresse' : 'Nouvelle adresse'}
+                {address ? t('customer.account.addresses.editTitle') : t('customer.account.addresses.newTitle')}
               </Text>
 
               <Controller
@@ -322,10 +314,11 @@ function AddressFormSheet({
 
             <View className="px-5 pt-4 gap-2" style={{ paddingBottom: insets.bottom + 12 }}>
               <Button
-                label={address ? 'Enregistrer' : 'Ajouter l’adresse'}
+                label={address ? t('common.save') : t('customer.account.addresses.submitNew')}
                 variant="primary"
                 size="lg"
                 fullWidth
+                loading={saving}
                 icon={<Check size={18} color="#fff" strokeWidth={2.4} />}
                 onPress={handleSubmit((values) => onSave(values, address))}
               />

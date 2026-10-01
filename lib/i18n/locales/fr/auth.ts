@@ -1,49 +1,48 @@
-/** Sign-in, sign-up and password-reset screens. */
+/** The passwordless entry flow (`app/(auth)/welcome.tsx`): choose → email → code → name. */
 export const auth = {
-  /** Sign-in and sign-up failures, keyed by `AuthErrorCode` from `data/api/auth.ts`. */
+  /** Keyed by `AuthErrorCode` from `data/api/auth.ts`. */
   error: {
-    no_such_account: 'Aucun compte ne correspond à cette adresse courriel.',
-    email_taken: 'Un compte existe déjà avec cette adresse courriel.',
     user_not_found: 'Utilisateur introuvable.',
+    code_invalid: 'Code incorrect. Vérifiez-le et réessayez.',
+    code_expired: 'Ce code a expiré. Demandez-en un nouveau.',
+    code_cooldown: 'Patientez une minute avant de redemander un code.',
+    oauth_unavailable: 'Bientôt disponible — continuez avec votre courriel pour l’instant.',
   },
-  /** Field labels, shared by all three screens. */
+  /** Field labels — `fullName` and `email` are also used by the account editor. */
   field: {
     fullName: 'Nom complet',
     email: 'Adresse courriel',
-    password: 'Mot de passe',
     referralCode: 'Code de parrainage',
-    referralHint: 'Optionnel — un ami qui vous a invité y gagne aussi des points.',
+    referralHint: 'Facultatif — l’ami qui vous a invité gagne aussi des points.',
   },
   welcome: {
     title: 'Bienvenue sur Sougouba',
     body: 'Les saveurs d’Afrique et du Maghreb, livrées près de chez vous au Québec.',
+    email: 'Continuer avec un courriel',
+    fineprint: 'Pas de mot de passe : on vous envoie un code, c’est tout.',
   },
-  signIn: {
-    title: 'Content de vous revoir',
-    body: 'Connectez-vous pour continuer vos commandes.',
-    submit: 'Se connecter',
-    forgot: 'Mot de passe oublié ?',
-    noAccount: 'Pas encore de compte ?',
+  email: {
+    title: 'Quel est votre courriel ?',
+    body: 'Nous vous enverrons un code à 6 chiffres pour vous connecter.',
+    submit: 'Recevoir mon code',
   },
-  signUp: {
-    title: 'Créer un compte',
-    body: 'Rejoignez Sougouba pour commander ou vendre en quelques minutes.',
-    submit: 'Créer un compte',
-    hasAccount: 'Déjà un compte ?',
+  code: {
+    title: 'Entrez votre code',
+    body: 'Envoyé à %{email}',
+    change: 'Modifier',
+    label: 'Code de connexion',
+    resend: 'Renvoyer le code',
+    resendIn: 'Renvoyer dans %{seconds} s',
+    resent: 'Nouveau code envoyé.',
   },
-  forgot: {
-    title: 'Mot de passe oublié',
-    body: 'Entrez votre adresse courriel — nous vous enverrons un lien pour le réinitialiser.',
-    submit: 'Envoyer le lien',
-    sentTitle: 'Vérifiez vos courriels',
-    /** `%{email}` is what the person typed, echoed back so they can spot a typo. */
-    sentBody: 'Si un compte existe pour %{email}, un lien de réinitialisation vient d’être envoyé.',
-    backToSignIn: 'Retour à la connexion',
+  name: {
+    title: 'Enchanté ! Comment vous appelez-vous ?',
+    body: 'C’est ce que verront les commerçants et les livreurs.',
+    referralToggle: 'J’ai un code de parrainage',
+    submit: 'C’est parti',
   },
-  /** Separator between the form and the OAuth buttons. */
   or: 'ou',
   oauth: {
-    /** Brand names stay as they are; only the verb is translated. */
     google: 'Continuer avec Google',
     apple: 'Continuer avec Apple',
   },

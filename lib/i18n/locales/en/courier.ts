@@ -83,6 +83,8 @@ export const courier: Widen<typeof reference> = {
     bankOther: 'Your bank’s name',
     account: 'Account number',
     payoutNote: 'Your earnings are paid by direct deposit. These details stay visible to you alone.',
+    transit: 'Transit number (5 digits)',
+    submit: 'Send my application',
   },
   signupSteps: {
     identity: 'You and your city',
@@ -113,6 +115,7 @@ export const courier: Widen<typeof reference> = {
   baseFarePerRun: '%{amount} per run',
   allYours: '100% yours',
   noRunsToday: 'no runs today',
+  runsToday: plural({ zero: 'no runs today', one: '%{count} run today', other: '%{count} runs today' }),
   bestDay: 'best day · %{label}',
   tipAmount: '%{amount} tip',
   wrongCode: 'Wrong code. Ask the customer for it.',
@@ -153,6 +156,14 @@ export const courier: Widen<typeof reference> = {
     body1: 'A Sougouba administrator checks your licence, your insurance and your bank details.',
     body2: 'Once approved, runs near you start appearing.',
   },
+  offer: {
+    newRun: 'New run',
+    minimum: 'minimum',
+    toPickup: '%{distance} to pickup',
+    toDropoff: '%{distance} to deliver',
+    decline: 'Decline',
+    accept: 'Accept',
+  },
   mission: {
     onSite: 'On site — collect the order',
     delivered: 'Delivered',
@@ -161,7 +172,13 @@ export const courier: Widen<typeof reference> = {
   },
   runCount: plural({ zero: 'no runs', one: '%{count} run', other: '%{count} runs' }),
   history: {
+    fromCity: 'from %{city}',
+    tip: '%{amount} tip',
     runsWithDistance: '%{runs} · %{distance}',
+  },
+  shift: {
+    online: 'Online',
+    offline: 'Offline',
   },
   earnings: {
     vsPrevious: plural({ one: 'Vs yesterday', other: 'Vs the previous %{count} days' }),
@@ -169,8 +186,13 @@ export const courier: Widen<typeof reference> = {
     noComparisonYesterday: 'nothing yesterday',
     noComparisonPeriod: 'no comparison period',
     baseFareRow: 'Pickup fee (%{runs})',
+    title: 'Earnings · %{range}',
+    distanceRow: 'Distance (%{distance})',
+    tipsRow: 'Tips',
+    rateNote: '%{base} per run plus %{perKm} per kilometre delivered. You keep every cent of your tips.',
   },
   chart: {
+    title: 'Earnings by day',
     selectedDay: '%{label} · %{runs}',
     bestDay: 'best day · %{label}',
     barA11y: '%{label}, %{amount}, %{runs}',

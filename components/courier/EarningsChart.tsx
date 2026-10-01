@@ -89,7 +89,7 @@ export function EarningsChart({ buckets, bestDay }: EarningsChartProps) {
     <View className="rounded-[20px] bg-card p-4 gap-4">
       <View className="flex-row items-start justify-between gap-3">
         <Text variant="label" tone="muted" className="text-[10px]">
-          Gains par jour
+          {t('courier.chart.title')}
         </Text>
         {shown ? (
           <View className="items-end gap-0.5">

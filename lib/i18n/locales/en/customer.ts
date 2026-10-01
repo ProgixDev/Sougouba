@@ -25,7 +25,7 @@ export const customer: Widen<typeof reference> = {
   },
   cart: {
     title: 'Cart',
-    clear: 'Empty',
+    clear: 'Clear',
     emptyTitle: 'Your cart is empty',
     emptyBody: 'Browse the shops near you to get started.',
     emptyAction: 'Discover shops',
@@ -91,6 +91,11 @@ export const customer: Widen<typeof reference> = {
       fieldStreet: 'Number and street',
       fieldPostalCode: 'Postal code',
       postalHint: 'Must match the city you chose.',
+      newTitle: 'New address',
+      editTitle: 'Edit address',
+      submitNew: 'Add address',
+      delete: 'Delete',
+      saveFailed: 'Couldn’t save the address',
     },
     edit: {
       title: 'Edit profile',
@@ -123,6 +128,9 @@ export const customer: Widen<typeof reference> = {
       emptyTitle: 'Nothing yet',
       emptyBody: 'Your points appear here as soon as an order is delivered.',
       refer: 'Refer a friend',
+      value: '≈ %{amount} in value — up to %{percent} of the subtotal can be used per order.',
+      referTeaser: '%{points} points for you, %{points} points for your friend.',
+      expiryLine: '%{date} · expires %{expiry}',
     },
     refer: {
       title: 'Refer a friend',
@@ -132,6 +140,8 @@ export const customer: Widen<typeof reference> = {
       shareFailedBody: 'Try again, or copy your code manually.',
       yourCode: 'Your code',
       copyHint: 'Press and hold the code to copy it.',
+      headline: 'Give %{points} points, get %{points} points',
+      body: 'As soon as your friend completes a first order of %{minimum} or more, you each get %{points} points (%{amount}).',
       terms:
         'One reward per new customer. Points are credited once your friend’s order has been delivered — never before.',
     },
@@ -167,6 +177,16 @@ export const customer: Widen<typeof reference> = {
     shopReply: 'Reply from the shop',
     replyPending: 'The shop has been notified. You will see their reply here.',
     deliveryCode: 'Delivery code',
+    codeHint: 'Give this code to %{name} when they hand over your order.',
+    callCourier: 'Call',
+    messageCourier: 'Text',
+    pointsEarned: plural({
+      one: 'You earned %{count} Sougouba point.',
+      other: 'You earned %{count} Sougouba points.',
+    }),
+    placedAt: 'Placed on %{date} at %{time}',
+    shop: 'Shop',
+    disputePending: 'Pending',
   },
   dispute: {
     title: 'Report a problem',
@@ -226,6 +246,7 @@ export const customer: Widen<typeof reference> = {
   manage: 'Manage',
   simulatedPayment: 'Simulated payment — no real transaction.',
   answered: 'Answered',
+  resolved: 'Resolved',
   feeFromLine: 'from %{amount}',
   nutrition: {
     calories: 'Calories',
@@ -241,6 +262,7 @@ export const customer: Widen<typeof reference> = {
   pointsRules: {
     earn: '$1 of eligible spend (excluding tax, delivery and tip) = 1 point.',
     expiry: 'Points are credited after delivery and expire %{months} months after you earn them.',
+    redeem: '%{points} points = $1 off, up to %{percent} of an order’s subtotal.',
   },
   referShare:
     'Join me on Sougouba and get %{points} points (%{amount}) on your first order of $%{minimum} or more. My code: %{code} — %{link}',
@@ -296,6 +318,8 @@ export const customer: Widen<typeof reference> = {
     pointsAvailable: '%{points} points available — up to %{amount} off this order.',
     pointsTooFew: '%{points} points available — not enough for a discount on this basket yet.',
     confirm: 'Confirm — %{total}',
+    deliveryEta: 'Estimated delivery in %{minutes} min',
+    items: 'Items (%{count})',
   },
   orderConfirmed: {
     title: 'Order confirmed',
@@ -321,11 +345,14 @@ export const customer: Widen<typeof reference> = {
     emptyCatalogTitle: 'Empty catalogue',
     emptyCatalogBody: 'This shop has not added any products yet.',
     halal: 'Halal',
+    deliveryFee: 'Delivery %{fee}',
   },
   vertical: {
     listSummary: '%{shops} · nearest first',
   },
   search: {
+    title: 'Search',
+    searching: 'Searching…',
     results: plural({ zero: 'No results', one: '%{count} result', other: '%{count} results' }),
     resultsForQuery: plural({
       zero: 'No results for “%{query}”',

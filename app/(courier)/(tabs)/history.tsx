@@ -86,7 +86,7 @@ export default function CourierHistoryScreen() {
     <View className="flex-1 bg-background">
       <CourierSlab
         title={t('courier.historyScreen.title')}
-        eyebrow={courier ? `depuis ${courier.city}` : undefined}
+        eyebrow={courier ? t('courier.history.fromCity', { city: courier.city }) : undefined}
       >
         <View className="flex-row items-end justify-between gap-4">
           <SlabFigure label={t('courier.historyScreen.delivered')} value={String(allTime.runCount)} />

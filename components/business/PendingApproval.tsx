@@ -60,7 +60,7 @@ export function PendingApproval({ state, onApproved }: PendingApprovalProps) {
           </View>
           <View className="gap-2">
             <Text variant="title" weight="bold" className="text-[26px]">
-              {applied ? 'Demande en attente' : t('business.queue.registerShop')}
+              {applied ? t('business.shopProfile.pendingTitle') : t('business.queue.registerShop')}
             </Text>
             <Text variant="body" tone="muted">
               {applied

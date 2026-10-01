@@ -84,7 +84,7 @@ export default function BusinessOrdersScreen() {
       active: orders.filter((o) => isActiveStatus(o.status)).length,
       // Counts what is waiting on the merchant, not the whole history — a chip
       // reading "Litiges (9)" beside nine already answered is a false alarm.
-      disputes: orders.filter((o) => o.dispute && o.dispute.status !== 'answered').length,
+      disputes: orders.filter((o) => o.dispute && o.dispute.status === 'open').length,
       delivered: orders.filter((o) => o.status === 'delivered').length,
       cancelled: orders.filter((o) => o.status === 'cancelled').length,
       all: orders.length,
@@ -105,7 +105,7 @@ export default function BusinessOrdersScreen() {
         return orders
           .filter((o) => o.dispute)
           .sort((a, b) => {
-            const pending = Number(a.dispute?.status === 'answered') - Number(b.dispute?.status === 'answered');
+            const pending = Number(a.dispute?.status !== 'open') - Number(b.dispute?.status !== 'open');
             return pending !== 0 ? pending : b.createdAt.localeCompare(a.createdAt);
           });
       case 'delivered':

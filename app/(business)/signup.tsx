@@ -50,8 +50,7 @@ export default function ShopSignupScreen() {
       ownerId: user.id,
       name: values.identity.name,
       vendorType: values.identity.vendorType,
-      // The merchant typed one language; it is stored as that language.
-      specialty: { fr: values.identity.specialtyFr },
+      specialtyId: values.identity.specialtyId,
       isHalalCertified: values.identity.isHalalCertified,
       address: {
         id: `addr_${user.id}_shop`,

@@ -237,7 +237,7 @@ export default function VendorDetailScreen() {
                   <View className="flex-row items-center gap-1.5">
                     <MapPin size={15} color={colors.mutedForeground} strokeWidth={2} />
                     <Text variant="caption" tone="muted" className="flex-1" numberOfLines={1}>
-                      {vendor.address.street}, {vendor.city}
+                      {[vendor.address.street, vendor.city].filter(Boolean).join(', ')}
                     </Text>
                   </View>
 
@@ -258,7 +258,9 @@ export default function VendorDetailScreen() {
                       </Text>
                     </View>
                     <Text variant="caption" tone="muted">
-                      Livraison {formatCad(deliveryFeeBetween(vendor.address, destination))}
+                      {t('customer.vendor.deliveryFee', {
+                        fee: formatCad(deliveryFeeBetween(vendor.address, destination)),
+                      })}
                     </Text>
                   </View>
 

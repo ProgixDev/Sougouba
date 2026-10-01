@@ -1,10 +1,13 @@
 import { Check, CreditCard, Landmark } from 'lucide-react-native';
 import { MotiView } from 'moti';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 
-import { Button, CitySelect, Input, Text } from '@/components/ui';
+import { Button, CitySelect, Input, SelectField, Text } from '@/components/ui';
+import { specialtiesApi } from '@/data/api';
+import type { Specialty } from '@/data/api/specialties';
+import { selectLocale, useLanguageStore } from '@/store/useLanguageStore';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import {
   VENDOR_TYPE_LABELS,
@@ -67,7 +70,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
     defaultValues: {
       name: '',
       vendorType: 'grocery',
-      specialtyFr: '',
+      specialtyId: '',
       isHalalCertified: false,
     },
   });
@@ -102,6 +105,34 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
   });
 
   const chosenType = identityForm.watch('vendorType');
+  const locale = useLanguageStore(selectLocale);
+
+  // The back office's list for the chosen type. Refetched when the type
+  // changes, and a choice from the other list is cleared — a restaurant cannot
+  // keep "Boucherie halal" because it was picked before switching.
+  const [specialties, setSpecialties] = useState<Specialty[] | null>(null);
+  const [specialtiesFailed, setSpecialtiesFailed] = useState(false);
+  const [specialtiesAttempt, setSpecialtiesAttempt] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setSpecialties(null);
+    setSpecialtiesFailed(false);
+    specialtiesApi
+      .getSpecialties(chosenType)
+      .then((list) => {
+        if (!active) return;
+        setSpecialties(list);
+        const current = identityForm.getValues('specialtyId');
+        if (current && !list.some((s) => s.id === current)) identityForm.setValue('specialtyId', '');
+      })
+      .catch(() => {
+        if (active) setSpecialtiesFailed(true);
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chosenType, specialtiesAttempt]);
   const payoutMethod = payoutForm.watch('payoutMethod');
 
   async function finish(payout: ShopPayoutValues) {
@@ -140,7 +171,10 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
             ))}
           </View>
           <Text variant="label" tone="muted" className="text-[10px]">
-            Étape {step + 1} — {t(`business.shopFormSteps.${STEP_KEYS[step]}`)}
+            {t('common.stepLabel', {
+              step: step + 1,
+              title: t(`business.shopFormSteps.${STEP_KEYS[step]}`),
+            })}
           </Text>
         </View>
 
@@ -187,7 +221,7 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
                             }`}
                           >
                             <Text variant="caption" weight={selected ? 'bold' : 'medium'}>
-                              {VENDOR_TYPE_LABELS[key]}
+                              {t(`domain.vertical.${key}.label`)}
                             </Text>
                             {selected ? (
                               <Check size={14} color={colors.primary} strokeWidth={3} />
@@ -203,22 +237,34 @@ export function ShopSignupForm({ onSubmit }: ShopSignupFormProps) {
 
             <Controller
               control={identityForm.control}
-              name="specialtyFr"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  label={chosenType === 'restaurant' ? t('business.shopFormSteps.cuisine') : t('business.shopForm.specialty')}
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  error={identityForm.formState.errors.specialtyFr?.message}
-                  required
-                  helperText={
-                    chosenType === 'restaurant'
-                      ? t('business.specialtyPlaceholderRestaurant')
-                      : t('business.specialtyPlaceholderGrocery')
-                  }
-                />
-              )}
+              name="specialtyId"
+              render={({ field: { onChange, value } }) =>
+                specialtiesFailed ? (
+                  <Pressable onPress={() => setSpecialtiesAttempt((n) => n + 1)} className="rounded-2xl bg-card p-4">
+                    <Text variant="caption" tone="destructive">
+                      {t('business.specialtyLoadError')}
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <SelectField
+                    label={chosenType === 'restaurant' ? t('business.shopFormSteps.cuisine') : t('business.shopForm.specialty')}
+                    placeholder={
+                      chosenType === 'restaurant'
+                        ? t('business.specialtyChooseRestaurant')
+                        : t('business.specialtyChooseGrocery')
+                    }
+                    options={(specialties ?? []).map((s) => ({
+                      value: s.id,
+                      label: locale === 'en' ? s.nameEn : s.nameFr,
+                    }))}
+                    value={value}
+                    onChange={onChange}
+                    error={identityForm.formState.errors.specialtyId?.message}
+                    helperText={t('business.specialtyHelper')}
+                    required
+                  />
+                )
+              }
             />
 
             <Controller

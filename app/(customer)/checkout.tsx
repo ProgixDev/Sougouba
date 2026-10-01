@@ -57,15 +57,13 @@ export default function CheckoutScreen() {
     useCallback(() => {
       if (!user) return;
       let active = true;
-      // Backfilled defensively rather than trusted to have finished already:
-      // `useDemoSeed` kicks this off once per session at the (customer) layout
-      // root, but checkout can be the very first screen focused after sign-in.
-      ordersApi
-        .ensureLoyaltyBackfill(user.id)
-        .then(() => loyaltyApi.getBalance(user.id))
+      loyaltyApi
+        .getBalance(user.id)
         .then((balance) => {
           if (active) setPointsBalance(balance);
-        });
+        })
+        // A balance that fails to load reads as zero points, not a crash.
+        .catch(() => undefined);
       return () => {
         active = false;
       };
@@ -94,7 +92,15 @@ export default function CheckoutScreen() {
         merchantDisplayName: 'Sougouba',
         paymentIntentClientSecret: clientSecret,
         returnURL: 'sougouba://stripe-redirect',
-        defaultBillingDetails: { name: user.fullName, email: user.email },
+        // Canada, not the phone's region: every Sougouba card is billed to a
+        // Quebec delivery address, and the sheet otherwise opened on whatever
+        // country the device was set to (a simulator in Algeria, a phone bought
+        // abroad) and asked for the wrong postal-code format.
+        defaultBillingDetails: {
+          name: user.fullName,
+          email: user.email,
+          address: { country: 'CA', city: address.city, postalCode: address.postalCode, line1: address.street },
+        },
         allowsDelayedPaymentMethods: false,
       });
       if (init.error) throw new Error(init.error.message);
@@ -168,7 +174,7 @@ export default function CheckoutScreen() {
                     {vendor.name}
                   </Text>
                   <Text variant="caption" tone="muted">
-                    Livraison estimée en {vendor.deliveryEtaMin} min
+                    {t('customer.checkout.deliveryEta', { minutes: vendor.deliveryEtaMin })}
                   </Text>
                 </View>
               </View>
@@ -191,7 +197,7 @@ export default function CheckoutScreen() {
             </View>
           </Section>
 
-          <Section title={`Articles (${lines.length})`}>
+          <Section title={t('customer.checkout.items', { count: lines.length })}>
             <View className="gap-2">
               {lines.map(({ item, product }) => (
                 <View key={item.productId} className="flex-row items-center justify-between gap-3">

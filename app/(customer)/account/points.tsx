@@ -6,16 +6,17 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BackHeader, EmptyState, Reveal, Skeleton, Text } from '@/components/ui';
-import { loyaltyApi, ordersApi } from '@/data/api';
+import { loyaltyApi } from '@/data/api';
 import {
   MAX_REDEMPTION_SHARE,
   POINTS_EXPIRY_MONTHS,
   POINTS_PER_CAD_REDEEMED,
+  REFERRAL_REWARD_POINTS,
   pointsToDiscountCad,
 } from '@/data/loyalty';
 import type { LoyaltyTransaction } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
-import { formatCad, formatDate, formatMonthYear } from '@/lib/format';
+import { formatCad, formatDate, formatMonthYear, formatPercent } from '@/lib/format';
 import { useT } from '@/lib/i18n/useT';
 import { formatPoints, loyaltyReasonKey } from '@/lib/loyalty';
 import { routes } from '@/lib/routes';
@@ -33,17 +34,17 @@ export default function PointsScreen() {
     useCallback(() => {
       if (!user) return;
       let active = true;
-      (async () => {
-        await ordersApi.ensureLoyaltyBackfill(user.id);
-        const [nextBalance, nextHistory] = await Promise.all([
-          loyaltyApi.getBalance(user.id),
-          loyaltyApi.getHistory(user.id),
-        ]);
-        if (!active) return;
-        setBalance(nextBalance);
-        setHistory(nextHistory);
-        setLoading(false);
-      })();
+      Promise.all([loyaltyApi.getBalance(user.id), loyaltyApi.getHistory(user.id)])
+        .then(([nextBalance, nextHistory]) => {
+          if (!active) return;
+          setBalance(nextBalance);
+          setHistory(nextHistory);
+        })
+        .catch(() => undefined)
+        // Always end the skeleton — a failed load shows an empty ledger, not a spinner forever.
+        .finally(() => {
+          if (active) setLoading(false);
+        });
       return () => {
         active = false;
       };
@@ -79,8 +80,10 @@ export default function PointsScreen() {
                   {balance}
                 </Text>
                 <Text variant="caption" tone="muted">
-                  ≈ {formatCad(pointsToDiscountCad(balance))} de valeur — jusqu’à{' '}
-                  {Math.round(MAX_REDEMPTION_SHARE * 100)} % du sous-total utilisables par commande.
+                  {t('customer.account.points.value', {
+                    amount: formatCad(pointsToDiscountCad(balance)),
+                    percent: formatPercent(MAX_REDEMPTION_SHARE),
+                  })}
                 </Text>
               </View>
             </View>
@@ -100,7 +103,7 @@ export default function PointsScreen() {
                   {t('customer.account.points.refer')}
                 </Text>
                 <Text variant="caption" tone="muted" className="text-[12px]">
-                  300 points pour vous, 300 points pour votre ami.
+                  {t('customer.account.points.referTeaser', { points: REFERRAL_REWARD_POINTS })}
                 </Text>
               </View>
             </Pressable>
@@ -112,9 +115,10 @@ export default function PointsScreen() {
               <View className="h-px bg-border ml-16" />
               <RuleRow
                 icon={Percent}
-                text={`${POINTS_PER_CAD_REDEEMED} points = 1 $ de réduction, jusqu’à ${Math.round(
-                  MAX_REDEMPTION_SHARE * 100
-                )} % du sous-total d’une commande.`}
+                text={t('customer.pointsRules.redeem', {
+                  points: POINTS_PER_CAD_REDEEMED,
+                  percent: formatPercent(MAX_REDEMPTION_SHARE),
+                })}
               />
               <View className="h-px bg-border ml-16" />
               <RuleRow icon={Clock} text={t('customer.pointsRules.expiry', { months: POINTS_EXPIRY_MONTHS })} />
@@ -144,10 +148,14 @@ export default function PointsScreen() {
                           {t(loyaltyReasonKey(tx.reason))}
                         </Text>
                         <Text variant="caption" tone="muted" className="text-[12px]">
-                          {formatDate(tx.createdAt)}
-                          {/* Month + year, not the day-level `formatDate` used above — an
-                              expiry a year out with no year shown reads as today's date. */}
-                          {tx.expiresAt ? ` · expire en ${formatMonthYear(tx.expiresAt)}` : ''}
+                          {/* Month + year, not the day-level `formatDate` — an expiry a
+                              year out with no year shown reads as today's date. */}
+                          {tx.expiresAt
+                            ? t('customer.account.points.expiryLine', {
+                                date: formatDate(tx.createdAt),
+                                expiry: formatMonthYear(tx.expiresAt),
+                              })
+                            : formatDate(tx.createdAt)}
                         </Text>
                       </View>
                       <Text

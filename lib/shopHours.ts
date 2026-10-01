@@ -17,6 +17,40 @@ export interface ShopDay {
 }
 
 /**
+ * The shops are in Quebec, so their hours are Montréal wall-clock time — not the
+ * phone's. Reading `getDay()`/`getHours()` from the device showed every shop as
+ * "fermé · rouvre demain" to anyone viewing from another timezone (a client
+ * demoing from abroad, a traveller ordering home), while the server — which
+ * evaluates `is_open` in America/Montreal — was taking their orders.
+ */
+const SHOP_TIME_ZONE = 'America/Montreal';
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function montrealClock(at: Date): { day: number; minutes: number } {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: SHOP_TIME_ZONE,
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(at);
+    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+    const day = WEEKDAYS.indexOf(get('weekday'));
+    const minutes = Number(get('hour')) * 60 + Number(get('minute'));
+    if (day >= 0 && Number.isFinite(minutes)) return { day, minutes };
+  } catch {
+    // No time-zone data on this runtime: the phone's clock is the best left.
+  }
+  return { day: at.getDay(), minutes: at.getHours() * 60 + at.getMinutes() };
+}
+
+/** Today's weekday (0 = Sunday) where the shops are. */
+export function shopWeekday(now: Date = new Date()): number {
+  return montrealClock(now).day;
+}
+
+/**
  * Where the shop is in its own day.
  *
  * A merchant's unit of time is the trading day, not the calendar week: the
@@ -25,8 +59,9 @@ export interface ShopDay {
  * rather than being recomputed in each screen.
  */
 export function shopDay(vendor: Vendor, now: Date = new Date()): ShopDay {
-  const hours = vendor.hours.find((h) => h.day === now.getDay()) ?? null;
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const clock = montrealClock(now);
+  const hours = vendor.hours.find((h) => h.day === clock.day) ?? null;
+  const nowMinutes = clock.minutes;
   const closedToday = !hours || Boolean(hours.closed);
 
   if (!hours || closedToday) {
@@ -86,8 +121,7 @@ export function shopStatusLine(day: ShopDay): Message {
  */
 export function positionInDay(day: ShopDay, iso: string): number | null {
   if (day.closedToday) return null;
-  const at = new Date(iso);
-  const minutes = at.getHours() * 60 + at.getMinutes();
+  const { minutes } = montrealClock(new Date(iso));
   return clamp01((minutes - day.openMinutes) / Math.max(1, day.closeMinutes - day.openMinutes));
 }
 

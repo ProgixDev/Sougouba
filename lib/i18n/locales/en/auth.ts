@@ -3,41 +3,43 @@ import type { auth as reference } from '../fr/auth';
 
 export const auth: Widen<typeof reference> = {
   error: {
-    no_such_account: 'No account matches that email address.',
-    email_taken: 'An account already exists with that email address.',
     user_not_found: 'User not found.',
+    code_invalid: 'That code is not right. Check it and try again.',
+    code_expired: 'That code has expired. Ask for a new one.',
+    code_cooldown: 'Wait a minute before asking for another code.',
+    oauth_unavailable: 'Coming soon — continue with your email for now.',
   },
   field: {
     fullName: 'Full name',
     email: 'Email address',
-    password: 'Password',
     referralCode: 'Referral code',
     referralHint: 'Optional — the friend who invited you earns points too.',
   },
   welcome: {
     title: 'Welcome to Sougouba',
     body: 'The flavours of Africa and the Maghreb, delivered near you in Quebec.',
+    email: 'Continue with email',
+    fineprint: 'No password — we just send you a code.',
   },
-  signIn: {
-    title: 'Good to see you again',
-    body: 'Sign in to carry on ordering.',
-    submit: 'Sign in',
-    forgot: 'Forgot your password?',
-    noAccount: 'No account yet?',
+  email: {
+    title: "What's your email?",
+    body: "We'll send you a 6-digit code to sign in.",
+    submit: 'Send my code',
   },
-  signUp: {
-    title: 'Create an account',
-    body: 'Join Sougouba to order or to sell, in a few minutes.',
-    submit: 'Create an account',
-    hasAccount: 'Already have an account?',
+  code: {
+    title: 'Enter your code',
+    body: 'Sent to %{email}',
+    change: 'Change',
+    label: 'Sign-in code',
+    resend: 'Resend the code',
+    resendIn: 'Resend in %{seconds}s',
+    resent: 'New code sent.',
   },
-  forgot: {
-    title: 'Forgotten password',
-    body: 'Enter your email address — we will send you a link to reset it.',
-    submit: 'Send the link',
-    sentTitle: 'Check your email',
-    sentBody: 'If an account exists for %{email}, a reset link has just been sent.',
-    backToSignIn: 'Back to sign in',
+  name: {
+    title: 'Nice to meet you! What should we call you?',
+    body: 'This is what shops and couriers will see.',
+    referralToggle: 'I have a referral code',
+    submit: "Let's go",
   },
   or: 'or',
   oauth: {

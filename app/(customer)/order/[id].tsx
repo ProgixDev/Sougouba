@@ -9,7 +9,7 @@ import { DeliveryMap } from '@/components/map';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useDeliveryProgress } from '@/hooks/useDeliveryProgress';
 import { Badge, BackHeader, Button, EmptyState, PriceSummary, Reveal, Skeleton, Text } from '@/components/ui';
-import { couriersApi, loyaltyApi, ordersApi, vendorsApi } from '@/data/api';
+import { loyaltyApi, ordersApi, vendorsApi } from '@/data/api';
 import type { Courier, DisputeReason, Order, Vendor } from '@/data/types';
 import { formatCad, formatDate, formatTime } from '@/lib/format';
 import { canOpenDispute, disputeReasonKey } from '@/lib/disputes';
@@ -33,6 +33,7 @@ export default function OrderDetailScreen() {
   // between fetches; this only has to catch *status* changes — a pickup, a
   // delivery — which is why eight seconds is plenty.
   const progress = useDeliveryProgress(order, vendor, courier);
+  const live = useLiveCourierPosition(order);
 
   // "Votre commande est livrée : vous avez gagné 45 points" (client brief) —
   // there is no push notification pipeline in this prototype (see
@@ -55,12 +56,8 @@ export default function OrderDetailScreen() {
     if (!found) return;
     const v = await vendorsApi.getVendorById(found.vendorId);
     if (activeRef.current) setVendor(v ?? null);
-    if (found.delivery) {
-      const c = await couriersApi.getCourierById(found.delivery.courierId);
-      if (activeRef.current) setCourier(c ?? null);
-    } else if (activeRef.current) {
-      setCourier(null);
-    }
+    // The order carries its courier's card; `/couriers/me` is the courier's own file.
+    if (activeRef.current) setCourier((found.delivery?.courier as Courier | undefined) ?? null);
   }, [id]);
 
   useEffect(() => {
@@ -145,7 +142,7 @@ export default function OrderDetailScreen() {
                 {t('customer.orderDetail.delivered')}
               </Text>
               <Text variant="caption" tone="muted" className="text-[12px]">
-                Vous avez gagné {pointsEarned} points Sougouba.
+                {t('customer.orderDetail.pointsEarned', { count: pointsEarned })}
               </Text>
             </View>
           </Pressable>
@@ -164,7 +161,10 @@ export default function OrderDetailScreen() {
             <View className="flex-row items-center justify-between gap-3">
               <View className="gap-1">
                 <Text variant="caption" tone="muted">
-                  Passée le {formatDate(order.createdAt)} à {formatTime(order.createdAt)}
+                  {t('customer.orderDetail.placedAt', {
+                    date: formatDate(order.createdAt),
+                    time: formatTime(order.createdAt),
+                  })}
                 </Text>
                 <Text variant="title" weight="bold" className="text-[24px]">
                   {formatCad(order.totalCad)}
@@ -185,8 +185,8 @@ export default function OrderDetailScreen() {
                     <DeliveryMap
                       pickup={progress.pickup}
                       dropoff={progress.dropoff}
-                      courier={progress.position}
-                      bearing={progress.bearing}
+                      courier={live ?? progress.position}
+                      bearing={live?.heading ?? progress.bearing}
                       route={progress.leg?.points}
                       progress={progress.progress}
                       variant="card"
@@ -203,7 +203,7 @@ export default function OrderDetailScreen() {
               </Section>
             ) : null}
 
-            <Section title="Suivi">
+            <Section title={t('common.tracking')}>
               <OrderStatusTimeline order={order} courierName={courier?.fullName} />
             </Section>
 
@@ -216,8 +216,14 @@ export default function OrderDetailScreen() {
                       {t(disputeReasonKey(order.dispute.reason))}
                     </Text>
                     <Badge
-                      label={order.dispute.status === 'answered' ? t('customer.answered') : 'En attente'}
-                      tone={order.dispute.status === 'answered' ? 'success' : 'warning'}
+                      label={
+                        order.dispute.status === 'resolved'
+                          ? t('customer.resolved')
+                          : order.dispute.status === 'answered'
+                            ? t('customer.answered')
+                            : t('customer.orderDetail.disputePending')
+                      }
+                      tone={order.dispute.status === 'open' ? 'warning' : 'success'}
                       size="sm"
                     />
                   </View>
@@ -246,7 +252,7 @@ export default function OrderDetailScreen() {
             ) : null}
 
             {vendor ? (
-              <Section title="Commerce">
+              <Section title={t('customer.orderDetail.shop')}>
                 <View className="flex-row items-center gap-3">
                   <View className="w-10 h-10 items-center justify-center rounded-full bg-muted">
                     <Store size={18} color={colors.mutedForeground} strokeWidth={2} />
@@ -282,7 +288,7 @@ export default function OrderDetailScreen() {
               </View>
             </Section>
 
-            <Section title={`Articles (${order.items.length})`}>
+            <Section title={t('customer.checkout.items', { count: order.items.length })}>
               <View className="gap-3">
                 {order.items.map((item) => (
                   <View key={item.productId} className="flex-row items-center justify-between gap-3">
@@ -337,4 +343,41 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <View className="rounded-2xl bg-card p-4">{children}</View>
     </View>
   );
+}
+
+/** A ping older than this is a courier whose app went quiet, not a courier standing still. */
+const LIVE_MAX_AGE_MS = 2 * 60_000;
+const LIVE_POLL_MS = 10_000;
+
+/**
+ * The courier's real position from their phone's GPS, while the order is on the
+ * road. `null` until the first fresh ping — the map then keeps the estimated
+ * position from `useDeliveryProgress`, so it never goes blank mid-run.
+ */
+function useLiveCourierPosition(order: Order | null) {
+  const [live, setLive] = useState<{ lat: number; lng: number; heading?: number } | null>(null);
+  const onTheRoad = order?.status === 'ready' || order?.status === 'out_for_delivery';
+  const orderId = order?.id;
+
+  useEffect(() => {
+    if (!onTheRoad || !orderId) {
+      setLive(null);
+      return;
+    }
+    let active = true;
+    const poll = async () => {
+      const ping = await ordersApi.getCourierLocation(orderId).catch(() => null);
+      if (!active) return;
+      const fresh = ping && Date.now() - Date.parse(ping.recordedAt) < LIVE_MAX_AGE_MS;
+      setLive(fresh ? { lat: ping.lat, lng: ping.lng, heading: ping.heading ?? undefined } : null);
+    };
+    void poll();
+    const id = setInterval(poll, LIVE_POLL_MS);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [onTheRoad, orderId]);
+
+  return live;
 }

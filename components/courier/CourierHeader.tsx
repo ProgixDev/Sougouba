@@ -85,7 +85,7 @@ export function CourierHeader({
               className="text-[13px]"
               style={{ color: online ? '#FFFFFF' : colors.mutedForeground }}
             >
-              {online ? 'En ligne' : 'Hors ligne'}
+              {online ? t('courier.shift.online') : t('courier.shift.offline')}
             </Text>
             {online ? (
               // A slow pulse, not a blink: it says "listening" without
@@ -105,11 +105,7 @@ export function CourierHeader({
               {formatCad(earningsTodayCad)}
             </Text>
             <Text variant="caption" tone="muted" className="text-[11px]">
-              {runsToday === 0
-                ? t('courier.noRunsToday')
-                : runsToday === 1
-                  ? '1 course aujourd’hui'
-                  : `${runsToday} courses aujourd’hui`}
+              {t('courier.runsToday', { count: runsToday })}
             </Text>
           </View>
         </View>

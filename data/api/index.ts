@@ -6,3 +6,6 @@ export * as couriersApi from './couriers';
 export * as authApi from './auth';
 export * as geoApi from './geo';
 export * as loyaltyApi from './loyalty';
+export * as specialtiesApi from './specialties';
+export * as addressesApi from './addresses';
+export * as favoritesApi from './favorites';

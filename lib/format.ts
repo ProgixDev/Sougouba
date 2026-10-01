@@ -149,6 +149,12 @@ export function formatPercent(rate: number): string {
   return currentLocale() === 'en' ? `${value}%` : `${String(value).replace('.', ',')} %`;
 }
 
+/** A one-decimal rating — `4,8` in French, `4.8` in English. */
+export function formatRating(rating: number): string {
+  const fixed = rating.toFixed(1);
+  return currentLocale() === 'en' ? fixed : fixed.replace('.', ',');
+}
+
 /**
  * How long an order has been waiting, in the shop's terms.
  *

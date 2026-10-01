@@ -4,7 +4,7 @@ import { fetch } from 'expo/fetch';
 import type { PickedDocument } from '../../lib/validation/merchant';
 
 import { ApiError, api, type Page } from '../http';
-import type { Address, ID, LocalizedText, Vendor, VendorStatus, VendorType } from '../types';
+import type { Address, ID, Vendor, VendorStatus, VendorType } from '../types';
 import { toVendor } from './mappers';
 
 /**
@@ -56,12 +56,15 @@ export async function getVendorsByCategory(categoryId: ID): Promise<Vendor[]> {
  * merchant may do. Kept in the signature so the business screens need no edit.
  */
 export async function getVendorByOwnerId(_ownerId: ID): Promise<Vendor | undefined> {
-  return single('/vendors/me');
+  // Not anonymous: `/vendors/me` is answered from the token, so sending none
+  // is a 401 "Missing bearer token" every time.
+  return single('/vendors/me', { anonymous: false });
 }
 
-async function single(path: string): Promise<Vendor | undefined> {
+/** Public shop reads skip the session by default; pass `anonymous: false` for the caller's own. */
+async function single(path: string, { anonymous = true } = {}): Promise<Vendor | undefined> {
   try {
-    return toVendor(await api<any>(path, { anonymous: true }));
+    return toVendor(await api<any>(path, { anonymous }));
   } catch (error) {
     // A 404 is "no such shop", which every caller already handles as undefined.
     if ((error as { status?: number }).status === 404) return undefined;
@@ -73,8 +76,8 @@ export interface ShopApplication {
   ownerId: ID;
   name: string;
   vendorType: VendorType;
-  /** The merchant's own words, in the language they typed them. */
-  specialty: LocalizedText;
+  /** An entry of the back-office specialty list for this `vendorType`. */
+  specialtyId: ID;
   isHalalCertified: boolean;
   address: Address;
   deliveryEtaMin: number;
@@ -137,8 +140,8 @@ export async function uploadRegistrationDocument(
  * profile to it. A merchant left with a shop row and no hours would have a shop
  * that is closed forever with no way to say otherwise.
  *
- * ⚠️ `specialty` is sent as its French text. The API column is `specialty_fr`;
- * there is nowhere to put a second language yet.
+ * `specialtyId` is an entry of the back-office list; the API copies its French
+ * name onto the shop, which is what cards and search show.
  */
 export async function submitShopApplication(input: ShopApplication): Promise<Vendor> {
   const created = await api<any>('/vendors/apply', {
@@ -146,7 +149,7 @@ export async function submitShopApplication(input: ShopApplication): Promise<Ven
     body: {
       name: input.name,
       vendorType: input.vendorType,
-      specialtyFr: input.specialty.fr,
+      specialtyId: input.specialtyId,
       isHalalCertified: input.isHalalCertified,
       street: input.address.street,
       city: input.address.city,

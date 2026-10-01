@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect } from 'expo-router';
@@ -21,7 +22,7 @@ import { Alert, Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { ProfileHeader } from '@/components/customer';
 import { LanguageToggle, Reveal, Text } from '@/components/ui';
-import { loyaltyApi, ordersApi } from '@/data/api';
+import { loyaltyApi } from '@/data/api';
 import { useColorScheme, useThemeColors } from '@/hooks/useColorScheme';
 import { useCustomerStats } from '@/hooks/useCustomerStats';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
@@ -51,6 +52,7 @@ export default function CustomerProfileScreen() {
   const { orderCount, favoriteCount, spentCad } = useCustomerStats();
   const isDark = preference === 'dark';
 
+  const version = Constants.expoConfig?.version ?? '1.0.0';
   const addressCount = user?.addresses.length ?? 0;
   const activeNotifications = Object.values(notifications).filter(Boolean).length;
 
@@ -59,12 +61,13 @@ export default function CustomerProfileScreen() {
     useCallback(() => {
       if (!user) return;
       let active = true;
-      ordersApi
-        .ensureLoyaltyBackfill(user.id)
-        .then(() => loyaltyApi.getBalance(user.id))
+      loyaltyApi
+        .getBalance(user.id)
         .then((balance) => {
           if (active) setPointsBalance(balance);
-        });
+        })
+        // A balance that fails to load reads as zero points, not a crash.
+        .catch(() => undefined);
       return () => {
         active = false;
       };
@@ -226,7 +229,7 @@ export default function CustomerProfileScreen() {
           </View>
 
           <Text variant="caption" tone="muted" className="text-center mt-6 text-[11px]">
-            Sougouba — prototype de démonstration ·{' '}
+            {t('common.appName')} — {t('customer.account.about.version', { version })} ·{' '}
             {colorScheme === 'dark' ? t('customer.themeDark') : t('customer.themeLight')}
           </Text>
         </Reveal>

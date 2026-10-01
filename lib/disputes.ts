@@ -53,7 +53,7 @@ export function canOpenDispute(order: Order): boolean {
  */
 export function disputeSummary(t: TFunction, dispute: OrderDispute): string {
   const reason = t(disputeReasonKey(dispute.reason));
-  return dispute.status === 'answered' ? t('domain.dispute.answered', { reason }) : reason;
+  return dispute.status !== 'open' ? t('domain.dispute.answered', { reason }) : reason;
 }
 
 // ── the courier's side ──────────────────────────────────────────────────────

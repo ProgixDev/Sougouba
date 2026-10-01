@@ -34,6 +34,7 @@ export const business: Widen<typeof reference> = {
     noResults: 'No results',
     noMatch: 'No product matches that search.',
     addFirst: 'Add your first product to start selling.',
+    emptyTitle: 'Empty catalogue',
   },
   ordersEmpty: {
     none: 'New orders appear here as soon as a customer places one.',
@@ -46,8 +47,10 @@ export const business: Widen<typeof reference> = {
   },
   closed: 'Closed',
   saveFailed: 'Could not save. Please try again.',
-  specialtyPlaceholderGrocery: 'E.g. “Maghrebi grocery” — the line under your name in listings.',
-  specialtyPlaceholderRestaurant: 'E.g. “Senegalese cooking” — the line under your name in listings.',
+  specialtyHelper: 'The line shown under your name in listings.',
+  specialtyChooseGrocery: 'Choose a speciality',
+  specialtyChooseRestaurant: 'Choose a cuisine',
+  specialtyLoadError: 'Could not load the list. Tap to try again.',
   metrics: {
     revenue: 'Takings',
     orders: 'Orders',
@@ -97,6 +100,14 @@ export const business: Widen<typeof reference> = {
   catalog: {
     addProduct: 'Add a product',
     searchPlaceholder: 'Search your catalogue…',
+    add: 'Add',
+    productCount: plural({ one: '%{count} product', other: '%{count} products' }),
+    toRestock: plural({ one: '%{count} to restock', other: '%{count} to restock' }),
+    summary: '%{products} · %{restock}',
+    stockLine: '%{price} · %{qty} in stock',
+    offSale: 'Unlisted',
+    lowStock: 'Low stock',
+    onSale: 'Listed',
   },
   analyticsScreen: {
     revenueByDay: 'Takings by day',
@@ -114,6 +125,11 @@ export const business: Widen<typeof reference> = {
     pendingTitle: 'Application pending',
     noShopBody: 'Register your business to start selling on Sougouba.',
     pendingBody: 'Your shop goes live once a Sougouba administrator has approved your file.',
+    feeFrom: 'from %{amount}',
+    monthlyFee: '%{amount} a month',
+    commissionLine: 'Plus a %{rate} commission on every order',
+    account: 'Account',
+    hoursToday: '%{day} · today',
   },
   orderDetail: {
     notFoundTitle: 'Order not found',
@@ -123,6 +139,7 @@ export const business: Widen<typeof reference> = {
     toPrepare: 'To prepare',
     reportedByCourier: 'Reported by the courier',
     cancelOrder: 'Cancel the order',
+    courier: 'Courier',
   },
   productDetail: {
     notFoundBody: 'This product may already have been deleted.',
@@ -142,12 +159,17 @@ export const business: Widen<typeof reference> = {
   },
   payout: {
     netSales: 'Net of sales',
+    title: 'Payout · %{range}',
+    sales: 'Sales',
+    commission: 'Sougouba commission (%{rate})',
+    subscriptionNote: 'The %{amount} monthly subscription is billed separately.',
   },
   dispute: {
     reply: 'Reply to the customer',
     send: 'Send the reply',
     yourReply: 'Your reply',
     stillOpen: 'The dispute stays open until Sougouba has handled it.',
+    reportedAt: 'Reported on %{date} at %{time}',
   },
   pending: {
     body: 'Review usually takes one business day. You will be notified as soon as your shop is live.',

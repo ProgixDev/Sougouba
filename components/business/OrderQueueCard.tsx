@@ -90,7 +90,7 @@ export function OrderQueueCard({
           <Badge label={statusLabel} tone={orderStatusTone[order.status]} size="sm" />
           {/* An unanswered complaint outranks the status: it is the reason to
               open this ticket ahead of the others. */}
-          {order.dispute && order.dispute.status !== 'answered' ? (
+          {order.dispute && order.dispute.status === 'open' ? (
             <Badge label="Litige" tone="destructive" size="sm" />
           ) : null}
           <Text variant="caption" tone="muted" className="text-[12px] flex-1">

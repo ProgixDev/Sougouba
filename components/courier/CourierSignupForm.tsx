@@ -123,7 +123,10 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
             ))}
           </View>
           <Text variant="label" tone="muted" className="text-[10px]">
-            Étape {step + 1} — {t(`courier.signupSteps.${STEP_KEYS[step]}`)}
+            {t('common.stepLabel', {
+              step: step + 1,
+              title: t(`courier.signupSteps.${STEP_KEYS[step]}`),
+            })}
           </Text>
         </View>
 
@@ -134,7 +137,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
               name="fullName"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Nom complet"
+                  label={t('auth.field.fullName')}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
@@ -368,7 +371,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
               name="transit"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Transit (5 chiffres)"
+                  label={t('courier.signupForm.transit')}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
@@ -404,7 +407,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
 
         <View className="gap-2">
           <Button
-            label={step === 2 ? 'Envoyer mon dossier' : 'Continuer'}
+            label={step === 2 ? t('courier.signupForm.submit') : t('common.continue')}
             variant="primary"
             size="lg"
             fullWidth
@@ -427,7 +430,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
           />
           {step > 0 ? (
             <Button
-              label="Retour"
+              label={t('common.ui.back')}
               variant="ghost"
               size="md"
               fullWidth

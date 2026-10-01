@@ -84,6 +84,8 @@ export const courier = {
     account: 'Numéro de compte',
     payoutNote:
       'Vos gains sont versés par dépôt direct. Ces informations restent visibles de vous seul.',
+    transit: 'Transit (5 chiffres)',
+    submit: 'Envoyer mon dossier',
   },
   signupSteps: {
     identity: 'Vous et votre ville',
@@ -114,6 +116,7 @@ export const courier = {
   baseFarePerRun: '%{amount} par course',
   allYours: '100 % pour vous',
   noRunsToday: 'aucune course aujourd’hui',
+  runsToday: plural({ zero: 'aucune course aujourd’hui', one: '%{count} course aujourd’hui', other: '%{count} courses aujourd’hui' }),
   bestDay: 'meilleur jour · %{label}',
   tipAmount: '%{amount} de pourboire',
   wrongCode: 'Code incorrect. Demandez-le au client.',
@@ -154,6 +157,14 @@ export const courier = {
     body1: 'Un administrateur Sougouba vérifie votre permis, votre assurance et vos coordonnées bancaires.',
     body2: 'Dès la validation, les courses proches de vous commencent à s’afficher.',
   },
+  offer: {
+    newRun: 'Nouvelle course',
+    minimum: 'minimum',
+    toPickup: '%{distance} pour le ramassage',
+    toDropoff: '%{distance} de livraison',
+    decline: 'Refuser',
+    accept: 'Accepter',
+  },
   mission: {
     onSite: 'Sur place — récupérez la commande',
     delivered: 'Livrée',
@@ -162,7 +173,13 @@ export const courier = {
   },
   runCount: plural({ zero: 'aucune course', one: '%{count} course', other: '%{count} courses' }),
   history: {
+    fromCity: 'depuis %{city}',
+    tip: '%{amount} de pourboire',
     runsWithDistance: '%{runs} · %{distance}',
+  },
+  shift: {
+    online: 'En ligne',
+    offline: 'Hors ligne',
   },
   earnings: {
     /** `one` is suppletive — "hier" reads better than "les 1 jours précédents". */
@@ -176,8 +193,14 @@ export const courier = {
     noComparisonYesterday: 'rien hier',
     noComparisonPeriod: 'pas de période à comparer',
     baseFareRow: 'Prise en charge (%{runs})',
+    title: 'Gains · %{range}',
+    distanceRow: 'Distance (%{distance})',
+    tipsRow: 'Pourboires',
+    rateNote:
+      '%{base} par course plus %{perKm} du kilomètre livré. Les pourboires vous reviennent intégralement.',
   },
   chart: {
+    title: 'Gains par jour',
     selectedDay: '%{label} · %{runs}',
     bestDay: 'meilleur jour · %{label}',
     barA11y: '%{label}, %{amount}, %{runs}',
