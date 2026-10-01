@@ -4,8 +4,8 @@ import type { PostgrestError } from '@supabase/supabase-js';
 import type { Db } from '../db/client.js';
 import { camelize, snakeize } from '../db/case.js';
 import { DB } from '../db/db.module.js';
-import { one } from '../db/embed.js';
 import { unwrap, unwrapRpc } from '../db/unwrap.js';
+import { hydrateOrders } from '../orders/order-view.js';
 import { GeoService } from '../geo/geo.service.js';
 import type { ApplyCourierInput, SetShiftInput, UpdateCourierInput } from './dto/courier.dto.js';
 
@@ -230,42 +230,30 @@ export class CouriersService {
     };
   }
 
-  /** Everything this courier has carried, newest first. */
+  /**
+   * Everything this courier has carried, newest first — as whole orders, in the
+   * shape every other order endpoint answers with (`orders/order-view.ts`), PIN
+   * withheld. This used to be a hand-picked join keyed `orderId` with the run's
+   * money at the top level; the app reads `order.id` and `order.delivery`, so
+   * history listed nothing and earnings summed to zero.
+   */
   async runs(userId: string, limit: number, offset: number) {
     const courierId = await this.courierIdFor(userId);
-    const rows = await unwrap<any[]>(
+    const runs = await unwrap<{ order_id: string }[]>(
       this.db
         .from('order_deliveries')
-        .select(
-          `acceptedAt:accepted_at, pickedUpAt:picked_up_at, deliveredAt:delivered_at,
-           distanceKm:distance_km, tipCad:tip_cad, earningsCad:earnings_cad,
-           orders!inner(orderId:id, status, vendorId:vendor_id, createdAt:created_at,
-                        deliveryAddressStreet:delivery_address_street,
-                        deliveryAddressCity:delivery_address_city)`
-        )
+        .select('order_id')
         .eq('courier_id', courierId)
         .order('accepted_at', { ascending: false })
         .range(offset, offset + limit - 1)
     );
+    if (runs.length === 0) return [];
 
-    // Flattened back to the shape the join produced.
-    return rows.map((r) => {
-      const order = one<any>(r.orders);
-      return {
-        orderId: order?.orderId,
-        status: order?.status,
-        vendorId: order?.vendorId,
-        createdAt: order?.createdAt,
-        deliveryAddressStreet: order?.deliveryAddressStreet,
-        deliveryAddressCity: order?.deliveryAddressCity,
-        acceptedAt: r.acceptedAt,
-        pickedUpAt: r.pickedUpAt,
-        deliveredAt: r.deliveredAt,
-        distanceKm: Number(r.distanceKm),
-        tipCad: Number(r.tipCad),
-        earningsCad: Number(r.earningsCad),
-      };
-    });
+    const ids = runs.map((r) => r.order_id);
+    const rows = await unwrap<Record<string, unknown>[]>(this.db.from('orders').select('*').in('id', ids));
+    const byId = new Map((await hydrateOrders(this.db, rows, { revealPin: false, courierCard: false })).map((o) => [o.id, o]));
+    // `in` does not keep order; the run list's does.
+    return ids.map((id) => byId.get(id)).filter((o) => o !== undefined);
   }
 
   /**

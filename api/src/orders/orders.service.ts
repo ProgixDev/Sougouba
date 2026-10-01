@@ -11,7 +11,6 @@ import {
 import type { PostgrestError } from '@supabase/supabase-js';
 
 import type { Db } from '../db/client.js';
-import { camelize } from '../db/case.js';
 import { DB } from '../db/db.module.js';
 import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import type { Page } from '../catalog/dto/query.dto.js';
@@ -22,6 +21,7 @@ import type {
   PlaceOrderInput,
   ReplyDisputeInput,
 } from './dto/order.dto.js';
+import { hydrateOrders } from './order-view.js';
 import { assertTransition, isActiveStatus, type OrderStatus, type StatusActor } from './order-status.js';
 import { priceOrder, roundCad, toStripeAmount, type PricedLine, type PricedOrder } from './pricing.js';
 import { PaymentsService } from './payments.service.js';
@@ -297,73 +297,6 @@ export class OrdersService {
 
   // ── reads ─────────────────────────────────────────────────────────────────
 
-  private async hydrate(rows: { id: string }[]) {
-    if (rows.length === 0) return new Map<string, { items: unknown[]; statusHistory: unknown[]; dispute: unknown }>();
-    const ids = rows.map((r) => r.id);
-
-    const [items, history, openDisputes] = await Promise.all([
-      unwrap<{ orderId: string; productId: string; name: string; qty: number; unitPriceCad: string }[]>(
-        this.db
-          .from('order_items')
-          .select('orderId:order_id, productId:product_id, name, qty, unitPriceCad:unit_price_cad')
-          .in('order_id', ids)
-      ),
-      unwrap<{ orderId: string; status: string; at: string }[]>(
-        this.db.from('order_status_history').select('orderId:order_id, status, at').in('order_id', ids)
-      ),
-      unwrap<Record<string, unknown>[]>(this.db.from('disputes').select('*').in('order_id', ids)).then((rows) =>
-        camelize<{ orderId: string }[]>(rows)
-      ),
-    ]);
-
-    const map = new Map<string, { items: unknown[]; statusHistory: unknown[]; dispute: unknown }>();
-    for (const id of ids) map.set(id, { items: [], statusHistory: [], dispute: null });
-    for (const item of items) {
-      map.get(item.orderId)!.items.push({
-        productId: item.productId,
-        name: item.name,
-        qty: item.qty,
-        unitPriceCad: Number(item.unitPriceCad),
-      });
-    }
-    for (const event of history) {
-      map.get(event.orderId)!.statusHistory.push({ status: event.status, at: event.at });
-    }
-    for (const dispute of openDisputes) {
-      map.get(dispute.orderId)!.dispute = dispute;
-    }
-    // Oldest first, so the timeline reads top to bottom.
-    //
-    // ⚠️ `at` is an ISO **string** here, not a Date. `postgres.js` parsed
-    // timestamptz into Date objects; PostgREST hands back JSON, so it never
-    // does. The previous `a.at.getTime()` would throw at runtime on a shape
-    // TypeScript had been told was a Date. Any other date arithmetic in this
-    // codebase carries the same break.
-    for (const entry of map.values()) {
-      (entry.statusHistory as { at: string }[]).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
-    }
-    return map;
-  }
-
-  private toOrder(row: Record<string, unknown>, parts: { items: unknown[]; statusHistory: unknown[]; dispute: unknown }) {
-    return {
-      ...row,
-      // `numeric` arrives as a string from postgres.js — see the note in
-      // `catalog/mappers.ts`. Handing these to the app unconverted would make
-      // every total string-concatenate.
-      subtotalCad: Number(row.subtotalCad),
-      gstCad: Number(row.gstCad),
-      qstCad: Number(row.qstCad),
-      deliveryFeeCad: Number(row.deliveryFeeCad),
-      totalCad: Number(row.totalCad),
-      pointsDiscountCad: row.pointsDiscountCad === null ? null : Number(row.pointsDiscountCad),
-      couponDiscountCad: row.couponDiscountCad === null ? null : Number(row.couponDiscountCad),
-      items: parts.items,
-      statusHistory: parts.statusHistory,
-      dispute: parts.dispute,
-    };
-  }
-
   /**
    * One order, visible to the three parties it concerns and nobody else.
    *
@@ -386,10 +319,31 @@ export class OrdersService {
 
     const raw = await unwrap<Record<string, unknown> | null>(query.maybeSingle());
     if (!raw) throw new NotFoundException('Order not found');
-    const row = camelize<Record<string, unknown> & { id: string }>(raw);
 
-    const parts = await this.hydrate([row]);
-    return this.toOrder(row, parts.get(row.id)!);
+    const [order] = await hydrateOrders(this.db, [raw], { revealPin: scope === 'customer', courierCard: true });
+    return order;
+  }
+
+  /**
+   * The latest GPS ping on one of the shopper's own orders. Ownership first, as
+   * a 404 — a stranger's order id must not answer with a position.
+   */
+  async courierLocation(customerId: string, orderId: string) {
+    const owned = await unwrap<{ id: string } | null>(
+      this.db.from('orders').select('id').eq('id', orderId).eq('customer_id', customerId).maybeSingle()
+    );
+    if (!owned) throw new NotFoundException('Order not found');
+    const ping = await unwrap<{ lat: number; lng: number; heading: number | null; recordedAt: string } | null>(
+      this.db
+        .from('courier_locations')
+        .select('lat, lng, heading, recordedAt:recorded_at')
+        .eq('order_id', orderId)
+        .order('recorded_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    );
+    // Wrapped: a bare `null` goes out as an empty body, which is not JSON.
+    return { location: ping ?? null };
   }
 
   async listForCustomer(customerId: string, query: OrderQuery): Promise<Page<unknown>> {
@@ -416,10 +370,8 @@ export class OrdersService {
       .range(query.offset, query.offset + query.limit - 1);
     if (error) throw unexpectedDbError(error);
 
-    const rows = camelize<(Record<string, unknown> & { id: string })[]>(data ?? []);
-    const parts = await this.hydrate(rows);
     return {
-      items: rows.map((row) => this.toOrder(row, parts.get(row.id)!)),
+      items: await hydrateOrders(this.db, data ?? [], { revealPin: ownership.column === 'customer_id', courierCard: true }),
       total: count ?? 0,
       limit: query.limit,
       offset: query.offset,

@@ -17,6 +17,7 @@ import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import type { ReportCourierIssueInput } from '../admin/dto/admin.dto.js';
 import { LoyaltyService } from '../loyalty/loyalty.service.js';
 import { assertTransition, type OrderStatus } from '../orders/order-status.js';
+import { hydrateOrders } from '../orders/order-view.js';
 import { courierEarnings, pinMatches } from './courier-pay.js';
 import type { CompleteDeliveryInput, LocationPingInput } from './dto/courier.dto.js';
 
@@ -57,10 +58,22 @@ export class DeliveryService {
     return { ...rest, status: one<any>(order)?.status as OrderStatus };
   }
 
-  /** What the courier's own screen shows: the run, plus the PIN they will be read at the door. */
+  /**
+   * The run as the courier's screens read it: the whole order, in the same
+   * shape the shopper and the merchant get (`orders/order-view.ts`).
+   *
+   * ⚠️ Without the PIN. This used to return `ownedRun`'s row, PIN included —
+   * but the PIN is the shopper's proof that the bag reached them. A courier who
+   * can read it here can close a run from anywhere; `complete` checks it against
+   * what the shopper read out, which only means something if this never sends it.
+   */
   async run(courierId: string, orderId: string) {
-    const run = await this.ownedRun(courierId, orderId);
-    return run;
+    await this.ownedRun(courierId, orderId);
+    const row = await unwrap<Record<string, unknown>>(
+      this.db.from('orders').select('*').eq('id', orderId).single()
+    );
+    const [order] = await hydrateOrders(this.db, [row], { revealPin: false, courierCard: false });
+    return order;
   }
 
   /**

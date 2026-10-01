@@ -61,6 +61,16 @@ export class OrdersController {
     return this.orders.byId(userId, id, 'customer');
   }
 
+  /**
+   * Where the courier carrying this order was last seen — the shopper's
+   * tracking map. `null` when the courier's app has not pinged yet; the map
+   * says so rather than inventing a position.
+   */
+  @Get(':id/courier-location')
+  courierLocation(@CurrentUser() userId: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.orders.courierLocation(userId, id);
+  }
+
   @Post(':id/dispute')
   openDispute(
     @CurrentUser() userId: string,
