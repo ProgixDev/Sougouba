@@ -14,7 +14,7 @@ import type { PostgrestError } from '@supabase/supabase-js';
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
 import { snakeize } from '../db/case.js';
-import { unwrap, unwrapRpc } from '../db/unwrap.js';
+import { unwrap, unwrapRpc, unwrapVoid } from '../db/unwrap.js';
 import { GeoService } from '../geo/geo.service.js';
 import {
   REGISTRATION_DOCUMENT_TYPES,
@@ -31,6 +31,7 @@ import { orIlike } from '../common/sql/postgrest.js';
 import { assertMediaPath, MERCHANT_DOCUMENTS_BUCKET, VENDOR_MEDIA_BUCKET } from './media-paths.js';
 import { toVendor, type VendorResponse, type VendorRow } from './mappers.js';
 import { slugify } from './slugify.js';
+import { SpecialtiesService } from './specialties.controller.js';
 
 /**
  * "Is this shop trading right now", asked of Postgres.
@@ -104,7 +105,8 @@ function defaultSectionNames(vendorType: 'grocery' | 'restaurant'): string[] {
 export class VendorsService {
   constructor(
     @Inject(DB) private readonly db: Db,
-    private readonly geo: GeoService
+    private readonly geo: GeoService,
+    private readonly specialties: SpecialtiesService
   ) {}
 
   // ── reads ─────────────────────────────────────────────────────────────────
@@ -334,6 +336,12 @@ export class VendorsService {
     );
     if (existing) throw new ConflictException('This account already has a shop');
 
+    // Resolved before anything is written: an id from the other vendor type's
+    // list, or one the back office has since retired, is refused here rather
+    // than leaving a shop whose line under its name nobody chose.
+    const specialty = await this.specialties.findActive(input.specialtyId, input.vendorType);
+    if (!specialty) throw new BadRequestException('Choisissez une spécialité dans la liste');
+
     const { lat, lng } = await this.geo.coordinatesFor(input.postalCode, input.city);
 
     // Shop, paperwork, a default week of hours, starting sections and the
@@ -347,7 +355,7 @@ export class VendorsService {
         p_slug_base: slugify(input.name),
         p_name: input.name,
         p_vendor_type: input.vendorType,
-        p_specialty_fr: input.specialtyFr,
+        p_specialty_fr: specialty.nameFr,
         p_city: input.city,
         p_street: input.street,
         p_postal_code: input.postalCode,
@@ -395,6 +403,11 @@ export class VendorsService {
         throw unexpectedDbError(error);
       }
     );
+
+    // Outside `vendor_apply`'s transaction, deliberately: the link is
+    // bookkeeping for the back office, and the shop is complete without it —
+    // `specialty_fr` above already carries the chosen line.
+    await unwrapVoid(this.db.from('vendors').update({ specialty_id: specialty.id }).eq('id', created));
 
     return this.oneOrFail((q) => q.eq('id', created));
   }

@@ -610,6 +610,30 @@ export type Database = {
           },
         ]
       }
+      email_verification_codes: {
+        Row: {
+          attempts: number
+          code_hash: string
+          email: string
+          expires_at: string
+          sent_at: string
+        }
+        Insert: {
+          attempts?: number
+          code_hash: string
+          email: string
+          expires_at: string
+          sent_at?: string
+        }
+        Update: {
+          attempts?: number
+          code_hash?: string
+          email?: string
+          expires_at?: string
+          sent_at?: string
+        }
+        Relationships: []
+      }
       favorite_products: {
         Row: {
           created_at: string
@@ -1195,6 +1219,42 @@ export type Database = {
           },
         ]
       }
+      specialties: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name_en: string
+          name_fr: string
+          position: number
+          slug: string
+          updated_at: string
+          vendor_type: Database["public"]["Enums"]["vendor_type"]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name_en: string
+          name_fr: string
+          position?: number
+          slug: string
+          updated_at?: string
+          vendor_type: Database["public"]["Enums"]["vendor_type"]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name_en?: string
+          name_fr?: string
+          position?: number
+          slug?: string
+          updated_at?: string
+          vendor_type?: Database["public"]["Enums"]["vendor_type"]
+        }
+        Relationships: []
+      }
       support_conversations: {
         Row: {
           created_at: string
@@ -1434,6 +1494,7 @@ export type Database = {
           reviewed_by: string | null
           slug: string
           specialty_fr: string
+          specialty_id: string | null
           status: Database["public"]["Enums"]["vendor_status"]
           status_reason: string | null
           updated_at: string
@@ -1460,6 +1521,7 @@ export type Database = {
           reviewed_by?: string | null
           slug: string
           specialty_fr: string
+          specialty_id?: string | null
           status?: Database["public"]["Enums"]["vendor_status"]
           status_reason?: string | null
           updated_at?: string
@@ -1486,6 +1548,7 @@ export type Database = {
           reviewed_by?: string | null
           slug?: string
           specialty_fr?: string
+          specialty_id?: string | null
           status?: Database["public"]["Enums"]["vendor_status"]
           status_reason?: string | null
           updated_at?: string

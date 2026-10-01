@@ -54,6 +54,21 @@ const envSchema = z.object({
   /** Phase 9. */
   OPENAI_API_KEY: z.string().optional(),
   FIREBASE_SERVICE_ACCOUNT_JSON: z.string().optional(),
+
+  /**
+   * Outgoing mail (sign-up codes), sent with Nodemailer.
+   *
+   * Optional, and empty is a deliberate state: with no `SMTP_HOST` the
+   * `MailService` does not send anything and logs the message to the console
+   * instead, so sign-up can be exercised end to end before a mail provider is
+   * chosen. Any SMTP relay works — Gmail app password, Resend, Postmark, SES.
+   */
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  /** The From header, e.g. `Sougouba <no-reply@sougouba.com>`. Falls back to `SMTP_USER`. */
+  MAIL_FROM: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -40,11 +40,8 @@ export const applyVendorSchema = z
   .object({
     name: z.string().trim().min(2, 'Nom de la boutique requis'),
     vendorType: vendorTypeSchema,
-    specialtyFr: z
-      .string()
-      .trim()
-      .min(3, 'Spécialité requise')
-      .max(40, 'Trop long — une ligne sous le nom de la boutique'),
+    /** An entry of `GET /specialties` for this `vendorType` — no longer free text. */
+    specialtyId: z.string().uuid('Choisissez une spécialité'),
     isHalalCertified: z.boolean(),
 
     street: z.string().trim().min(4, 'Adresse requise'),

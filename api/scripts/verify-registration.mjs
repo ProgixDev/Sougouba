@@ -60,10 +60,14 @@ async function uploadDoc(token, kind, bytes = PDF, contentType = 'application/pd
   return { ...issued.body, putStatus: put.status };
 }
 
+// Registration takes an entry of the back-office list, not free text.
+const [SPECIALTY] = await (await fetch(`${API}/specialties?type=grocery`)).json();
+if (!SPECIALTY?.id) throw new Error('GET /specialties returned no grocery specialty — is migration 0033 applied?');
+
 const application = (docs) => ({
   name: `Vérification ${Date.now()}`,
   vendorType: 'grocery',
-  specialtyFr: 'Épicerie de test',
+  specialtyId: SPECIALTY.id,
   isHalalCertified: false,
   street: '1234 Rue Saint-Denis',
   city: 'Montréal',

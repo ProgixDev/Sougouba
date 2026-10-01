@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { GeoModule } from '../geo/geo.module.js';
+import { SpecialtiesController, SpecialtiesService } from './specialties.controller.js';
 import { CategoriesController, CategoriesService } from './categories.controller.js';
 import { ProductsService } from './products.service.js';
 import { VendorMeController } from './vendor-me.controller.js';
@@ -23,8 +24,8 @@ import { VendorsService } from './vendors.service.js';
   // `CatalogController`'s `GET vendors/:id` would otherwise swallow
   // `GET vendors/me` (as id="me", which `ParseUUIDPipe` then 400s). The
   // merchant's fixed paths have to be offered first.
-  controllers: [VendorMeController, CatalogController, CategoriesController],
-  providers: [VendorsService, ProductsService, CategoriesService],
+  controllers: [VendorMeController, CatalogController, CategoriesController, SpecialtiesController],
+  providers: [VendorsService, ProductsService, CategoriesService, SpecialtiesService],
   exports: [VendorsService, ProductsService],
 })
 export class CatalogModule {}

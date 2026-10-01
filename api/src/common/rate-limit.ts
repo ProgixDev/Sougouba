@@ -33,6 +33,16 @@ const BUDGETS: { prefix: string; max: number; windowMs: number; why: string }[] 
     why: 'billed per call by Mapbox',
   },
   {
+    // Sign-up and its email codes: every call can send a mail, and a 6-digit
+    // code is only safe while guesses are scarce. Keyed by IP (there is no
+    // account yet). The per-code attempt cap and resend cooldown in
+    // `SignupService` are the real brute-force limit; this caps the rate.
+    prefix: '/auth',
+    max: 10,
+    windowMs: 60_000,
+    why: 'sends mail, and guards 6-digit codes',
+  },
+  {
     // The race-condition endpoint: two couriers accepting the same offer is the
     // contention this protects, and one courier needs exactly one call per
     // offer. Twenty a minute is a courier working flat out; a thousand is a

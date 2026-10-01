@@ -14,8 +14,10 @@ import { FavoritesModule } from './favorites/favorites.module.js';
 import { GeoModule } from './geo/geo.module.js';
 import { HealthModule } from './health/health.module.js';
 import { LoyaltyModule } from './loyalty/loyalty.module.js';
+import { MailModule } from './mail/mail.module.js';
 import { MeModule } from './me/me.module.js';
 import { OrdersModule } from './orders/orders.module.js';
+import { SignupModule } from './signup/signup.module.js';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { OrdersModule } from './orders/orders.module.js';
     ScheduleModule.forRoot(),
     DbModule,
     AuthModule,
+    MailModule,
+    SignupModule,
     HealthModule,
     GeoModule,
     MeModule,
