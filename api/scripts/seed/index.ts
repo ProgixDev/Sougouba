@@ -26,19 +26,16 @@
 import { createSeedDb } from './seed-db.js';
 import { deleteSeedAuthUsers, ensureAuthUsers, type SeedPerson } from './auth-users.js';
 import {
-  CATEGORY_IDS,
   COURIERS,
   COURIER_ISSUE_MESSAGES,
   COURIER_ISSUE_REASONS,
   CUSTOMERS,
   DISPUTE_MESSAGES,
   DISPUTE_REASONS,
-  ITEM_BANK,
-  ITEM_IMAGES,
-  SECTION_NAMES,
   VENDORS,
   VENDOR_IMAGES,
 } from './fixtures.js';
+import { catalogueFor, productSeedIndex, sectionSeedIndex } from './catalogue.js';
 import { productImagePath, vendorImagePath } from './image-paths.js';
 import { Family, isSeedEmail, seedEmail, seedId, SEED_ID_PREFIX } from './ids.js';
 import { cents, hashString, intBetween, mulberry32, pick } from './rng.js';
@@ -275,10 +272,11 @@ async function seed(): Promise<void> {
       })
       .onConflictDoNothing();
 
-    for (const [position, nameFr] of SECTION_NAMES.entries()) {
+    // The shop's own aisles (`catalogue.ts`), not one generic set for all.
+    for (const [position, nameFr] of catalogueFor(v.key).sections.entries()) {
       await db
         .insert('vendor_sections')
-        .values({ id: seedId(Family.Section, index * 100 + position), vendorId, nameFr, position })
+        .values({ id: seedId(Family.Section, sectionSeedIndex(index, position)), vendorId, nameFr, position })
         .onConflictDoNothing();
     }
 
@@ -289,8 +287,9 @@ async function seed(): Promise<void> {
         .onConflictDoNothing();
     }
 
-    for (const key of v.categoryKeys) {
-      await db.insert('vendor_categories').values({ vendorId, categoryId: CATEGORY_IDS[key] }).onConflictDoNothing();
+    // Listed under the categories its products are actually in.
+    for (const categoryId of catalogueFor(v.key).categoryIds) {
+      await db.insert('vendor_categories').values({ vendorId, categoryId }).onConflictDoNothing();
     }
   }
 
@@ -299,24 +298,30 @@ async function seed(): Promise<void> {
   for (const [vIndex, v] of VENDORS.entries()) {
     const vendorId = vendorIdOf.get(v.key)!;
     const list: { id: string; name: string; priceCents: number }[] = [];
-    for (const [iIndex, item] of ITEM_BANK.entries()) {
-      const productId = seedId(Family.Product, vIndex * 100 + iIndex);
+    for (const [iIndex, item] of catalogueFor(v.key).products.entries()) {
+      const productId = seedId(Family.Product, productSeedIndex(vIndex, iIndex));
       // A product must sit in an aisle *of its own shop* — the composite FK
       // `products_section_id_vendor_id_fk` enforces it.
-      const sectionId = seedId(Family.Section, vIndex * 100 + SECTION_NAMES.indexOf(item.sectionName));
+      const sectionId = seedId(Family.Section, sectionSeedIndex(vIndex, item.section));
       await db
         .insert('products')
         .values({
           id: productId,
           vendorId,
-          categoryId: CATEGORY_IDS[item.categoryKey],
+          categoryId: item.categoryId,
           sectionId,
           name: item.name,
-          description: `${item.name} — sélection ${v.name}.`,
+          description: item.description,
           priceCad: cents(item.priceCents),
-          imageUrl: productImagePath(vendorId, ITEM_IMAGES[item.name]!),
-          stockQty: intBetween(rand, 4, 90),
-          isAvailable: true,
+          compareAtPriceCad: item.compareAtCents === null ? null : cents(item.compareAtCents),
+          imageUrl: productImagePath(vendorId, item.image),
+          stockQty: item.stockQty,
+          isAvailable: item.isAvailable,
+          tags: item.tags,
+          nutritionCalories: item.nutrition?.calories ?? null,
+          nutritionProteinG: item.nutrition?.proteinG ?? null,
+          nutritionFatG: item.nutrition?.fatG ?? null,
+          nutritionWeightG: item.nutrition?.weightG ?? null,
         })
         .onConflictDoUpdate({ set: { priceCad: cents(item.priceCents) } });
       list.push({ id: productId, name: item.name, priceCents: item.priceCents });
@@ -562,6 +567,31 @@ async function seed(): Promise<void> {
   await insertAll('courier_issues', issueRows);
   await insertAll('disputes', disputeRows);
 
+  // 9 ─ the points those deliveries earned. Through the same function the API
+  // calls on delivery, so the ledger is the one a real order would leave; the
+  // first version wrote orders and never the points, and every seeded shopper
+  // with sixty days of history had a balance of 0.
+  const deliveredAtOf = new Map(deliveryRows.map((d) => [d.orderId as string, d.deliveredAt as Date | null]));
+  const settings = (await db.client.from('platform_settings').select('*').eq('id', 1).single()).data as Record<string, unknown>;
+  let credited = 0;
+  for (const o of orderRows) {
+    if (o.status !== 'delivered' || o.refundedAt) continue;
+    const deliveredAt = deliveredAtOf.get(o.id as string) ?? new Date((o.createdAt as Date).getTime() + 55 * 60_000);
+    const expiresAt = new Date(deliveredAt);
+    expiresAt.setMonth(expiresAt.getMonth() + Number(settings.points_expiry_months));
+    const { error } = await db.client.rpc('loyalty_credit_delivered', {
+      p_order_id: o.id,
+      p_customer_id: o.customerId,
+      p_points: Math.floor(Number(o.subtotalCad) * Number(settings.points_per_cad)),
+      p_expires_at: expiresAt.toISOString(),
+      p_created_at: deliveredAt.toISOString(),
+      p_referral_points: Number(settings.referral_reward_points),
+      p_qualifies_for_referral: false,
+    });
+    if (error) throw new Error(`loyalty credit: ${error.code ?? '?'} ${error.message}`);
+    credited += 1;
+  }
+
   const liveCount = orderRows.filter((o) => IN_FLIGHT.includes(o.status as (typeof IN_FLIGHT)[number])).length;
 
 
@@ -569,6 +599,7 @@ async function seed(): Promise<void> {
   console.log(`  couriers ${COURIERS.length} (${approvedCouriers.length} approved)`);
   console.log(`  orders   ${orderRows.length} (${liveCount} still in flight)`);
   console.log(`  problems ${disputeRows.length} disputes, ${issueRows.length} courier issues`);
+  console.log(`  loyalty  ${credited} delivered orders credited`);
   console.log(`\n  Sign in to the dashboard as:\n    ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}`);
 }
 

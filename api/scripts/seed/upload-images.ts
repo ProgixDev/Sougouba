@@ -18,7 +18,8 @@ import { fileURLToPath } from 'node:url';
 
 import { createClient } from '@supabase/supabase-js';
 
-import { ITEM_BANK, ITEM_IMAGES, VENDORS, VENDOR_IMAGES } from './fixtures.js';
+import { catalogueFor, productSeedIndex } from './catalogue.js';
+import { VENDORS, VENDOR_IMAGES } from './fixtures.js';
 import { Family, seedId } from './ids.js';
 import { productImagePath, vendorImagePath } from './image-paths.js';
 
@@ -45,10 +46,9 @@ for (const [vIndex, v] of VENDORS.entries()) {
   const vendorFile = VENDOR_IMAGES[v.key];
   if (!vendorFile) throw new Error(`No image for shop "${v.key}" in VENDOR_IMAGES`);
   jobs.push({ path: vendorImagePath(vendorId, vendorFile), file: vendorFile, table: 'vendors', id: vendorId });
-  for (const [iIndex, item] of ITEM_BANK.entries()) {
-    const file = ITEM_IMAGES[item.name];
-    if (!file) throw new Error(`No image for "${item.name}" in ITEM_IMAGES`);
-    const productId = seedId(Family.Product, vIndex * 100 + iIndex);
+  for (const [iIndex, item] of catalogueFor(v.key).products.entries()) {
+    const file = item.image;
+    const productId = seedId(Family.Product, productSeedIndex(vIndex, iIndex));
     jobs.push({ path: productImagePath(vendorId, file), file, table: 'products', id: productId });
   }
 }

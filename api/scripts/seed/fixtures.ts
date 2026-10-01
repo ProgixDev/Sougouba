@@ -129,63 +129,6 @@ export const CUSTOMERS: CustomerFixture[] = [
   { key: 'safia', fullName: 'Safia Toure', address: { label: 'Domicile', street: '3300 Chemin de la Côte-Sainte-Catherine', city: 'Montréal', postalCode: 'H3T 1C5', lat: 45.4978, lng: -73.6221 } },
 ];
 
-export interface ItemFixture {
-  name: string;
-  /** Integer cents — never a float. See `cents()` in rng.ts. */
-  priceCents: number;
-  categoryKey: keyof typeof CATEGORY_IDS;
-  sectionName: string;
-}
-
-/** The 15-item bank `admin/lib/api/seed.ts` draws order lines from. */
-export const ITEM_BANK: ItemFixture[] = [
-  { name: 'Riz brisé parfumé 5 kg', priceCents: 1899, categoryKey: 'cerealesLegumineuses', sectionName: 'Riz et céréales' },
-  { name: 'Attiéké frais 1 kg', priceCents: 799, categoryKey: 'cerealesLegumineuses', sectionName: 'Riz et céréales' },
-  { name: 'Huile de palme rouge 1 L', priceCents: 1249, categoryKey: 'epicesCondiments', sectionName: 'Épices et condiments' },
-  { name: 'Pâte d’arachide 500 g', priceCents: 649, categoryKey: 'epicesCondiments', sectionName: 'Épices et condiments' },
-  { name: 'Cube Maggi (paquet de 60)', priceCents: 899, categoryKey: 'epicesCondiments', sectionName: 'Épices et condiments' },
-  { name: 'Ras el hanout 100 g', priceCents: 549, categoryKey: 'epicesCondiments', sectionName: 'Épices et condiments' },
-  { name: 'Épaule d’agneau halal 1 kg', priceCents: 2299, categoryKey: 'viandeHalal', sectionName: 'Boucherie' },
-  { name: 'Poulet fermier halal entier', priceCents: 1749, categoryKey: 'viandeHalal', sectionName: 'Boucherie' },
-  { name: 'Tilapia entier surgelé 1 kg', priceCents: 1399, categoryKey: 'viandeHalal', sectionName: 'Boucherie' },
-  { name: 'Igname fraîche 2 kg', priceCents: 999, categoryKey: 'fruitsLegumes', sectionName: 'Fruits et légumes' },
-  { name: 'Gombo frais 500 g', priceCents: 599, categoryKey: 'fruitsLegumes', sectionName: 'Fruits et légumes' },
-  { name: 'Bissap séché 200 g', priceCents: 749, categoryKey: 'boissons', sectionName: 'Boissons' },
-  { name: 'Thé à la menthe Maghreb 250 g', priceCents: 899, categoryKey: 'boissons', sectionName: 'Boissons' },
-  { name: 'Msemen (paquet de 6)', priceCents: 699, categoryKey: 'painsPatisseries', sectionName: 'Boulangerie' },
-  { name: 'Yaourt nature 1 L', priceCents: 549, categoryKey: 'produitsLaitiers', sectionName: 'Produits laitiers' },
-];
-
-/**
- * The photo for each item, by name — a file in the app's
- * `assets/images/catalog/` (credits in `assets/images/CREDITS.md`).
- *
- * The app bundled these long before the database existed, keyed by the mock's
- * own ids (`prd_riz_brise`), which match nothing here — so every product
- * rendered as a placeholder icon. `npm run db:seed:images` uploads each one into
- * its shop's `product-media` folder and writes the path onto the row.
- *
- * Two are near matches rather than exact: the shoulder uses the leg-of-lamb
- * photo, and attiéké the attiéké-and-fish plate.
- */
-export const ITEM_IMAGES: Record<string, string> = {
-  'Riz brisé parfumé 5 kg': 'prd_riz_brise',
-  'Attiéké frais 1 kg': 'prd_attieke_poisson',
-  'Huile de palme rouge 1 L': 'prd_huile_palme',
-  'Pâte d’arachide 500 g': 'prd_pate_arachide',
-  'Cube Maggi (paquet de 60)': 'prd_cube_bouillon',
-  'Ras el hanout 100 g': 'prd_ras_el_hanout',
-  'Épaule d’agneau halal 1 kg': 'prd_gigot_agneau',
-  'Poulet fermier halal entier': 'prd_poulet_fermier',
-  'Tilapia entier surgelé 1 kg': 'prd_tilapia_entier',
-  'Igname fraîche 2 kg': 'prd_igname',
-  'Gombo frais 500 g': 'prd_gombo_frais',
-  'Bissap séché 200 g': 'prd_bissap_sec',
-  'Thé à la menthe Maghreb 250 g': 'prd_the_menthe',
-  'Msemen (paquet de 6)': 'prd_msemen',
-  'Yaourt nature 1 L': 'prd_yaourt_maison',
-};
-
 /**
  * Each shop's cover (also its logo), by fixture key. The five shops the mobile
  * seed never had borrow a product photo that says what they sell.
@@ -207,9 +150,6 @@ export const VENDOR_IMAGES: Record<string, string> = {
   zanzibar: 'prd_safran',
   casbah: 'prd_tajine_agneau',
 };
-
-/** Deduplicated aisle names, in a stable order — every product must sit in one. */
-export const SECTION_NAMES = [...new Set(ITEM_BANK.map((i) => i.sectionName))];
 
 export const DISPUTE_REASONS = ['missing_items', 'wrong_order', 'quality', 'late', 'other'] as const;
 
