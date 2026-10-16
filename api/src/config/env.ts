@@ -75,6 +75,23 @@ const envSchema = z.object({
   FIREBASE_SERVICE_ACCOUNT_JSON: z.string().optional(),
 
   /**
+   * Accept the fixed code `000000` for every sign-in, and send no email.
+   *
+   * The test-phase switch for a deploy with no mail provider: testers get into
+   * any account with 000000 instead of waiting for a code that cannot arrive.
+   * Without it, `MailService` refuses to boot in production rather than let
+   * sign-up codes vanish into a server log.
+   *
+   * ⚠️ **This is an authentication bypass.** Anyone who knows an address — a
+   * tester, a merchant, an administrator — can sign in as them with six zeros.
+   * It must be unset before the app is delivered or handed to anyone outside
+   * the test group, and it is a separate variable from `NODE_ENV` precisely so
+   * that turning it off is one deliberate deletion rather than a side effect of
+   * some other setting. The API logs a warning naming it on every boot.
+   */
+  ALLOW_FIXED_TEST_OTP: z.string().optional(),
+
+  /**
    * Outgoing mail (sign-up codes), sent with Nodemailer.
    *
    * Optional, and empty is a deliberate state: with no `SMTP_HOST` the
