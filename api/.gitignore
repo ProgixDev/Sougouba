@@ -15,3 +15,10 @@ coverage/
 app.json
 ios/
 android/
+.vercel
+
+# `vercel link` wrote `.env*` here, which would also hide `.env.example` — the
+# one env file that is meant to be committed, since it is how anyone knows
+# which variables exist. Kept, with the exception the root .gitignore uses.
+.env*
+!.env.example
