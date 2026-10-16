@@ -6,3 +6,12 @@ coverage/
 *.log
 *.tsbuildinfo
 .DS_Store
+
+# Expo artifacts, which have no business in a NestJS folder. A stray
+# `npx expo` run in here once generated app.json plus a whole ios/ project for
+# a phantom "sougoubaapi" app, and the root .gitignore could not catch them: it
+# anchors the native folders as `/ios` and `/android`, which matches the mobile
+# app at the repo root and nothing nested.
+app.json
+ios/
+android/
