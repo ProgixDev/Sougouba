@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 import type { Env } from '../config/env.js';
+import { isServerless } from '../config/runtime.js';
 import { RetentionService } from './retention.service.js';
 
 /**
@@ -28,7 +29,26 @@ export class RetentionScheduler {
     private readonly config: ConfigService<Env, true>
   ) {}
 
+  /** Just the two vars `isServerless` reads, so the check stays a pure function. */
+  private get env(): Pick<Env, 'VERCEL' | 'SERVERLESS'> {
+    return {
+      VERCEL: this.config.get('VERCEL', { infer: true }),
+      SERVERLESS: this.config.get('SERVERLESS', { infer: true }),
+    };
+  }
+
+
+  /**
+   * The timer that owns the nightly retention purge on a long-running host. On serverless it
+   * stands down and platform cron calls `nightly` directly — see
+   * `cron/cron.controller.ts`.
+   */
   @Cron(CronExpression.EVERY_DAY_AT_4AM, { timeZone: 'America/Montreal' })
+  async scheduledNightly(): Promise<void> {
+    if (isServerless(this.env)) return;
+    await this.nightly();
+  }
+
   async nightly(): Promise<void> {
     // Tests boot the app; a purge firing mid-suite would delete rows a test put there.
     if (this.config.get('NODE_ENV', { infer: true }) === 'test') return;

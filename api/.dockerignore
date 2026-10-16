@@ -1,0 +1,27 @@
+# Keep the build context small and the image free of things that must never
+# ship in it — `.env` above all, which carries the service-role key.
+.env
+.env.*
+!.env.example
+
+node_modules
+dist
+*.tsbuildinfo
+
+# Not needed to run the API: migrations and seeds are applied from a developer
+# machine against Supabase, and the tests do not run in the image.
+drizzle
+scripts
+test
+vitest.config.ts
+vitest.config.e2e.ts
+
+# Expo artifacts that do not belong in this folder at all — see PROGRESS.md.
+app.json
+ios
+android
+
+*.md
+.git
+.github
+.vercel

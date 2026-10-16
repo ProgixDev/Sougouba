@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { CourierModule } from '../courier/courier.module.js';
 import { LoyaltyModule } from '../loyalty/loyalty.module.js';
 import { OrdersController } from './orders.controller.js';
 import { OrdersService } from './orders.service.js';
@@ -16,10 +17,15 @@ import { VendorOrdersController } from './vendor-orders.controller.js';
  * a dispute first gets a life beyond the two parties.
  */
 @Module({
+  // `CourierModule` only for `DispatchScheduler.nudge`: a placed order should
+  // reach a courier immediately on a host where no dispatch timer runs. Safe
+  // to import — `CourierModule` reaches into this module's files directly
+  // (`order-view`, `order-status`) but does not import the module, so there is
+  // no cycle.
   // Checkout needs all three of what `LoyaltyModule` exports: the balance to
   // clamp a redemption against, the debit to write once the order exists, and
   // the coupon to price and then mark used.
-  imports: [LoyaltyModule],
+  imports: [LoyaltyModule, CourierModule],
   controllers: [OrdersController, VendorOrdersController, StripeWebhookController],
   providers: [OrdersService, PaymentsService],
   // `PaymentsService` is exported so Phase 6's refunds go back through the same

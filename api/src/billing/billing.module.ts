@@ -22,6 +22,6 @@ import { PayoutsService } from './payouts.service.js';
   imports: [OrdersModule, LoyaltyModule, CourierModule],
   controllers: [MerchantBillingController, CourierBillingController, AdminPayoutsController],
   providers: [AnalyticsService, ConnectService, PayoutsService, PayoutsScheduler],
-  exports: [AnalyticsService, PayoutsService],
+  exports: [AnalyticsService, PayoutsService, PayoutsScheduler],
 })
 export class BillingModule {}

@@ -20,6 +20,6 @@ import { DispatchService } from './dispatch.service.js';
   imports: [GeoModule, LoyaltyModule],
   controllers: [CourierController],
   providers: [CouriersService, DispatchService, DeliveryService, DispatchScheduler],
-  exports: [CouriersService, DispatchService],
+  exports: [CouriersService, DispatchService, DispatchScheduler],
 })
 export class CourierModule {}

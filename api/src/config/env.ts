@@ -51,6 +51,25 @@ const envSchema = z.object({
   /** Phase 1/5: geocoding and Directions — same account as the mobile app's map rendering. */
   MAPBOX_SECRET_TOKEN: z.string().optional(),
 
+  /**
+   * Set to '1' by Vercel on every deployment, and by hand on any other
+   * serverless host. Decides whether the in-process schedulers run or whether
+   * cron drives them over HTTP — see `config/runtime.ts`.
+   */
+  VERCEL: z.string().optional(),
+  SERVERLESS: z.string().optional(),
+
+  /**
+   * Shared secret for the platform's scheduler, sent as
+   * `Authorization: Bearer <CRON_SECRET>` to the `/internal/cron/*` routes.
+   *
+   * Required in practice on a serverless deploy: without it `CronGuard`
+   * refuses every call, so nothing is scheduled at all. Vercel generates one
+   * and injects it into cron invocations automatically; set the same value in
+   * the project's environment variables so the guard can compare against it.
+   */
+  CRON_SECRET: z.string().optional(),
+
   /** Phase 9. */
   OPENAI_API_KEY: z.string().optional(),
   FIREBASE_SERVICE_ACCOUNT_JSON: z.string().optional(),

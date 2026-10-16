@@ -24,6 +24,6 @@ import { RetentionService } from './retention.service.js';
   imports: [OrdersModule, LoyaltyModule, AuditModule],
   controllers: [AdminController],
   providers: [AdminService, RefundsService, ApprovalsService, RetentionService, RetentionScheduler],
-  exports: [RefundsService],
+  exports: [RefundsService, RetentionScheduler],
 })
 export class AdminModule {}

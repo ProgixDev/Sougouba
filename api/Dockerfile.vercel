@@ -1,0 +1,55 @@
+# syntax=docker/dockerfile:1
+
+# The API as a container image.
+#
+# Vercel picks this file up automatically (`Dockerfile.vercel` at the project
+# root) and routes all traffic to it, so the app runs exactly as it does
+# locally and on a VPS — one `node dist/main.js`, real paths, real Fastify —
+# rather than being reshaped into a function handler. That matters here for two
+# reasons: Vercel's function builder compiles TypeScript with esbuild, which
+# drops `emitDecoratorMetadata` and so quietly breaks Nest's dependency
+# injection; and this same file is what the VPS deploy will use at delivery
+# (`docker build -f Dockerfile.vercel .`), which keeps test and production on
+# one artifact instead of two.
+#
+# ⚠️ A container on Vercel still scales to zero, so in-process timers are not
+# dependable there. `VERCEL=1` is set automatically on every Vercel deployment,
+# which makes `config/runtime.ts` stand the schedulers down in favour of the
+# `/internal/cron/*` routes. On the VPS nothing sets it, the timers run, and
+# dispatch returns to its 5-second loop with no code change.
+
+# ── build ────────────────────────────────────────────────────────────────────
+# Dev dependencies are needed here: `nest build` is the real TypeScript
+# compiler, and tsconfig declares vitest's global types.
+FROM node:24-alpine AS build
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY nest-cli.json tsconfig.json tsconfig.build.json ./
+COPY src ./src
+RUN npm run build
+
+# ── runtime ──────────────────────────────────────────────────────────────────
+FROM node:24-alpine AS runtime
+WORKDIR /app
+
+# Set before `npm ci` so the install itself runs in production mode.
+ENV NODE_ENV=production
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
+COPY --from=build /app/dist ./dist
+
+# Vercel sends container traffic to port 80 unless the project overrides PORT.
+# `config/env.ts` reads PORT, so this is all it takes; on a VPS behind nginx,
+# override it with `-e PORT=3100` and nothing else changes.
+ENV PORT=80
+EXPOSE 80
+
+# Run as the image's own unprivileged user rather than root.
+USER node
+
+CMD ["node", "dist/main.js"]

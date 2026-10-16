@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/internal/cron/dispatch",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/internal/cron/payouts",
+      "schedule": "0 7 * * 5"
+    },
+    {
+      "path": "/internal/cron/retention",
+      "schedule": "0 8 * * *"
+    }
+  ]
+}

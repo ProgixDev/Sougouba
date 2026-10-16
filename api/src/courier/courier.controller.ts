@@ -9,6 +9,7 @@ import { paginationSchema } from '../catalog/dto/query.dto.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import { CouriersService } from './couriers.service.js';
 import { DeliveryService } from './delivery.service.js';
+import { DispatchScheduler } from './dispatch.scheduler.js';
 import { DispatchService } from './dispatch.service.js';
 import {
   applyCourierSchema,
@@ -42,7 +43,12 @@ export class CourierController {
   constructor(
     private readonly couriers: CouriersService,
     private readonly dispatch: DispatchService,
-    private readonly delivery: DeliveryService
+    private readonly delivery: DeliveryService,
+    /**
+     * Only ever used for `nudge`, which runs a dispatch tick on hosts with no
+     * always-on timer. A no-op on a VPS — see `dispatch.scheduler.ts`.
+     */
+    private readonly dispatcher: DispatchScheduler
   ) {}
 
   @Post('apply')
@@ -62,15 +68,22 @@ export class CourierController {
 
   /** Going on or off shift. Only an approved file may go online. */
   @Post('me/shift')
-  setShift(@CurrentUser() userId: string, @Body(new ZodValidationPipe(setShiftSchema)) body: SetShiftInput) {
-    return this.couriers.setShift(userId, body);
+  async setShift(@CurrentUser() userId: string, @Body(new ZodValidationPipe(setShiftSchema)) body: SetShiftInput) {
+    const result = await this.couriers.setShift(userId, body);
+    // A courier who just came online is the one thing a waiting order needs.
+    await this.dispatcher.nudge();
+    return result;
   }
 
   /** Keep-alive for a courier waiting for work, who has no run to ping against. */
   @Post('me/heartbeat')
-  heartbeat(@CurrentUser() userId: string, @Body(new ZodValidationPipe(locationPingSchema.partial())) body: Partial<LocationPingInput>) {
+  async heartbeat(@CurrentUser() userId: string, @Body(new ZodValidationPipe(locationPingSchema.partial())) body: Partial<LocationPingInput>) {
     const position = body.lat !== undefined && body.lng !== undefined ? { lat: body.lat, lng: body.lng } : undefined;
-    return this.couriers.heartbeat(userId, position);
+    const result = await this.couriers.heartbeat(userId, position);
+    // The app heartbeats every 45 s while a courier waits for work, which makes
+    // this the closest thing to a tick-tock a serverless deploy has.
+    await this.dispatcher.nudge();
+    return result;
   }
 
   @Get('me/earnings')
@@ -96,6 +109,9 @@ export class CourierController {
   @Get('me/offers')
   async offers(@CurrentUser() userId: string) {
     const courierId = await this.couriers.courierIdFor(userId);
+    // Before answering, not after: a tick is what makes this list current, and
+    // this route exists precisely for a client that has just reconnected.
+    await this.dispatcher.nudge();
     return this.dispatch.pendingOffersFor(courierId);
   }
 
@@ -108,7 +124,11 @@ export class CourierController {
   @Post('me/offers/:id/decline')
   async decline(@CurrentUser() userId: string, @Param('id', ParseUUIDPipe) offerId: string) {
     const courierId = await this.couriers.courierIdFor(userId);
-    return this.dispatch.decline(courierId, offerId);
+    const result = await this.dispatch.decline(courierId, offerId);
+    // Re-offer to the next courier now. Otherwise a declined order waits for
+    // the next tick, which on serverless could be a minute away.
+    await this.dispatcher.nudge();
+    return result;
   }
 
   // ── carrying a run ────────────────────────────────────────────────────────

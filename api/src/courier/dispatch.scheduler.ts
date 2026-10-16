@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Interval } from '@nestjs/schedule';
 
 import type { Env } from '../config/env.js';
+import { isServerless } from '../config/runtime.js';
 import { DispatchService } from './dispatch.service.js';
 
 /** Comfortably under `OFFER_TIMEOUT_MS` (30 s), so a lapsed offer moves on within a few seconds. */
@@ -36,7 +37,50 @@ export class DispatchScheduler {
     private readonly config: ConfigService<Env, true>
   ) {}
 
+  /** Just the two vars `isServerless` reads, so the check stays a pure function. */
+  private get env(): Pick<Env, 'VERCEL' | 'SERVERLESS'> {
+    return {
+      VERCEL: this.config.get('VERCEL', { infer: true }),
+      SERVERLESS: this.config.get('SERVERLESS', { infer: true }),
+    };
+  }
+
+  /**
+   * The timer that owns the loop on a long-running host.
+   *
+   * On a serverless host it stands down and `tick` is driven over HTTP
+   * instead — see `config/runtime.ts` and `cron/cron.controller.ts`. The check
+   * is here rather than on `tick` itself so that cron and `nudge` can still
+   * call the real thing.
+   */
   @Interval(TICK_MS)
+  async scheduledTick(): Promise<void> {
+    if (isServerless(this.env)) return;
+    await this.tick();
+  }
+
+  /**
+   * Drive one tick from an HTTP request, on hosts where no timer runs.
+   *
+   * Platform cron can only be trusted to fire once a minute, which is slower
+   * than `OFFER_TIMEOUT_MS`. So the requests that actually care about dispatch
+   * also drive it: a courier coming on shift, polling offers, heartbeating or
+   * declining, and a customer's order being placed. Each of those is a moment
+   * when a tick is exactly what the caller wants to have happened.
+   *
+   * A no-op off serverless, where the 5-second timer already covers it — two
+   * tickers would only burn two ticks to do one tick's work.
+   *
+   * Awaited rather than fired and forgotten: a serverless instance can be
+   * frozen the moment its response is sent, so background work started here
+   * might simply never run. `tick` swallows its own failures, so this cannot
+   * turn a dispatch problem into a failed request for the caller.
+   */
+  async nudge(): Promise<void> {
+    if (!isServerless(this.env)) return;
+    await this.tick();
+  }
+
   async tick(): Promise<void> {
     // Tests boot the app; a dispatcher firing in the background while they run
     // would write rows nobody asked for.

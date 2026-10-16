@@ -91,7 +91,11 @@ const DEFAULT_BUDGET = { max: 300, windowMs: 60_000 };
  * - **Health checks.** A load balancer polling `/health` every second must not
  *   be able to rate-limit itself out of existence and take the instance with it.
  */
-const NEVER_LIMITED = ['/webhooks/stripe', '/health'];
+// `/internal/cron` is exempt because the caller is the platform's scheduler,
+// already authenticated by `CronGuard`'s shared secret, and a throttled payout
+// run is a courier not being paid. It keys on IP like anything unauthenticated
+// would, and cron invocations do not come from a stable one.
+const NEVER_LIMITED = ['/webhooks/stripe', '/health', '/internal/cron'];
 
 export function budgetFor(url: string): { max: number; windowMs: number } {
   const path = url.split('?')[0] ?? url;

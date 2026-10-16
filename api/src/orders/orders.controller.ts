@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { SupabaseAuthGuard } from '../auth/supabase-auth.guard.js';
+import { DispatchScheduler } from '../courier/dispatch.scheduler.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import {
   cartSchema,
@@ -33,7 +34,11 @@ import { OrdersService } from './orders.service.js';
 @UseGuards(SupabaseAuthGuard)
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly orders: OrdersService) {}
+  constructor(
+    private readonly orders: OrdersService,
+    /** Only for `nudge` — a no-op unless this is a serverless deploy. */
+    private readonly dispatcher: DispatchScheduler
+  ) {}
 
   /** Declared before `:id` — otherwise `quote` is matched as an order id and 400s on the uuid pipe. */
   @Post('quote')
@@ -47,8 +52,12 @@ export class OrdersController {
   }
 
   @Post()
-  place(@CurrentUser() userId: string, @Body(new ZodValidationPipe(placeOrderSchema)) body: PlaceOrderInput) {
-    return this.orders.place(userId, body);
+  async place(@CurrentUser() userId: string, @Body(new ZodValidationPipe(placeOrderSchema)) body: PlaceOrderInput) {
+    const order = await this.orders.place(userId, body);
+    // The order exists and is paid; a courier should hear about it now rather
+    // than whenever the next tick happens to come round.
+    await this.dispatcher.nudge();
+    return order;
   }
 
   @Get()

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 
 import type { Env } from '../config/env.js';
+import { isServerless } from '../config/runtime.js';
 import { PaymentsService } from '../orders/payments.service.js';
 import { PayoutsService } from './payouts.service.js';
 
@@ -32,7 +33,26 @@ export class PayoutsScheduler {
     private readonly config: ConfigService<Env, true>
   ) {}
 
+  /** Just the two vars `isServerless` reads, so the check stays a pure function. */
+  private get env(): Pick<Env, 'VERCEL' | 'SERVERLESS'> {
+    return {
+      VERCEL: this.config.get('VERCEL', { infer: true }),
+      SERVERLESS: this.config.get('SERVERLESS', { infer: true }),
+    };
+  }
+
+
+  /**
+   * The timer that owns the weekly courier payout on a long-running host. On serverless it
+   * stands down and platform cron calls `weekly` directly — see
+   * `cron/cron.controller.ts`.
+   */
   @Cron('0 3 * * 5', { timeZone: 'America/Montreal' })
+  async scheduledWeekly(): Promise<void> {
+    if (isServerless(this.env)) return;
+    await this.weekly();
+  }
+
   async weekly(): Promise<void> {
     if (this.config.get('NODE_ENV', { infer: true }) === 'test') return;
 
