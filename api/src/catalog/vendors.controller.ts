@@ -2,7 +2,16 @@ import { Controller, Get, Param, ParseUUIDPipe, Query, UsePipes } from '@nestjs/
 import { ApiTags } from '@nestjs/swagger';
 
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
-import { productQuerySchema, productSearchSchema, type ProductQuery, type ProductSearchQuery } from './dto/product.dto.js';
+import {
+  productIdsSchema,
+  productListSchema,
+  productQuerySchema,
+  productSearchSchema,
+  type ProductIdsQuery,
+  type ProductListQuery,
+  type ProductQuery,
+  type ProductSearchQuery,
+} from './dto/product.dto.js';
 import { vendorQuerySchema, type VendorQuery } from './dto/vendor.dto.js';
 import { ProductsService } from './products.service.js';
 import { VendorsService } from './vendors.service.js';
@@ -51,6 +60,31 @@ export class CatalogController {
     @Query(new ZodValidationPipe(productQuerySchema)) query: ProductQuery
   ) {
     return this.products.listForVendor(id, query);
+  }
+
+  /**
+   * The catalogue, platform-wide. `?categoryId=` is the category browse and
+   * `?vendorId=` narrows to one shop, so a screen needs one request rather
+   * than the shop list plus a shelf per shop.
+   */
+  @Get('products')
+  @UsePipes(new ZodValidationPipe(productListSchema))
+  listProducts(@Query() query: ProductListQuery) {
+    return this.products.list(query);
+  }
+
+  /**
+   * Several products by id — the cart, checkout and the favourites list.
+   *
+   * Declared above `products/:id`, like `vendors/slug/:slug` above
+   * `vendors/:id` and for the same reason: Nest matches in declaration order,
+   * so `:id` would otherwise take this with `id="by-ids"` and 400 on the uuid
+   * pipe.
+   */
+  @Get('products/by-ids')
+  @UsePipes(new ZodValidationPipe(productIdsSchema))
+  productsByIds(@Query() query: ProductIdsQuery) {
+    return this.products.byIds(query.ids);
   }
 
   @Get('products/search')

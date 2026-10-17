@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { createProductSchema, PRICE_BANDS, productQuerySchema, updateProductSchema } from './product.dto.js';
+import {
+  createProductSchema,
+  PRICE_BANDS,
+  productIdsSchema,
+  productListSchema,
+  productQuerySchema,
+  productSearchSchema,
+  updateProductSchema,
+} from './product.dto.js';
 
 const CATEGORY = '7f3a1c00-0000-4000-8000-000000000001';
 const SECTION = '33333333-3333-4333-8333-333333333333';
@@ -141,5 +149,57 @@ describe('PRICE_BANDS', () => {
     expect(PRICE_BANDS['10_to_20']).toEqual([10, 20]);
     expect(PRICE_BANDS.over_20).toEqual([20, null]);
     expect(PRICE_BANDS.all).toEqual([null, null]);
+  });
+});
+
+describe('productListSchema', () => {
+  const ID = '5eed9515-0004-4000-8000-0000000000c8';
+
+  it('accepts a browse with no search term, where a search would not', () => {
+    // The whole point of the route: the home screen and a category tap have no
+    // term, and before it existed they walked every shop's shelf instead.
+    expect(productListSchema.safeParse({}).success).toBe(true);
+    expect(productSearchSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('still takes a term when there is one', () => {
+    expect(productListSchema.parse({ q: ' riz ' }).q).toBe('riz');
+  });
+
+  it('narrows to one shop', () => {
+    expect(productListSchema.parse({ vendorId: ID }).vendorId).toBe(ID);
+    expect(productListSchema.safeParse({ vendorId: 'nope' }).success).toBe(false);
+  });
+
+  it('keeps the shared pagination and sort defaults', () => {
+    const parsed = productListSchema.parse({});
+    expect(parsed.offset).toBe(0);
+    expect(parsed.limit).toBeGreaterThan(0);
+    expect(parsed.priceBand).toBeDefined();
+    expect(parsed.sort).toBeDefined();
+  });
+});
+
+describe('productIdsSchema', () => {
+  const A = '5eed9515-0004-4000-8000-0000000000c8';
+  const B = '5eed9515-0004-4000-8000-0000000000c9';
+
+  it('splits a comma-separated list, trimming and dropping blanks', () => {
+    // `?ids=a, b,,c` is what string-joining a cart in a URL actually produces.
+    expect(productIdsSchema.parse({ ids: `${A}, ${B},` }).ids).toEqual([A, B]);
+  });
+
+  it('refuses an empty list rather than answering with the whole catalogue', () => {
+    expect(productIdsSchema.safeParse({ ids: '' }).success).toBe(false);
+    expect(productIdsSchema.safeParse({ ids: ' , ' }).success).toBe(false);
+  });
+
+  it('refuses anything that is not a uuid', () => {
+    expect(productIdsSchema.safeParse({ ids: `${A},by-ids` }).success).toBe(false);
+  });
+
+  it('caps the list, because the ids become one `in` statement', () => {
+    expect(productIdsSchema.safeParse({ ids: Array(100).fill(A).join(',') }).success).toBe(true);
+    expect(productIdsSchema.safeParse({ ids: Array(101).fill(A).join(',') }).success).toBe(false);
   });
 });

@@ -28,6 +28,9 @@ export const PRICE_BANDS: Record<PriceBand, [number | null, number | null]> = {
   over_20: [20, null],
 };
 
+/** Ceiling for `productIdsSchema`. A cart is a handful of lines; a favourites list is tens. */
+const MAX_PRODUCT_IDS = 100;
+
 export const productQuerySchema = paginationSchema.extend({
   sort: sortKeySchema,
   priceBand: priceBandSchema,
@@ -49,6 +52,53 @@ export const productSearchSchema = productQuerySchema.extend({
 });
 
 export type ProductSearchQuery = z.infer<typeof productSearchSchema>;
+
+/**
+ * Browsing the catalogue platform-wide, with **no search term required**.
+ *
+ * `productSearchSchema` insists on `q` because a blank platform-wide *search*
+ * is meant to return nothing. Browsing is the other half of that: the home
+ * screen and a category tap have no term at all. Before this existed the app
+ * reached the same answer by listing every shop and then asking each shop for
+ * its shelf — one request per shop, so the home screen cost 1 + N requests and
+ * got slower with every merchant who signed up. Same filters, same single
+ * `product_page` call; `q` is simply optional.
+ */
+export const productListSchema = productQuerySchema.extend({
+  vendorId: z.uuid().optional(),
+});
+
+export type ProductListQuery = z.infer<typeof productListSchema>;
+
+/**
+ * A known set of product ids, resolved in one request.
+ *
+ * What the cart, checkout and the favourites list actually want: they already
+ * hold ids and need the products behind them. They used to get there by
+ * downloading the whole catalogue and filtering it on the device.
+ *
+ * Comma-separated rather than repeated `ids=` params, because that is what a
+ * cart of three lines reads like in a URL. Capped: the ids land in one `in`
+ * list, and an unbounded one is a statement someone else gets to size.
+ */
+export const productIdsSchema = z.object({
+  ids: z
+    .string()
+    .transform((raw) =>
+      raw
+        .split(',')
+        .map((part) => part.trim())
+        .filter(Boolean)
+    )
+    .pipe(
+      z
+        .array(z.uuid('Identifiant invalide'))
+        .min(1, 'Au moins un identifiant')
+        .max(MAX_PRODUCT_IDS, `${MAX_PRODUCT_IDS} identifiants maximum`)
+    ),
+});
+
+export type ProductIdsQuery = z.infer<typeof productIdsSchema>;
 
 // ── merchant writes ─────────────────────────────────────────────────────────
 

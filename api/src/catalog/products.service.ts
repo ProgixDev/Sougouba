@@ -6,6 +6,7 @@ import { unwrap } from '../db/unwrap.js';
 import {
   PRICE_BANDS,
   type CreateProductInput,
+  type ProductListQuery,
   type ProductQuery,
   type ProductSearchQuery,
   type UpdateProductInput,
@@ -86,6 +87,45 @@ export class ProductsService {
   /** Platform-wide search across every approved shop. */
   async search(query: ProductSearchQuery): Promise<Page<ProductResponse>> {
     return this.page({ vendorId: query.vendorId, approvedOnly: true }, query);
+  }
+
+  /**
+   * The catalogue, platform-wide, with no search term — the browse to
+   * `search`'s search. One `product_page` call, however many shops exist.
+   *
+   * This is what the home screen and a category tap need. They used to ask for
+   * the shop list and then for each shop's shelf separately, which is 1 + N
+   * requests for one screen and degrades as merchants sign up; the filtering
+   * and paging were already in `page`, only a route that didn't demand `q` was
+   * missing.
+   */
+  async list(query: ProductListQuery): Promise<Page<ProductResponse>> {
+    return this.page({ vendorId: query.vendorId, approvedOnly: true }, query);
+  }
+
+  /**
+   * Resolve a known set of ids in one round trip.
+   *
+   * Not `product_page`: the RPC has no id filter, and adding one would mean a
+   * migration for a lookup that needs no sorting, paging or price bands. A
+   * plain `in` is both the whole query and one statement.
+   *
+   * `vendors!inner(status)` applies the same approved-shops rule as `byId` —
+   * see there for why the embed is inner. Ids that are unknown, or whose shop
+   * is not approved, are **absent from the result rather than an error**: a
+   * favourite whose shop got suspended should quietly drop off the list, and a
+   * cart line pointing at a withdrawn product should fail at checkout with a
+   * price the server recomputed, not here with a 404 for the whole screen.
+   */
+  async byIds(ids: string[]): Promise<ProductResponse[]> {
+    const rows = await unwrap<ProductRow[]>(
+      this.db
+        .from('products')
+        .select(`${PRODUCT_COLUMNS}, vendors!inner(status)`)
+        .in('id', ids)
+        .eq('vendors.status', 'approved')
+    );
+    return rows.map((row) => toProduct(row));
   }
 
   async byId(id: string): Promise<ProductResponse> {
