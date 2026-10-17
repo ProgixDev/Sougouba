@@ -22,6 +22,7 @@ import {
   HankenGrotesk_800ExtraBold,
 } from '@expo-google-fonts/hanken-grotesk';
 import { StripeProvider } from '@stripe/stripe-react-native';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type Theme } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -31,6 +32,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useColorScheme, useSyncColorScheme, useThemeColors } from '@/hooks/useColorScheme';
+import { queryClient, watchAppFocus } from '@/lib/queryClient';
 import { useStoreHydration } from '@/hooks/useStoreHydration';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -78,6 +80,10 @@ export default function RootLayout() {
     SystemUI.setBackgroundColorAsync(colors.background).catch(() => {});
   }, [colors.background]);
 
+  // React Query's own focus detection is a browser API that never fires here,
+  // so `refetchOnWindowFocus` only works once AppState is wired to it.
+  useEffect(watchAppFocus, []);
+
   // Render on a font failure too, with system fallbacks — an unstyled app beats
   // an app permanently stuck behind the native splash.
   const ready = (fontsLoaded || !!fontError) && storeHydrated;
@@ -100,6 +106,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView className="flex-1">
+      <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
         <ThemeProvider value={navigationTheme}>
         {/* Stripe's payment sheet collects the card; Sougouba never sees it.
@@ -122,6 +129,7 @@ export default function RootLayout() {
         </StripeProvider>
         </ThemeProvider>
       </SafeAreaProvider>
+      </QueryClientProvider>
     </GestureHandlerRootView>
   );
 }

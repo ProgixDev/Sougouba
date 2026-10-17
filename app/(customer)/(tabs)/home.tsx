@@ -6,7 +6,7 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 import { HomeHeader, ProductGrid, VendorCard, VerticalCard, useCartBarInset } from '@/components/customer';
 import { useT } from '@/lib/i18n/useT';
 import { EmptyState, Reveal, SectionHeader, SkeletonCard, Text } from '@/components/ui';
-import { categoriesApi, ordersApi, productsApi, vendorsApi } from '@/data/api';
+import { useCategories, useProducts, useTopProductIds, useVendors } from '@/data/queries';
 import type { Category, ID, Product, Vendor, VendorType } from '@/data/types';
 import { distanceKm } from '@/data/utils/geo';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
@@ -15,6 +15,18 @@ import { dynamicRoutes, routes } from '@/lib/routes';
 import { verticals } from '@/lib/verticals';
 import { useCartStore } from '@/store/useCartStore';
 import { useSessionStore } from '@/store/useSessionStore';
+
+/**
+ * Stable empty fallbacks.
+ *
+ * A fresh `[]` on every render while a query is pending is a new reference, so
+ * every `useMemo` keyed on these lists would recompute each frame and the
+ * memoised card lists below would be pointless.
+ */
+const EMPTY_CATEGORIES: Category[] = [];
+const EMPTY_PRODUCTS: Product[] = [];
+const EMPTY_VENDORS: Vendor[] = [];
+const EMPTY_IDS: ID[] = [];
 
 const BEST_SELLER_LIMIT = 6;
 const NEARBY_LIMIT = 6;
@@ -27,35 +39,38 @@ export default function CustomerHomeScreen() {
   const user = useSessionStore((s) => s.user);
   const addItem = useCartStore((s) => s.addItem);
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [bestSellerIds, setBestSellerIds] = useState<ID[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Four cached queries, fetched in parallel. Each is shared with every other
+  // screen asking the same question, so arriving here from the cart or search
+  // paints from cache and revalidates behind it instead of refetching.
+  const categoriesQuery = useCategories();
+  const productsQuery = useProducts();
+  const vendorsQuery = useVendors();
+  const bestSellersQuery = useTopProductIds(BEST_SELLER_LIMIT);
+
+  const categories = categoriesQuery.data ?? EMPTY_CATEGORIES;
+  const products = productsQuery.data ?? EMPTY_PRODUCTS;
+  const vendors = vendorsQuery.data ?? EMPTY_VENDORS;
+  const bestSellerIds = bestSellersQuery.data ?? EMPTY_IDS;
+
+  // Only the first load shows skeletons. A background revalidation must not
+  // blank a screen that already has content on it.
+  const loading =
+    categoriesQuery.isPending || productsQuery.isPending || vendorsQuery.isPending;
+
   const [refreshing, setRefreshing] = useState(false);
-
-  const load = useCallback(async () => {
-    const [nextCategories, nextProducts, nextVendors, nextBestSellers] = await Promise.all([
-      categoriesApi.getCategories(),
-      productsApi.getProducts(),
-      vendorsApi.getVendors(),
-      ordersApi.getTopProductIds(BEST_SELLER_LIMIT),
-    ]);
-    setCategories(nextCategories);
-    setProducts(nextProducts);
-    setVendors(nextVendors);
-    setBestSellerIds(nextBestSellers);
-  }, []);
-
-  useEffect(() => {
-    load().finally(() => setLoading(false));
-  }, [load]);
-
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await Promise.all([
+      categoriesQuery.refetch(),
+      productsQuery.refetch(),
+      vendorsQuery.refetch(),
+      bestSellersQuery.refetch(),
+    ]);
     setRefreshing(false);
-  }, [load]);
+    // Deliberately no deps: the query objects are recreated every render, so
+    // depending on them would rebuild this callback — and the RefreshControl
+    // under it — on every frame. `refetch` is stable per query.
+  }, []);
 
   /** Lucide key per category id, so cards can pick the right placeholder glyph. */
   const iconByCategory = useMemo(

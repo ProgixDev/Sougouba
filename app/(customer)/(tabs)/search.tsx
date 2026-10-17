@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FilterSheet, ProductGrid, SearchField, useCartBarInset } from '@/components/customer';
 import { Chip, EmptyState, Text } from '@/components/ui';
-import { categoriesApi, productsApi, vendorsApi } from '@/data/api';
+import { useCategories, useProductSearch, useProducts, useVendors } from '@/data/queries';
 import type { Category, ID, Product, Vendor } from '@/data/types';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useT } from '@/lib/i18n/useT';
@@ -21,6 +21,11 @@ import { dynamicRoutes } from '@/lib/routes';
 import { useLocalized } from '@/lib/localized';
 import { useCartStore } from '@/store/useCartStore';
 
+/** Stable empty fallbacks — see the note in home.tsx. */
+const EMPTY_CATEGORIES: Category[] = [];
+const EMPTY_PRODUCTS: Product[] = [];
+const EMPTY_VENDORS: Vendor[] = [];
+
 const BROWSE_LIMIT = 24;
 
 export default function SearchScreen() {
@@ -32,12 +37,7 @@ export default function SearchScreen() {
 
   const [query, setQuery] = useState('');
   const [categoryId, setCategoryId] = useState<ID | null>(null);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [results, setResults] = useState<Product[] | null>(null);
-  const [searching, setSearching] = useState(false);
 
-  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [filters, setFilters] = useState<ProductFilters>(emptyFilters);
   const [sheetOpen, setSheetOpen] = useState(false);
   // What the sheet's button counts. Tracked separately from `filters` so the
@@ -46,38 +46,22 @@ export default function SearchScreen() {
 
   const debouncedQuery = useDebounce(query, 250);
 
-  useEffect(() => {
-    Promise.all([
-      categoriesApi.getCategories(),
-      productsApi.getProducts(),
-      vendorsApi.getVendors(),
-    ]).then(([c, p, v]) => {
-      setCategories(c);
-      setAllProducts(p);
-      setVendors(v);
-    });
-  }, []);
+  // Shared with home and the rest of the catalogue screens, so arriving here
+  // usually paints from cache with no request at all.
+  const categoriesQuery = useCategories();
+  const allProductsQuery = useProducts();
+  const vendorsQuery = useVendors();
 
-  useEffect(() => {
-    const trimmed = debouncedQuery.trim();
-    if (!trimmed) {
-      // `searchProducts('')` returns [] by design, which would read as "no
-      // results" — an empty query means "no query", so browse everything.
-      setResults(null);
-      setSearching(false);
-      return;
-    }
-    let active = true;
-    setSearching(true);
-    productsApi.searchProducts(trimmed).then((found) => {
-      if (!active) return;
-      setResults(found);
-      setSearching(false);
-    });
-    return () => {
-      active = false;
-    };
-  }, [debouncedQuery]);
+  const categories = categoriesQuery.data ?? EMPTY_CATEGORIES;
+  const allProducts = allProductsQuery.data ?? EMPTY_PRODUCTS;
+  const vendors = vendorsQuery.data ?? EMPTY_VENDORS;
+
+  // Disabled on a blank term, so `data` is `undefined` when not searching —
+  // which is exactly the `null` the browse path below looks for. An empty
+  // array would read as "no results" rather than "no query".
+  const searchQuery = useProductSearch(debouncedQuery);
+  const results = debouncedQuery.trim() ? searchQuery.data ?? null : null;
+  const searching = !!debouncedQuery.trim() && searchQuery.isPending;
 
   /** The full narrowing pipeline for a given filter set: query → category → filters. */
   const narrow = useCallback(

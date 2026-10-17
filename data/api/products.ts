@@ -8,6 +8,9 @@ import { toProduct } from './mappers';
  */
 const ALL = 100;
 
+/** `productIdsSchema`'s ceiling on the API side; a longer list is a 400, not a truncation. */
+const MAX_IDS = 100;
+
 /**
  * ⚠️ **The reads and the writes see different catalogues, on purpose.**
  *
@@ -18,33 +21,25 @@ const ALL = 100;
  */
 
 /**
- * The whole browsable catalogue.
+ * The whole browsable catalogue, in one request.
  *
- * ⚠️ **This is a stopgap and it is N+1.** There is no "all products" endpoint,
- * deliberately — `/products/search` requires a term, because shipping the whole
- * catalogue to the phone to filter it there is precisely what the API was built
- * not to do (docs/BACKEND-BUILD-PHASES.md, Phase 2). So this walks the approved
- * shops and asks each for its shelves: ten requests today, one per shop, growing
- * with the marketplace.
+ * This used to be N+1 — it listed the approved shops and then asked each one
+ * for its shelves, so the home screen cost 1 + one-request-per-shop and got
+ * slower with every merchant who signed up. `GET /products` is the paginated
+ * browse endpoint that note was waiting for: same filters as
+ * `/products/search`, with the search term optional, answered by the same
+ * single `product_page` call however many shops exist.
  *
- * It exists because four screens still ask for the catalogue as one array —
- * home, search, favourites and the cart — and each wants something narrower:
- *
- *   - **home** wants a page of featured products → a paginated browse endpoint
- *   - **search** should call `searchProducts(q)` as the shopper types, not prefetch
- *   - **favourites** and **cart** want *specific ids* → `GET /products?ids=…`
- *
- * None of those exists yet. Replacing this with them is the next real piece of
- * catalogue work; until then the screens keep working and the cost is visible
- * here rather than hidden in a slow home screen nobody can explain.
+ * Still capped at `ALL`. A catalogue larger than one page is a real paging UI,
+ * not a bigger number here, and `getProductsByCategory`/`searchProducts` are
+ * the narrower questions most screens actually want to ask.
  */
 export async function getProducts(): Promise<Product[]> {
-  const vendors = await api<Page<{ id: string }>>('/vendors', {
+  const page = await api<Page<any>>('/products', {
     anonymous: true,
     query: { limit: ALL },
   });
-  const shelves = await Promise.all(vendors.items.map((v) => getProductsByVendor(v.id)));
-  return shelves.flat();
+  return page.items.map(toProduct);
 }
 
 export async function getProductById(id: ID): Promise<Product | undefined> {
@@ -65,13 +60,41 @@ export async function getProductsByVendor(vendorId: ID): Promise<Product[]> {
 }
 
 /**
- * ⚠️ Same shape as `getProducts` and for the same reason: `/products/search`
- * needs a term, so a category browse cannot go through it. Filtered here off
- * the walk above.
+ * One category, filtered in the database.
+ *
+ * Previously this pulled the entire catalogue and filtered it on the device —
+ * the exact thing the API was built not to do. `?categoryId=` applies the same
+ * rule server-side, so a category tap is one request for one category's rows.
  */
 export async function getProductsByCategory(categoryId: ID): Promise<Product[]> {
-  const all = await getProducts();
-  return all.filter((p) => p.categoryId === categoryId);
+  const page = await api<Page<any>>('/products', {
+    anonymous: true,
+    query: { categoryId, limit: ALL },
+  });
+  return page.items.map(toProduct);
+}
+
+/**
+ * Specific products by id, in one request.
+ *
+ * For the screens that already hold ids and only need what is behind them —
+ * the cart, checkout, and the favourites list. They used to download the whole
+ * catalogue and filter it locally.
+ *
+ * ⚠️ **Ids that no longer resolve are absent from the result, not an error.**
+ * A favourite whose shop has since been suspended should quietly drop off the
+ * list rather than break the screen, so callers must treat a missing id as
+ * "gone" rather than assuming the array lines up with what they asked for.
+ * Capped at `MAX_IDS`, matching the API.
+ */
+export async function getProductsByIds(ids: ID[]): Promise<Product[]> {
+  const wanted = [...new Set(ids)].slice(0, MAX_IDS);
+  if (wanted.length === 0) return [];
+  const rows = await api<any[]>('/products/by-ids', {
+    anonymous: true,
+    query: { ids: wanted.join(',') },
+  });
+  return rows.map(toProduct);
 }
 
 /**

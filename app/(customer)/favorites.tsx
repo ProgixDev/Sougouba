@@ -1,17 +1,22 @@
 import { router } from 'expo-router';
 import { Heart } from 'lucide-react-native';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ProductGrid, VendorCard, useCartBarInset } from '@/components/customer';
 import { useT } from '@/lib/i18n/useT';
 import { BackHeader, EmptyState, SectionHeader, Skeleton } from '@/components/ui';
-import { categoriesApi, productsApi, vendorsApi } from '@/data/api';
+import { useCategories, useProductsByIds, useVendors } from '@/data/queries';
 import type { Category, Product, Vendor } from '@/data/types';
 import { dynamicRoutes, routes } from '@/lib/routes';
 import { useCartStore } from '@/store/useCartStore';
 import { useFavoritesStore } from '@/store/useFavoritesStore';
+
+/** Stable empty fallbacks — a fresh `[]` each render would defeat the `useMemo`s below. */
+const EMPTY_PRODUCTS: Product[] = [];
+const EMPTY_VENDORS: Vendor[] = [];
+const EMPTY_CATEGORIES: Category[] = [];
 
 export default function FavoritesScreen() {
   const cartBarInset = useCartBarInset();
@@ -20,27 +25,21 @@ export default function FavoritesScreen() {
   const vendorIds = useFavoritesStore((s) => s.vendorIds);
   const addItem = useCartStore((s) => s.addItem);
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Only the favourited products, by id. This screen used to pull the entire
+  // catalogue and filter it on the device to show a handful of cards.
+  const productsQuery = useProductsByIds(productIds);
+  const vendorsQuery = useVendors();
+  const categoriesQuery = useCategories();
 
-  useEffect(() => {
-    let active = true;
-    Promise.all([productsApi.getProducts(), vendorsApi.getVendors(), categoriesApi.getCategories()])
-      .then(([p, v, c]) => {
-        if (!active) return;
-        setProducts(p);
-        setVendors(v);
-        setCategories(c);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+  const products = productsQuery.data ?? EMPTY_PRODUCTS;
+  const vendors = vendorsQuery.data ?? EMPTY_VENDORS;
+  const categories = categoriesQuery.data ?? EMPTY_CATEGORIES;
+
+  // `useProductsByIds` is disabled on an empty list, so it stays `pending`
+  // forever with nothing favourited — which would hold the skeletons up on a
+  // screen whose real answer is the empty state.
+  const loading =
+    (productIds.length > 0 && productsQuery.isPending) || vendorsQuery.isPending;
 
   // Derived from the store, so un-favouriting removes the card immediately
   // without a refetch.

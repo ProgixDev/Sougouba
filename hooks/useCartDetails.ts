@@ -53,6 +53,24 @@ export function useCartDetails(): CartDetails {
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [loading, setLoading] = useState(items.length > 0);
 
+  /**
+   * Which products the cart holds, as a stable string.
+   *
+   * The effect below fetches exactly these ids, so it has to re-run when the
+   * *set* changes — not when the count does. Swapping one product for another
+   * leaves `items.length` untouched, and keying the effect on the length would
+   * leave the new line with no product to join against, which `lines` then
+   * silently drops. Sorted so reordering the cart is not a change.
+   */
+  const productKey = useMemo(
+    () =>
+      items
+        .map((i) => i.productId)
+        .sort()
+        .join(','),
+    [items]
+  );
+
   useEffect(() => {
     if (items.length === 0) {
       setProducts({});
@@ -63,7 +81,9 @@ export function useCartDetails(): CartDetails {
     let active = true;
     setLoading(true);
     Promise.all([
-      productsApi.getProducts(),
+      // Only the lines in the cart. This used to call `getProducts()`, which
+      // downloaded the entire catalogue to name three rows.
+      productsApi.getProductsByIds(items.map((i) => i.productId)),
       vendorId ? vendorsApi.getVendorById(vendorId) : Promise.resolve(undefined),
     ])
       .then(([all, v]) => {
@@ -77,8 +97,9 @@ export function useCartDetails(): CartDetails {
     return () => {
       active = false;
     };
-    // Re-join when the set of products changes, not on every quantity tick.
-  }, [items.length, vendorId]);
+    // Keyed on `productKey`, not `items`: the set of products is what this
+    // fetches, so a quantity bump re-renders without refetching.
+  }, [productKey, vendorId]);
 
   const lines = useMemo(
     () =>
