@@ -1,0 +1,246 @@
+import { Inject, Injectable, Logger } from '@nestjs/common';
+
+import type { Db } from '../db/client.js';
+import { DB } from '../db/db.module.js';
+import { unwrap } from '../db/unwrap.js';
+import type { OrderStatus } from '../orders/order-status.js';
+import {
+  applicationCopy,
+  courierCopy,
+  customerCopy,
+  merchantCopy,
+  orderReference,
+} from './messages.js';
+import { PushService } from './push.service.js';
+
+interface OrderContext {
+  id: string;
+  customerId: string;
+  totalCad: number;
+  vendor: { name: string; ownerId: string } | null;
+  items: { qty: number }[];
+}
+
+/**
+ * The events the platform pushes about, named the way the business names them.
+ *
+ * Callers say *what happened* (`orderStatusChanged`, `offerMade`); this decides
+ * who hears about it, under which switch, and with what words. Every method
+ * looks up what it needs from the order id alone, so a caller never has to
+ * thread a vendor name through just to make a notification possible.
+ *
+ * Like `PushService`, nothing here throws. Callers run these **alongside** the
+ * response they are building (`Promise.all`) rather than after it: on a
+ * serverless host a promise left running once the response is sent may simply
+ * never finish, and awaiting in sequence would add the push's round trips to a
+ * merchant's tap.
+ */
+@Injectable()
+export class NotifyService {
+  private readonly logger = new Logger(NotifyService.name);
+
+  constructor(
+    @Inject(DB) private readonly db: Db,
+    private readonly push: PushService,
+  ) {}
+
+  /** The shopper hears about the steps that change what they should do next. */
+  async orderStatusChanged(
+    orderId: string,
+    status: OrderStatus,
+  ): Promise<void> {
+    const copy = {
+      confirmed: { make: customerCopy.confirmed, category: 'orderUpdates' },
+      out_for_delivery: {
+        make: customerCopy.outForDelivery,
+        category: 'deliveryAlerts',
+      },
+      delivered: { make: customerCopy.delivered, category: 'orderUpdates' },
+      cancelled: { make: customerCopy.cancelled, category: 'orderUpdates' },
+    } as const;
+    // `preparing` and `ready` are the shop's internal steps; a buzz for each
+    // would train the shopper to ignore the ones that matter.
+    if (!(status in copy)) return;
+    const { make, category } = copy[status as keyof typeof copy];
+
+    await this.guard('orderStatusChanged', async () => {
+      const order = await this.order(orderId);
+      if (!order) return;
+      const params = {
+        ref: orderReference(order.id),
+        vendor: order.vendor?.name ?? 'Sougouba',
+      };
+      await this.push.send([order.customerId], {
+        content: (l) => make(params, l),
+        url: customerOrderUrl(order.id),
+        channel: 'orders',
+        category,
+      });
+    });
+  }
+
+  /** A paid order has just landed in the shop's queue. */
+  async orderPlaced(orderId: string): Promise<void> {
+    await this.guard('orderPlaced', async () => {
+      const order = await this.order(orderId);
+      if (!order?.vendor) return;
+      const params = {
+        ref: orderReference(order.id),
+        items: order.items.reduce((sum, line) => sum + line.qty, 0),
+        totalCad: order.totalCad,
+      };
+      await this.push.send([order.vendor.ownerId], {
+        content: (l) => merchantCopy.newOrder(params, l),
+        url: `/(business)/order/${order.id}`,
+        channel: 'orders',
+      });
+    });
+  }
+
+  /** The shopper opened a dispute: the merchant is asked to answer it. */
+  async disputeOpened(orderId: string): Promise<void> {
+    await this.guard('disputeOpened', async () => {
+      const order = await this.order(orderId);
+      if (!order?.vendor) return;
+      const ref = orderReference(order.id);
+      await this.push.send([order.vendor.ownerId], {
+        content: (l) => merchantCopy.disputeOpened({ ref }, l),
+        url: `/(business)/order/${order.id}`,
+        channel: 'orders',
+      });
+    });
+  }
+
+  /** The back office settled the shopper's dispute. */
+  async disputeResolved(orderId: string): Promise<void> {
+    await this.guard('disputeResolved', async () => {
+      const order = await this.order(orderId);
+      if (!order) return;
+      const ref = orderReference(order.id);
+      await this.push.send([order.customerId], {
+        content: (l) => customerCopy.disputeResolved({ ref }, l),
+        url: customerOrderUrl(order.id),
+        channel: 'orders',
+        category: 'orderUpdates',
+      });
+    });
+  }
+
+  /**
+   * The back office approved a shop or a courier. Only approvals are pushed:
+   * a refusal or a suspension deserves a reason a lock screen cannot carry.
+   */
+  async applicationApproved(
+    kind: 'vendor' | 'courier',
+    id: string,
+  ): Promise<void> {
+    await this.guard('applicationApproved', async () => {
+      if (kind === 'vendor') {
+        const vendor = await unwrap<{ name: string; ownerId: string } | null>(
+          this.db
+            .from('vendors')
+            .select('name, ownerId:owner_id')
+            .eq('id', id)
+            .maybeSingle(),
+        );
+        if (!vendor) return;
+        await this.push.send([vendor.ownerId], {
+          content: (l) =>
+            applicationCopy.vendorApproved({ name: vendor.name }, l),
+          url: '/(business)/(tabs)/dashboard',
+          channel: 'orders',
+        });
+        return;
+      }
+      const courier = await unwrap<{ userId: string } | null>(
+        this.db
+          .from('couriers')
+          .select('userId:user_id')
+          .eq('id', id)
+          .maybeSingle(),
+      );
+      if (!courier) return;
+      await this.push.send([courier.userId], {
+        content: (l) => applicationCopy.courierApproved({}, l),
+        url: '/(courier)/(tabs)/missions',
+        channel: 'orders',
+      });
+    });
+  }
+
+  /**
+   * A courier was offered a run. The offer lapses in seconds, so this is the
+   * one push sent at the highest urgency the channel allows (see the app's
+   * `offers` channel).
+   */
+  async offerMade(offer: {
+    courierId: string;
+    vendorId: string;
+    distanceToPickupKm: number;
+    earningsCad: number;
+  }) {
+    await this.guard('offerMade', async () => {
+      const [courier, vendor] = await Promise.all([
+        unwrap<{ userId: string } | null>(
+          this.db
+            .from('couriers')
+            .select('userId:user_id')
+            .eq('id', offer.courierId)
+            .maybeSingle(),
+        ),
+        unwrap<{ name: string } | null>(
+          this.db
+            .from('vendors')
+            .select('name')
+            .eq('id', offer.vendorId)
+            .maybeSingle(),
+        ),
+      ]);
+      if (!courier) return;
+      const params = {
+        vendor: vendor?.name ?? 'Sougouba',
+        km: offer.distanceToPickupKm,
+        earningsCad: offer.earningsCad,
+      };
+      await this.push.send([courier.userId], {
+        content: (l) => courierCopy.newOffer(params, l),
+        url: '/(courier)/(tabs)/missions',
+        channel: 'offers',
+      });
+    });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+
+  private async order(orderId: string): Promise<OrderContext | null> {
+    const row = await unwrap<{
+      id: string;
+      customerId: string;
+      totalCad: string | number;
+      vendor: { name: string; ownerId: string } | null;
+      items: { qty: number }[];
+    } | null>(
+      this.db
+        .from('orders')
+        .select(
+          'id, customerId:customer_id, totalCad:total_cad, vendor:vendors(name, ownerId:owner_id), items:order_items(qty)',
+        )
+        .eq('id', orderId)
+        .maybeSingle(),
+    );
+    return row ? { ...row, totalCad: Number(row.totalCad) } : null;
+  }
+
+  /** A notification is never worth failing the caller over. */
+  private async guard(event: string, work: () => Promise<void>): Promise<void> {
+    try {
+      await work();
+    } catch (error) {
+      this.logger.warn(`Push for ${event} skipped: ${String(error)}`);
+    }
+  }
+}
+
+function customerOrderUrl(orderId: string): string {
+  return `/(customer)/order/${orderId}`;
+}

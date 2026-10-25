@@ -28,6 +28,7 @@ import { PaymentsService } from './payments.service.js';
 import { CouponsService } from '../loyalty/coupons.service.js';
 import { LoyaltyService } from '../loyalty/loyalty.service.js';
 import { SettingsService } from '../loyalty/settings.service.js';
+import { NotifyService } from '../notifications/notify.service.js';
 
 @Injectable()
 export class OrdersService {
@@ -38,7 +39,8 @@ export class OrdersService {
     private readonly payments: PaymentsService,
     private readonly loyalty: LoyaltyService,
     private readonly coupons: CouponsService,
-    private readonly settings: SettingsService
+    private readonly settings: SettingsService,
+    private readonly notify: NotifyService
   ) {}
 
   // ── pricing ───────────────────────────────────────────────────────────────
@@ -292,7 +294,13 @@ export class OrdersService {
       }
     );
 
-    return this.byId(customerId, orderId, 'customer');
+    // The shop hears about it while the receipt is being read back — in
+    // parallel, never in sequence, and a failed push fails nothing.
+    const [order] = await Promise.all([
+      this.byId(customerId, orderId, 'customer'),
+      this.notify.orderPlaced(orderId),
+    ]);
+    return order;
   }
 
   // ── reads ─────────────────────────────────────────────────────────────────
@@ -414,7 +422,8 @@ export class OrdersService {
       }
     );
 
-    return this.byId(userId, orderId, 'merchant');
+    const [view] = await Promise.all([this.byId(userId, orderId, 'merchant'), this.notify.orderStatusChanged(orderId, to)]);
+    return view;
   }
 
   // ── disputes ──────────────────────────────────────────────────────────────
@@ -449,7 +458,8 @@ export class OrdersService {
       throw unexpectedDbError(error);
     }
 
-    return this.byId(customerId, orderId, 'customer');
+    const [view] = await Promise.all([this.byId(customerId, orderId, 'customer'), this.notify.disputeOpened(orderId)]);
+    return view;
   }
 
   /** The merchant's answer. Settling the dispute is the back-office's call (Phase 6), not theirs. */

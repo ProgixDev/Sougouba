@@ -16,6 +16,7 @@ import { one } from '../db/embed.js';
 import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import type { ReportCourierIssueInput } from '../admin/dto/admin.dto.js';
 import { LoyaltyService } from '../loyalty/loyalty.service.js';
+import { NotifyService } from '../notifications/notify.service.js';
 import { assertTransition, type OrderStatus } from '../orders/order-status.js';
 import { hydrateOrders } from '../orders/order-view.js';
 import { courierEarnings, pinMatches } from './courier-pay.js';
@@ -34,7 +35,8 @@ export class DeliveryService {
 
   constructor(
     @Inject(DB) private readonly db: Db,
-    private readonly loyalty: LoyaltyService
+    private readonly loyalty: LoyaltyService,
+    private readonly notify: NotifyService
   ) {}
 
   /** The run this courier is carrying, or a 404. Every method below starts here. */
@@ -97,7 +99,11 @@ export class DeliveryService {
       }
     );
 
-    return this.run(courierId, orderId);
+    const [view] = await Promise.all([
+      this.run(courierId, orderId),
+      this.notify.orderStatusChanged(orderId, 'out_for_delivery'),
+    ]);
+    return view;
   }
 
   /**
@@ -165,7 +171,8 @@ export class DeliveryService {
       this.logger.error(`Order ${orderId} delivered but loyalty credit failed — needs a replay: ${String(error)}`);
     }
 
-    return this.run(courierId, orderId);
+    const [view] = await Promise.all([this.run(courierId, orderId), this.notify.orderStatusChanged(orderId, 'delivered')]);
+    return view;
   }
 
   /**

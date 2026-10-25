@@ -19,6 +19,7 @@ import { MERCHANT_DOCUMENTS_BUCKET } from '../catalog/media-paths.js';
 import { type AdminAction } from './audit.service.js';
 import { num, type AdminCourierDetail, type AdminUserDetail, type AdminVendorDetail } from './dto/admin-detail.dto.js';
 import type { ReviewDecisionInput, ReviewQuery, UserQuery } from './dto/admin.dto.js';
+import { NotifyService } from '../notifications/notify.service.js';
 
 export type ApplicationStatus = 'pending' | 'approved' | 'suspended' | 'rejected';
 
@@ -83,7 +84,10 @@ const DOCUMENT_URL_TTL_SECONDS = 10 * 60;
 export class ApprovalsService {
   private readonly logger = new Logger(ApprovalsService.name);
 
-  constructor(@Inject(DB) private readonly db: Db) {}
+  constructor(
+    @Inject(DB) private readonly db: Db,
+    private readonly notify: NotifyService
+  ) {}
 
   // ── merchants ─────────────────────────────────────────────────────────────
 
@@ -338,6 +342,7 @@ export class ApprovalsService {
     );
 
     this.logger.log(`Admin ${adminId} moved vendor ${vendorId} ("${vendor.name}") from ${vendor.status} to ${to}`);
+    if (to === 'approved') await this.notify.applicationApproved('vendor', vendorId);
     return camelize(updated);
   }
 
@@ -524,6 +529,7 @@ export class ApprovalsService {
     );
 
     this.logger.log(`Admin ${adminId} moved courier ${courierId} ("${courier.fullName}") from ${courier.status} to ${to}`);
+    if (to === 'approved') await this.notify.applicationApproved('courier', courierId);
     return camelize(updated);
   }
 

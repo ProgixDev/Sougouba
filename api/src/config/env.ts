@@ -70,9 +70,22 @@ const envSchema = z.object({
    */
   CRON_SECRET: z.string().optional(),
 
-  /** Phase 9. */
+  /**
+   * Push notifications go through Expo's push service, which forwards to FCM
+   * and APNs — so the FCM service account and APNs key are uploaded to the EAS
+   * project (`eas credentials`), not set here. This token is only needed once
+   * "Enhanced security for push notifications" is turned on in the Expo
+   * project; until then Expo accepts unauthenticated sends.
+   */
+  EXPO_ACCESS_TOKEN: z.string().optional(),
+
+  /**
+   * The support assistant (`support/`). Without a key the endpoints stay up
+   * and answer 503 "not yet available", so the app can ship before the key
+   * does. `OPENAI_MODEL` overrides the default model without a deploy of code.
+   */
   OPENAI_API_KEY: z.string().optional(),
-  FIREBASE_SERVICE_ACCOUNT_JSON: z.string().optional(),
+  OPENAI_MODEL: z.string().optional(),
 
   /**
    * Accept the fixed code `000000` for every sign-in, and send no email.

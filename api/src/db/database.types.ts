@@ -1219,6 +1219,45 @@ export type Database = {
           },
         ]
       }
+      push_tokens: {
+        Row: {
+          created_at: string
+          delivery_alerts: boolean
+          locale: string
+          new_vendors: boolean
+          order_updates: boolean
+          platform: string
+          promotions: boolean
+          token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_alerts?: boolean
+          locale?: string
+          new_vendors?: boolean
+          order_updates?: boolean
+          platform: string
+          promotions?: boolean
+          token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          delivery_alerts?: boolean
+          locale?: string
+          new_vendors?: boolean
+          order_updates?: boolean
+          platform?: string
+          promotions?: boolean
+          token?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       specialties: {
         Row: {
           created_at: string

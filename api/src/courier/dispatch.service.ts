@@ -15,6 +15,7 @@ import { one } from '../db/embed.js';
 import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import { courierEarnings, generateDeliveryPin, legDurationMin, type VehicleType } from './courier-pay.js';
 import { HEARTBEAT_TTL_MS, MAX_PICKUP_DISTANCE_KM, offerExpiryFrom } from './dispatch-rules.js';
+import { NotifyService } from '../notifications/notify.service.js';
 
 /**
  * The SQL half of the great-circle distance now lives in
@@ -31,7 +32,10 @@ import { HEARTBEAT_TTL_MS, MAX_PICKUP_DISTANCE_KM, offerExpiryFrom } from './dis
 export class DispatchService {
   private readonly logger = new Logger(DispatchService.name);
 
-  constructor(@Inject(DB) private readonly db: Db) {}
+  constructor(
+    @Inject(DB) private readonly db: Db,
+    private readonly notify: NotifyService
+  ) {}
 
   /**
    * One tick: lapse what has run out, then offer what is waiting.
@@ -153,6 +157,17 @@ export class DispatchService {
       estimated_earnings_cad: courierEarnings(toDropoff),
     });
     if (error && error.code !== UNIQUE_VIOLATION) throw unexpectedDbError(error);
+
+    // Only for an offer this tick actually created — the duplicate a racing
+    // tick lost was already pushed by the tick that won.
+    if (!error) {
+      await this.notify.offerMade({
+        courierId: candidate.id,
+        vendorId: order.vendorId,
+        distanceToPickupKm: Number(candidate.distance_to_pickup_km),
+        earningsCad: courierEarnings(toDropoff),
+      });
+    }
 
     return true;
   }

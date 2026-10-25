@@ -17,8 +17,10 @@ import { HealthModule } from './health/health.module.js';
 import { LoyaltyModule } from './loyalty/loyalty.module.js';
 import { MailModule } from './mail/mail.module.js';
 import { MeModule } from './me/me.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 import { OrdersModule } from './orders/orders.module.js';
 import { SignupModule } from './signup/signup.module.js';
+import { SupportModule } from './support/support.module.js';
 
 @Module({
   imports: [
@@ -34,6 +36,7 @@ import { SignupModule } from './signup/signup.module.js';
     DbModule,
     AuthModule,
     MailModule,
+    NotificationsModule,
     SignupModule,
     HealthModule,
     GeoModule,
@@ -46,6 +49,7 @@ import { SignupModule } from './signup/signup.module.js';
     CourierModule,
     BillingModule,
     AdminModule,
+    SupportModule,
     CronModule,
   ],
 })

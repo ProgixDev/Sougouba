@@ -26,6 +26,7 @@ import type {
 } from './dto/admin.dto.js';
 import { RefundsService } from './refunds.service.js';
 import { deltaPct, overviewWindow, round2, type OverviewRange } from './stats-window.js';
+import { NotifyService } from '../notifications/notify.service.js';
 
 /**
  * True for a query made only of hex digits and dashes — someone pasting back a
@@ -58,7 +59,8 @@ export class AdminService {
   // of the log is still a service, and only the controller needs it.
   constructor(
     @Inject(DB) private readonly db: Db,
-    private readonly refunds: RefundsService
+    private readonly refunds: RefundsService,
+    private readonly notify: NotifyService
   ) {}
 
   // ── disputes ──────────────────────────────────────────────────────────────
@@ -194,7 +196,8 @@ export class AdminService {
       }
     );
 
-    return this.disputeFor(orderId);
+    const [resolved] = await Promise.all([this.disputeFor(orderId), this.notify.disputeResolved(orderId)]);
+    return resolved;
   }
 
   private async disputeFor(orderId: string) {
