@@ -30,6 +30,7 @@ export const routes = {
   accountAbout: '/(customer)/account/about',
   accountPoints: '/(customer)/account/points',
   accountRefer: '/(customer)/account/refer',
+  accountSupport: '/(customer)/account/support',
   businessDashboard: '/(business)/(tabs)/dashboard',
   businessCatalog: '/(business)/(tabs)/catalog',
   businessOrders: '/(business)/(tabs)/orders',

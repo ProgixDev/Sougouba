@@ -305,6 +305,9 @@ export interface Order {
    */
   pointsRedeemed?: number;
   pointsDiscountCad?: number;
+  /** The promo code applied at checkout and what it took off — null on an order that used none. */
+  couponCode?: string | null;
+  couponDiscountCad?: number | null;
   totalCad: number;
   deliveryAddress: Address;
   createdAt: string;

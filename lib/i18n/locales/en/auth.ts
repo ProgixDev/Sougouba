@@ -8,6 +8,7 @@ export const auth: Widen<typeof reference> = {
     code_expired: 'That code has expired. Ask for a new one.',
     code_cooldown: 'Wait a minute before asking for another code.',
     oauth_unavailable: 'Coming soon — continue with your email for now.',
+    oauth_failed: 'Sign-in did not go through. Try again or continue with your email.',
   },
   field: {
     fullName: 'Full name',

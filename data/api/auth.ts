@@ -1,3 +1,8 @@
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
+
 import { supabase } from '../../lib/supabase';
 import { api, ApiError } from '../http';
 import type { Address, ID, User, UserRole } from '../types';
@@ -8,7 +13,8 @@ export type AuthErrorCode =
   | 'code_invalid'
   | 'code_expired'
   | 'code_cooldown'
-  | 'oauth_unavailable';
+  | 'oauth_unavailable'
+  | 'oauth_failed';
 
 /**
  * An API layer must not return display copy.
@@ -170,18 +176,117 @@ export async function getUserById(id: ID): Promise<User | undefined> {
 }
 
 /**
- * ⚠️ Google and Apple sign-in are **not wired**. The mock returned a fabricated
- * account for either provider, which made the buttons look finished; leaving
- * that in place against a real backend would be worse — a tap that appears to
- * sign someone in and does not.
- *
- * Doing it properly needs `expo-auth-session` plus the provider configured in
- * Supabase Auth, and Apple additionally needs the entitlement and an Apple
- * Developer account the client owns. Both are contracted (devis: "auth
- * email/Google/Apple"), neither is done.
+ * Where the provider sends the browser back to: `sougouba://auth/callback`.
+ * Must be in Supabase → Authentication → URL Configuration → Redirect URLs
+ * (`sougouba://**` covers it), or Supabase falls back to the Site URL and the
+ * browser never returns to the app.
  */
-export async function oauthContinue(_provider: 'google' | 'apple'): Promise<User> {
-  throw new AuthError('oauth_unavailable');
+const OAUTH_REDIRECT = Linking.createURL('auth/callback');
+
+/**
+ * Sign in with Google or Apple, through Supabase Auth.
+ *
+ * Apple is native, not a browser round trip: iOS shows its own sheet and hands
+ * back an identity token, which Supabase verifies against Apple's keys
+ * (`signInWithIdToken`). That needs only the bundle id in Supabase's Apple
+ * "Client IDs" — no Services ID, no `.p8`, no secret to rotate every six
+ * months. The button is iOS-only (`welcome.tsx`), which is also where Apple's
+ * guideline 4.8 requires it.
+ *
+ * Google goes through the browser, described below.
+ *
+ * Supabase builds the provider URL; the system browser shows the provider's
+ * own sign-in page (`openAuthSessionAsync` — ASWebAuthenticationSession on
+ * iOS, a Custom Tab on Android), and comes back to `OAUTH_REDIRECT` with a
+ * one-time code that is exchanged here for an ordinary Supabase session. From
+ * then on it is the same session the email code produces, and the API sees no
+ * difference.
+ *
+ * The account is created by Supabase on first sign-in, and the profile by the
+ * same `auth.users` trigger as every other account — with the name Google
+ * supplied (`raw_user_meta_data.full_name`), so most Google sign-ups skip the
+ * name step. `isNewUser` means the same thing it does for the email flow: the
+ * profile still has no name.
+ *
+ * Returns null when the shopper closed the browser — a choice, not an error.
+ */
+export async function oauthContinue(provider: 'google' | 'apple'): Promise<{ user: User; isNewUser: boolean } | null> {
+  if (provider === 'apple') return appleSignIn();
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: { redirectTo: OAUTH_REDIRECT, skipBrowserRedirect: true },
+  });
+  if (error || !data?.url) throw new AuthError('oauth_failed');
+
+  const result = await WebBrowser.openAuthSessionAsync(data.url, OAUTH_REDIRECT);
+  if (result.type !== 'success') return null;
+
+  const params = callbackParams(result.url);
+  // The provider or Supabase refused — a denied consent screen, a provider
+  // that is switched off in the dashboard, a redirect URL not on the list.
+  if (params.error || !params.code) throw new AuthError('oauth_failed');
+
+  const exchanged = await supabase.auth.exchangeCodeForSession(params.code);
+  if (exchanged.error) throw new AuthError('oauth_failed');
+
+  const user = await currentUser();
+  return { user, isNewUser: !user.fullName.trim() };
+}
+
+async function appleSignIn(): Promise<{ user: User; isNewUser: boolean } | null> {
+  if (!(await AppleAuthentication.isAvailableAsync())) throw new AuthError('oauth_unavailable');
+
+  // Replay protection: Apple signs the *hash* into the token, Supabase is given
+  // the raw value and checks the two agree. A token lifted from somewhere else
+  // carries someone else's nonce and is refused.
+  const rawNonce = Crypto.randomUUID();
+  const hashedNonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
+
+  let credential: AppleAuthentication.AppleAuthenticationCredential;
+  try {
+    credential = await AppleAuthentication.signInAsync({
+      requestedScopes: [
+        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+      ],
+      nonce: hashedNonce,
+    });
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ERR_REQUEST_CANCELED') return null;
+    throw new AuthError('oauth_failed');
+  }
+  if (!credential.identityToken) throw new AuthError('oauth_failed');
+
+  const { error } = await supabase.auth.signInWithIdToken({
+    provider: 'apple',
+    token: credential.identityToken,
+    nonce: rawNonce,
+  });
+  if (error) throw new AuthError('oauth_failed');
+
+  // ⚠️ Apple gives the name **once**, on the very first sign-in, and never
+  // again — not in the token, not on the next sign-in. The profile was just
+  // created nameless by the `auth.users` trigger, so it is written now or it
+  // is gone (the shopper would be asked for it by the name step instead).
+  const name = [credential.fullName?.givenName, credential.fullName?.familyName].filter(Boolean).join(' ').trim();
+  let user = await currentUser();
+  if (name && !user.fullName.trim()) {
+    await api('/me', { method: 'PATCH', body: { fullName: name } }).catch(() => undefined);
+    user = await currentUser();
+  }
+  return { user, isNewUser: !user.fullName.trim() };
+}
+
+/** Query and fragment, merged — Supabase reports errors in either, depending on where the flow failed. */
+function callbackParams(url: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const [beforeHash, hash = ''] = url.split('#');
+  const query = beforeHash.includes('?') ? beforeHash.slice(beforeHash.indexOf('?') + 1) : '';
+  for (const part of [query, hash]) {
+    for (const [key, value] of new URLSearchParams(part)) out[key] = value;
+  }
+  return out;
 }
 
 export async function signOut(): Promise<void> {

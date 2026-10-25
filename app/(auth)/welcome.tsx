@@ -107,7 +107,19 @@ export default function AuthFlowScreen() {
               className="flex-1"
             >
               {step === 'choose' ? (
-                <ChooseStep onEmail={() => setStep('email')} />
+                <ChooseStep
+                  onEmail={() => setStep('email')}
+                  onSignedIn={(user, isNewUser) => {
+                    // Same fork as the email code: a Google account with no
+                    // name on it still gets the name step.
+                    if (isNewUser) {
+                      setPendingUser(user);
+                      setStep('name');
+                    } else {
+                      signIn(user);
+                    }
+                  }}
+                />
               ) : step === 'email' ? (
                 <EmailStep
                   initial={email}
@@ -213,18 +225,31 @@ function Rise({ i, children }: { i: number; children: React.ReactNode }) {
   );
 }
 
-function ChooseStep({ onEmail }: { onEmail: () => void }) {
+function ChooseStep({
+  onEmail,
+  onSignedIn,
+}: {
+  onEmail: () => void;
+  onSignedIn: (user: AppUser, isNewUser: boolean) => void;
+}) {
   const t = useT();
   const colors = useThemeColors();
   const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState<'google' | 'apple' | null>(null);
 
   async function oauth(provider: 'google' | 'apple') {
+    if (busy) return;
     setNotice(null);
+    setBusy(provider);
     try {
-      await authApi.oauthContinue(provider);
+      const signedIn = await authApi.oauthContinue(provider);
+      // Null: the browser was closed. Nothing to say about that.
+      if (signedIn) onSignedIn(signedIn.user, signedIn.isNewUser);
     } catch (e) {
       setNotice(e instanceof AuthError ? t(`auth.error.${e.code}`) : t('common.genericError'));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -254,11 +279,21 @@ function ChooseStep({ onEmail }: { onEmail: () => void }) {
         </Rise>
         {Platform.OS === 'ios' ? (
           <Rise i={2}>
-            <SocialButton provider="apple" label={t('auth.oauth.apple')} onPress={() => oauth('apple')} />
+            <SocialButton
+              provider="apple"
+              label={t('auth.oauth.apple')}
+              loading={busy === 'apple'}
+              onPress={() => oauth('apple')}
+            />
           </Rise>
         ) : null}
         <Rise i={3}>
-          <SocialButton provider="google" label={t('auth.oauth.google')} onPress={() => oauth('google')} />
+          <SocialButton
+            provider="google"
+            label={t('auth.oauth.google')}
+            loading={busy === 'google'}
+            onPress={() => oauth('google')}
+          />
         </Rise>
 
         <AnimatePresence>

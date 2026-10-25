@@ -109,6 +109,16 @@ export default function OrderConfirmedScreen() {
                 </Text>
               </View>
             ) : null}
+            {order.couponDiscountCad ? (
+              <View className="flex-row items-center justify-between">
+                <Text variant="caption" tone="muted">
+                  {t('customer.orderConfirmed.couponUsed')}
+                </Text>
+                <Text variant="caption" weight="bold" tone="primary">
+                  {order.couponCode} · -{formatCad(order.couponDiscountCad)}
+                </Text>
+              </View>
+            ) : null}
             {vendor ? (
               <View className="flex-row items-center justify-between">
                 <Text variant="caption" tone="muted">

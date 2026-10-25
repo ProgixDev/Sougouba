@@ -71,6 +71,8 @@ export const common = {
     delivery: 'Livraison',
     deliveryWithDistance: 'Livraison (%{distance})',
     points: 'Points Sougouba',
+    coupon: 'Code promo',
+    couponNamed: 'Code promo (%{code})',
     total: 'Total',
   },
   roleSelect: {

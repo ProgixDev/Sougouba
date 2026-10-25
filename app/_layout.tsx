@@ -33,6 +33,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useColorScheme, useSyncColorScheme, useThemeColors } from '@/hooks/useColorScheme';
 import { queryClient, watchAppFocus } from '@/lib/queryClient';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useStoreHydration } from '@/hooks/useStoreHydration';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -83,6 +84,10 @@ export default function RootLayout() {
   // React Query's own focus detection is a browser API that never fires here,
   // so `refetchOnWindowFocus` only works once AppState is wired to it.
   useEffect(watchAppFocus, []);
+
+  // Registers this device for push once signed in, and opens whatever a
+  // tapped notification is about.
+  usePushNotifications();
 
   // Render on a font failure too, with system fallbacks — an unstyled app beats
   // an app permanently stuck behind the native splash.

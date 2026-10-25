@@ -18,6 +18,9 @@ export interface PriceSummaryProps {
   deliveryDistanceKm?: number;
   /** What Points Sougouba took off, if the shopper redeemed any — see `data/loyalty.ts`. Omit or 0 to hide the line. */
   pointsDiscountCad?: number;
+  /** What a promo code took off, and the code itself so the line can name it. Omit or 0 to hide the line. */
+  couponDiscountCad?: number;
+  couponCode?: string | null;
   totalCad: number;
 }
 
@@ -42,6 +45,8 @@ export function PriceSummary({
   deliveryFeeCad,
   deliveryDistanceKm,
   pointsDiscountCad,
+  couponDiscountCad,
+  couponCode,
   totalCad,
 }: PriceSummaryProps) {
   const t = useT();
@@ -66,6 +71,13 @@ export function PriceSummary({
       />
 
       {pointsDiscountCad ? <Line label={t('common.price.points')} value={-pointsDiscountCad} tier="discount" /> : null}
+      {couponDiscountCad ? (
+        <Line
+          label={couponCode ? t('common.price.couponNamed', { code: couponCode }) : t('common.price.coupon')}
+          value={-couponDiscountCad}
+          tier="discount"
+        />
+      ) : null}
 
       <View className="h-px bg-border mt-1.5" />
 

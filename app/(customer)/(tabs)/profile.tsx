@@ -10,6 +10,7 @@ import {
   Info,
   LogOut,
   MapPin,
+  MessageCircleQuestion,
   Moon,
   Pencil,
   ReceiptText,
@@ -220,6 +221,12 @@ export default function CustomerProfileScreen() {
         </Section>
 
         <Section title={t('customer.profile.about')} delay={280}>
+          <NavRow
+            icon={MessageCircleQuestion}
+            label={t('customer.account.support.rowLabel')}
+            onPress={() => router.push(routes.accountSupport)}
+          />
+          <Divider />
           <NavRow icon={Info} label={t('customer.account.about.title')} onPress={() => router.push(routes.accountAbout)} />
         </Section>
 

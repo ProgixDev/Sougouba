@@ -9,3 +9,5 @@ export * as loyaltyApi from './loyalty';
 export * as specialtiesApi from './specialties';
 export * as addressesApi from './addresses';
 export * as favoritesApi from './favorites';
+export * as pushApi from './push';
+export * as supportApi from './support';

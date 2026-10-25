@@ -7,6 +7,7 @@ export const auth = {
     code_expired: 'Ce code a expiré. Demandez-en un nouveau.',
     code_cooldown: 'Patientez une minute avant de redemander un code.',
     oauth_unavailable: 'Bientôt disponible — continuez avec votre courriel pour l’instant.',
+    oauth_failed: 'La connexion n’a pas abouti. Réessayez ou continuez avec votre courriel.',
   },
   /** Field labels — `fullName` and `email` are also used by the account editor. */
   field: {

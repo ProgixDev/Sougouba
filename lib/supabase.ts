@@ -50,6 +50,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     // for an OAuth fragment; there is no such URL here, and leaving it on makes
     // the client throw on a platform with no `window.location`.
     detectSessionInUrl: false,
+    // PKCE for Google/Apple: the browser hands back a one-time `code`, not the
+    // tokens themselves. A custom URL scheme (`sougouba://`) is not owned the
+    // way a domain is — another app could register it — and a code is useless
+    // without the verifier this client kept in storage, where a token would
+    // not be. The email sign-in is unaffected: it installs its session with
+    // `setSession`, which does not go through a flow at all.
+    flowType: 'pkce',
   },
 });
 

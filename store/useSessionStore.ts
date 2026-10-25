@@ -8,6 +8,7 @@ import { useDispatchStore } from './useDispatchStore';
 import { useFavoritesStore } from './useFavoritesStore';
 import { usePreferencesStore } from './usePreferencesStore';
 import * as authApi from '../data/api/auth';
+import { withdrawPushRegistration } from '../lib/push';
 
 interface SessionState {
   user: User | null;
@@ -64,7 +65,13 @@ export const useSessionStore = create<SessionState>()(
         // and the local state below is what the UI reacts to. A failure here
         // leaves a token that expires on its own; a hang would leave a user
         // staring at a button that did nothing.
-        void authApi.signOut().catch(() => undefined);
+        //
+        // The push token is withdrawn first, because the API needs the session
+        // to know whose device it is deleting — after `signOut` it would 401
+        // and this phone would keep receiving the old account's orders.
+        void withdrawPushRegistration()
+          .then(() => authApi.signOut())
+          .catch(() => undefined);
 
         // Account-scoped stores must not leak into the next session.
         useCartStore.getState().clear();

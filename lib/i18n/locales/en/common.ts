@@ -62,6 +62,8 @@ export const common: Widen<typeof reference> = {
     delivery: 'Delivery',
     deliveryWithDistance: 'Delivery (%{distance})',
     points: 'Sougouba points',
+    coupon: 'Promo code',
+    couponNamed: 'Promo code (%{code})',
     total: 'Total',
   },
   roleSelect: {

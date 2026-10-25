@@ -10,8 +10,7 @@ import { MerchantSignupSheet } from '@/components/onboarding';
 import { useT } from '@/lib/i18n/useT';
 import { BackHeader, Reveal, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
-
-const SUPPORT_EMAIL = 'soutien@sougouba.ca';
+import { SUPPORT_EMAIL } from '@/lib/contact';
 
 export default function AboutScreen() {
   const t = useT();

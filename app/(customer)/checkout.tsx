@@ -1,11 +1,11 @@
 import { useFocusEffect, router } from 'expo-router';
 import { useStripe } from '@stripe/stripe-react-native';
-import { Lock, MapPin, Sparkles, Store } from 'lucide-react-native';
+import { ChevronRight, Lock, MapPin, Sparkles, Store, Tag } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BackHeader, Button, PriceSummary, Text } from '@/components/ui';
+import { BackHeader, Button, Input, PriceSummary, Text } from '@/components/ui';
 import { useT } from '@/lib/i18n/useT';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { ordersApi, loyaltyApi } from '@/data/api';
@@ -71,18 +71,65 @@ export default function CheckoutScreen() {
   );
   const redeemablePoints = maxRedeemablePoints(subtotalCad, pointsBalance);
   const pointsDiscountCad = usePoints ? pointsToDiscountCad(redeemablePoints) : 0;
-  const discountedTotalCad = roundCad(totalCad - pointsDiscountCad);
 
-  async function placeOrder() {
-    if (!user || !vendor || !address || lines.length === 0) return;
-    setError(null);
-    setPlacing(true);
-    const cart: ordersApi.Cart = {
+  // A promo code. Nothing about it is decided here: the server says whether the
+  // code exists, applies to this shop and is still live, and what it is worth —
+  // this screen only asks (`quoteCart`) and shows the answer. The same code is
+  // checked again, for real, when the PaymentIntent is priced and when the
+  // order is written.
+  const [promoOpen, setPromoOpen] = useState(false);
+  const [promoInput, setPromoInput] = useState('');
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [checkingPromo, setCheckingPromo] = useState(false);
+  const [coupon, setCoupon] = useState<{ code: string; discountCad: number } | null>(null);
+
+  // Points and coupon are each worth what they are worth against the original
+  // subtotal, and together never more than it — the rule `priceOrder` applies
+  // on the server. The coupon line gives way when the two would overlap, so
+  // the lines still add up to the total shown.
+  const couponDiscountCad = coupon ? roundCad(Math.min(coupon.discountCad, subtotalCad - pointsDiscountCad)) : 0;
+  const discountedTotalCad = roundCad(totalCad - pointsDiscountCad - couponDiscountCad);
+
+  function cartFor(couponCode = coupon?.code): ordersApi.Cart | null {
+    if (!vendor || !address) return null;
+    return {
       vendorId: vendor.id,
       addressId: address.id,
       items: lines.map(({ item }) => ({ productId: item.productId, qty: item.qty })),
       ...(usePoints && redeemablePoints > 0 ? { redeemPoints: redeemablePoints } : {}),
+      ...(couponCode ? { couponCode } : {}),
     };
+  }
+
+  async function applyPromo() {
+    const code = promoInput.trim().toUpperCase();
+    const cart = cartFor(code);
+    if (!code || !cart) return;
+    setPromoError(null);
+    setCheckingPromo(true);
+    try {
+      const quote = await ordersApi.quoteCart(cart);
+      if (!quote.couponCode || quote.couponDiscountCad <= 0) {
+        setPromoError(t('customer.checkout.promoFailed'));
+        return;
+      }
+      setCoupon({ code: quote.couponCode, discountCad: quote.couponDiscountCad });
+      setPromoOpen(false);
+      setPromoInput('');
+    } catch (caught) {
+      // "Ce code promo a expiré" is the server's own sentence — more useful
+      // than anything this screen could guess.
+      setPromoError(caught instanceof ApiError && caught.isClientError ? caught.message : t('customer.checkout.promoFailed'));
+    } finally {
+      setCheckingPromo(false);
+    }
+  }
+
+  async function placeOrder() {
+    const cart = cartFor();
+    if (!user || !vendor || !address || !cart || lines.length === 0) return;
+    setError(null);
+    setPlacing(true);
     try {
       // 1. The server prices the cart and opens a PaymentIntent for exactly that.
       const { clientSecret, paymentIntentId } = await ordersApi.createPaymentIntent(cart);
@@ -242,6 +289,77 @@ export default function CheckoutScreen() {
             </Section>
           ) : null}
 
+          <Section title={t('customer.checkout.promoLabel')}>
+            {coupon ? (
+              <View className="flex-row items-center gap-3">
+                <View className="w-10 h-10 items-center justify-center rounded-full bg-primary/10">
+                  <Tag size={18} color={colors.primary} strokeWidth={2} />
+                </View>
+                <View className="flex-1 gap-0.5">
+                  <Text variant="caption" weight="bold">
+                    {coupon.code}
+                  </Text>
+                  <Text variant="caption" tone="primary" className="text-[12px] leading-[16px]">
+                    {t('customer.checkout.promoApplied', { amount: formatCad(couponDiscountCad) })}
+                  </Text>
+                </View>
+                <Pressable
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('customer.checkout.promoA11yRemove', { code: coupon.code })}
+                  onPress={() => setCoupon(null)}
+                  disabled={placing}
+                >
+                  <Text variant="caption" weight="semibold" tone="muted" className="text-[13px]">
+                    {t('customer.checkout.promoRemove')}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : promoOpen ? (
+              <View className="gap-3">
+                <Input
+                  label={t('customer.checkout.promoLabel')}
+                  icon={Tag}
+                  value={promoInput}
+                  onChangeText={(text) => {
+                    setPromoInput(text);
+                    if (promoError) setPromoError(null);
+                  }}
+                  error={promoError ?? undefined}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  autoComplete="off"
+                  autoFocus
+                  maxLength={64}
+                  returnKeyType="done"
+                  onSubmitEditing={applyPromo}
+                />
+                <Button
+                  label={t('customer.checkout.promoApply')}
+                  variant="outline"
+                  size="sm"
+                  loading={checkingPromo}
+                  disabled={!promoInput.trim() || !address}
+                  onPress={applyPromo}
+                />
+              </View>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setPromoOpen(true)}
+                className="flex-row items-center gap-3 active:opacity-70"
+              >
+                <View className="w-10 h-10 items-center justify-center rounded-full bg-muted">
+                  <Tag size={18} color={colors.mutedForeground} strokeWidth={2} />
+                </View>
+                <Text variant="caption" weight="semibold" className="flex-1">
+                  {t('customer.checkout.promoAdd')}
+                </Text>
+                <ChevronRight size={18} color={colors.mutedForeground} strokeWidth={2} />
+              </Pressable>
+            )}
+          </Section>
+
           <View className="rounded-2xl bg-card p-4">
             <PriceSummary
               subtotalCad={subtotalCad}
@@ -250,6 +368,8 @@ export default function CheckoutScreen() {
               deliveryFeeCad={deliveryFeeCad}
               deliveryDistanceKm={deliveryDistanceKm}
               pointsDiscountCad={pointsDiscountCad}
+              couponDiscountCad={couponDiscountCad}
+              couponCode={coupon?.code}
               totalCad={discountedTotalCad}
             />
           </View>

@@ -30,6 +30,9 @@ const config = {
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
     },
+    // Sign in with Apple. Adds the entitlement; EAS Build turns the capability
+    // on for the App ID in whichever Apple team builds it.
+    usesAppleSignIn: true,
   },
   android: {
     package: 'pro.progix.sougouba',
@@ -82,6 +85,7 @@ const config = {
     'expo-image',
     'expo-video',
     'expo-web-browser',
+    'expo-apple-authentication',
     // No `merchantIdentifier` yet: Apple Pay needs a merchant ID registered on
     // the client's own Apple Developer account. Cards work without it.
     ['@stripe/stripe-react-native', { enableGooglePay: false }],
@@ -99,6 +103,18 @@ const config = {
     // The build fails with a 401 from Mapbox's Maven/CocoaPods repo when it is
     // missing, which reads as a network error rather than a missing credential.
     '@rnmapbox/maps',
+    // Remote push, through Expo's push service (FCM on Android, APNs on iOS).
+    // The FCM v1 service account and APNs key are EAS credentials, uploaded
+    // with `eas credentials` — nothing secret lives here. `icon` is the
+    // all-white silhouette Android's status bar demands; `color` tints it.
+    [
+      'expo-notifications',
+      {
+        icon: './assets/notification-icon.png',
+        color: '#1C5439',
+        defaultChannel: 'orders',
+      },
+    ],
     [
       'expo-location',
       {

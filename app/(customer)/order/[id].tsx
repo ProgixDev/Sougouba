@@ -307,6 +307,8 @@ export default function OrderDetailScreen() {
                   qstCad={order.qstCad}
                   deliveryFeeCad={order.deliveryFeeCad}
                   pointsDiscountCad={order.pointsDiscountCad}
+                  couponDiscountCad={order.couponDiscountCad ?? undefined}
+                  couponCode={order.couponCode}
                   totalCad={order.totalCad}
                 />
               </View>
