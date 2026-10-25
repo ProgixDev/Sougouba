@@ -41,12 +41,20 @@ export class CronController {
    * One dispatch tick: expire offers nobody answered, offer waiting orders to
    * the nearest free courier.
    *
-   * Scheduled every minute, which is the floor Vercel's scheduler allows and
-   * slower than the 30-second offer timeout it serves. It is therefore the
-   * safety net, not the mechanism: `DispatchScheduler.nudge` runs a tick from
-   * the courier and order requests that care, so in practice a tick happens
-   * within a second of anything worth dispatching. On the VPS the 5-second
-   * timer takes over and this route goes quiet.
+   * **Not scheduled** (removed from `vercel.json` on 2026-10-25). It ran every
+   * minute as a safety net, and on Vercel that cost far more than it caught:
+   * a container woken 1,440 times a day never scales to zero, so the API was
+   * billed as an always-on machine — 88 % of the team's provisioned memory
+   * from 16 to 19 October, while nothing was being dispatched.
+   *
+   * Nothing depends on it. `DispatchScheduler.nudge` already runs a tick from
+   * every request that can make dispatch possible: an order placed, a courier
+   * coming on shift, and an online courier's heartbeat and 5-second offer poll
+   * — which is also what expires and re-offers a lapsed offer. With no courier
+   * online there is nobody to offer to, so a timer would only find nothing.
+   *
+   * Kept as a route so an external scheduler, or a person, can still force a
+   * tick. On the VPS the 5-second timer owns dispatch and this goes unused.
    */
   @Get('dispatch')
   dispatchTickViaGet(): Promise<{ ok: true }> {

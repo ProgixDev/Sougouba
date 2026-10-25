@@ -5,10 +5,6 @@
   ],
   "crons": [
     {
-      "path": "/internal/cron/dispatch",
-      "schedule": "* * * * *"
-    },
-    {
       "path": "/internal/cron/payouts",
       "schedule": "0 7 * * 5"
     },
