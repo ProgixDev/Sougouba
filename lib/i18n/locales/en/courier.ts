@@ -149,6 +149,10 @@ export const courier: Widen<typeof reference> = {
     offline: 'You are offline',
     waitingBody: 'We will offer you the next order ready near you.',
     offlineBody: 'Go online to start receiving run offers.',
+    simulate: 'Simulate a run',
+    simulateHint: 'A real test order at the nearest shop, offered to you alone.',
+    simulateDisabled: 'Run simulation is turned off on this server.',
+    demoCode: 'Demonstration run — customer code: %{code}',
   },
   gateCopy: {
     completeBody: 'A few details are still missing before you can deliver: your contact details, your vehicle and your documents.',

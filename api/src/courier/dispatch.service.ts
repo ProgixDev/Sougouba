@@ -316,7 +316,7 @@ export class DispatchService {
 }
 
 /** The TypeScript twin of `distanceKmSql`, for values already in memory. */
-function haversine(aLat: number, aLng: number, bLat: number, bLng: number): number {
+export function haversine(aLat: number, aLng: number, bLat: number, bLng: number): number {
   const toRad = (d: number) => (d * Math.PI) / 180;
   const dLat = toRad(bLat - aLat);
   const dLng = toRad(bLng - aLng);

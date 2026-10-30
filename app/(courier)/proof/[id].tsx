@@ -121,6 +121,16 @@ export default function CourierProofScreen() {
             </Text>
           </View>
 
+          {/* Only a demonstration run carries the code here — the courier is its
+              customer. On a real run it stays with the shopper. */}
+          {order.delivery.pin ? (
+            <View className="rounded-2xl bg-card p-4">
+              <Text variant="caption" weight="semibold" className="text-[13px] leading-[19px]">
+                {t('courier.missions.demoCode', { code: order.delivery.pin })}
+              </Text>
+            </View>
+          ) : null}
+
           <ProofCapture
             onSubmit={complete}
             busy={busy}

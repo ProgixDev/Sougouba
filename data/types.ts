@@ -419,8 +419,11 @@ export interface OrderDelivery {
   dropoffEtaMin: number;
   /** Shop -> shopper, in kilometres. What the courier is paid on. */
   distanceKm: number;
-  /** Four digits the shopper reads out. Derived from the order id, so it is stable. */
-  pin: string;
+  /**
+   * Four digits the shopper reads out, checked by the server. Only in the
+   * shopper's view — and a courier's on their own demonstration run.
+   */
+  pin?: string;
   proof?: DeliveryProof;
   /**
    * Who is carrying it — sent to the shopper and the shop only, since neither

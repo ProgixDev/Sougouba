@@ -235,3 +235,14 @@ export async function startPayoutOnboarding(): Promise<string> {
   });
   return url;
 }
+
+// ── test phase ──────────────────────────────────────────────────────────────
+
+/**
+ * Test phase only: a demonstration run — a real `ready` order at the nearest
+ * shop, offered to this courier straight away. The API answers 404 unless
+ * `ALLOW_DEMO_RUNS` is set on the deploy.
+ */
+export async function startDemoRun(): Promise<{ orderId: ID; offerId: ID }> {
+  return api('/couriers/me/demo-run', { method: 'POST', body: {} });
+}

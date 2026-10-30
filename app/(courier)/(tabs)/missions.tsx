@@ -1,13 +1,14 @@
 import { router, useFocusEffect } from 'expo-router';
-import { Power } from 'lucide-react-native';
+import { FlaskConical, Power } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
 import { CourierGate, CourierHeader, MissionSheet, OfferCard } from '@/components/courier';
 import { useT } from '@/lib/i18n/useT';
 import { DeliveryMap } from '@/components/map';
-import { Text } from '@/components/ui';
+import { Button, Text } from '@/components/ui';
 import { couriersApi, ordersApi, vendorsApi } from '@/data/api';
+import { ApiError } from '@/data/http';
 import type { Order, Vendor } from '@/data/types';
 import { useCourierDemoSeed } from '@/hooks/useCourierDemoSeed';
 import { useCourierEarnings } from '@/hooks/useCourierEarnings';
@@ -16,6 +17,7 @@ import { useDeliveryProgress } from '@/hooks/useDeliveryProgress';
 import { useDispatchEngine } from '@/hooks/useDispatchEngine';
 import { useOwnPosition } from '@/hooks/useOwnPosition';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
+import { isOfferExpired } from '@/lib/dispatch';
 import { nextStatusFor } from '@/lib/orderStatus';
 import { dynamicRoutes } from '@/lib/routes';
 import { useDispatchStore } from '@/store/useDispatchStore';
@@ -44,6 +46,7 @@ export default function MissionsScreen() {
   const goOffline = useDispatchStore((s) => s.goOffline);
   const clearOffer = useDispatchStore((s) => s.clearOffer);
   const setActiveOrder = useDispatchStore((s) => s.setActiveOrder);
+  const receiveOffer = useDispatchStore((s) => s.receiveOffer);
 
   // Mounted once for the group, from here rather than the layout so it starts
   // only when a courier is actually looking at the dispatch surface.
@@ -63,6 +66,8 @@ export default function MissionsScreen() {
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [offerVendor, setOfferVendor] = useState<Vendor | null>(null);
   const [busy, setBusy] = useState(false);
+  const [simulating, setSimulating] = useState(false);
+  const [simulateError, setSimulateError] = useState<string | null>(null);
   // Measured rather than guessed: the dock is an offer card, a mission sheet or
   // a one-line idle card, and they are nowhere near the same height.
   const [dockHeight, setDockHeight] = useState(0);
@@ -153,6 +158,32 @@ export default function MissionsScreen() {
     // Told to the server so the run goes to the next courier now, not in 30 s.
     couriersApi.declineOffer(offer.id).catch(() => undefined);
     clearOffer('declined');
+  }
+
+  /**
+   * Test phase: ask the server for a demonstration run, then show its offer
+   * now rather than at the dispatch engine's next five-second look.
+   */
+  async function simulate() {
+    if (simulating || !courier) return;
+    setSimulateError(null);
+    setSimulating(true);
+    try {
+      await couriersApi.startDemoRun();
+      const offers = await ordersApi.getDispatchableOrders();
+      const next = offers.find((o) => !isOfferExpired(o, Date.now()));
+      if (next) receiveOffer({ ...next, courierId: courier.id });
+    } catch (error) {
+      setSimulateError(
+        error instanceof ApiError
+          ? error.status === 404
+            ? t('courier.missions.simulateDisabled')
+            : error.message
+          : t('common.genericError')
+      );
+    } finally {
+      setSimulating(false);
+    }
   }
 
   async function advance() {
@@ -254,7 +285,12 @@ export default function MissionsScreen() {
               busy={busy}
             />
           ) : (
-            <IdleCard online={online} />
+            <IdleCard
+              online={online}
+              onSimulate={simulate}
+              simulating={simulating}
+              simulateError={simulateError}
+            />
           )}
         </View>
       </View>
@@ -269,7 +305,17 @@ export default function MissionsScreen() {
  * waiting is the platform's turn. Saying "aucune course" for both would make
  * being offline look like a slow night.
  */
-function IdleCard({ online }: { online: boolean }) {
+function IdleCard({
+  online,
+  onSimulate,
+  simulating,
+  simulateError,
+}: {
+  online: boolean;
+  onSimulate: () => void;
+  simulating: boolean;
+  simulateError: string | null;
+}) {
   const t = useT();
   return (
     <View className="rounded-[24px] bg-card p-5 gap-2 items-center">
@@ -282,6 +328,30 @@ function IdleCard({ online }: { online: boolean }) {
           ? t('courier.missions.waitingBody')
           : t('courier.missions.offlineBody')}
       </Text>
+      {/* Test phase: a run to practise on while no real order is waiting.
+          Online only — an offer is something a courier on shift receives. */}
+      {online ? (
+        <View className="w-full gap-2 pt-2">
+          <Button
+            label={t('courier.missions.simulate')}
+            variant="outline"
+            size="sm"
+            fullWidth
+            loading={simulating}
+            onPress={onSimulate}
+            icon={<FlaskConical size={15} color="#8A8175" strokeWidth={2} />}
+          />
+          {simulateError ? (
+            <Text variant="caption" tone="destructive" className="text-center text-[12px] leading-[18px]">
+              {simulateError}
+            </Text>
+          ) : (
+            <Text variant="caption" tone="muted" className="text-center text-[11px] leading-[16px]">
+              {t('courier.missions.simulateHint')}
+            </Text>
+          )}
+        </View>
+      ) : null}
     </View>
   );
 }

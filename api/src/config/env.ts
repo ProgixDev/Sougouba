@@ -117,6 +117,18 @@ const envSchema = z.object({
   ALLOW_DEMO_SELF_APPROVAL: z.string().optional(),
 
   /**
+   * Test phase only: lets an approved courier ask for a demonstration run with
+   * `POST /couriers/me/demo-run` — a real `ready` order at the nearest shop,
+   * offered straight to them, so the driver flow can be tried without a
+   * shopper and a merchant. Unset, the route answers 404.
+   *
+   * ⚠️ The run is real to the rest of the system: it lands in the shop's order
+   * list (at 0 $) and its fare counts toward the courier's payout. Unset it
+   * before delivery, with the two flags above.
+   */
+  ALLOW_DEMO_RUNS: z.string().optional(),
+
+  /**
    * Outgoing mail (sign-up codes), sent with Nodemailer.
    *
    * Optional, and empty is a deliberate state: with no `SMTP_HOST` the

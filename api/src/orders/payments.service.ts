@@ -183,23 +183,44 @@ export class PaymentsService {
   // ── Connect (Phase 7) ─────────────────────────────────────────────────────
 
   /**
-   * Create an Express account for a merchant or a courier.
+   * Create a connected account for a merchant or a courier.
    *
-   * **Express, not Custom**: Stripe hosts the onboarding, collects the bank
-   * details and owns the identity verification. Custom would put all of that on
-   * this API — which is precisely the PII this project has spent Phase 5 and 7
-   * refusing to hold.
+   * **Accounts v2** (`/v2/core/accounts`): Stripe refuses v1
+   * `accounts.create({ type: 'express' })` for new Connect integrations, which
+   * is the 500 couriers hit on "Configurer mes versements".
+   *
+   * Configured as a marketplace *recipient*: the platform takes the payment
+   * and the account receives transfers (a merchant's share, a courier's week),
+   * so only `stripe_transfers` is requested — no `merchant` configuration, which
+   * would add card-payment onboarding nobody here needs. Express dashboard and
+   * the platform collecting fees and owning losses, per Stripe's marketplace
+   * defaults. Stripe hosts the onboarding and holds the bank details; this API
+   * never sees them.
    */
-  async createConnectAccount(subject: { kind: 'vendor' | 'courier'; id: string; name: string }): Promise<string> {
-    const account = await this.client().accounts.create({
-      type: 'express',
-      country: 'CA',
-      // Both are paid out, neither is charged directly — the platform takes the
-      // payment and splits it (`application_fee_amount`), so `card_payments` is
-      // not requested here.
-      capabilities: { transfers: { requested: true } },
-      business_type: subject.kind === 'courier' ? 'individual' : undefined,
-      metadata: { sougoubaKind: subject.kind, sougoubaId: subject.id, name: subject.name },
+  async createConnectAccount(subject: {
+    kind: 'vendor' | 'courier';
+    id: string;
+    name: string;
+    /** Required by Stripe on any account with the `recipient` configuration. */
+    email: string;
+  }): Promise<string> {
+    const account = await this.client().v2.core.accounts.create({
+      display_name: subject.name,
+      contact_email: subject.email,
+      dashboard: 'express',
+      identity: {
+        country: 'ca',
+        entity_type: subject.kind === 'courier' ? 'individual' : 'company',
+      },
+      defaults: {
+        currency: 'cad',
+        locales: ['fr-CA'],
+        responsibilities: { fees_collector: 'application', losses_collector: 'application' },
+      },
+      configuration: {
+        recipient: { capabilities: { stripe_balance: { stripe_transfers: { requested: true } } } },
+      },
+      metadata: { sougoubaKind: subject.kind, sougoubaId: subject.id },
     });
     this.logger.log(`Created Connect account ${account.id} for ${subject.kind} ${subject.id}`);
     return account.id;
@@ -210,25 +231,48 @@ export class PaymentsService {
    *
    * Short-lived by Stripe's design, which is why this is generated per request
    * rather than stored: a saved link is a link that has expired by the time
-   * someone clicks it.
+   * someone clicks it. Onboarding an account that already finished it reopens
+   * the same form for review, which is what "Revoir mes informations" wants.
    */
   async createAccountLink(accountId: string, returnUrl: string, refreshUrl: string): Promise<string> {
-    const link = await this.client().accountLinks.create({
+    const link = await this.client().v2.core.accountLinks.create({
       account: accountId,
-      type: 'account_onboarding',
-      return_url: returnUrl,
-      refresh_url: refreshUrl,
+      use_case: {
+        type: 'account_onboarding',
+        account_onboarding: {
+          configurations: ['recipient'],
+          return_url: returnUrl,
+          refresh_url: refreshUrl,
+        },
+      },
     });
     return link.url;
   }
 
-  /** What Stripe currently believes about an account — the truth behind our cached status. */
+  /**
+   * What Stripe currently believes about an account — the truth behind our cached status.
+   *
+   * Read from the v2 transfer capability, not v1's `payouts_enabled`:
+   * `active` means a transfer will land. Short of that, the status details say
+   * whether Stripe is still checking what was submitted (`onboarded`, waiting)
+   * or is missing something the courier has to fill in.
+   */
   async getConnectAccount(accountId: string) {
-    const account = await this.client().accounts.retrieve(accountId);
+    const account = await this.client().v2.core.accounts.retrieve(accountId, {
+      include: ['configuration.recipient', 'requirements'],
+    });
+    const transfers = account.configuration?.recipient?.capabilities?.stripe_balance?.stripe_transfers;
+    const active = transfers?.status === 'active';
+    const verifying = (transfers?.status_details ?? []).some(
+      (d) => d.code === 'requirements_pending_verification' || d.code === 'determining_status'
+    );
+    const outstanding = (account.requirements?.entries ?? []).length;
     return {
-      detailsSubmitted: account.details_submitted ?? false,
-      chargesEnabled: account.charges_enabled ?? false,
-      payoutsEnabled: account.payouts_enabled ?? false,
+      detailsSubmitted: active || verifying || (transfers !== undefined && outstanding === 0),
+      // Recipient accounts never take card payments themselves; kept so the
+      // status payload keeps its shape for the clients that read it.
+      chargesEnabled: active,
+      payoutsEnabled: active,
     };
   }
 

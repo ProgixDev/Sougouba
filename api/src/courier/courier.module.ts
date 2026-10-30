@@ -5,6 +5,7 @@ import { LoyaltyModule } from '../loyalty/loyalty.module.js';
 import { CourierController } from './courier.controller.js';
 import { CouriersService } from './couriers.service.js';
 import { DeliveryService } from './delivery.service.js';
+import { DemoRunService } from './demo-run.service.js';
 import { DispatchScheduler } from './dispatch.scheduler.js';
 import { DispatchService } from './dispatch.service.js';
 
@@ -19,7 +20,7 @@ import { DispatchService } from './dispatch.service.js';
 @Module({
   imports: [GeoModule, LoyaltyModule],
   controllers: [CourierController],
-  providers: [CouriersService, DispatchService, DeliveryService, DispatchScheduler],
+  providers: [CouriersService, DispatchService, DeliveryService, DemoRunService, DispatchScheduler],
   exports: [CouriersService, DispatchService, DispatchScheduler],
 })
 export class CourierModule {}

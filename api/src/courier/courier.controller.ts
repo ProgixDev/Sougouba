@@ -9,6 +9,7 @@ import { paginationSchema } from '../catalog/dto/query.dto.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import { CouriersService } from './couriers.service.js';
 import { DeliveryService } from './delivery.service.js';
+import { DemoRunService } from './demo-run.service.js';
 import { DispatchScheduler } from './dispatch.scheduler.js';
 import { DispatchService } from './dispatch.service.js';
 import {
@@ -48,6 +49,7 @@ export class CourierController {
     private readonly couriers: CouriersService,
     private readonly dispatch: DispatchService,
     private readonly delivery: DeliveryService,
+    private readonly demoRuns: DemoRunService,
     /**
      * Only ever used for `nudge`, which runs a dispatch tick on hosts with no
      * always-on timer. A no-op on a VPS — see `dispatch.scheduler.ts`.
@@ -64,6 +66,12 @@ export class CourierController {
   @Post('me/demo-approve')
   demoApprove(@CurrentUser() userId: string) {
     return this.couriers.demoApprove(userId);
+  }
+
+  /** Test phase only — see `DemoRunService`. A 404 unless `ALLOW_DEMO_RUNS` is set. */
+  @Post('me/demo-run')
+  demoRun(@CurrentUser() userId: string) {
+    return this.demoRuns.create(userId);
   }
 
   @Get('me')

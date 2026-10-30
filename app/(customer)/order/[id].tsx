@@ -197,7 +197,8 @@ export default function OrderDetailScreen() {
                     courier={courier}
                     phase={progress.phase}
                     etaMin={progress.etaMin}
-                    pin={order.delivery!.pin}
+                    // Always present in the shopper's view; the fallback only satisfies the type.
+                    pin={order.delivery!.pin ?? '····'}
                   />
                 </View>
               </Section>

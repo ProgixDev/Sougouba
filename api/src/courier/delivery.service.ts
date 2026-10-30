@@ -74,17 +74,21 @@ export class DeliveryService {
    * The run as the courier's screens read it: the whole order, in the same
    * shape the shopper and the merchant get (`orders/order-view.ts`).
    *
-   * ⚠️ Without the PIN. This used to return `ownedRun`'s row, PIN included —
+   * ⚠️ Without the PIN (unless the courier is also the order's customer, below). This used to return `ownedRun`'s row, PIN included —
    * but the PIN is the shopper's proof that the bag reached them. A courier who
    * can read it here can close a run from anywhere; `complete` checks it against
    * what the shopper read out, which only means something if this never sends it.
    */
   async run(courierId: string, orderId: string) {
     await this.ownedRun(courierId, orderId);
-    const row = await unwrap<Record<string, unknown>>(
-      this.db.from('orders').select('*').eq('id', orderId).single()
-    );
-    const [order] = await hydrateOrders(this.db, [row], { revealPin: false, courierCard: false });
+    const [row, courier] = await Promise.all([
+      unwrap<Record<string, unknown>>(this.db.from('orders').select('*').eq('id', orderId).single()),
+      unwrap<{ user_id: string }>(this.db.from('couriers').select('user_id').eq('id', courierId).single()),
+    ]);
+    // The one exception: a courier carrying their *own* order — a demonstration
+    // run (`DemoRunService`) — is the shopper too, and the shopper reads the code.
+    const ownOrder = row.customer_id === courier.user_id;
+    const [order] = await hydrateOrders(this.db, [row], { revealPin: ownOrder, courierCard: false });
     return order;
   }
 

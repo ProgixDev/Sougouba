@@ -150,6 +150,10 @@ export const courier = {
     offline: 'Vous êtes hors ligne',
     waitingBody: 'Nous vous proposons la prochaine commande prête près de vous.',
     offlineBody: 'Passez en ligne pour recevoir des propositions de course.',
+    simulate: 'Simuler une course',
+    simulateHint: 'Une vraie commande de test, à la boutique la plus proche, proposée à vous seul.',
+    simulateDisabled: 'La simulation de course est désactivée sur ce serveur.',
+    demoCode: 'Course de démonstration — code du client : %{code}',
   },
   gateCopy: {
     completeBody: 'Il reste quelques informations avant de pouvoir livrer : vos coordonnées, votre véhicule et vos documents.',

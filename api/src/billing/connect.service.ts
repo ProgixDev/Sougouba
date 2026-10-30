@@ -29,6 +29,17 @@ export class ConnectService {
     private readonly payments: PaymentsService
   ) {}
 
+  /**
+   * The account's sign-in email. Stripe refuses a recipient account without a
+   * contact email, and it is the address Stripe writes to about the payouts.
+   */
+  private async emailOf(userId: string): Promise<string> {
+    const { data } = await this.db.auth.admin.getUserById(userId);
+    const email = data?.user?.email;
+    if (!email) throw new ConflictException('Ajoutez une adresse courriel à votre compte pour configurer les versements');
+    return email;
+  }
+
   // ── merchants ─────────────────────────────────────────────────────────────
 
   /**
@@ -57,7 +68,12 @@ export class ConnectService {
 
     const accountId =
       existing?.stripe_connect_account_id ??
-      (await this.payments.createConnectAccount({ kind: 'vendor', id: vendor.id, name: vendor.name }));
+      (await this.payments.createConnectAccount({
+        kind: 'vendor',
+        id: vendor.id,
+        name: vendor.name,
+        email: await this.emailOf(userId),
+      }));
 
     if (!existing) {
       // `status` is deliberately left at its `inactive` default. It tracks the
@@ -134,7 +150,12 @@ export class ConnectService {
 
     const accountId =
       existing?.stripe_connect_account_id ??
-      (await this.payments.createConnectAccount({ kind: 'courier', id: courier.id, name: courier.fullName }));
+      (await this.payments.createConnectAccount({
+        kind: 'courier',
+        id: courier.id,
+        name: courier.fullName,
+        email: await this.emailOf(userId),
+      }));
 
     if (!existing) {
       await unwrap(
