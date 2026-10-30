@@ -77,8 +77,8 @@
     "verify": "npm run typecheck && npm run verify:seed && npm run verify:logic && npm run verify:loyalty && npm run verify:contrast && npm run verify:i18n",
     "verify:contrast": "npx --yes tsx scripts/verify-contrast.ts",
     "verify:i18n": "npx --yes tsx scripts/verify-i18n.ts",
-    "update:prod": "eas update --channel production --environment production",
-    "update:preview": "eas update --channel preview --environment preview"
+    "update:prod": "eas update --channel production --environment production --platform ios",
+    "update:preview": "eas update --channel preview --environment preview --platform ios"
   },
   "private": true,
   "overrides": {
