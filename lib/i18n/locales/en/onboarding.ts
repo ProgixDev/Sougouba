@@ -43,7 +43,7 @@ export const onboarding: Widen<typeof reference> = {
   slides: {
     market: {
       title: 'Local grocers,\nfinally in one place',
-      body: 'African and Maghrebi shops across Montreal, Montreal North, Laval and Longueuil, gathered in a single app.',
+      body: 'African and Maghrebi shops, gathered in a single app.',
     },
     spices: {
       title: 'What you can’t\nfind anywhere else',

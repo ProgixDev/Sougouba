@@ -79,8 +79,8 @@ export const customer = {
     about: {
       title: 'Aide et informations',
       version: 'Version %{version}',
-      tagline: 'Les épiceries africaines et maghrébines du Grand Montréal',
-      body: 'Sougouba relie les épiceries, boucheries et cuisines africaines et maghrébines de Montréal, Montréal-Nord, Laval et Longueuil aux gens qui cherchent leurs produits. Commandez auprès du commerce, suivez la préparation, recevez à la maison.',
+      tagline: 'Les épiceries africaines et maghrébines',
+      body: 'Sougouba relie les épiceries et cuisines africaines et maghrébines aux gens qui cherchent leurs produits. Commandez auprès du commerce, suivez la préparation, recevez à la maison.',
       support: 'Écrire au soutien',
       registerShop: 'Inscrire mon commerce',
       registerShopDetail: 'Comment vendre sur Sougouba',

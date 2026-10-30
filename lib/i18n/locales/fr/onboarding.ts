@@ -59,7 +59,7 @@ export const onboarding = {
   slides: {
     market: {
       title: 'Les épiceries d’ici,\nenfin réunies',
-      body: 'Commerces africains et maghrébins de Montréal, Montréal-Nord, Laval et Longueuil, réunis dans une seule application.',
+      body: 'Commerces africains et maghrébins, réunis dans une seule application.',
     },
     spices: {
       title: 'Ce qu’on ne trouve\npas ailleurs',

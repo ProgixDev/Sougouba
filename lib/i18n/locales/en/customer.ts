@@ -72,8 +72,8 @@ export const customer: Widen<typeof reference> = {
     about: {
       title: 'Help and information',
       version: 'Version %{version}',
-      tagline: 'African and Maghrebi grocers across Greater Montreal',
-      body: 'Sougouba connects the African and Maghrebi grocers, butchers and kitchens of Montreal, Montreal North, Laval and Longueuil with the people looking for their products. Order from the shop, follow the preparation, receive it at home.',
+      tagline: 'African and Maghrebi grocers',
+      body: 'Sougouba connects African and Maghrebi grocers and kitchens with the people looking for their products. Order from the shop, follow the preparation, receive it at home.',
       support: 'Email support',
       registerShop: 'Register my shop',
       registerShopDetail: 'How selling on Sougouba works',
