@@ -1,14 +1,13 @@
-import { legDurationMin } from '@/data/delivery';
-import type { LatLng, VehicleType } from '@/data/types';
+import type { LatLng } from '@/data/types';
 import { distanceKm } from '@/data/utils/geo';
-import { hashString, mulberry32 } from '@/data/utils/random';
 
 /**
- * Where a courier is, without ever storing where a courier is.
+ * Geometry over a route the courier is driving.
  *
- * The whole module is pure: a route is regenerated from an order id, and a
- * position is a function of (route, elapsed time). Nothing here holds state,
- * which is the point — see `progressAt`.
+ * The route itself comes from Mapbox Directions (`lib/directions.ts`) and the
+ * position from the courier's GPS; this module only relates the two — how far
+ * along the line a fix sits, which half to dim, how long is left. Pure, so it
+ * can be checked without a map or a phone.
  */
 
 export interface RouteLeg {
@@ -18,152 +17,50 @@ export interface RouteLeg {
   durationMin: number;
 }
 
-/** How many corners a generated route turns. Montréal blocks, roughly. */
-const SEGMENTS = 6;
-/**
- * Sideways wander, as a fraction of the straight-line distance.
- *
- * Tuned, not picked. Right-angle routing over a grid already costs
- * (|dx|+|dy|)/hypot(dx,dy) before any wander is added — 1.0x due north, 1.41x
- * on a diagonal — which is a real property of grid cities, not an artefact, and
- * `lib/geo.ts` puts the Montréal driving detour at roughly a third. The drift is
- * only there to stop every route looking like the same staircase. At 0.22 it was
- * pushing runs past 1.9x, inflating every ETA and every fare derived from one;
- * at 0.10 it moves the ratio by a few points either side of what the bearing
- * already implies.
- */
-const DRIFT = 0.1;
-
-/**
- * A plausible driving route between two points, generated offline.
- *
- * Not a call to the Directions API, and deliberately so: this app is a mock with
- * no backend, every other figure in it is derived rather than fetched, and a
- * demo that needs a network round trip per delivery is a demo that breaks in the
- * room it is being shown in. What matters visually is that the line looks like
- * streets rather than a laser — so the path zig-zags in near-right angles with a
- * little jitter, which on Montréal's grid reads as a route.
- *
- * Seeded by `seed` (the order id at every call site), so the same delivery draws
- * the same line on every launch, on both the courier's screen and the shopper's.
- * If real geometry is ever wanted, this signature is what a Directions call
- * would fill in behind — nothing above it knows the difference.
- */
-export function buildLeg(from: LatLng, to: LatLng, seed: string, vehicle: VehicleType): RouteLeg {
-  const rng = mulberry32(hashString(`route:${seed}`));
-  const straight = distanceKm(from, to);
-
-  const dLat = to.lat - from.lat;
-  const dLng = to.lng - from.lng;
-  // Unit normal to the straight line, in degrees. Longitude is compressed by
-  // latitude, but over a delivery-sized span the error is smaller than the
-  // jitter this offsets by, so it is not worth the cosine.
-  const length = Math.hypot(dLat, dLng) || 1;
-  const nLat = -dLng / length;
-  const nLng = dLat / length;
-
-  const points: LatLng[] = [{ ...from }];
-  for (let i = 1; i < SEGMENTS; i++) {
-    const t = i / SEGMENTS;
-    // Offsets taper to zero at both ends: a route that starts beside the shop
-    // instead of at it looks like a bug, not like a road.
-    const taper = Math.sin(t * Math.PI);
-    const offset = (rng() - 0.5) * 2 * DRIFT * taper;
-
-    const midLat = from.lat + dLat * t + nLat * offset * length;
-    const midLng = from.lng + dLng * t + nLng * offset * length;
-
-    // Two points per waypoint, sharing one coordinate each — that is what makes
-    // the corner square rather than a smooth curve.
-    const prev = points[points.length - 1];
-    points.push({ lat: prev.lat, lng: midLng });
-    points.push({ lat: midLat, lng: midLng });
-  }
-  points.push({ lat: points[points.length - 1].lat, lng: to.lng });
-  points.push({ ...to });
-
-  // Measured along the generated path, not as the crow flies: the courier is
-  // paid and timed on the road they actually drive.
-  let travelled = 0;
-  for (let i = 1; i < points.length; i++) travelled += distanceKm(points[i - 1], points[i]);
-
-  return {
-    points,
-    distanceKm: travelled,
-    durationMin: legDurationMin(travelled, vehicle),
-  };
-}
-
-/**
- * How much faster than real time a run plays out. **Set this to 1 for production.**
- *
- * A delivery leg is ten to twenty minutes of real driving, and at 1x the courier
- * marker advances about five metres a second — which, on a camera framing a
- * five-kilometre route, is less than a pixel. The map is then indistinguishable
- * from a static picture for the entire length of a demo, and the one thing the
- * courier screen exists to show is the one thing nobody can see.
- *
- * Scaling the *clock* rather than nudging the position keeps every guarantee in
- * this module intact: position is still a pure function of (route, elapsed), a
- * killed app still resumes where it should, and the courier's screen and the
- * shopper's still agree, because both read the same scaled clock. The ETA is
- * derived from the same progress value, so the countdown falls in step with the
- * marker instead of contradicting it — the run simply happens on a fast clock.
- *
- * At 10x a twelve-minute leg is watchable in about seventy seconds, which is
- * roughly how long someone spends looking at a demo before tapping the next
- * thing.
- */
-export const DEMO_TIME_SCALE = 10;
-
-/**
- * How far along a leg the courier is, from 0 to 1.
- *
- * **Derived from the clock, never accumulated.** A `setInterval` that nudges a
- * stored position forward is wrong in three ways that all show up in a demo:
- * it stops advancing when no screen is mounted, it double-advances if two
- * screens mount at once, and it loses everything on a cold start. Anchoring to
- * `startedAt` means a courier who was eight minutes into a twenty-minute run is
- * still eight minutes in after the app is killed, backgrounded, or opened on the
- * shopper's phone instead.
- */
-export function progressAt(startedAtIso: string, durationMin: number, nowMs: number): number {
-  if (durationMin <= 0) return 1;
-  const elapsedMin = ((nowMs - Date.parse(startedAtIso)) / 60000) * DEMO_TIME_SCALE;
-  if (!Number.isFinite(elapsedMin)) return 0;
-  return Math.min(1, Math.max(0, elapsedMin / durationMin));
-}
-
-export interface RoutePosition {
-  at: LatLng;
-  /** Compass degrees, 0 = north. Rotates the courier marker. */
+export interface RouteFix {
+  /** Share of the route's length behind the courier, 0 to 1. */
+  progress: number;
+  /** How far the fix is from the line — past a threshold the route is stale. */
+  offRouteKm: number;
+  /** Compass degrees of the segment the courier is on, for when GPS has no heading. */
   bearing: number;
 }
 
-/** Point on the path at `progress`, interpolated between the two waypoints around it. */
-export function positionAlong(leg: RouteLeg, progress: number): RoutePosition {
-  const points = leg.points;
-  if (points.length < 2) return { at: points[0] ?? { lat: 0, lng: 0 }, bearing: 0 };
+/**
+ * Where a GPS fix falls on the route.
+ *
+ * Projects onto each segment and keeps the nearest, measuring along the line up
+ * to that point. Flat-earth maths over a segment: at delivery scale the error is
+ * centimetres, far below GPS noise.
+ */
+export function locateOnRoute(points: LatLng[], at: LatLng): RouteFix {
+  if (points.length < 2) return { progress: 0, offRouteKm: points[0] ? distanceKm(points[0], at) : 0, bearing: 0 };
 
-  const target = Math.min(1, Math.max(0, progress)) * leg.distanceKm;
-  let travelled = 0;
+  const kx = Math.cos((at.lat * Math.PI) / 180);
+  let best = { distKm: Infinity, alongKm: 0, bearing: 0 };
+  let walked = 0;
+  let total = 0;
 
   for (let i = 1; i < points.length; i++) {
-    const step = distanceKm(points[i - 1], points[i]);
-    if (travelled + step >= target || i === points.length - 1) {
-      // Zero-length steps happen where two waypoints share a coordinate; fall
-      // back to the far end rather than dividing by zero.
-      const within = step > 0 ? (target - travelled) / step : 1;
-      const at = {
-        lat: points[i - 1].lat + (points[i].lat - points[i - 1].lat) * within,
-        lng: points[i - 1].lng + (points[i].lng - points[i - 1].lng) * within,
-      };
-      return { at, bearing: bearingBetween(points[i - 1], points[i]) };
-    }
-    travelled += step;
+    const a = points[i - 1];
+    const b = points[i];
+    const step = distanceKm(a, b);
+    const dx = (b.lng - a.lng) * kx;
+    const dy = b.lat - a.lat;
+    const len2 = dx * dx + dy * dy;
+    const t = len2 > 0 ? Math.min(1, Math.max(0, (((at.lng - a.lng) * kx) * dx + (at.lat - a.lat) * dy) / len2)) : 0;
+    const foot = { lat: a.lat + dy * t, lng: a.lng + (b.lng - a.lng) * t };
+    const d = distanceKm(foot, at);
+    if (d < best.distKm) best = { distKm: d, alongKm: walked + step * t, bearing: bearingBetween(a, b) };
+    walked += step;
+    total += step;
   }
 
-  return { at: points[points.length - 1], bearing: 0 };
+  return {
+    progress: total > 0 ? Math.min(1, best.alongKm / total) : 1,
+    offRouteKm: best.distKm,
+    bearing: best.bearing,
+  };
 }
 
 export interface SplitPath {

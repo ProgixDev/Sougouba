@@ -21,6 +21,8 @@ export const customer = {
     restaurantsNearby: 'Restaurants près de chez vous',
     noRestaurants: 'Aucun restaurant pour l’instant.',
     deliverTo: 'Livraison à',
+    chooseAddress: 'Choisir une adresse',
+    changeAddressA11y: 'Changer l’adresse de livraison',
   },
   searchField: {
     placeholder: 'Rechercher un produit, un commerce…',
@@ -302,7 +304,19 @@ export const customer = {
   cardRequired: 'Une carte est requise : Sougouba n’accepte pas le paiement à la livraison.',
   themeDark: 'thème sombre',
   themeLight: 'thème clair',
-  defaultCity: 'Montréal, QC',
+  addressPicker: {
+    title: 'Où vous livrer ?',
+    useCurrentLocation: 'Utiliser ma position actuelle',
+    useCurrentLocationHint: 'On remplit l’adresse, vous vérifiez.',
+    locating: 'Localisation en cours…',
+    permissionDenied:
+      'L’accès à votre position est désactivé. Autorisez-le dans les Réglages, ou ajoutez l’adresse à la main.',
+    openSettings: 'Ouvrir les Réglages',
+    locationFailed: 'Position introuvable pour le moment. Ajoutez l’adresse à la main.',
+    notServed: 'Sougouba ne livre pas encore ici. Villes desservies : %{cities}.',
+    savedTitle: 'Mes adresses',
+    defaultLabel: 'Domicile',
+  },
   favorite: {
     add: 'Ajouter aux favoris',
     remove: 'Retirer des favoris',

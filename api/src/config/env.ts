@@ -105,6 +105,18 @@ const envSchema = z.object({
   ALLOW_FIXED_TEST_OTP: z.string().optional(),
 
   /**
+   * Test phase only: lets a pending courier approve their own file with
+   * `POST /couriers/me/demo-approve`, so the "Simuler l'approbation" button on
+   * the courier gate opens the driver screens without a trip to the back office.
+   *
+   * ⚠️ **This skips the human review the CDC puts in front of every courier.**
+   * Unset, the route answers 404 as if it did not exist. Unset it with
+   * `ALLOW_FIXED_TEST_OTP`, before delivery. The API logs an error naming it on
+   * every boot while it is on.
+   */
+  ALLOW_DEMO_SELF_APPROVAL: z.string().optional(),
+
+  /**
    * Outgoing mail (sign-up codes), sent with Nodemailer.
    *
    * Optional, and empty is a deliberate state: with no `SMTP_HOST` the

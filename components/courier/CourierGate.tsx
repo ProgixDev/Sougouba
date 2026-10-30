@@ -34,7 +34,7 @@ export function CourierGate({ state, onApproved }: CourierGateProps) {
   const t = useT();
   const colors = useThemeColors();
   const tabBarInset = useTabBarInset();
-  const { approve, approving } = useDemoCourierApproval(onApproved);
+  const { approve, approving, error } = useDemoCourierApproval(onApproved);
 
   const applied = state === 'pending';
 
@@ -127,6 +127,11 @@ export function CourierGate({ state, onApproved }: CourierGateProps) {
             <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
               {t('courier.gate.approveBody')}
             </Text>
+            {error ? (
+              <Text variant="caption" tone="destructive" className="text-[12px] leading-[18px]">
+                {error}
+              </Text>
+            ) : null}
           </View>
         ) : null}
       </ScrollView>

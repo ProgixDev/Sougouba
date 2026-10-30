@@ -12,14 +12,13 @@ import {
   PAYOUT_WEEKDAY,
   groupRunsByDay,
   nextPayoutDate,
-  pendingPayoutCad,
   splitEarnings,
   summariseRuns,
 } from '../lib/courierAnalytics';
 import { BASE_FARE_CAD, PER_KM_CAD, courierEarnings, courierFare } from '../data/courierPay';
 import { deliveryPin, legDurationMin } from '../data/delivery';
 import { distanceKm } from '../data/utils/geo';
-import { DEMO_TIME_SCALE, buildLeg, etaMinutes, positionAlong, progressAt, splitPath } from '../lib/courierRoute';
+import { etaMinutes, locateOnRoute, splitPath, type RouteLeg } from '../lib/courierRoute';
 import { OFFER_TIMEOUT_MS, isOfferExpired, offerRemainingMs, rankCouriers } from '../lib/dispatch';
 import { couriers as seedCouriers } from '../data/seed/couriers';
 import {
@@ -206,59 +205,50 @@ check('a bike is slower than a scooter over the same distance',
   legDurationMin(6, 'bike') > legDurationMin(6, 'scooter'));
 
 // ── route geometry ───────────────────────────────────────────────────────────
-// The position of a courier is derived, never stored (see `lib/courierRoute.ts`).
-// These are the properties the rest of the delivery flow leans on.
+// The route is Mapbox's and the position is the courier's GPS; what is checked
+// here is how the two are related — where a fix falls on the line, and what is
+// left to drive. A fixed L-shaped route stands in for a Directions answer.
+const ROUTE: RouteLeg = (() => {
+  const points = [
+    { lat: 45.5359, lng: -73.6142 },
+    { lat: 45.5359, lng: -73.6021 },
+    { lat: 45.5605, lng: -73.6021 },
+  ];
+  let km = 0;
+  for (let i = 1; i < points.length; i++) km += distanceKm(points[i - 1], points[i]);
+  return { points, distanceKm: km, durationMin: 12 };
+})();
 {
-  const shop = { lat: 45.5359, lng: -73.6142 };
-  const door = { lat: 45.5605, lng: -73.6021 };
-  const leg = buildLeg(shop, door, 'ord_check', 'car');
-  const again = buildLeg(shop, door, 'ord_check', 'car');
+  const [shop, corner, door] = ROUTE.points;
+  check('a fix at the start is 0 % along', locateOnRoute(ROUTE.points, shop).progress < 1e-6);
+  check('a fix at the door is 100 % along', Math.abs(locateOnRoute(ROUTE.points, door).progress - 1) < 1e-6);
+  const firstLeg = distanceKm(shop, corner) / ROUTE.distanceKm;
+  check('a fix at the corner is as far along as the first street',
+    Math.abs(locateOnRoute(ROUTE.points, corner).progress - firstLeg) < 1e-3);
 
-  check('a route is the same on every launch', JSON.stringify(leg) === JSON.stringify(again));
-  check('two orders get different routes',
-    JSON.stringify(buildLeg(shop, door, 'ord_other', 'car').points) !== JSON.stringify(leg.points));
-  check('a route starts at the shop', distanceKm(positionAlong(leg, 0).at, shop) < 1e-9);
-  check('a route ends at the door', distanceKm(positionAlong(leg, 1).at, door) < 1e-9);
-  check('the road is longer than the crow flies', leg.distanceKm > distanceKm(shop, door));
-  // A wander that doubles the trip would double every ETA and every fare
-  // derived from it, so the upper bound is asserted rather than eyeballed.
-  check('the detour stays plausible', leg.distanceKm < distanceKm(shop, door) * 1.75,
-    (leg.distanceKm / distanceKm(shop, door)).toFixed(2));
+  // 30 m beside the second street: on the route, not off it.
+  const beside = { lat: (corner.lat + door.lat) / 2, lng: corner.lng + 0.0004 };
+  const near = locateOnRoute(ROUTE.points, beside);
+  check('a fix beside the road is near the route', near.offRouteKm < 0.075, near.offRouteKm.toFixed(3));
+  check('a fix beside the road snaps to the street it is beside', near.progress > firstLeg);
+  const away = locateOnRoute(ROUTE.points, { lat: 45.5, lng: -73.7 });
+  check('a fix streets away is off the route', away.offRouteKm > 0.075);
 
   let backwards = false;
-  let travelled = 0;
-  let prev = positionAlong(leg, 0).at;
-  for (let i = 1; i <= 100; i++) {
-    const at = positionAlong(leg, i / 100).at;
-    travelled += distanceKm(prev, at);
-    if (distanceKm(prev, at) < -1e-12) backwards = true;
-    prev = at;
+  let prev = 0;
+  for (let i = 0; i <= 50; i++) {
+    const t = i / 50;
+    const at = { lat: corner.lat + (door.lat - corner.lat) * t, lng: corner.lng };
+    const { progress } = locateOnRoute(ROUTE.points, at);
+    if (progress < prev - 1e-9) backwards = true;
+    prev = progress;
   }
-  check('a courier never moves backwards along the route', !backwards);
-  check('sampling the path recovers its length', Math.abs(travelled - leg.distanceKm) < 0.1,
-    `${travelled.toFixed(3)} vs ${leg.distanceKm.toFixed(3)}`);
+  check('driving forward never moves progress backwards', !backwards);
+  check('a one-point route does not throw', locateOnRoute([shop], door).progress === 0);
 
-  const start = '2026-08-20T12:00:00.000Z';
-  const t0 = Date.parse(start);
-  check('progress is 0 before the start', progressAt(start, 20, t0 - 60_000) === 0);
-  check('progress is clamped at 1', progressAt(start, 20, t0 + 86_400_000) === 1);
-  // Linear in *scaled* time: `DEMO_TIME_SCALE` compresses the clock so a run is
-  // watchable in a demo (see `lib/courierRoute.ts`), and half the leg is reached
-  // after half its duration divided by that scale. The property being checked is
-  // still linearity — the constant is only the slope.
-  check(
-    'progress is linear in time',
-    Math.abs(progressAt(start, 20, t0 + (10 / DEMO_TIME_SCALE) * 60_000) - 0.5) < 1e-9
-  );
-  // The property the whole "derive, don't store" design rests on: the same
-  // instant always yields the same position, however many times it is asked.
-  check('progress depends only on the clock',
-    progressAt(start, 20, t0 + 7 * 60_000) === progressAt(start, 20, t0 + 7 * 60_000));
-  check('a zero-length run is already over', progressAt(start, 0, t0) === 1);
-
-  check('the eta runs out exactly at arrival', etaMinutes(leg, 1) === 0);
-  check('the eta is the full duration at the start', etaMinutes(leg, 0) === leg.durationMin);
-  check('the eta only shrinks', etaMinutes(leg, 0.25) >= etaMinutes(leg, 0.75));
+  check('the eta runs out exactly at arrival', etaMinutes(ROUTE, 1) === 0);
+  check('the eta is the full duration at the start', etaMinutes(ROUTE, 0) === ROUTE.durationMin);
+  check('the eta only shrinks', etaMinutes(ROUTE, 0.25) >= etaMinutes(ROUTE, 0.75));
 }
 
 // ── dispatch ─────────────────────────────────────────────────────────────────
@@ -477,9 +467,8 @@ check('every filter set counts once', activeFilterCount({ sort: 'name', priceBan
 // The travelled/remaining split drives the two-tone route line on the map. The
 // two halves must meet exactly, or the line shows a gap under the courier.
 {
-  const shop = { lat: 45.5359, lng: -73.6142 };
-  const door = { lat: 45.5605, lng: -73.6021 };
-  const leg = buildLeg(shop, door, 'ord_split', 'car');
+  const leg = ROUTE;
+  const [shop] = leg.points;
 
   const none = splitPath(leg.points, 0);
   check('nothing is travelled at the start', none.travelled.length === 0);
@@ -495,8 +484,7 @@ check('every filter set counts once', activeFilterCount({ sort: 'name', priceBan
   check('the two halves meet at the same point',
     Math.abs(joinA.lat - joinB.lat) < 1e-12 && Math.abs(joinA.lng - joinB.lng) < 1e-12);
   // The cut point must be where the marker is, or the line and the puck disagree.
-  const marker = positionAlong(leg, 0.5).at;
-  check('the cut sits under the courier marker', distanceKm(joinA, marker) < 0.001);
+  check('the cut sits where a fix there is located', Math.abs(locateOnRoute(leg.points, joinA).progress - 0.5) < 1e-3);
   check('a progress beyond 1 is clamped, not extrapolated',
     splitPath(leg.points, 4).remaining.length === 0);
   check('a degenerate route splits without throwing', splitPath([shop], 0.5).remaining.length === 1);
@@ -554,8 +542,6 @@ check('every filter set counts once', activeFilterCount({ sort: 'name', priceBan
   const payout = nextPayoutDate(now);
   check('the next payout is a Friday', payout.getDay() === PAYOUT_WEEKDAY);
   check('the next payout is not behind us', payout.getTime() >= new Date(now).setHours(0, 0, 0, 0));
-  check('the pending payout is never more than the all-time total',
-    pendingPayoutCad(runs, now) <= summariseRuns(runs, 3650, now).earningsCad + 0.01);
 }
 
 // ── address: served city + matching postal code ──────────────────────────────

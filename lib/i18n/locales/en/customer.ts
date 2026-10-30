@@ -17,6 +17,8 @@ export const customer: Widen<typeof reference> = {
     restaurantsNearby: 'Restaurants near you',
     noRestaurants: 'No restaurants yet.',
     deliverTo: 'Deliver to',
+    chooseAddress: 'Choose an address',
+    changeAddressA11y: 'Change delivery address',
   },
   searchField: {
     placeholder: 'Search a product or a shop…',
@@ -294,7 +296,19 @@ export const customer: Widen<typeof reference> = {
   cardRequired: 'A card is required: Sougouba does not accept cash on delivery.',
   themeDark: 'dark theme',
   themeLight: 'light theme',
-  defaultCity: 'Montreal, QC',
+  addressPicker: {
+    title: 'Where should we deliver?',
+    useCurrentLocation: 'Use my current location',
+    useCurrentLocationHint: 'We fill in the address, you check it.',
+    locating: 'Finding your location…',
+    permissionDenied:
+      'Location access is turned off. Allow it in Settings, or add the address by hand.',
+    openSettings: 'Open Settings',
+    locationFailed: 'Couldn’t find your location right now. Add the address by hand.',
+    notServed: 'Sougouba doesn’t deliver here yet. Cities served: %{cities}.',
+    savedTitle: 'My addresses',
+    defaultLabel: 'Home',
+  },
   favorite: {
     add: 'Add to favourites',
     remove: 'Remove from favourites',

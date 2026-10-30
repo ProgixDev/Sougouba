@@ -1,5 +1,5 @@
 import { useFocusEffect } from 'expo-router';
-import { CalendarClock, TrendingDown, TrendingUp, Wallet } from 'lucide-react-native';
+import { TrendingDown, TrendingUp, Wallet } from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 
@@ -8,22 +8,18 @@ import {
   CourierSlab,
   EarningsChart,
   EarningsSummary,
+  PayoutCard,
   SlabFigure,
   SlabSegmented,
   onCourierSlab,
 } from '@/components/courier';
 import { EmptyState, Reveal, Skeleton, Text } from '@/components/ui';
-import { useThemeColors } from '@/hooks/useColorScheme';
 import { useCourierEarnings } from '@/hooks/useCourierEarnings';
+import { useCourierPayouts } from '@/hooks/useCourierPayouts';
 import { useCourierProfile } from '@/hooks/useCourierProfile';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
-import {
-  compareRuns,
-  nextPayoutDate,
-  pendingPayoutCad,
-  summariseRuns,
-} from '@/lib/courierAnalytics';
-import { formatCad, formatDate } from '@/lib/format';
+import { compareRuns, summariseRuns } from '@/lib/courierAnalytics';
+import { formatCad } from '@/lib/format';
 import { useT } from '@/lib/i18n/useT';
 import { formatDistance } from '@/lib/geo';
 import { mustard } from '@/theme/tokens';
@@ -69,9 +65,10 @@ const RANGES: { key: Range; days: number }[] = [
 export default function CourierEarningsScreen() {
   const t = useT();
   const tabBarInset = useTabBarInset();
-  const colors = useThemeColors();
   const { courier, loading: profileLoading, missing, pending, reload } = useCourierProfile();
   const { runs, loading, reload: reloadRuns } = useCourierEarnings(courier?.id);
+  const payouts = useCourierPayouts(courier?.status === 'approved');
+  const reloadPayouts = payouts.reload;
 
   const [range, setRange] = useState<Range>('week');
   const [refreshing, setRefreshing] = useState(false);
@@ -80,7 +77,8 @@ export default function CourierEarningsScreen() {
     useCallback(() => {
       void reload();
       void reloadRuns();
-    }, [reload, reloadRuns])
+      void reloadPayouts();
+    }, [reload, reloadRuns, reloadPayouts])
   );
 
   const selected = RANGES.find((r) => r.key === range)!;
@@ -96,8 +94,6 @@ export default function CourierEarningsScreen() {
     return runs.filter((o) => Date.parse(o.delivery!.deliveredAt ?? o.createdAt) >= from);
   }, [runs, selected.days]);
 
-  const payoutOn = useMemo(() => nextPayoutDate(), []);
-  const payoutCad = useMemo(() => pendingPayoutCad(runs), [runs]);
   const allTime = useMemo(() => summariseRuns(runs, 3650), [runs]);
 
   if (profileLoading) return null;
@@ -115,7 +111,7 @@ export default function CourierEarningsScreen() {
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
-              await reloadRuns();
+              await Promise.all([reloadRuns(), reloadPayouts()]);
               setRefreshing(false);
             }}
           />
@@ -205,39 +201,16 @@ export default function CourierEarningsScreen() {
               <EarningsSummary runs={rangeRuns} rangeLabel={t(`courier.ranges.${selected.key}`).toLowerCase()} />
             </Reveal>
 
-            {/* Says when the money moves. A payout screen that only shows a
-                total leaves the courier guessing at the one thing they came for
-                after the amount itself — and "chaque semaine" was never an
-                answer to "when". */}
+          </View>
+        )}
+
+        {/* Outside the range's branches: what is owed, and where it goes, does
+            not depend on whether tonight had any runs. A quiet day is exactly
+            when a courier checks that Friday's transfer is still coming. */}
+        {loading ? null : (
+          <View className="px-5 pt-4">
             <Reveal index={3}>
-              <View className="rounded-[20px] bg-card p-4 gap-3">
-                <View className="flex-row items-center gap-3">
-                  <View
-                    className="w-10 h-10 rounded-full items-center justify-center"
-                    style={{ backgroundColor: `${colors.primary}14` }}
-                  >
-                    <CalendarClock size={18} color={colors.primary} strokeWidth={2} />
-                  </View>
-                  <View className="flex-1 gap-0.5">
-                    <Text variant="caption" weight="bold" className="text-[14px]">
-                      Prochain versement
-                    </Text>
-                    <Text variant="caption" tone="muted" className="text-[12px]">
-                      {formatDate(payoutOn.toISOString())}
-                    </Text>
-                  </View>
-                  <Text
-                    weight="bold"
-                    className="text-[19px]"
-                    style={{ fontVariant: ['tabular-nums'] }}
-                  >
-                    {formatCad(payoutCad)}
-                  </Text>
-                </View>
-                <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
-              {t('courier.earningsScreen.payoutNote')}
-                </Text>
-              </View>
+              <PayoutCard payouts={payouts} />
             </Reveal>
           </View>
         )}

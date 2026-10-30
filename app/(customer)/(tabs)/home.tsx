@@ -3,7 +3,7 @@ import { PackageOpen } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 
-import { HomeHeader, ProductGrid, VendorCard, VerticalCard, useCartBarInset } from '@/components/customer';
+import { AddressPickerSheet, HomeHeader, ProductGrid, VendorCard, VerticalCard, useCartBarInset } from '@/components/customer';
 import { useT } from '@/lib/i18n/useT';
 import { EmptyState, Reveal, SectionHeader, SkeletonCard, Text } from '@/components/ui';
 import { useCategories, useProducts, useTopProductIds, useVendors } from '@/data/queries';
@@ -124,6 +124,18 @@ export default function CustomerHomeScreen() {
   const origin = useMemo(() => deliveryAddressFor(user), [user]);
 
   /**
+   * What the header names: the same address `origin` measures from, or nothing.
+   * `deliveryAddressFor` falls back to a seeded downtown address for accounts
+   * with none, and printing that would tell a shopper in Laval they live on
+   * Sainte-Catherine — the header asks them to choose instead.
+   */
+  const location = useMemo(() => {
+    const saved = user?.addresses.find((a) => a.isDefault) ?? user?.addresses[0];
+    return saved ? `${saved.label} · ${saved.city}` : null;
+  }, [user]);
+  const [pickingAddress, setPickingAddress] = useState(false);
+
+  /**
    * Restaurants only, nearest first (client, août 2026).
    *
    * It listed every shop sorted by announced ETA, under a heading that said
@@ -150,7 +162,8 @@ export default function CustomerHomeScreen() {
       >
         <HomeHeader
           fullName={user?.fullName ?? ''}
-          city={t('customer.defaultCity')}
+          location={location}
+          onLocationPress={() => setPickingAddress(true)}
           onSearchPress={() => router.push(routes.customerSearch)}
           onProfilePress={() => router.push(routes.customerProfile)}
         />
@@ -248,6 +261,7 @@ export default function CustomerHomeScreen() {
           )}
         </View>
       </ScrollView>
+      <AddressPickerSheet visible={pickingAddress} onClose={() => setPickingAddress(false)} />
     </View>
   );
 }

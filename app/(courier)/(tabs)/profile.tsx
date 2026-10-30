@@ -14,15 +14,15 @@ import {
   Sun,
 } from 'lucide-react-native';
 import { useCallback, useMemo } from 'react';
-import { Pressable, ScrollView, Switch, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { CourierGate, CourierSlabSurface, onCourierSlab } from '@/components/courier';
 import { Avatar, LanguageToggle, Reveal, Text } from '@/components/ui';
-import { bankLabel } from '@/data/banks';
 import { BASE_FARE_CAD, PER_KM_CAD } from '@/data/courierPay';
 import type { VehicleType } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useCourierEarnings } from '@/hooks/useCourierEarnings';
+import { useCourierPayouts } from '@/hooks/useCourierPayouts';
 import { useCourierProfile } from '@/hooks/useCourierProfile';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { summariseRuns } from '@/lib/courierAnalytics';
@@ -70,11 +70,14 @@ export default function CourierProfileScreen() {
   const { courier, loading, missing, pending, reload } = useCourierProfile();
   const { runs } = useCourierEarnings(courier?.id);
   const allTime = useMemo(() => summariseRuns(runs, 3650), [runs]);
+  const payouts = useCourierPayouts(courier?.status === 'approved');
+  const reloadPayouts = payouts.reload;
 
   useFocusEffect(
     useCallback(() => {
       void reload();
-    }, [reload])
+      void reloadPayouts();
+    }, [reload, reloadPayouts])
   );
 
   if (loading) return null;
@@ -206,13 +209,21 @@ export default function CourierProfileScreen() {
                   colors={colors}
                 />
               ) : null}
-              {courier.payout ? (
-                <Row
-                  icon={Landmark}
-                  label="Versements"
-                  value={`${bankLabel(courier.payout.bankId, courier.payout.bankNameOther)} •••• ${courier.payout.account.slice(-4)}`}
-                  colors={colors}
-                />
+              {/* Stripe's status, not a bank number: the account lives with
+                  Stripe and this app never holds it. Tappable while there is
+                  something left to do there. */}
+              <PayoutRow
+                label="Versements"
+                value={t(`courier.payouts.row.${payouts.state}`)}
+                actionable={payouts.state === 'setup' || payouts.state === 'review'}
+                busy={payouts.settingUp}
+                onPress={payouts.setUp}
+                colors={colors}
+              />
+              {payouts.error ? (
+                <Text variant="caption" tone="destructive" className="text-[12px] leading-[18px]">
+                  {payouts.error}
+                </Text>
               ) : null}
               <Row
                 icon={Star}
@@ -357,6 +368,63 @@ function Row({
         {value}
       </Text>
     </View>
+  );
+}
+
+function PayoutRow({
+  label,
+  value,
+  actionable,
+  busy,
+  onPress,
+  colors,
+}: {
+  label: string;
+  value: string;
+  actionable: boolean;
+  busy: boolean;
+  onPress: () => void;
+  colors: { mutedForeground: string; primary: string };
+}) {
+  const content = (
+    <>
+      <Landmark size={16} color={colors.mutedForeground} strokeWidth={2} />
+      <Text variant="caption" tone="muted" className="flex-1 text-[13px]">
+        {label}
+      </Text>
+      <Text
+        variant="caption"
+        weight="bold"
+        numberOfLines={1}
+        className="text-[13px]"
+        style={actionable ? { color: colors.primary } : undefined}
+      >
+        {value}
+      </Text>
+      {actionable ? (
+        busy ? (
+          <ActivityIndicator size="small" color={colors.primary} />
+        ) : (
+          <ChevronRight size={15} color={colors.primary} strokeWidth={2.2} />
+        )
+      ) : null}
+    </>
+  );
+
+  if (!actionable) return <View className="flex-row items-center gap-3">{content}</View>;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ busy }}
+      disabled={busy}
+      onPress={onPress}
+      // Taller than the rows around it: this one is a control, and 44 pt is the
+      // floor for something a thumb has to hit.
+      hitSlop={{ top: 10, bottom: 10 }}
+      className="flex-row items-center gap-3 active:opacity-70"
+    >
+      {content}
+    </Pressable>
   );
 }
 

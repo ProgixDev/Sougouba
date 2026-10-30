@@ -1,37 +1,26 @@
-import { Check } from 'lucide-react-native';
+import { Check, Landmark } from 'lucide-react-native';
 import { MotiView } from 'moti';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
-import { Button, CitySelect, Input, SelectField, Text } from '@/components/ui';
-import { OTHER_BANK_ID, banks } from '@/data/banks';
+import { Button, CitySelect, Input, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { i18nResolver } from '@/lib/validation/resolver';
 import { useT } from '@/lib/i18n/useT';
 import {
   VEHICLE_KEYS,
   courierIdentitySchema,
-  courierPayoutSchema,
   courierVehicleSchema,
   isMotorised,
   type CourierIdentityInput,
   type CourierIdentityValues,
-  type CourierPayoutValues,
   type CourierVehicleValues,
 } from '@/lib/validation/courier';
-
-/** Institution numbers are what a direct-deposit slip prints; show them. */
-const BANK_OPTIONS = banks.map((bank) => ({
-  value: bank.id,
-  label: bank.name,
-  ...(bank.code ? { detail: `Institution ${bank.code}` } : {}),
-}));
 
 export interface CourierSignupValues {
   identity: CourierIdentityValues;
   vehicle: CourierVehicleValues;
-  payout: CourierPayoutValues;
 }
 
 export interface CourierSignupFormProps {
@@ -43,18 +32,22 @@ export interface CourierSignupFormProps {
  * Keys, not sentences: this is module scope, so a `t()` here would resolve once
  * at import and freeze the launch language for the life of the process.
  */
-const STEP_KEYS = ['identity', 'vehicle', 'payout'] as const;
+const STEP_KEYS = ['identity', 'vehicle'] as const;
+const LAST_STEP = STEP_KEYS.length - 1;
 
 /**
- * Registration, in three steps rather than one long scroll.
+ * Registration, in two steps rather than one long scroll.
  *
  * Each step is its own `useForm` with its own schema, so leaving a step
  * validates it there and then. One combined form would hold every error until
  * the last screen and then drop eleven of them at once on someone who has
  * already forgotten what they typed on the first.
  *
- * The steps are independent forms, so answers survive going back — going back
- * to change a vehicle must not silently clear a bank account.
+ * The steps are independent forms, so answers survive going back.
+ *
+ * No bank step. It used to ask for a transit and account number that the API
+ * refuses to store; payouts are set up on Stripe's own form once the file is
+ * approved (`useCourierPayouts`), so nobody types banking details into this app.
  */
 export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFormProps) {
   const t = useT();
@@ -63,7 +56,6 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [identity, setIdentity] = useState<CourierIdentityValues | null>(null);
-  const [vehicle, setVehicle] = useState<CourierVehicleValues | null>(null);
 
   const identityForm = useForm<CourierIdentityInput, unknown, CourierIdentityValues>({
     resolver: i18nResolver(t, courierIdentitySchema),
@@ -82,20 +74,14 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
       insuranceExpiry: '',
     },
   });
-  const payoutForm = useForm<CourierPayoutValues>({
-    resolver: i18nResolver(t, courierPayoutSchema),
-    defaultValues: { bankId: '', bankNameOther: '', transit: '', account: '' },
-  });
-
   const chosenVehicle = vehicleForm.watch('vehicle');
-  const chosenBank = payoutForm.watch('bankId');
 
-  async function finish(payout: CourierPayoutValues) {
-    if (!identity || !vehicle) return;
+  async function finish(vehicle: CourierVehicleValues) {
+    if (!identity) return;
     setFormError(null);
     setSubmitting(true);
     try {
-      await onSubmit({ identity, vehicle, payout });
+      await onSubmit({ identity, vehicle });
     } catch {
       setFormError(t('courier.sendFailed'));
       setSubmitting(false);
@@ -109,7 +95,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 24 }}
       >
-        {/* Three segments rather than "Étape 2 sur 3": the same information,
+        {/* Segments rather than "Étape 1 sur 2": the same information,
             and it shows how much is left without asking anyone to read it. */}
         <View className="gap-2.5">
           <View className="flex-row gap-1.5">
@@ -327,75 +313,12 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
           </View>
         ) : null}
 
-        {step === 2 ? (
-          <View className="gap-4">
-            <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
-              {t('courier.signupForm.payoutNote')}
+        {step === LAST_STEP ? (
+          <View className="flex-row gap-3 rounded-2xl bg-card p-4">
+            <Landmark size={18} color={colors.mutedForeground} strokeWidth={2} />
+            <Text variant="caption" tone="muted" className="flex-1 text-[13px] leading-[19px]">
+              {t('courier.signupForm.payoutLater')}
             </Text>
-            <Controller
-              control={payoutForm.control}
-              name="bankId"
-              render={({ field: { onChange, value } }) => (
-                <SelectField
-                  label={t('courier.signupForm.bankName')}
-                  sheetTitle={t('courier.yourBank')}
-                  options={BANK_OPTIONS}
-                  value={value}
-                  onChange={onChange}
-                  placeholder={t('courier.signupForm.chooseBank')}
-                  error={payoutForm.formState.errors.bankId?.message}
-                  required
-                />
-              )}
-            />
-            {/* "Autre" is the escape hatch, not the default — everything above
-                it is a bank whose institution number we already hold. */}
-            {chosenBank === OTHER_BANK_ID ? (
-              <Controller
-                control={payoutForm.control}
-                name="bankNameOther"
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <Input
-                    label={t('courier.signupForm.bankOther')}
-                    value={value ?? ''}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={payoutForm.formState.errors.bankNameOther?.message}
-                    required
-                  />
-                )}
-              />
-            ) : null}
-            <Controller
-              control={payoutForm.control}
-              name="transit"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  label={t('courier.signupForm.transit')}
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  keyboardType="number-pad"
-                  error={payoutForm.formState.errors.transit?.message}
-                  required
-                />
-              )}
-            />
-            <Controller
-              control={payoutForm.control}
-              name="account"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  label={t('courier.signupForm.account')}
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  keyboardType="number-pad"
-                  error={payoutForm.formState.errors.account?.message}
-                  required
-                />
-              )}
-            />
           </View>
         ) : null}
 
@@ -407,7 +330,7 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
 
         <View className="gap-2">
           <Button
-            label={step === 2 ? t('courier.signupForm.submit') : t('common.continue')}
+            label={step === LAST_STEP ? t('courier.signupForm.submit') : t('common.continue')}
             variant="primary"
             size="lg"
             fullWidth
@@ -418,13 +341,8 @@ export function CourierSignupForm({ defaultFullName, onSubmit }: CourierSignupFo
                   setIdentity(values);
                   setStep(1);
                 })();
-              } else if (step === 1) {
-                vehicleForm.handleSubmit((values) => {
-                  setVehicle(values);
-                  setStep(2);
-                })();
               } else {
-                payoutForm.handleSubmit(finish)();
+                vehicleForm.handleSubmit(finish)();
               }
             }}
           />

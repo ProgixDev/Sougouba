@@ -13,7 +13,22 @@ export const courier = {
     collected: 'Encaissé',
     emptyTitle: 'Rien sur cette période',
     payoutNote:
-      'Les gains de la semaine en cours sont déposés le vendredi sur le compte enregistré dans votre dossier. Les pourboires vous reviennent intégralement.',
+      'Vos gains sont virés chaque vendredi sur le compte bancaire relié via Stripe. Les pourboires vous reviennent intégralement.',
+  },
+  payouts: {
+    nextPayout: 'Prochain versement',
+    activeTitle: 'Versements actifs',
+    activeBody: 'Stripe dépose vos gains sur votre compte bancaire.',
+    reviewTitle: 'Vérification en cours',
+    reviewBody: 'Stripe vérifie vos informations. Vos gains vous attendent d’ici là.',
+    reviewCta: 'Revoir mes informations',
+    setupTitle: 'Ajoutez votre compte bancaire',
+    setupBody:
+      'Vos gains restent en attente tant qu’aucun compte n’est relié. Stripe recueille vos coordonnées bancaires — Sougouba ne les voit jamais.',
+    setupCta: 'Configurer mes versements',
+    unavailableTitle: 'Statut indisponible',
+    unavailableBody: 'Impossible de joindre le service de paiement pour le moment. Vos gains sont bien enregistrés.',
+    row: { active: 'Actifs', review: 'En vérification', setup: 'À configurer', unavailable: 'Indisponible', loading: '…' },
   },
   historyScreen: {
     title: 'Vos courses',
@@ -55,6 +70,8 @@ export const courier = {
   gate: {
     approve: 'Simuler l’approbation',
     approveBody: 'Approuve votre dossier, comme le ferait un administrateur.',
+    approveFailed: 'L’approbation a échoué. Veuillez réessayer.',
+    approveDisabled: 'L’approbation de démonstration est désactivée sur ce serveur. Un administrateur doit approuver votre dossier.',
     demoLabel: 'Démonstration',
     pendingBody:
       'La validation prend généralement un jour ouvrable. Vous recevrez une notification dès que votre dossier est approuvé.',
@@ -64,6 +81,8 @@ export const courier = {
     note: 'Ces informations sont transmises à Sougouba pour validation. Rien n’est publié.',
   },
   signupForm: {
+    payoutLater:
+      'Vos versements se configurent avec Stripe une fois votre dossier approuvé — vos coordonnées bancaires ne passent jamais par Sougouba.',
     phone: 'Téléphone',
     cityHint: 'Les villes où Sougouba a des courses aujourd’hui.',
     postalHint:

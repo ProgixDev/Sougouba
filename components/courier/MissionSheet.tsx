@@ -108,7 +108,8 @@ export function MissionSheet({
                 : `${order.deliveryAddress.city} ${order.deliveryAddress.postalCode}`}
             </Text>
           </View>
-          {progress && progress.phase !== 'delivered' ? (
+          {/* No figure without a GPS fix: an ETA from nowhere is a guess. */}
+          {progress && progress.phase !== 'delivered' && progress.etaMin !== null ? (
             <View className="items-end">
               <Text weight="bold" className="text-[19px]" style={{ fontVariant: ['tabular-nums'] }}>
                 {progress.etaMin}

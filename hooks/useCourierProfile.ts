@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { couriersApi } from '@/data/api';
 import type { Courier } from '@/data/types';
@@ -57,6 +58,18 @@ export function useCourierProfile(): CourierProfileState {
       active = false;
     };
   }, [reload]);
+
+  // Each courier tab holds its own copy of the file. Without this, approving
+  // from the Missions tab left an already-visited Profile tab on the gate.
+  // Quiet re-read — no `loading`, so an open screen does not blank out.
+  // The first focus is the mount, which the effect above already covers.
+  const focusedOnce = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (focusedOnce.current) reload();
+      focusedOnce.current = true;
+    }, [reload])
+  );
 
   return {
     courier,

@@ -15,12 +15,16 @@ import {
   applyCourierSchema,
   completeDeliverySchema,
   locationPingSchema,
+  proofUploadSchema,
   setShiftSchema,
+  signatureSchema,
   updateCourierSchema,
   type ApplyCourierInput,
   type CompleteDeliveryInput,
   type LocationPingInput,
+  type ProofUploadInput,
   type SetShiftInput,
+  type SignatureInput,
   type UpdateCourierInput,
 } from './dto/courier.dto.js';
 
@@ -54,6 +58,12 @@ export class CourierController {
   @Post('apply')
   apply(@CurrentUser() userId: string, @Body(new ZodValidationPipe(applyCourierSchema)) body: ApplyCourierInput) {
     return this.couriers.apply(userId, body);
+  }
+
+  /** Test phase only — see `CouriersService.demoApprove`. A 404 unless the flag is set. */
+  @Post('me/demo-approve')
+  demoApprove(@CurrentUser() userId: string) {
+    return this.couriers.demoApprove(userId);
   }
 
   @Get('me')
@@ -143,6 +153,28 @@ export class CourierController {
   async pickup(@CurrentUser() userId: string, @Param('orderId', ParseUUIDPipe) orderId: string) {
     const courierId = await this.couriers.courierIdFor(userId);
     return this.delivery.markPickedUp(courierId, orderId);
+  }
+
+  /** A signed upload URL for the photo proof. The returned `path` is what `complete` takes as `imagePath`. */
+  @Post('me/runs/:orderId/proof-upload')
+  async proofUpload(
+    @CurrentUser() userId: string,
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+    @Body(new ZodValidationPipe(proofUploadSchema)) body: ProofUploadInput
+  ) {
+    const courierId = await this.couriers.courierIdFor(userId);
+    return this.delivery.createProofUpload(courierId, orderId, body);
+  }
+
+  /** The drawn signature, stored as an SVG the API writes. Returns the `imagePath` for `complete`. */
+  @Post('me/runs/:orderId/signature')
+  async signature(
+    @CurrentUser() userId: string,
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+    @Body(new ZodValidationPipe(signatureSchema)) body: SignatureInput
+  ) {
+    const courierId = await this.couriers.courierIdFor(userId);
+    return this.delivery.saveSignature(courierId, orderId, body);
   }
 
   @Post('me/runs/:orderId/complete')

@@ -15,8 +15,12 @@ const TICK_MS = 1000;
 const LOOK_MS = 5000;
 /** Under the server's two-minute roster TTL, with room for one missed beat. */
 const HEARTBEAT_MS = 45_000;
-/** How often a courier carrying a bag reports where they are, for the shopper's map. */
-const PING_MS = 15_000;
+/**
+ * How often a courier carrying a bag reports where they are, for the shopper's
+ * map — which shows the real ping and nothing interpolated, so this is its
+ * frame rate. Twelve a minute against a 300-a-minute budget on `/couriers`.
+ */
+const PING_MS = 5_000;
 
 /**
  * The courier's side of dispatch.

@@ -14,7 +14,22 @@ export const courier: Widen<typeof reference> = {
     collected: 'Collected',
     emptyTitle: 'Nothing in this period',
     payoutNote:
-      'This week’s earnings are deposited on Friday to the account on file. Tips are yours in full.',
+      'Your earnings are transferred every Friday to the bank account linked through Stripe. Tips are yours in full.',
+  },
+  payouts: {
+    nextPayout: 'Next payout',
+    activeTitle: 'Payouts active',
+    activeBody: 'Stripe deposits your earnings into your bank account.',
+    reviewTitle: 'Verification in progress',
+    reviewBody: 'Stripe is checking your details. Your earnings are waiting for you in the meantime.',
+    reviewCta: 'Review my details',
+    setupTitle: 'Add your bank account',
+    setupBody:
+      'Your earnings are held until an account is linked. Stripe collects your banking details — Sougouba never sees them.',
+    setupCta: 'Set up payouts',
+    unavailableTitle: 'Status unavailable',
+    unavailableBody: 'The payment service can’t be reached right now. Your earnings are safely recorded.',
+    row: { active: 'Active', review: 'Being verified', setup: 'To set up', unavailable: 'Unavailable', loading: '…' },
   },
   historyScreen: {
     title: 'Your runs',
@@ -56,6 +71,8 @@ export const courier: Widen<typeof reference> = {
   gate: {
     approve: 'Simulate approval',
     approveBody: 'Approves your file, as an administrator would.',
+    approveFailed: 'Approval failed. Please try again.',
+    approveDisabled: 'Demo approval is turned off on this server. An administrator must approve your file.',
     demoLabel: 'Demonstration',
     pendingBody:
       'Review usually takes one business day. You will get a notification as soon as your file is approved.',
@@ -65,6 +82,8 @@ export const courier: Widen<typeof reference> = {
     note: 'These details go to Sougouba for review. Nothing is published.',
   },
   signupForm: {
+    payoutLater:
+      'You’ll set up payouts with Stripe once your file is approved — your banking details never pass through Sougouba.',
     phone: 'Phone',
     cityHint: 'The cities where Sougouba has runs today.',
     postalHint: 'Must match the city you chose. Used to offer you runs near where you live.',

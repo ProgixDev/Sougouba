@@ -18,7 +18,7 @@ export const auth = {
   },
   welcome: {
     title: 'Bienvenue sur Sougouba',
-    body: 'Les saveurs d’Afrique et du Maghreb, livrées près de chez vous au Québec.',
+    body: 'Les saveurs d’Afrique et du Maghreb, livrées près de chez vous.',
     email: 'Continuer avec un courriel',
     fineprint: 'Pas de mot de passe : on vous envoie un code, c’est tout.',
   },

@@ -24,6 +24,17 @@ const config = {
   experiments: {
     typedRoutes: true,
   },
+  /**
+   * Over-the-air JS updates through EAS Update. `fingerprint` rather than
+   * `appVersion`: the runtime version is a hash of the native project, so an
+   * update built after a native dependency changed can never be served to a
+   * binary that lacks it — the version string alone would not notice.
+   * Publish with `npm run update:prod` (see `package.json`).
+   */
+  runtimeVersion: { policy: 'fingerprint' },
+  updates: {
+    url: 'https://u.expo.dev/e6a4ddb9-c49d-45c6-a211-d34bc3f28113',
+  },
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'pro.progix.sougouba',

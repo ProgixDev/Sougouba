@@ -60,8 +60,8 @@ const HALO = 76;
  * The courier. Mustard — the one accent neither of the other two roles uses, so
  * the moving dot never reads as "the shop" at a glance.
  *
- * `live` adds a slow sonar ring behind the puck. Under `DEMO_TIME_SCALE` the
- * marker does visibly travel, but a courier stopped at a light, waiting at the
+ * `live` adds a slow sonar ring behind the puck. The marker moves with the
+ * courier's GPS, but a courier stopped at a light, waiting at the
  * counter, or sitting at 100 % progress is indistinguishable from a frozen
  * screen — the ring is what says the position is current rather than the last
  * one anyone heard. Two seconds, not one: this repeats for the whole run, and

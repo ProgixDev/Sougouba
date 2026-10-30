@@ -10,6 +10,7 @@ import { couriersApi, ordersApi, vendorsApi } from '@/data/api';
 import type { Courier, Order, Vendor } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useDeliveryProgress } from '@/hooks/useDeliveryProgress';
+import { useOwnPosition } from '@/hooks/useOwnPosition';
 import { formatCad } from '@/lib/format';
 import { useT } from '@/lib/i18n/useT';
 import { formatDistance } from '@/lib/geo';
@@ -40,7 +41,8 @@ export default function CourierDeliveryScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  const progress = useDeliveryProgress(order, vendor, courier);
+  const own = useOwnPosition(Boolean(order?.delivery) && order?.status !== 'delivered' && order?.status !== 'cancelled');
+  const progress = useDeliveryProgress(order, vendor, courier, own);
 
   const load = useCallback(async () => {
     const found = await ordersApi.getOrderById(id);
@@ -141,7 +143,7 @@ export default function CourierDeliveryScreen() {
                 active={Boolean(towardsShop)}
                 title={vendor?.name ?? t('common.genericShop')}
                 lines={[vendor?.address.street ?? '', `${vendor?.address.city ?? ''}`]}
-                etaMin={towardsShop ? progress?.etaMin : undefined}
+                etaMin={towardsShop ? (progress?.etaMin ?? undefined) : undefined}
                 onNavigate={
                   vendor
                     ? () => navigateTo(vendor.address.lat, vendor.address.lng, vendor.name)
@@ -158,7 +160,7 @@ export default function CourierDeliveryScreen() {
                   `${order.deliveryAddress.city} ${order.deliveryAddress.postalCode}`,
                   order.customerName ?? '',
                 ]}
-                etaMin={progress?.phase === 'to_dropoff' ? progress.etaMin : undefined}
+                etaMin={progress?.phase === 'to_dropoff' ? (progress.etaMin ?? undefined) : undefined}
                 onNavigate={() =>
                   navigateTo(
                     order.deliveryAddress.lat,

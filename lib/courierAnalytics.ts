@@ -217,22 +217,6 @@ export function nextPayoutDate(now = new Date()): Date {
   return date;
 }
 
-/** What has accrued since the last payout and is waiting on the next one. */
-export function pendingPayoutCad(runs: Order[], now = new Date()): number {
-  const since = startOfDay(nextPayoutDate(now));
-  since.setDate(since.getDate() - 7);
-  const from = since.getTime();
-
-  return round2(
-    runs.reduce((sum, order) => {
-      const delivery = order.delivery;
-      if (!delivery) return sum;
-      const at = Date.parse(delivery.deliveredAt ?? order.createdAt);
-      return Number.isFinite(at) && at >= from ? sum + delivery.earningsCad : sum;
-    }, 0)
-  );
-}
-
 /** Null rather than Infinity when there is no base — "up ∞ %" is not actionable. */
 function percentChange(from: number, to: number): number | null {
   if (from <= 0) return null;

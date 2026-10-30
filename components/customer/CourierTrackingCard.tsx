@@ -12,7 +12,8 @@ import { mustard } from '@/theme/tokens';
 export interface CourierTrackingCardProps {
   courier: Courier;
   phase: DeliveryPhase;
-  etaMin: number;
+  /** Null before the courier's phone has reported a position. */
+  etaMin: number | null;
   /** The code the shopper reads out at the door. */
   pin: string;
 }
@@ -69,7 +70,7 @@ export function CourierTrackingCard({ courier, phase, etaMin, pin }: CourierTrac
           </View>
         </View>
 
-        {!arrived ? (
+        {!arrived && etaMin !== null ? (
           <View className="items-end">
             <Text weight="bold" className="text-[22px]" style={{ fontVariant: ['tabular-nums'] }}>
               {etaMin}

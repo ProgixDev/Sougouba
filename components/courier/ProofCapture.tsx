@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera, Check, Delete, PenLine, ShieldCheck } from 'lucide-react-native';
 import { useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, View, type LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Svg, { Path } from 'react-native-svg';
 import { runOnJS } from 'react-native-reanimated';
@@ -41,10 +41,9 @@ const METHODS: { key: ProofMethod; label: string; icon: typeof Camera }[] = [
  * (signature). Forcing one method would mean a courier who cannot complete a
  * legitimate delivery — which is how proof-of-delivery gets faked in practice.
  *
- * The PIN is checked here, on the device, against the value derived from the
- * order id. That is not security — anyone holding the order can compute it (see
- * `deliveryPin` in `data/delivery.ts`) — it is a hand-off token that proves the
- * courier and the customer were in the same place.
+ * The PIN is checked by the server against the code stored on the order, which
+ * only the shopper is shown. A photo or a signature is stored as an image the
+ * back office can open if the delivery is disputed.
  */
 export function ProofCapture({ onSubmit, busy = false }: ProofCaptureProps) {
   const t = useT();
@@ -52,9 +51,14 @@ export function ProofCapture({ onSubmit, busy = false }: ProofCaptureProps) {
   const [method, setMethod] = useState<ProofMethod>('pin');
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<{ uri: string; mimeType: string } | null>(null);
   const [strokes, setStrokes] = useState<string[]>([]);
+  const [pad, setPad] = useState({ width: 0, height: 0 });
+  // Photo and signature failures — an upload that did not go through, a run
+  // that moved. The PIN keeps its own, under the boxes it is about.
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const current = useRef<string>('');
+  const photoUri = photo?.uri ?? null;
 
   const signature = Gesture.Pan()
     .minDistance(0)
@@ -69,6 +73,7 @@ export function ProofCapture({ onSubmit, busy = false }: ProofCaptureProps) {
     });
 
   function startStroke(x: number, y: number) {
+    setSubmitError(null);
     current.current = `M${x.toFixed(1)} ${y.toFixed(1)}`;
     setStrokes((s) => [...s, current.current]);
   }
@@ -86,7 +91,10 @@ export function ProofCapture({ onSubmit, busy = false }: ProofCaptureProps) {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) return;
     const result = await ImagePicker.launchCameraAsync({ quality: 0.6, allowsEditing: false });
-    if (!result.canceled) setPhotoUri(result.assets[0].uri);
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    setSubmitError(null);
+    setPhoto({ uri: asset.uri, mimeType: asset.mimeType ?? mimeFromUri(asset.uri) });
   }
 
   async function submit() {
@@ -96,15 +104,21 @@ export function ProofCapture({ onSubmit, busy = false }: ProofCaptureProps) {
       if (error) setPinError(error);
       return;
     }
+    setSubmitError(null);
     if (method === 'photo') {
-      if (!photoUri) return;
-      return void onSubmit({ method: 'photo', imageUri: photoUri });
+      if (!photo) return;
+      const error = await onSubmit({ method: 'photo', imageUri: photo.uri, imageMimeType: photo.mimeType });
+      if (error) setSubmitError(error);
+      return;
     }
-    if (strokes.length === 0) return;
-    // The drawing is not persisted as a file — there is no backend to upload it
-    // to. What is recorded is that a signature was given, which is what the
-    // dispute record needs to know.
-    return void onSubmit({ method: 'signature', note: t('courier.proofSteps.signatureCaptured') });
+    if (strokes.length === 0 || pad.width === 0) return;
+    // The strokes go to the API, which stores them as an image of the pad.
+    const error = await onSubmit({
+      method: 'signature',
+      signature: { width: Math.round(pad.width), height: Math.round(pad.height), paths: strokes },
+      note: t('courier.proofSteps.signatureCaptured'),
+    });
+    if (error) setSubmitError(error);
   }
 
   const ready =
@@ -127,6 +141,7 @@ export function ProofCapture({ onSubmit, busy = false }: ProofCaptureProps) {
               onPress={() => {
                 setMethod(key);
                 setPinError(null);
+                setSubmitError(null);
               }}
               className={`flex-1 h-[70px] rounded-2xl border-[1.5px] items-center justify-center gap-1.5 ${
                 selected ? 'border-primary bg-primary/10' : 'border-border bg-card'
@@ -200,7 +215,10 @@ export function ProofCapture({ onSubmit, busy = false }: ProofCaptureProps) {
       {method === 'signature' ? (
         <View className="gap-3">
           <GestureDetector gesture={signature}>
-            <View className="h-[220px] rounded-[20px] bg-card border-[1.5px] border-border overflow-hidden">
+            <View
+              onLayout={(e: LayoutChangeEvent) => setPad(e.nativeEvent.layout)}
+              className="h-[220px] rounded-[20px] bg-card border-[1.5px] border-border overflow-hidden"
+            >
               <Svg width="100%" height="100%">
                 {strokes.map((d, i) => (
                   <Path
@@ -224,9 +242,23 @@ export function ProofCapture({ onSubmit, busy = false }: ProofCaptureProps) {
             </View>
           </GestureDetector>
           {strokes.length > 0 ? (
-            <Button label="Effacer" variant="ghost" size="sm" onPress={() => setStrokes([])} />
+            <Button
+              label="Effacer"
+              variant="ghost"
+              size="sm"
+              onPress={() => {
+                setStrokes([]);
+                setSubmitError(null);
+              }}
+            />
           ) : null}
         </View>
+      ) : null}
+
+      {submitError && method !== 'pin' ? (
+        <Text variant="caption" tone="destructive" className="text-center" accessibilityLiveRegion="polite">
+          {submitError}
+        </Text>
       ) : null}
 
       <Button
@@ -241,6 +273,14 @@ export function ProofCapture({ onSubmit, busy = false }: ProofCaptureProps) {
       />
     </View>
   );
+}
+
+/** When the camera does not say: iOS hands back `.jpg`, some Android cameras `.png`. */
+function mimeFromUri(uri: string): string {
+  const ext = uri.split('?')[0].split('.').pop()?.toLowerCase();
+  if (ext === 'png') return 'image/png';
+  if (ext === 'heic') return 'image/heic';
+  return 'image/jpeg';
 }
 
 function PinBoxes({ value, error }: { value: string; error: boolean }) {

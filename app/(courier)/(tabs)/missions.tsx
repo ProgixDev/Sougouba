@@ -14,6 +14,7 @@ import { useCourierEarnings } from '@/hooks/useCourierEarnings';
 import { useCourierProfile } from '@/hooks/useCourierProfile';
 import { useDeliveryProgress } from '@/hooks/useDeliveryProgress';
 import { useDispatchEngine } from '@/hooks/useDispatchEngine';
+import { useOwnPosition } from '@/hooks/useOwnPosition';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { nextStatusFor } from '@/lib/orderStatus';
 import { dynamicRoutes } from '@/lib/routes';
@@ -67,7 +68,10 @@ export default function MissionsScreen() {
   const [dockHeight, setDockHeight] = useState(0);
   const [headerHeight, setHeaderHeight] = useState(0);
 
-  const progress = useDeliveryProgress(order, vendor, courier);
+  // The courier's real position while they are working — online and waiting,
+  // or carrying a run. Off shift the GPS is left alone.
+  const own = useOwnPosition(online || Boolean(activeOrderId));
+  const progress = useDeliveryProgress(order, vendor, courier, own);
 
   // The offer names a shop; the card needs the shop's name.
   useEffect(() => {
@@ -177,10 +181,11 @@ export default function MissionsScreen() {
     return <CourierGate state={missing ? 'missing' : 'pending'} onApproved={reload} />;
   }
 
-  // Something is always on the map: mid-run it is the run, otherwise the
-  // courier's own patch, so the screen is never an empty grey rectangle.
-  const pickup = progress?.pickup ?? courier?.base ?? { lat: 45.5019, lng: -73.5674 };
-  const dropoff = progress?.dropoff ?? courier?.base ?? pickup;
+  // Something is always on the map: mid-run it is the run, otherwise where the
+  // courier actually is — or, before a GPS fix, the area they registered in.
+  const here = own ?? courier?.base ?? { lat: 45.5019, lng: -73.5674 };
+  const pickup = progress?.pickup ?? here;
+  const dropoff = progress?.dropoff ?? here;
 
   return (
     <View className="flex-1 bg-background">
@@ -191,8 +196,8 @@ export default function MissionsScreen() {
         <DeliveryMap
           pickup={pickup}
           dropoff={dropoff}
-          courier={progress?.position ?? courier?.base ?? null}
-          bearing={progress?.bearing ?? 0}
+          courier={progress?.position ?? own}
+          bearing={progress?.bearing ?? own?.heading ?? 0}
           route={progress?.leg?.points}
           progress={progress?.progress ?? 0}
           padding={{

@@ -2,7 +2,6 @@ import { api, ApiError } from '../http';
 import type {
   Courier,
   CourierInsurance,
-  CourierPayout,
   CourierStatus,
   ID,
   LatLng,
@@ -73,7 +72,6 @@ export interface CourierApplication {
   plate?: string;
   licenceNumber?: string;
   insurance?: CourierInsurance;
-  payout?: CourierPayout;
   city: string;
   postalCode?: string;
   base: { lat: number; lng: number };
@@ -84,14 +82,10 @@ export interface CourierApplication {
  * A file lands in the queue, not on the road: the API creates it `pending` and
  * it stays there until an administrator decides (CDC addendum v1.1, §04).
  *
- * ⚠️ `payout` is **not sent**. The mock stored `{ bankId, transit, account }`;
- * this database deliberately holds no raw bank details — Stripe collects them
- * during Connect onboarding, and `courier_payouts` holds an account id, not a
- * transit number. The signup form's payout step needs rerouting to
- * `POST /couriers/me/stripe/onboard`; until it is, those fields are collected
- * and dropped, which is better than storing them but is not finished work.
+ * Banking is not part of the file: Stripe collects it after approval, through
+ * {@link startPayoutOnboarding}, and this database holds an account id.
  *
- * `base` is dropped too: the API geocodes the postal code and city itself, for
+ * `base` is dropped: the API geocodes the postal code and city itself, for
  * the same reason it re-prices an order — a client-supplied coordinate is a
  * client-supplied delivery fee.
  */
@@ -116,6 +110,15 @@ export async function submitApplication(input: CourierApplication): Promise<Cour
         : {}),
     },
   }));
+}
+
+/**
+ * Test phase only: the courier clears their own pending file. The API answers
+ * 404 unless `ALLOW_DEMO_SELF_APPROVAL` is set on the deploy — the real
+ * decision is `POST /admin/couriers/:id/approve`, in the back office.
+ */
+export async function demoApproveMine(): Promise<Courier> {
+  return toCourier(await api<Courier>('/couriers/me/demo-approve', { method: 'POST' }));
 }
 
 /**
@@ -184,4 +187,51 @@ export async function pingLocation(orderId: ID, position: LatLng): Promise<void>
 /** Pass on an offer, so the server re-offers the run to the next courier straight away instead of at expiry. */
 export async function declineOffer(offerId: ID): Promise<void> {
   await api(`/couriers/me/offers/${offerId}/decline`, { method: 'POST', body: {} });
+}
+
+// ── payouts ─────────────────────────────────────────────────────────────────
+
+/**
+ * Where the courier stands with Stripe — asked of Stripe by the API, not read
+ * from a cached column, because `payoutsEnabled` flips when Stripe finishes its
+ * own checks and nothing tells us.
+ */
+export interface PayoutStatus {
+  /** The courier finished Stripe's form (`details_submitted`). */
+  onboarded: boolean;
+  /** Stripe will actually send money to their bank. */
+  payoutsEnabled: boolean;
+  /** `not_started` until the first onboarding link is asked for. */
+  status: 'not_started' | 'onboarding' | 'active' | string;
+}
+
+export async function getPayoutStatus(): Promise<PayoutStatus> {
+  return api<PayoutStatus>('/couriers/me/stripe/status');
+}
+
+/** What has been delivered and not yet paid out — the amount the next Friday transfer carries. */
+export async function getPendingPayout(): Promise<{ pendingCad: number; runCount: number }> {
+  return api('/couriers/me/payouts/pending');
+}
+
+/**
+ * The URL the in-app browser waits for. The API's `/stripe/connect/return`
+ * redirects here, so the sheet closes itself when Stripe is done.
+ */
+export const PAYOUT_RETURN_URL = 'sougouba://payouts-return';
+
+/**
+ * A one-time Stripe onboarding link for the courier's Connect account.
+ *
+ * Both return addresses are the API's own HTTPS route, which bounces to
+ * {@link PAYOUT_RETURN_URL}: `refresh` is where Stripe sends a link that
+ * expired before it was finished.
+ */
+export async function startPayoutOnboarding(): Promise<string> {
+  const back = `${process.env.EXPO_PUBLIC_API_URL}/stripe/connect/return`;
+  const { url } = await api<{ url: string }>('/couriers/me/stripe/onboard', {
+    method: 'POST',
+    body: { returnUrl: `${back}?state=done`, refreshUrl: `${back}?state=refresh` },
+  });
+  return url;
 }

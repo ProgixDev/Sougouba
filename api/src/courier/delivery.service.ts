@@ -8,6 +8,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { PostgrestError } from '@supabase/supabase-js';
+import { randomUUID } from 'node:crypto';
 
 import type { Db } from '../db/client.js';
 import { camelize } from '../db/case.js';
@@ -20,7 +21,16 @@ import { NotifyService } from '../notifications/notify.service.js';
 import { assertTransition, type OrderStatus } from '../orders/order-status.js';
 import { hydrateOrders } from '../orders/order-view.js';
 import { courierEarnings, pinMatches } from './courier-pay.js';
-import type { CompleteDeliveryInput, LocationPingInput } from './dto/courier.dto.js';
+import {
+  PROOF_PHOTO_TYPES,
+  type CompleteDeliveryInput,
+  type LocationPingInput,
+  type ProofUploadInput,
+  type SignatureInput,
+} from './dto/courier.dto.js';
+
+/** Private bucket (migration 0003): only the API's service role reads or writes it. */
+const DELIVERY_PROOFS_BUCKET = 'delivery-proofs';
 
 /**
  * The two acts that move an order physically: picking it up, and handing it
@@ -107,6 +117,77 @@ export class DeliveryService {
   }
 
   /**
+   * Somewhere to put the photo proof.
+   *
+   * Same two hops as a merchant's registration documents: the API picks the
+   * path and signs a one-shot upload URL, the phone sends the bytes straight to
+   * Storage. The path sits under the order id, which is what `complete` checks
+   * — a courier cannot close their run with a photo taken for another one.
+   */
+  async createProofUpload(courierId: string, orderId: string, input: ProofUploadInput) {
+    await this.proofableRun(courierId, orderId);
+    const path = `${orderId}/photo-${randomUUID()}.${PROOF_PHOTO_TYPES[input.contentType]}`;
+    const { data, error } = await this.db.storage.from(DELIVERY_PROOFS_BUCKET).createSignedUploadUrl(path);
+    if (error || !data) throw new InternalServerErrorException('Could not prepare the upload');
+    return { path, uploadUrl: data.signedUrl, contentType: input.contentType };
+  }
+
+  /**
+   * Store a drawn signature and return its path, for `complete`.
+   *
+   * The SVG is written here, not on the phone: the strokes are validated as
+   * move/line commands and numbers (`signatureSchema`), so the file holds
+   * nothing a viewer could execute — which an uploaded SVG could not promise.
+   */
+  async saveSignature(courierId: string, orderId: string, input: SignatureInput) {
+    await this.proofableRun(courierId, orderId);
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${input.width}" height="${input.height}" ` +
+      `viewBox="0 0 ${input.width} ${input.height}"><rect width="100%" height="100%" fill="#fff"/>` +
+      input.paths
+        .map(
+          (d) =>
+            `<path d="${d}" fill="none" stroke="#1f3d2b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`
+        )
+        .join('') +
+      '</svg>';
+    const path = `${orderId}/signature-${randomUUID()}.svg`;
+    const { error } = await this.db.storage
+      .from(DELIVERY_PROOFS_BUCKET)
+      .upload(path, Buffer.from(svg, 'utf8'), { contentType: 'image/svg+xml', upsert: false });
+    if (error) throw new InternalServerErrorException('Could not store the signature');
+    return { path };
+  }
+
+  /** Proof is only taken for a run that has the bag and has not been handed over. */
+  private async proofableRun(courierId: string, orderId: string) {
+    const run = await this.ownedRun(courierId, orderId);
+    if (run.deliveredAt) throw new ConflictException('This run is already complete');
+    if (!run.pickedUpAt) throw new ConflictException('Mark the order picked up first');
+    return run;
+  }
+
+  /**
+   * The image a photo or signature proof names must be this run's, and must be
+   * there. Without the second half, `imagePath: "x"` closes a run with a proof
+   * that is a dangling string — the dispute it exists for would open on nothing.
+   */
+  private async assertProofImage(orderId: string, imagePath: string) {
+    if (!imagePath.startsWith(`${orderId}/`) || imagePath.includes('..')) {
+      throw new BadRequestException('Preuve invalide');
+    }
+    // A missing object comes back as `data: false`; any other failure throws.
+    let found: boolean;
+    try {
+      found = (await this.db.storage.from(DELIVERY_PROOFS_BUCKET).exists(imagePath)).data;
+    } catch (error) {
+      this.logger.error(`Proof lookup failed for ${imagePath}: ${String(error)}`);
+      throw new InternalServerErrorException('Could not verify the proof');
+    }
+    if (!found) throw new BadRequestException("La preuve n'a pas été reçue. Réessayez.");
+  }
+
+  /**
    * The run is finished, with evidence.
    *
    * Proof and status land in one transaction on purpose: an order marked
@@ -130,6 +211,7 @@ export class DeliveryService {
     if (input.method === 'pin' && !pinMatches(run.pin, input.pin!)) {
       throw new BadRequestException('NIP incorrect');
     }
+    if (input.method !== 'pin') await this.assertProofImage(orderId, input.imagePath!);
 
     const now = new Date();
     const tipCad = input.tipCad ?? 0;

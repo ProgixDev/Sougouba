@@ -1,3 +1,6 @@
+import { File } from 'expo-file-system';
+import { fetch } from 'expo/fetch';
+
 import type { DeliveryOffer } from '../../lib/dispatch';
 import { useSessionStore } from '../../store/useSessionStore';
 import { api, ApiError, type Page } from '../http';
@@ -252,6 +255,50 @@ export async function completeDelivery(
   input: { method: 'pin' | 'photo' | 'signature'; pin?: string; imagePath?: string; note?: string; tipCad?: number }
 ): Promise<Order | undefined> {
   return (await tryPost<Order>(`/couriers/me/runs/${orderId}/complete`, input)) ?? undefined;
+}
+
+/**
+ * Send the photo proof to Storage and return the path `completeDelivery` takes.
+ *
+ * Two hops, like a merchant's registration documents: the API signs a one-shot
+ * upload URL under this run's folder, then the bytes go straight to Storage
+ * rather than through the API.
+ */
+export async function uploadDeliveryPhoto(orderId: ID, uri: string, mimeType: string): Promise<string> {
+  const { path, uploadUrl } = await api<{ path: string; uploadUrl: string }>(
+    `/couriers/me/runs/${orderId}/proof-upload`,
+    { method: 'POST', body: { contentType: mimeType } }
+  );
+  const response = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': mimeType },
+    body: new File(uri),
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, "Envoi de la photo impossible. Veuillez réessayer.");
+  }
+  return path;
+}
+
+export interface SignatureStrokes {
+  width: number;
+  height: number;
+  /** `M x y L x y…`, one entry per stroke, as the pad recorded them. */
+  paths: string[];
+}
+
+/**
+ * Store the drawn signature and return its path for `completeDelivery`.
+ *
+ * Strokes, not a file: the API writes the SVG itself, so nothing the phone sends
+ * ends up as markup someone else opens.
+ */
+export async function saveDeliverySignature(orderId: ID, strokes: SignatureStrokes): Promise<string> {
+  const { path } = await api<{ path: string }>(`/couriers/me/runs/${orderId}/signature`, {
+    method: 'POST',
+    body: strokes,
+  });
+  return path;
 }
 
 export async function reportCourierIssue(

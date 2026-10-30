@@ -53,9 +53,18 @@ export default function CourierProofScreen() {
       // transaction that writes the proof, so the two cannot disagree.
       let updated: Awaited<ReturnType<typeof ordersApi.completeDelivery>>;
       try {
+        // The image goes up first and the run closes on its path — the server
+        // refuses a photo or signature proof whose file is not there.
+        const imagePath =
+          proof.method === 'photo' && proof.imageUri
+            ? await ordersApi.uploadDeliveryPhoto(order.id, proof.imageUri, proof.imageMimeType ?? 'image/jpeg')
+            : proof.method === 'signature' && proof.signature
+              ? await ordersApi.saveDeliverySignature(order.id, proof.signature)
+              : undefined;
         updated = await ordersApi.completeDelivery(order.id, {
           method: proof.method,
           pin: proof.pin,
+          imagePath,
           note: proof.note,
         });
       } catch (error) {
@@ -64,7 +73,10 @@ export default function CourierProofScreen() {
         if (error instanceof ApiError && error.isClientError) {
           return proof.method === 'pin' && error.status === 400 ? t('courier.wrongCode') : error.message;
         }
-        throw error;
+        // Offline, a timeout, a failed upload: the http layer already words
+        // these in French. Anything else (the photo file unreadable) gets the
+        // generic line rather than an unhandled rejection and a dead button.
+        return error instanceof ApiError ? error.message : t('common.genericError');
       }
       if (!updated) return;
       // The run is over: clear it before leaving, or the missions screen docks a

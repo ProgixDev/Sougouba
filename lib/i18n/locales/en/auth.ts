@@ -18,7 +18,7 @@ export const auth: Widen<typeof reference> = {
   },
   welcome: {
     title: 'Welcome to Sougouba',
-    body: 'The flavours of Africa and the Maghreb, delivered near you in Quebec.',
+    body: 'The flavours of Africa and the Maghreb, delivered near you.',
     email: 'Continue with email',
     fineprint: 'No password — we just send you a code.',
   },

@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Post, Query, Redirect, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiExcludeController, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 
 import { AdminGuard } from '../auth/admin.guard.js';
@@ -111,5 +111,32 @@ export class AdminPayoutsController {
   @Post('run')
   run() {
     return this.payouts.runBatch();
+  }
+}
+
+/** Where the app waits for the browser — see `ConnectReturnController`. */
+const APP_RETURN_URL = 'sougouba://payouts-return';
+
+/**
+ * Where Stripe's hosted onboarding sends the browser back to.
+ *
+ * An HTTPS hop rather than handing Stripe the app's own scheme: Account Links
+ * want a web URL, and this way the app does not depend on whether a custom
+ * scheme is accepted. The app passes this route as both `returnUrl` and
+ * `refreshUrl`; the in-app browser is waiting for `sougouba://payouts-return`
+ * and closes the moment the redirect reaches it.
+ *
+ * Public on purpose — Stripe's redirect carries no token — and harmless for it:
+ * the target is fixed, so this cannot be turned into an open redirect, and the
+ * app re-reads the onboarding status from the API rather than trusting `state`.
+ */
+@ApiExcludeController()
+@Controller('stripe/connect')
+export class ConnectReturnController {
+  @Get('return')
+  @Redirect(APP_RETURN_URL, 302)
+  back(@Query('state') state?: string) {
+    // `refresh` means the link expired before it was finished; the app asks for a new one.
+    return { url: `${APP_RETURN_URL}?state=${state === 'refresh' ? 'refresh' : 'done'}` };
   }
 }

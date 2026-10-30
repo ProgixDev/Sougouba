@@ -33,6 +33,7 @@
     "expo-splash-screen": "~57.0.5",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.2",
+    "expo-updates": "~57.0.26",
     "expo-video": "~57.0.2",
     "expo-web-browser": "~57.0.2",
     "i18n-js": "^4.5.3",
@@ -75,7 +76,9 @@
     "verify:loyalty": "npx --yes tsx scripts/verify-loyalty.ts",
     "verify": "npm run typecheck && npm run verify:seed && npm run verify:logic && npm run verify:loyalty && npm run verify:contrast && npm run verify:i18n",
     "verify:contrast": "npx --yes tsx scripts/verify-contrast.ts",
-    "verify:i18n": "npx --yes tsx scripts/verify-i18n.ts"
+    "verify:i18n": "npx --yes tsx scripts/verify-i18n.ts",
+    "update:prod": "eas update --channel production --environment production",
+    "update:preview": "eas update --channel preview --environment preview"
   },
   "private": true,
   "overrides": {

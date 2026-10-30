@@ -143,3 +143,42 @@ export const completeDeliverySchema = z
   });
 
 export type CompleteDeliveryInput = z.infer<typeof completeDeliverySchema>;
+
+/** What a camera hands back. HEIC because that is an iPhone's default. */
+export const PROOF_PHOTO_TYPES = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/heic': 'heic',
+} as const;
+
+/** A signed upload URL for the photo proof — asked for once the courier has taken the picture. */
+export const proofUploadSchema = z.object({
+  contentType: z.enum(Object.keys(PROOF_PHOTO_TYPES) as [keyof typeof PROOF_PHOTO_TYPES], {
+    message: 'Format accepté : JPEG, PNG ou HEIC',
+  }),
+});
+
+export type ProofUploadInput = z.infer<typeof proofUploadSchema>;
+
+/** `M x y L x y L x y…` — one point, then straight segments. Unambiguous, so it cannot backtrack. */
+const POINT = String.raw`-?\d+(?:\.\d+)? -?\d+(?:\.\d+)?`;
+const SIGNATURE_PATH = new RegExp(`^M${POINT}(?: L${POINT})*$`);
+
+/**
+ * A drawn signature, as the strokes the pad recorded.
+ *
+ * Sent as path data rather than as a file because the phone has no way to
+ * rasterise the pad, and an SVG the device wrote is markup the back office
+ * would then open. The API writes the SVG itself, from strokes that can only
+ * contain move/line commands and numbers — nothing in them can become a tag.
+ */
+export const signatureSchema = z.object({
+  width: z.number().positive().max(4000),
+  height: z.number().positive().max(4000),
+  paths: z
+    .array(z.string().max(20_000).regex(SIGNATURE_PATH, 'Tracé invalide'))
+    .min(1, 'Signature requise')
+    .max(200),
+});
+
+export type SignatureInput = z.infer<typeof signatureSchema>;

@@ -29,11 +29,11 @@ export default function OrderDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [reporting, setReporting] = useState(false);
 
-  // The courier's position is interpolated locally, so it moves smoothly
-  // between fetches; this only has to catch *status* changes — a pickup, a
-  // delivery — which is why eight seconds is plenty.
-  const progress = useDeliveryProgress(order, vendor, courier);
+  // The courier's position is their phone's GPS, polled on its own below; the
+  // order poll only has to catch *status* changes — a pickup, a delivery —
+  // which is why eight seconds is plenty.
   const live = useLiveCourierPosition(order);
+  const progress = useDeliveryProgress(order, vendor, courier, live);
 
   // "Votre commande est livrée : vous avez gagné 45 points" (client brief) —
   // there is no push notification pipeline in this prototype (see
@@ -185,8 +185,8 @@ export default function OrderDetailScreen() {
                     <DeliveryMap
                       pickup={progress.pickup}
                       dropoff={progress.dropoff}
-                      courier={live ?? progress.position}
-                      bearing={live?.heading ?? progress.bearing}
+                      courier={progress.position}
+                      bearing={progress.bearing}
                       route={progress.leg?.points}
                       progress={progress.progress}
                       variant="card"
@@ -349,12 +349,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 /** A ping older than this is a courier whose app went quiet, not a courier standing still. */
 const LIVE_MAX_AGE_MS = 2 * 60_000;
-const LIVE_POLL_MS = 10_000;
+/** In step with the courier's 5 s ping. With the 8 s order poll, ~20 a minute against the 40 on `/orders`. */
+const LIVE_POLL_MS = 5_000;
 
 /**
  * The courier's real position from their phone's GPS, while the order is on the
- * road. `null` until the first fresh ping — the map then keeps the estimated
- * position from `useDeliveryProgress`, so it never goes blank mid-run.
+ * road. `null` until the first fresh ping — the map then shows the run without
+ * a courier marker, rather than one placed somewhere invented.
  */
 function useLiveCourierPosition(order: Order | null) {
   const [live, setLive] = useState<{ lat: number; lng: number; heading?: number } | null>(null);

@@ -352,15 +352,6 @@ export interface CourierInsurance {
   expiry: string;
 }
 
-/** Where a courier is paid. `bankId` indexes `data/banks.ts`. */
-export interface CourierPayout {
-  bankId: string;
-  /** Only when `bankId` is `other` — the name the courier typed. */
-  bankNameOther?: string;
-  transit: string;
-  account: string;
-}
-
 export interface Courier {
   id: ID;
   /** The account this file belongs to. */
@@ -375,12 +366,6 @@ export interface Courier {
   licenceNumber?: string;
   /** Absent for a bike. Required of moto and voiture at registration. */
   insurance?: CourierInsurance;
-  /**
-   * Absent on the seeded couriers. Collected at registration and, until this
-   * was fixed, thrown away between the form and the API — the payout step
-   * validated a bank account nothing ever stored.
-   */
-  payout?: CourierPayout;
   city: string;
   postalCode?: string;
   /** Where a courier sits while online and idle — the origin every offer is ranked from. */
@@ -396,8 +381,12 @@ export type ProofMethod = 'photo' | 'signature' | 'pin';
 
 export interface DeliveryProof {
   method: ProofMethod;
-  /** Local file URI for a photo or a captured signature; absent for a PIN. */
+  /** Local file URI for a photo; absent for a PIN or a signature. */
   imageUri?: string;
+  /** The photo's type as the camera reported it — what the upload is signed for. */
+  imageMimeType?: string;
+  /** The drawn strokes, with the pad's size, for a signature. */
+  signature?: { width: number; height: number; paths: string[] };
   /** The four digits the shopper read out — sent to the server to check, never compared on the phone. */
   pin?: string;
   note?: string;

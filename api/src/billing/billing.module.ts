@@ -4,7 +4,12 @@ import { CourierModule } from '../courier/courier.module.js';
 import { LoyaltyModule } from '../loyalty/loyalty.module.js';
 import { OrdersModule } from '../orders/orders.module.js';
 import { AnalyticsService } from './analytics.service.js';
-import { AdminPayoutsController, CourierBillingController, MerchantBillingController } from './billing.controller.js';
+import {
+  AdminPayoutsController,
+  ConnectReturnController,
+  CourierBillingController,
+  MerchantBillingController,
+} from './billing.controller.js';
 import { ConnectService } from './connect.service.js';
 import { PayoutsScheduler } from './payouts.scheduler.js';
 import { PayoutsService } from './payouts.service.js';
@@ -20,7 +25,7 @@ import { PayoutsService } from './payouts.service.js';
  */
 @Module({
   imports: [OrdersModule, LoyaltyModule, CourierModule],
-  controllers: [MerchantBillingController, CourierBillingController, AdminPayoutsController],
+  controllers: [MerchantBillingController, CourierBillingController, AdminPayoutsController, ConnectReturnController],
   providers: [AnalyticsService, ConnectService, PayoutsService, PayoutsScheduler],
   exports: [AnalyticsService, PayoutsService, PayoutsScheduler],
 })

@@ -30,11 +30,11 @@ export default function CourierSignupScreen() {
 
   async function submit(values: CourierSignupValues) {
     if (!user) return;
-    const { identity, vehicle, payout } = values;
-    // Everything the three steps collected, not just the first two. The licence
-    // number and the whole payout step used to be validated and then dropped on
-    // the floor here — the courier answered questions nothing ever stored, and
-    // the insurance added at the client's request would have gone the same way.
+    const { identity, vehicle } = values;
+    // Everything both steps collected. The licence number used to be validated
+    // and then dropped on the floor here, and the insurance added at the
+    // client's request would have gone the same way. Banking is not asked for
+    // at all: Stripe collects it after approval.
     const motorised = isMotorised(vehicle.vehicle);
     await couriersApi.submitApplication({
       userId: user.id,
@@ -52,12 +52,6 @@ export default function CourierSignupScreen() {
             },
           }
         : {}),
-      payout: {
-        bankId: payout.bankId,
-        ...(payout.bankNameOther ? { bankNameOther: payout.bankNameOther } : {}),
-        transit: payout.transit,
-        account: payout.account,
-      },
       city: identity.city,
       postalCode: identity.postalCode,
       // The postal code is the only location the form asks for, and a courier

@@ -1,79 +1,26 @@
 import * as Haptics from 'expo-haptics';
-import { Check, Home, MapPin, Plus, Trash2 } from 'lucide-react-native';
-import { MotiView } from 'moti';
+import { Home, MapPin, Plus, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  View,
-} from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import {
-  BackHeader,
-  Badge,
-  Button,
-  CitySelect,
-  EmptyState,
-  Input,
-  Reveal,
-  Text,
-} from '@/components/ui';
-import { addressesApi } from '@/data/api';
-import { ApiError } from '@/data/http';
+import { AddressFormSheet } from '@/components/customer';
+import { BackHeader, Badge, EmptyState, Reveal, Text } from '@/components/ui';
 import type { Address } from '@/data/types';
+import { useAddressBook } from '@/hooks/useAddressBook';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useT } from '@/lib/i18n/useT';
-import { i18nResolver } from '@/lib/validation/resolver';
-import {
-  type AddressInput,
-  type AddressValues,
-  addressSchema,
-} from '@/lib/validation/profile';
-import { useSessionStore } from '@/store/useSessionStore';
+import type { AddressValues } from '@/lib/validation/profile';
 
 export default function AddressesScreen() {
   const t = useT();
   const colors = useThemeColors();
-  const user = useSessionStore((s) => s.user);
-  const updateUser = useSessionStore((s) => s.updateUser);
+  const book = useAddressBook();
+  const { addresses, saving } = book;
   const [editing, setEditing] = useState<Address | 'new' | null>(null);
 
-  const addresses = user?.addresses ?? [];
-
-  const [saving, setSaving] = useState(false);
-
-  /**
-   * Every change goes to the API, then the book is re-read from it. The server
-   * geocodes and decides the default, and `POST /orders` only accepts the id of
-   * an address it holds — so the server's list is the one worth showing.
-   */
-  async function sync(write: () => Promise<unknown>): Promise<boolean> {
-    try {
-      await write();
-      updateUser({ addresses: await addressesApi.list() });
-      return true;
-    } catch (error) {
-      Alert.alert(
-        t('customer.account.addresses.saveFailed'),
-        error instanceof ApiError && error.isClientError ? error.message : t('common.genericError')
-      );
-      return false;
-    }
-  }
-
   async function save(values: AddressValues, existing: Address | null) {
-    setSaving(true);
-    const ok = await sync(() =>
-      existing ? addressesApi.update(existing.id, values) : addressesApi.create(values)
-    );
-    setSaving(false);
-    if (!ok) return;
+    if (!(await book.save(values, existing))) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setEditing(null);
   }
@@ -84,7 +31,7 @@ export default function AddressesScreen() {
       {
         text: t('customer.account.addresses.delete'),
         style: 'destructive',
-        onPress: () => sync(() => addressesApi.remove(address.id)),
+        onPress: () => book.remove(address),
       },
     ]);
   }
@@ -134,7 +81,7 @@ export default function AddressesScreen() {
                   {!address.isDefault ? (
                     <RowAction
                       label={t('customer.account.addresses.setDefault')}
-                      onPress={() => sync(() => addressesApi.update(address.id, { isDefault: true }))}
+                      onPress={() => book.makeDefault(address)}
                     />
                   ) : null}
                   <View className="flex-1" />
@@ -183,150 +130,5 @@ function RowAction({ label, onPress }: { label: string; onPress: () => void }) {
         {label}
       </Text>
     </Pressable>
-  );
-}
-
-/**
- * Add/edit form.
- *
- * Remounted by key whenever the target changes, so `defaultValues` are read
- * fresh — react-hook-form snapshots them at mount and would otherwise keep
- * showing the first address ever opened.
- */
-function AddressFormSheet({
-  address,
-  visible,
-  saving,
-  onClose,
-  onSave,
-}: {
-  address: Address | null;
-  visible: boolean;
-  saving: boolean;
-  onClose: () => void;
-  onSave: (values: AddressValues, existing: Address | null) => void;
-}) {
-  const t = useT();
-  const insets = useSafeAreaInsets();
-  const {
-    control,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<AddressInput, unknown, AddressValues>({
-    resolver: i18nResolver(t, addressSchema),
-    defaultValues: {
-      label: address?.label ?? '',
-      street: address?.street ?? '',
-      city: address?.city ?? 'Montréal',
-      postalCode: address?.postalCode ?? '',
-    },
-  });
-
-  return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <View className="flex-1 justify-end">
-        <MotiView
-          from={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ type: 'timing', duration: 180 }}
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10, 32, 24, 0.45)' }}
-        >
-          <Pressable className="flex-1" accessibilityLabel={t('common.ui.close')} onPress={onClose} />
-        </MotiView>
-
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <MotiView
-            from={{ translateY: 400 }}
-            animate={{ translateY: 0 }}
-            transition={{ type: 'spring', damping: 20, stiffness: 190, mass: 0.9 }}
-            className="rounded-t-[28px] bg-card"
-          >
-            <View className="items-center pt-3 pb-1">
-              <View className="h-1 w-10 rounded-full bg-border" />
-            </View>
-
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              contentContainerClassName="px-5 pt-3 gap-4"
-              style={{ maxHeight: 460 }}
-            >
-              <Text variant="subtitle" weight="bold" className="text-[20px]">
-                {address ? t('customer.account.addresses.editTitle') : t('customer.account.addresses.newTitle')}
-              </Text>
-
-              <Controller
-                control={control}
-                name="label"
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <Input
-                    label={t('customer.account.addresses.fieldLabel')}
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={errors.label?.message}
-                    autoCapitalize="words"
-                  />
-                )}
-              />
-              <Controller
-                control={control}
-                name="street"
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <Input
-                    label={t('customer.account.addresses.fieldStreet')}
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={errors.street?.message}
-                    autoCapitalize="words"
-                    textContentType="fullStreetAddress"
-                  />
-                )}
-              />
-              <Controller
-                control={control}
-                name="city"
-                render={({ field: { onChange, value } }) => (
-                  <CitySelect
-                    value={value}
-                    onChange={onChange}
-                    error={errors.city?.message}
-                  />
-                )}
-              />
-              <Controller
-                control={control}
-                name="postalCode"
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <Input
-                    label={t('customer.account.addresses.fieldPostalCode')}
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={errors.postalCode?.message}
-                    autoCapitalize="characters"
-                    textContentType="postalCode"
-                    helperText={t('customer.account.addresses.postalHint')}
-                  />
-                )}
-              />
-            </ScrollView>
-
-            <View className="px-5 pt-4 gap-2" style={{ paddingBottom: insets.bottom + 12 }}>
-              <Button
-                label={address ? t('common.save') : t('customer.account.addresses.submitNew')}
-                variant="primary"
-                size="lg"
-                fullWidth
-                loading={saving}
-                icon={<Check size={18} color="#fff" strokeWidth={2.4} />}
-                onPress={handleSubmit((values) => onSave(values, address))}
-              />
-              <Button label={t('common.cancel')} variant="ghost" size="lg" fullWidth onPress={onClose} />
-            </View>
-          </MotiView>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
   );
 }

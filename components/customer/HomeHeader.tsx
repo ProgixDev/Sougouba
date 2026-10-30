@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { MapPin } from 'lucide-react-native';
+import { ChevronDown, MapPin } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,7 +11,9 @@ import { SearchField } from './SearchField';
 
 export interface HomeHeaderProps {
   fullName: string;
-  city: string;
+  /** "Domicile · Laval", or `null` when the shopper has no address yet. */
+  location: string | null;
+  onLocationPress?: () => void;
   onSearchPress?: () => void;
   onProfilePress?: () => void;
 }
@@ -29,7 +31,7 @@ export interface HomeHeaderProps {
  * wanted; the CDC addendum puts that choice first instead, and it is now made on
  * the two `VerticalCard`s directly below this panel.
  */
-export function HomeHeader({ fullName, city, onSearchPress, onProfilePress }: HomeHeaderProps) {
+export function HomeHeader({ fullName, location, onLocationPress, onSearchPress, onProfilePress }: HomeHeaderProps) {
   const t = useT();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
@@ -55,17 +57,33 @@ export function HomeHeader({ fullName, city, onSearchPress, onProfilePress }: Ho
       }}
     >
       <View className="flex-row items-center gap-3 px-5">
-        <View className="w-11 h-11 items-center justify-center rounded-full bg-card">
-          <MapPin size={19} color={colors.primary} strokeWidth={2} />
-        </View>
-        <View className="flex-1">
-          <Text variant="caption" tone="muted" className="text-[12px]">
-            {t('customer.home.deliverTo')}
-          </Text>
-          <Text variant="subtitle" weight="bold" numberOfLines={1} className="text-[17px] leading-[22px]">
-            {city}
-          </Text>
-        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('customer.home.changeAddressA11y')}
+          onPress={onLocationPress}
+          className="flex-1 flex-row items-center gap-3 active:opacity-70"
+        >
+          <View className="w-11 h-11 items-center justify-center rounded-full bg-card">
+            <MapPin size={19} color={colors.primary} strokeWidth={2} />
+          </View>
+          <View className="flex-1">
+            <Text variant="caption" tone="muted" className="text-[12px]">
+              {t('customer.home.deliverTo')}
+            </Text>
+            <View className="flex-row items-center gap-1">
+              <Text
+                variant="subtitle"
+                weight="bold"
+                numberOfLines={1}
+                tone={location ? 'default' : 'primary'}
+                className="shrink text-[17px] leading-[22px]"
+              >
+                {location ?? t('customer.home.chooseAddress')}
+              </Text>
+              <ChevronDown size={17} color={colors.primary} strokeWidth={2.4} />
+            </View>
+          </View>
+        </Pressable>
         <Pressable
           hitSlop={6}
           accessibilityRole="button"

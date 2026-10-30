@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { OTHER_BANK_ID, banks } from '@/data/banks';
 import type { MessageKey } from '@/lib/i18n';
 
 import { citySchema, postalCodeSchema, refinePostalCodeCity } from './address';
@@ -97,42 +96,9 @@ function isExpired(mmYyyy: string, now = new Date()): boolean {
   return year === now.getFullYear() && month < now.getMonth() + 1;
 }
 
-export const courierPayoutSchema = z
-  .object({
-    /**
-     * The bank, chosen from `data/banks.ts` rather than typed.
-     *
-     * It was a free-text "Institution financière", which accepted "RBC",
-     * "Royale" and "banque royale" as three institutions and left nothing to
-     * reconcile a deposit against. `other` keeps the escape hatch the client
-     * asked for.
-     */
-    bankId: z.string().min(1, 'validation.courier.bankRequired'),
-    bankNameOther: z.string().trim().optional(),
-    transit: z.string().trim().regex(/^\d{5}$/, 'validation.courier.transitFormat'),
-    account: z.string().trim().regex(/^\d{7,12}$/, 'validation.courier.accountFormat'),
-  })
-  .superRefine((values, ctx) => {
-    if (values.bankId !== OTHER_BANK_ID) {
-      if (!banks.some((b) => b.id === values.bankId)) {
-        ctx.addIssue({ code: 'custom', path: ['bankId'], message: 'validation.courier.bankUnknown' });
-      }
-      return;
-    }
-    if (!values.bankNameOther || values.bankNameOther.length < 2) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['bankNameOther'],
-        message: 'validation.courier.bankOtherRequired',
-      });
-    }
-  });
-export type CourierPayoutValues = z.infer<typeof courierPayoutSchema>;
-
 export const courierSchema = z.object({
   identity: courierIdentitySchema,
   vehicle: courierVehicleSchema,
-  payout: courierPayoutSchema,
 });
 export type CourierValues = z.infer<typeof courierSchema>;
 
