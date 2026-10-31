@@ -1,18 +1,51 @@
+import { useState } from 'react';
+
+import { vendorsApi } from '@/data/api';
+import { ApiError } from '@/data/http';
+import { useT } from '@/lib/i18n/useT';
+
 /**
- * ⚠️ **Neutralised by the backend cutover — this hook no longer does anything.**
+ * The two demonstration buttons on the merchant's "pending" screen.
  *
- * It approved the signed-in merchant's own shop after a few seconds so a demo would not stall on the review gate. Approving a shop is an administrator's decision — audited, guarded by `AdminGuard`, and taken in the back office. `setVendorStatus` throws now rather than pretend otherwise, so `PendingApproval` should lose its button.
+ * - `approve` — puts the merchant's own pending shop online, as an
+ *   administrator would.
+ * - `adoptDemoShop` — attaches this account to a seeded shop that already has a
+ *   catalogue and an order history, so the dashboard has something to show.
  *
- * Kept as a no-op with its original shape so its caller needs no edit, and so
- * this note sits where the next person will look. Delete both together once the
- * screen stops referencing it.
+ * Test phase only. Both API routes exist only while `ALLOW_DEMO_SELF_APPROVAL`
+ * is set and answer 404 otherwise — said as such, so a tester knows to ask
+ * rather than retry. The real approval is `POST /admin/vendors/:id/approve`.
  */
-export function useDemoShopApproval(_onApproved?: () => Promise<void> | void) {
-  // The shape the two callers destructure, with both actions inert.
+export function useDemoShopApproval(onApproved?: () => Promise<void> | void) {
+  const t = useT();
+  const [approving, setApproving] = useState(false);
+  const [adopting, setAdopting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run(action: () => Promise<unknown>, setBusy: (busy: boolean) => void) {
+    setError(null);
+    setBusy(true);
+    try {
+      await action();
+      await onApproved?.();
+    } catch (cause) {
+      setError(
+        cause instanceof ApiError
+          ? cause.status === 404
+            ? t('business.pending.demoDisabled')
+            : cause.message
+          : t('common.genericError')
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return {
-    approve: async () => {},
-    approving: false,
-    adoptDemoShop: async () => {},
-    adopting: false,
+    approve: () => run(vendorsApi.demoApproveMine, setApproving),
+    approving,
+    adoptDemoShop: () => run(vendorsApi.adoptDemoShop, setAdopting),
+    adopting,
+    error,
   };
 }

@@ -181,6 +181,7 @@ export const business = {
     openDemo: 'Ouvrir une boutique de démonstration',
     openDemoBody:
       'Rattache ce compte à une boutique déjà garnie, avec son catalogue et son historique de commandes.',
+    demoDisabled: 'Les raccourcis de démonstration sont désactivés sur ce serveur. Un administrateur doit valider votre boutique.',
   },
   productForm: {
     name: 'Nom du produit',

@@ -113,6 +113,9 @@ const envSchema = z.object({
    * Unset, the route answers 404 as if it did not exist. Unset it with
    * `ALLOW_FIXED_TEST_OTP`, before delivery. The API logs an error naming it on
    * every boot while it is on.
+   *
+   * It also gates the merchant's two shortcuts (`POST /vendors/me/demo-approve`
+   * and `/vendors/me/demo-adopt`, see `VendorDemoService`).
    */
   ALLOW_DEMO_SELF_APPROVAL: z.string().optional(),
 

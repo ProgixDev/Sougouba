@@ -38,7 +38,7 @@ export function PendingApproval({ state, onApproved }: PendingApprovalProps) {
   const t = useT();
   const colors = useThemeColors();
   const tabBarInset = useTabBarInset();
-  const { approve, approving, adoptDemoShop, adopting } = useDemoShopApproval(onApproved);
+  const { approve, approving, adoptDemoShop, adopting, error } = useDemoShopApproval(onApproved);
 
   const applied = state === 'pending';
 
@@ -153,6 +153,11 @@ export function PendingApproval({ state, onApproved }: PendingApprovalProps) {
               </Text>
             </>
           )}
+          {error ? (
+            <Text variant="caption" tone="destructive" className="text-[12px] leading-[18px]">
+              {error}
+            </Text>
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>

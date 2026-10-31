@@ -180,6 +180,7 @@ export const business: Widen<typeof reference> = {
     openDemo: 'Open a demonstration shop',
     openDemoBody:
       'Attaches this account to a stocked shop, with its catalogue and its order history.',
+    demoDisabled: 'Demonstration shortcuts are turned off on this server. An administrator must approve your shop.',
   },
   productForm: {
     name: 'Product name',

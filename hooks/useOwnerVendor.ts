@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { vendorsApi } from '@/data/api';
 import type { Vendor } from '@/data/types';
@@ -60,6 +61,18 @@ export function useOwnerVendor(): OwnerVendorState {
       active = false;
     };
   }, [reload]);
+
+  // Each business tab holds its own copy of the shop. Without this, approving
+  // or adopting a shop from one tab left the tabs already visited on the
+  // "pending" screen. Quiet re-read — no `loading`, so an open screen does not
+  // blank out. The first focus is the mount, which the effect above covers.
+  const focusedOnce = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (focusedOnce.current) void reload();
+      focusedOnce.current = true;
+    }, [reload])
+  );
 
   return {
     vendor,

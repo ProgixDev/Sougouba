@@ -7,6 +7,7 @@ import { ProductsService } from './products.service.js';
 import { VendorMeController } from './vendor-me.controller.js';
 import { CatalogController } from './vendors.controller.js';
 import { VendorsService } from './vendors.service.js';
+import { VendorDemoService } from './vendor-demo.service.js';
 
 /**
  * Vendors, products and categories in one module, named to match the plan's own
@@ -25,7 +26,7 @@ import { VendorsService } from './vendors.service.js';
   // `GET vendors/me` (as id="me", which `ParseUUIDPipe` then 400s). The
   // merchant's fixed paths have to be offered first.
   controllers: [VendorMeController, CatalogController, CategoriesController, SpecialtiesController],
-  providers: [VendorsService, ProductsService, CategoriesService, SpecialtiesService],
+  providers: [VendorsService, ProductsService, CategoriesService, SpecialtiesService, VendorDemoService],
   exports: [VendorsService, ProductsService],
 })
 export class CatalogModule {}

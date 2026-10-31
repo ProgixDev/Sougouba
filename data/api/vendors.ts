@@ -178,3 +178,21 @@ export async function setVendorStatus(_id: ID, _status: VendorStatus): Promise<V
     'setVendorStatus is not available to the app — approving a shop is an administrator action in the back office.'
   );
 }
+
+// ── test phase ──────────────────────────────────────────────────────────────
+
+/**
+ * Test phase only: the merchant approves their own pending shop. The API
+ * answers 404 unless `ALLOW_DEMO_SELF_APPROVAL` is set on the deploy.
+ */
+export async function demoApproveMine(): Promise<void> {
+  await api('/vendors/me/demo-approve', { method: 'POST', body: {} });
+}
+
+/**
+ * Test phase only: attach this account to a seeded shop — catalogue, hours and
+ * order history included. Same flag, same 404 when it is off.
+ */
+export async function adoptDemoShop(): Promise<{ id: ID; name: string }> {
+  return api('/vendors/me/demo-adopt', { method: 'POST', body: {} });
+}
