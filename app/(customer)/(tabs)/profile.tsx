@@ -16,6 +16,7 @@ import {
   ReceiptText,
   Sparkles,
   Sun,
+  Trash2,
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
@@ -26,6 +27,7 @@ import { LanguageToggle, Reveal, Text } from '@/components/ui';
 import { loyaltyApi } from '@/data/api';
 import { useColorScheme, useThemeColors } from '@/hooks/useColorScheme';
 import { useCustomerStats } from '@/hooks/useCustomerStats';
+import { useDeleteAccount } from '@/hooks/useDeleteAccount';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { formatCad, formatMonthYear } from '@/lib/format';
 import { useT } from '@/lib/i18n/useT';
@@ -43,6 +45,7 @@ export default function CustomerProfileScreen() {
   const user = useSessionStore((s) => s.user);
   const updateUser = useSessionStore((s) => s.updateUser);
   const signOut = useSessionStore((s) => s.signOut);
+  const { confirmDeleteAccount } = useDeleteAccount();
 
   const preference = useThemeStore((s) => s.preference);
   const setPreference = useThemeStore((s) => s.setPreference);
@@ -233,6 +236,8 @@ export default function CustomerProfileScreen() {
         <Reveal delay={320}>
           <View className="mt-6 mx-5 rounded-[20px] bg-card overflow-hidden">
             <NavRow icon={LogOut} label={t('customer.profile.signOut')} destructive onPress={signOut} />
+            <Divider />
+            <NavRow icon={Trash2} label={t('common.deleteAccount.action')} destructive onPress={confirmDeleteAccount} />
           </View>
 
           <Text variant="caption" tone="muted" className="text-center mt-6 text-[11px]">

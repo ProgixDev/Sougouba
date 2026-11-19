@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Star,
   Sun,
+  Trash2,
 } from 'lucide-react-native';
 import { useCallback, useMemo } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Switch, View } from 'react-native';
@@ -24,6 +25,7 @@ import { useThemeColors } from '@/hooks/useColorScheme';
 import { useCourierEarnings } from '@/hooks/useCourierEarnings';
 import { useCourierPayouts } from '@/hooks/useCourierPayouts';
 import { useCourierProfile } from '@/hooks/useCourierProfile';
+import { useDeleteAccount } from '@/hooks/useDeleteAccount';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { summariseRuns } from '@/lib/courierAnalytics';
 import { formatCad, formatMonthYear, formatRating } from '@/lib/format';
@@ -63,6 +65,7 @@ export default function CourierProfileScreen() {
   const colors = useThemeColors();
   const user = useSessionStore((s) => s.user);
   const signOut = useSessionStore((s) => s.signOut);
+  const { confirmDeleteAccount } = useDeleteAccount();
   const preference = useThemeStore((s) => s.preference);
   const setPreference = useThemeStore((s) => s.setPreference);
   const isDark = preference === 'dark';
@@ -304,6 +307,22 @@ export default function CourierProfileScreen() {
                 </Text>
               </View>
               <ChevronRight size={16} color={colors.mutedForeground} strokeWidth={2} />
+            </Pressable>
+          </Reveal>
+
+          <Reveal index={5}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('common.deleteAccount.action')}
+              onPress={confirmDeleteAccount}
+              className="flex-row items-center gap-3 rounded-[20px] bg-card p-4 active:opacity-80"
+            >
+              <View className="w-9 h-9 items-center justify-center rounded-full bg-destructive/10">
+                <Trash2 size={17} color={colors.destructive} strokeWidth={2} />
+              </View>
+              <Text variant="caption" weight="bold" tone="destructive" className="flex-1 text-[14px]">
+                {t('common.deleteAccount.action')}
+              </Text>
             </Pressable>
           </Reveal>
         </View>

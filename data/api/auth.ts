@@ -292,3 +292,14 @@ function callbackParams(url: string): Record<string, string> {
 export async function signOut(): Promise<void> {
   await supabase.auth.signOut();
 }
+
+/**
+ * Deletes the signed-in account, permanently. The API refuses with a 409 and a
+ * sentence to show while an order is still in progress.
+ *
+ * ⚠️ This does not end the local session — the caller follows it with the
+ * session store's `signOut`, which is what clears this device.
+ */
+export async function deleteAccount(): Promise<void> {
+  await api<void>('/me', { method: 'DELETE' });
+}

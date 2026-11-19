@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Clock, Clock3, LogOut, MapPin, Moon, Receipt, Star, Store, Sun, Truck } from 'lucide-react-native';
+import { Clock, Clock3, LogOut, MapPin, Moon, Receipt, Star, Store, Sun, Trash2, Truck } from 'lucide-react-native';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { CounterHeader, DeliveryGrid } from '@/components/business';
@@ -15,6 +15,7 @@ import {
 import { MIN_DELIVERY_FEE_CAD } from '@/data/deliveryPricing';
 import type { VendorHours } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
+import { useDeleteAccount } from '@/hooks/useDeleteAccount';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
 import { formatCad, formatPercent } from '@/lib/format';
@@ -33,6 +34,7 @@ export default function BusinessProfileScreen() {
   const tabBarInset = useTabBarInset();
   const user = useSessionStore((s) => s.user);
   const signOut = useSessionStore((s) => s.signOut);
+  const { confirmDeleteAccount } = useDeleteAccount();
   const { vendor, loading, missing, approved } = useOwnerVendor();
 
   const preference = useThemeStore((s) => s.preference);
@@ -226,6 +228,20 @@ export default function BusinessProfileScreen() {
             </View>
             <Text variant="caption" weight="semibold" tone="destructive" className="flex-1">
               {t('business.shopProfile.signOut')}
+            </Text>
+          </Pressable>
+          <View className="h-px bg-border ml-16" />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('common.deleteAccount.action')}
+            onPress={confirmDeleteAccount}
+            className="flex-row items-center gap-3 p-4 active:bg-muted"
+          >
+            <View className="w-9 h-9 items-center justify-center rounded-full bg-destructive/10">
+              <Trash2 size={17} color={colors.destructive} strokeWidth={2} />
+            </View>
+            <Text variant="caption" weight="semibold" tone="destructive" className="flex-1">
+              {t('common.deleteAccount.action')}
             </Text>
           </Pressable>
         </Reveal>

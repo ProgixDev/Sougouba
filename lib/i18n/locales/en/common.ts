@@ -88,4 +88,12 @@ export const common: Widen<typeof reference> = {
     darkModeA11y: 'Turn on dark mode',
     language: 'Language',
   },
+  deleteAccount: {
+    action: 'Delete my account',
+    confirmTitle: 'Delete your account?',
+    confirmBody:
+      'Your profile, addresses and favourites will be permanently deleted, and your Sougouba points will be lost. Order history is kept without your name, for accounting reasons. This cannot be undone.',
+    confirmAction: 'Delete',
+    failedTitle: 'Could not delete the account',
+  },
 };

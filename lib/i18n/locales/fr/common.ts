@@ -98,4 +98,13 @@ export const common = {
     darkModeA11y: 'Activer le mode sombre',
     language: 'Langue',
   },
+  /** One wording for the three profiles: the consequence is the same whatever the role. */
+  deleteAccount: {
+    action: 'Supprimer mon compte',
+    confirmTitle: 'Supprimer votre compte ?',
+    confirmBody:
+      'Votre profil, vos adresses et vos favoris seront supprimés définitivement, et vos points Sougouba seront perdus. L’historique des commandes est conservé sans votre nom, pour des raisons comptables. Cette action est irréversible.',
+    confirmAction: 'Supprimer',
+    failedTitle: 'Suppression impossible',
+  },
 };
