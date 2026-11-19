@@ -511,3 +511,24 @@ export interface LoyaltyTransaction {
   /** Only an earn expires. Absent means the points never age out — a redemption's -100 has no shelf life. */
   expiresAt?: string;
 }
+
+/**
+ * A promo code a merchant created for their own shop.
+ *
+ * The merchant funds it: the discount comes off the product subtotal the shop
+ * is paid from. `active` is computed by the API from the window and the usage
+ * limit, so a list never has to re-derive "would this work right now".
+ */
+export interface Coupon {
+  id: ID;
+  code: string;
+  discountType: 'percentage' | 'fixed';
+  /** A percent (15 → 15 %) or an amount in CAD, depending on `discountType`. */
+  discountValue: number;
+  usageLimit: number | null;
+  usedCount: number;
+  startsAt: string | null;
+  endsAt: string | null;
+  createdAt: string;
+  active: boolean;
+}

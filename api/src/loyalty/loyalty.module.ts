@@ -3,6 +3,8 @@ import { Module } from '@nestjs/common';
 import { AuditModule } from '../admin/audit.module.js';
 import { CouponsService } from './coupons.service.js';
 import { LoyaltyController } from './loyalty.controller.js';
+import { MerchantCouponsController } from './merchant-coupons.controller.js';
+import { MerchantCouponsService } from './merchant-coupons.service.js';
 import { LoyaltyService } from './loyalty.service.js';
 import { SettingsService } from './settings.service.js';
 
@@ -17,8 +19,8 @@ import { SettingsService } from './settings.service.js';
 @Module({
   // For `SettingsService`, which records who changed a rate. See `AuditModule`.
   imports: [AuditModule],
-  controllers: [LoyaltyController],
-  providers: [LoyaltyService, CouponsService, SettingsService],
+  controllers: [LoyaltyController, MerchantCouponsController],
+  providers: [LoyaltyService, CouponsService, MerchantCouponsService, SettingsService],
   exports: [LoyaltyService, CouponsService, SettingsService],
 })
 export class LoyaltyModule {}

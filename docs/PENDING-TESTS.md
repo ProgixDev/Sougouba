@@ -1,4 +1,4 @@
-# Pending tests — account deletion and ratings
+# Pending tests — account deletion, ratings and coupons
 
 Written 2026-11-19. Both features are implemented in code but **neither has been
 tested against the real database**: we had no access to the Supabase project
@@ -187,7 +187,43 @@ order, an avatar and (if possible) a support conversation. Delete it, then check
 
 ---
 
-## 4. Release steps once both pass
+## 4. Merchant coupons — test plan
+
+Decided 2026-11-19: **the merchant creates coupons for their own shop**, because
+the merchant pays for the discount. Discount on products only, one coupon per
+order. No migration needed (the `coupons` table already existed).
+
+Endpoints: `GET /vendors/me/coupons`, `POST /vendors/me/coupons`,
+`POST /vendors/me/coupons/:id/deactivate`. App: merchant profile → "Codes promo".
+Code: `api/src/loyalty/merchant-coupons.*`, `app/(business)/coupons.tsx`.
+
+| # | Case | Expected |
+|---|---|---|
+| C1 | Approved merchant creates `ETE10`, 10 %, 30 days | `201`; appears in the list as "Actif" |
+| C2 | Same code again (same or other shop, any letter case) | `409` "Ce code est déjà utilisé…" |
+| C3 | Pending / suspended shop creates a code | `403` |
+| C4 | Account with no shop | `404` |
+| C5 | Percentage `0`, `91`, `12.5`; fixed `0`, `500.01` | `400` with a French message |
+| C6 | Code with space, accent, `%`, under 3 or over 20 characters | `400` |
+| C7 | Deactivate own code | `200`, `active: false`; second call still `200` |
+| C8 | Deactivate another shop's coupon id | `404` |
+
+- [ ] Customer applies the code at **that shop's** checkout → discount on the
+      product subtotal only; taxes and delivery unchanged.
+- [ ] Same code at **another shop** → "Ce code promo ne s'applique pas à cette boutique".
+- [ ] Code with `usageLimit: 1` → second order refused; the list shows "Utilisé 1 fois sur 1" and "Terminé".
+- [ ] Deactivated or expired code → refused at checkout.
+- [ ] After an order with a coupon, `used_count` went up by one (done inside `order_place`).
+- [ ] In Stripe: the merchant receives the discounted total minus 12 % of the
+      **full** subtotal — i.e. the merchant funds the discount. Confirm this is
+      what the client wants; the in-app note tells merchants so.
+
+Not built: editing a code, a per-customer limit, platform-funded coupons, an
+admin view of all coupons.
+
+---
+
+## 5. Release steps once all pass
 
 1. Deploy the API to Vercel **after** the migration is applied.
 2. Ship the app change: OTA (`npm run update:prod`, iOS) — no native change was made.

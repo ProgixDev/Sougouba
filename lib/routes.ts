@@ -37,6 +37,8 @@ export const routes = {
   businessAnalytics: '/(business)/(tabs)/analytics',
   businessProfile: '/(business)/(tabs)/profile',
   businessProductNew: '/(business)/product/new',
+  /** The merchant's own promo codes: the list and the form that adds to it. */
+  businessCoupons: '/(business)/coupons',
   businessSignup: '/(business)/signup',
   /** Post-registration confirmation — separate so the form can't be back-navigated into. */
   businessSignupConfirmed: '/(business)/signup-confirmed',

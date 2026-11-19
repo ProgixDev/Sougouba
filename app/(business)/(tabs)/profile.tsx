@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Clock, Clock3, LogOut, MapPin, Moon, Receipt, Star, Store, Sun, Trash2, Truck } from 'lucide-react-native';
+import { ChevronRight, Clock, Clock3, LogOut, MapPin, Moon, Receipt, Star, Store, Sun, TicketPercent, Trash2, Truck } from 'lucide-react-native';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { CounterHeader, DeliveryGrid } from '@/components/business';
@@ -154,6 +154,30 @@ export default function BusinessProfileScreen() {
             ) : null}
           </View>
         )}
+
+        {approved && vendor ? (
+          <Reveal delay={90} className="mt-4 mx-5 rounded-[20px] bg-card overflow-hidden">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('business.coupons.title')}
+              onPress={() => router.push(routes.businessCoupons)}
+              className="flex-row items-center gap-3 p-4 active:bg-muted"
+            >
+              <View className="w-9 h-9 items-center justify-center rounded-full bg-muted">
+                <TicketPercent size={17} color={colors.mutedForeground} strokeWidth={2} />
+              </View>
+              <View className="flex-1 gap-0.5">
+                <Text variant="caption" weight="semibold">
+                  {t('business.coupons.title')}
+                </Text>
+                <Text variant="caption" tone="muted" className="text-[12px]">
+                  {t('business.coupons.rowHint')}
+                </Text>
+              </View>
+              <ChevronRight size={17} color={colors.mutedForeground} strokeWidth={2} />
+            </Pressable>
+          </Reveal>
+        ) : null}
 
         {/* What selling here costs, stated once where a merchant would look for
             it (CDC addendum v1.1, §05). Both charges apply — the subscription is
