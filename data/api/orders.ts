@@ -187,6 +187,14 @@ export async function openDispute(
   return (await tryPost<Order>(`/orders/${orderId}/dispute`, input)) ?? undefined;
 }
 
+/** Rates a delivered order — once. A second call is a 409 with a sentence to show. */
+export async function submitReview(
+  orderId: ID,
+  input: { vendorRating: number; courierRating?: number; comment?: string }
+): Promise<Order | undefined> {
+  return (await tryPost<Order>(`/orders/${orderId}/review`, input)) ?? undefined;
+}
+
 export async function replyToDispute(orderId: ID, message: string): Promise<Order | undefined> {
   return (await tryPost<Order>(`/vendors/me/orders/${orderId}/dispute/reply`, { message })) ?? undefined;
 }

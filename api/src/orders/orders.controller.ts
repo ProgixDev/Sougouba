@@ -10,10 +10,12 @@ import {
   openDisputeSchema,
   orderQuerySchema,
   placeOrderSchema,
+  submitReviewSchema,
   type CartInput,
   type OpenDisputeInput,
   type OrderQuery,
   type PlaceOrderInput,
+  type SubmitReviewInput,
 } from './dto/order.dto.js';
 import { OrdersService } from './orders.service.js';
 
@@ -87,5 +89,14 @@ export class OrdersController {
     @Body(new ZodValidationPipe(openDisputeSchema)) body: OpenDisputeInput
   ) {
     return this.orders.openDispute(userId, id, body);
+  }
+
+  @Post(':id/review')
+  submitReview(
+    @CurrentUser() userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(submitReviewSchema)) body: SubmitReviewInput
+  ) {
+    return this.orders.submitReview(userId, id, body);
   }
 }

@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { DisputeCard } from '@/components/business';
 import { OrderStatusTimeline } from '@/components/customer';
 import { useThemeColors } from '@/hooks/useColorScheme';
-import { Badge, BackHeader, Button, EmptyState, PriceSummary, Skeleton, Text } from '@/components/ui';
+import { Badge, BackHeader, Button, EmptyState, PriceSummary, Skeleton, StarRating, Text } from '@/components/ui';
 import { ordersApi } from '@/data/api';
 import type { Courier, Order } from '@/data/types';
 import { customerName } from '@/lib/customerNames';
@@ -149,6 +149,19 @@ export default function BusinessOrderDetailScreen() {
             </View>
 
             {order.dispute ? <DisputeCard dispute={order.dispute} onReply={reply} /> : null}
+
+            {order.review ? (
+              <Section title={t('business.orderDetail.customerReview')}>
+                <View className="gap-2">
+                  <StarRating value={order.review.vendorRating} size={18} />
+                  {order.review.comment ? (
+                    <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
+                      {order.review.comment}
+                    </Text>
+                  ) : null}
+                </View>
+              </Section>
+            ) : null}
 
             <Section title={t('business.metrics.customer')}>
               <View className="flex-row items-center gap-3">

@@ -134,6 +134,7 @@ export const business = {
   orderDetail: {
     notFoundTitle: 'Commande introuvable',
     notFoundBody: 'Cette commande n’existe plus.',
+    customerReview: 'Avis du client',
     seeOrders: 'Voir les commandes',
     deliveryAddress: 'Adresse de livraison',
     toPrepare: 'À préparer',

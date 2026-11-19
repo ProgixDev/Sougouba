@@ -1,18 +1,19 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { MapPin, MessageSquareWarning, ReceiptText, Sparkles, Store } from 'lucide-react-native';
+import { MapPin, MessageSquareWarning, ReceiptText, Sparkles, Star, Store } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CourierTrackingCard, DisputeSheet, OrderStatusTimeline } from '@/components/customer';
+import { CourierTrackingCard, DisputeSheet, OrderStatusTimeline, ReviewSheet } from '@/components/customer';
+import type { ReviewInput } from '@/components/customer';
 import { DeliveryMap } from '@/components/map';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useDeliveryProgress } from '@/hooks/useDeliveryProgress';
-import { Badge, BackHeader, Button, EmptyState, PriceSummary, Reveal, Skeleton, Text } from '@/components/ui';
+import { Badge, BackHeader, Button, EmptyState, PriceSummary, Reveal, Skeleton, StarRating, Text } from '@/components/ui';
 import { loyaltyApi, ordersApi, vendorsApi } from '@/data/api';
 import type { Courier, DisputeReason, Order, Vendor } from '@/data/types';
 import { formatCad, formatDate, formatTime } from '@/lib/format';
-import { canOpenDispute, disputeReasonKey } from '@/lib/disputes';
+import { canOpenDispute, canReview, disputeReasonKey } from '@/lib/disputes';
 import { useT } from '@/lib/i18n/useT';
 import { isActiveStatus, orderStatusKey, orderStatusTone } from '@/lib/orderStatus';
 import { routes } from '@/lib/routes';
@@ -28,6 +29,7 @@ export default function OrderDetailScreen() {
   const [courier, setCourier] = useState<Courier | null>(null);
   const [loading, setLoading] = useState(true);
   const [reporting, setReporting] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
 
   // The courier's position is their phone's GPS, polled on its own below; the
   // order poll only has to catch *status* changes — a pickup, a delivery —
@@ -116,6 +118,15 @@ export default function OrderDetailScreen() {
     const updated = await ordersApi.openDispute(order.id, { reason, message });
     if (updated) setOrder(updated);
     setReporting(false);
+  }
+
+  // Not caught here: a refusal (already rated, not delivered) is shown inside
+  // the sheet, which stays open so the shopper is not left wondering.
+  async function review(input: ReviewInput) {
+    if (!order) return;
+    const updated = await ordersApi.submitReview(order.id, input);
+    if (updated) setOrder(updated);
+    setReviewing(false);
   }
 
   return (
@@ -207,6 +218,32 @@ export default function OrderDetailScreen() {
             <Section title={t('common.tracking')}>
               <OrderStatusTimeline order={order} courierName={courier?.fullName} />
             </Section>
+
+            {order.review ? (
+              <Section title={t('customer.orderDetail.yourReview')}>
+                <View className="gap-3">
+                  <View className="flex-row items-center justify-between gap-3">
+                    <Text variant="caption" weight="semibold" numberOfLines={1} className="flex-1">
+                      {vendor?.name ?? t('customer.orderDetail.reviewShop')}
+                    </Text>
+                    <StarRating value={order.review.vendorRating} size={16} />
+                  </View>
+                  {order.review.courierRating ? (
+                    <View className="flex-row items-center justify-between gap-3">
+                      <Text variant="caption" weight="semibold" numberOfLines={1} className="flex-1">
+                        {courier?.fullName ?? t('customer.orderDetail.reviewCourier')}
+                      </Text>
+                      <StarRating value={order.review.courierRating} size={16} />
+                    </View>
+                  ) : null}
+                  {order.review.comment ? (
+                    <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
+                      {order.review.comment}
+                    </Text>
+                  ) : null}
+                </View>
+              </Section>
+            ) : null}
 
             {order.dispute ? (
               <Section title={t('customer.orderDetail.issueReported')}>
@@ -314,6 +351,16 @@ export default function OrderDetailScreen() {
                 />
               </View>
             </Section>
+            {canReview(order) ? (
+              <Button
+                label={t('customer.orderDetail.rateOrder')}
+                variant="primary"
+                size="md"
+                fullWidth
+                icon={<Star size={17} color={colors.primaryForeground} strokeWidth={2.2} />}
+                onPress={() => setReviewing(true)}
+              />
+            ) : null}
             {canOpenDispute(order) ? (
               <Button
                 label={t('customer.orderDetail.reportProblem')}
@@ -328,6 +375,13 @@ export default function OrderDetailScreen() {
         )}
       </ScrollView>
 
+      <ReviewSheet
+        visible={reviewing}
+        vendorName={vendor?.name ?? t('common.genericShop')}
+        courierName={order?.delivery ? (courier?.fullName ?? t('customer.orderDetail.reviewCourier')) : undefined}
+        onClose={() => setReviewing(false)}
+        onSubmit={review}
+      />
       <DisputeSheet
         visible={reporting}
         onClose={() => setReporting(false)}

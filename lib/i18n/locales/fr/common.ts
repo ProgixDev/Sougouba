@@ -98,6 +98,10 @@ export const common = {
     darkModeA11y: 'Activer le mode sombre',
     language: 'Langue',
   },
+  rating: {
+    /** Read aloud for each star, and for a read-only row. */
+    value: '%{value} sur 5',
+  },
   /** One wording for the three profiles: the consequence is the same whatever the role. */
   deleteAccount: {
     action: 'Supprimer mon compte',

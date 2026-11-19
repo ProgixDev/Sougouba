@@ -84,3 +84,21 @@ export const replyDisputeSchema = z.object({
 });
 
 export type ReplyDisputeInput = z.infer<typeof replyDisputeSchema>;
+
+// ── reviews ─────────────────────────────────────────────────────────────────
+
+const stars = (message: string) => z.number({ message }).int(message).min(1, message).max(5, message);
+
+/**
+ * The shop is always rated; the courier only if the shopper has something to
+ * say about them. Same bounds as the table's check constraints
+ * (`drizzle/0036_order_reviews.sql`), stated here so a bad value is a 400 with
+ * a sentence rather than a constraint violation and a 500.
+ */
+export const submitReviewSchema = z.object({
+  vendorRating: stars('Donnez une note de 1 à 5 au commerce'),
+  courierRating: stars('La note du livreur doit être de 1 à 5').optional(),
+  comment: z.string().trim().max(1000, 'Trop long').optional(),
+});
+
+export type SubmitReviewInput = z.infer<typeof submitReviewSchema>;

@@ -134,6 +134,7 @@ export const business: Widen<typeof reference> = {
   orderDetail: {
     notFoundTitle: 'Order not found',
     notFoundBody: 'This order no longer exists.',
+    customerReview: 'Customer review',
     seeOrders: 'See orders',
     deliveryAddress: 'Delivery address',
     toPrepare: 'To prepare',

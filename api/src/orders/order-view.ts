@@ -29,24 +29,72 @@ import { unwrap } from '../db/unwrap.js';
  */
 export type OrderView = Record<string, unknown> & { id: string };
 
+/**
+ * Whose eyes a review is being shown to. The shopper wrote it and sees all of
+ * it; the shop sees its own mark and the comment, never what was said about the
+ * courier. Left out (the courier's reads, the admin's), no review is attached.
+ */
+export type ReviewAudience = 'customer' | 'merchant';
+
+type ReviewRow = {
+  orderId: string;
+  vendorRating: number;
+  courierRating: number | null;
+  comment: string | null;
+  createdAt: string;
+};
+
+/** PostgREST's and Postgres's "no such table" — see `reviewsFor`. */
+const MISSING_TABLE = new Set(['PGRST205', '42P01']);
+let warnedMissingReviews = false;
+
+/**
+ * The reviews on these orders.
+ *
+ * ⚠️ Unlike every other read here, a missing table is tolerated: it answers "no
+ * reviews" instead of failing. This sits on the path of *every* order read, and
+ * the code can reach a database before `0036_order_reviews.sql` does — at which
+ * point a strict read would take down order history, tracking and the shop's
+ * queue to protect a feature nobody can use yet. Any other error still throws.
+ * Delete the tolerance once the migration is applied everywhere.
+ */
+async function reviewsFor(db: Db, orderIds: string[]): Promise<ReviewRow[]> {
+  const { data, error } = await db
+    .from('order_reviews')
+    .select('orderId:order_id, vendorRating:vendor_rating, courierRating:courier_rating, comment, createdAt:created_at')
+    .in('order_id', orderIds);
+  if (error) {
+    if (MISSING_TABLE.has(error.code)) {
+      if (!warnedMissingReviews) {
+        warnedMissingReviews = true;
+        console.warn('[reviews] order_reviews does not exist yet — apply drizzle/0036_order_reviews.sql');
+      }
+      return [];
+    }
+    return unwrap<ReviewRow[]>(Promise.resolve({ data: null, error }));
+  }
+  return data ?? [];
+}
+
 type Parts = {
   items: unknown[];
   statusHistory: { status: string; at: string }[];
   dispute: unknown;
   delivery: Record<string, unknown> | null;
   courierIssue: unknown;
+  review: unknown;
 };
 
 export async function hydrateOrders(
   db: Db,
   rawRows: Record<string, unknown>[],
-  opts: { revealPin: boolean; courierCard: boolean }
+  opts: { revealPin: boolean; courierCard: boolean; review?: ReviewAudience }
 ): Promise<OrderView[]> {
   if (rawRows.length === 0) return [];
   const rows = camelize<(Record<string, unknown> & { id: string })[]>(rawRows);
   const ids = rows.map((r) => r.id);
 
-  const [items, history, disputes, deliveries, issues] = await Promise.all([
+  const [items, history, disputes, deliveries, issues, reviews] = await Promise.all([
     unwrap<{ orderId: string; productId: string; name: string; qty: number; unitPriceCad: string }[]>(
       db
         .from('order_items')
@@ -68,6 +116,7 @@ export async function hydrateOrders(
     unwrap<Record<string, unknown>[]>(
       db.from('courier_issues').select('order_id, reason, message, at, status').in('order_id', ids)
     ),
+    opts.review ? reviewsFor(db, ids) : Promise.resolve([] as ReviewRow[]),
   ]);
 
   const courierIds = [...new Set(deliveries.map((d) => d.courier_id as string))];
@@ -86,7 +135,7 @@ export async function hydrateOrders(
 
   const parts = new Map<string, Parts>();
   for (const id of ids) {
-    parts.set(id, { items: [], statusHistory: [], dispute: null, delivery: null, courierIssue: null });
+    parts.set(id, { items: [], statusHistory: [], dispute: null, delivery: null, courierIssue: null, review: null });
   }
   for (const item of items) {
     parts.get(item.orderId)!.items.push({
@@ -118,6 +167,10 @@ export async function hydrateOrders(
     const { orderId, ...rest } = issue;
     parts.get(orderId)!.courierIssue = rest;
   }
+  for (const review of reviews) {
+    const { orderId, courierRating, ...rest } = review;
+    parts.get(orderId)!.review = opts.review === 'customer' ? { ...rest, courierRating } : rest;
+  }
   // Oldest first, so the timeline reads top to bottom. `at` is an ISO string —
   // PostgREST never hands back a Date.
   for (const p of parts.values()) p.statusHistory.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
@@ -147,6 +200,7 @@ export async function hydrateOrders(
       dispute: p.dispute,
       delivery: p.delivery,
       courierIssue: p.courierIssue,
+      review: p.review,
     };
   });
 }

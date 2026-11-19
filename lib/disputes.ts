@@ -43,6 +43,14 @@ export function canOpenDispute(order: Order): boolean {
 }
 
 /**
+ * Whether the shopper can still rate this order: delivered, and not rated yet.
+ * A cancelled order has nothing to rate — what went wrong there is a dispute.
+ */
+export function canReview(order: Order): boolean {
+  return order.status === 'delivered' && !order.review;
+}
+
+/**
  * One line for a list row — what the merchant sees before opening the ticket.
  *
  * Takes `t` rather than returning a `Message` because it *composes*: the

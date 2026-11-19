@@ -88,6 +88,9 @@ export const common: Widen<typeof reference> = {
     darkModeA11y: 'Turn on dark mode',
     language: 'Language',
   },
+  rating: {
+    value: '%{value} out of 5',
+  },
   deleteAccount: {
     action: 'Delete my account',
     confirmTitle: 'Delete your account?',

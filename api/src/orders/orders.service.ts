@@ -20,6 +20,7 @@ import type {
   OrderQuery,
   PlaceOrderInput,
   ReplyDisputeInput,
+  SubmitReviewInput,
 } from './dto/order.dto.js';
 import { hydrateOrders } from './order-view.js';
 import { assertTransition, isActiveStatus, type OrderStatus, type StatusActor } from './order-status.js';
@@ -328,7 +329,11 @@ export class OrdersService {
     const raw = await unwrap<Record<string, unknown> | null>(query.maybeSingle());
     if (!raw) throw new NotFoundException('Order not found');
 
-    const [order] = await hydrateOrders(this.db, [raw], { revealPin: scope === 'customer', courierCard: true });
+    const [order] = await hydrateOrders(this.db, [raw], {
+      revealPin: scope === 'customer',
+      courierCard: true,
+      review: scope,
+    });
     return order;
   }
 
@@ -379,7 +384,11 @@ export class OrdersService {
     if (error) throw unexpectedDbError(error);
 
     return {
-      items: await hydrateOrders(this.db, data ?? [], { revealPin: ownership.column === 'customer_id', courierCard: true }),
+      items: await hydrateOrders(this.db, data ?? [], {
+        revealPin: ownership.column === 'customer_id',
+        courierCard: true,
+        review: ownership.column === 'customer_id' ? 'customer' : 'merchant',
+      }),
       total: count ?? 0,
       limit: query.limit,
       offset: query.offset,
@@ -486,6 +495,38 @@ export class OrdersService {
     return this.byId(userId, orderId, 'merchant');
   }
 
+  // ── reviews ───────────────────────────────────────────────────────────────
+
+  /**
+   * The shopper rates a delivered order: the shop always, the courier if they
+   * choose to. Once per order, and not editable — a mark a shopper can revise
+   * after the shop has answered a dispute is a bargaining chip, not a review.
+   *
+   * Every rule lives in `order_review_submit` (`drizzle/0036_order_reviews.sql`)
+   * because the insert and the two refreshed averages have to be one
+   * transaction, and the function is the only place this API has one.
+   */
+  async submitReview(customerId: string, orderId: string, input: SubmitReviewInput) {
+    await unwrapRpc<void>(
+      this.db.rpc('order_review_submit', {
+        p_customer_id: customerId,
+        p_order_id: orderId,
+        p_vendor_rating: input.vendorRating,
+        p_courier_rating: input.courierRating,
+        p_comment: input.comment || undefined,
+      }),
+      (error) => {
+        if (error.code === NOT_FOUND) throw new NotFoundException('Order not found');
+        if (error.code === NOT_DELIVERED) {
+          throw new BadRequestException('Vous pourrez noter cette commande une fois livrée.');
+        }
+        if (error.code === UNIQUE_VIOLATION) throw new ConflictException('Vous avez déjà noté cette commande.');
+        throw unexpectedDbError(error);
+      }
+    );
+    return this.byId(customerId, orderId, 'customer');
+  }
+
   /** Exposed for Phase 5/6 to reuse the same visibility rule. */
   isActive(status: OrderStatus): boolean {
     return isActiveStatus(status);
@@ -514,6 +555,9 @@ const SOLD_OUT = 'SGB01';
 const COUPON_EXHAUSTED = 'SGB02';
 const COUPON_ALREADY_USED = 'SGB03';
 const STATUS_MOVED = 'SGB04';
+// `order_review_submit` (`drizzle/0036_order_reviews.sql`).
+const NOT_FOUND = 'SGB05';
+const NOT_DELIVERED = 'SGB09';
 /** Postgres's own — https://www.postgresql.org/docs/current/errcodes-appendix.html */
 const UNIQUE_VIOLATION = '23505';
 

@@ -888,6 +888,68 @@ export type Database = {
           },
         ]
       }
+      order_reviews: {
+        Row: {
+          comment: string | null
+          courier_id: string | null
+          courier_rating: number | null
+          created_at: string
+          customer_id: string
+          order_id: string
+          vendor_id: string
+          vendor_rating: number
+        }
+        Insert: {
+          comment?: string | null
+          courier_id?: string | null
+          courier_rating?: number | null
+          created_at?: string
+          customer_id: string
+          order_id: string
+          vendor_id: string
+          vendor_rating: number
+        }
+        Update: {
+          comment?: string | null
+          courier_id?: string | null
+          courier_rating?: number | null
+          created_at?: string
+          customer_id?: string
+          order_id?: string
+          vendor_id?: string
+          vendor_rating?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_reviews_courier_id_fkey"
+            columns: ["courier_id"]
+            isOneToOne: false
+            referencedRelation: "couriers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_reviews_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_reviews_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: true
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_reviews_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_status_history: {
         Row: {
           at: string
@@ -1971,6 +2033,16 @@ export type Database = {
           p_order_id: string
           p_reason: string
           p_stripe_refund_id: string
+        }
+        Returns: undefined
+      }
+      order_review_submit: {
+        Args: {
+          p_comment?: string
+          p_courier_rating?: number
+          p_customer_id: string
+          p_order_id: string
+          p_vendor_rating: number
         }
         Returns: undefined
       }

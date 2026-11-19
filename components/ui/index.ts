@@ -19,6 +19,7 @@ export { SectionHeader } from './SectionHeader';
 export { SelectField } from './SelectField';
 export type { SelectOption } from './SelectField';
 export { PriceSummary } from './PriceSummary';
+export { StarRating } from './StarRating';
 export { StatPill } from './StatPill';
 export { TabBarBackground } from './TabBarBackground';
 export { TabBarIcon } from './TabBarIcon';

@@ -318,6 +318,20 @@ export interface Order {
   delivery?: OrderDelivery;
   /** Absent unless the courier flagged a problem on the road. */
   courierIssue?: CourierIssue;
+  /** Absent until the shopper rates the order. Null-ish for a courier, who is never shown it. */
+  review?: OrderReview | null;
+}
+
+/**
+ * What the shopper thought, once the order arrived. One per order and never
+ * edited. `courierRating` is only present in the shopper's own view — a shop
+ * sees its mark and the comment, not what was said about the courier.
+ */
+export interface OrderReview {
+  vendorRating: number;
+  courierRating?: number | null;
+  comment: string | null;
+  createdAt: string;
 }
 
 /** How a livreur gets around. Sets the speed the delivery simulation runs at. */
