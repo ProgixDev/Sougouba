@@ -340,15 +340,14 @@ export async function getVendorStats(_vendorId: ID): Promise<VendorStats> {
 }
 
 /**
- * ⚠️ **No endpoint yet.** The home screen's "Articles les + vendus" ranked
- * products by units sold across every shop; the API has that aggregate only
- * per-merchant (`/vendors/me/analytics`), behind the merchant's own token.
+ * The platform's best sellers over the last 30 days, most units first — ids
+ * only, for the home screen's "Articles les + vendus" rail.
  *
- * A platform-wide version is a small addition — `admin_overview` already does
- * the same shape — but it does not exist, so this returns an empty list and the
- * home screen falls back to its deals ordering, exactly as it does when the
- * catalogue has no sales to rank.
+ * Only products a shopper can buy right now are ranked (approved shop, on
+ * sale, in stock). An empty list — no sales yet, or the API's database
+ * function not deployed — makes the home screen fill the rail with deals.
  */
-export async function getTopProductIds(_limit = 6): Promise<ID[]> {
-  return [];
+export async function getTopProductIds(limit = 6): Promise<ID[]> {
+  const { ids } = await api<{ ids: ID[] }>('/products/best-sellers', { anonymous: true, query: { limit } });
+  return ids;
 }

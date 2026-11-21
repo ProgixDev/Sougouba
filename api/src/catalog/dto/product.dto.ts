@@ -100,6 +100,13 @@ export const productIdsSchema = z.object({
 
 export type ProductIdsQuery = z.infer<typeof productIdsSchema>;
 
+/** The home screen's best-seller rail. Small on purpose: it is one rail, not a page. */
+export const bestSellersQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(20).default(6),
+});
+
+export type BestSellersQuery = z.infer<typeof bestSellersQuerySchema>;
+
 // ── merchant writes ─────────────────────────────────────────────────────────
 
 /**

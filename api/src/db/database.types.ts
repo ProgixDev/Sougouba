@@ -2062,6 +2062,13 @@ export type Database = {
           pending_cad: number
         }[]
       }
+      product_best_sellers: {
+        Args: { p_days?: number; p_limit?: number }
+        Returns: {
+          product_id: string
+          qty: number
+        }[]
+      }
       product_page: {
         Args: {
           p_approved_only?: boolean

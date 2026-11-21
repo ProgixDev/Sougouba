@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
@@ -22,11 +22,44 @@ const PRODUCT_COLUMNS = `id, vendorId:vendor_id, categoryId:category_id, section
   nutritionCalories:nutrition_calories, nutritionProteinG:nutrition_protein_g,
   nutritionFatG:nutrition_fat_g, nutritionWeightG:nutrition_weight_g`;
 
+/** PostgREST's "no such function" and Postgres's own — `0037` not applied yet. */
+const MISSING_FUNCTION = new Set(['PGRST202', '42883']);
+
+/** The window the home screen ranks over: what is selling now, not since launch. */
+const BEST_SELLER_DAYS = 30;
+
 @Injectable()
 export class ProductsService {
+  private readonly logger = new Logger(ProductsService.name);
+  private warnedMissingBestSellers = false;
+
   constructor(@Inject(DB) private readonly db: Db) {}
 
   // ── reads ─────────────────────────────────────────────────────────────────
+
+  /**
+   * The platform's best sellers, most units first — ids only; the home screen
+   * already holds the products.
+   *
+   * Answers `[]` while `product_best_sellers` does not exist (migration `0037`
+   * not applied): the home screen treats an empty list as "nothing ranked yet"
+   * and fills the rail with deals, so the screen stays whole. Any other error
+   * still throws.
+   */
+  async bestSellerIds(limit: number): Promise<string[]> {
+    const { data, error } = await this.db.rpc('product_best_sellers', { p_limit: limit, p_days: BEST_SELLER_DAYS });
+    if (error) {
+      if (MISSING_FUNCTION.has(error.code)) {
+        if (!this.warnedMissingBestSellers) {
+          this.warnedMissingBestSellers = true;
+          this.logger.warn('product_best_sellers does not exist yet — apply drizzle/0037_product_best_sellers.sql');
+        }
+        return [];
+      }
+      return unwrap<string[]>(Promise.resolve({ data: null, error }));
+    }
+    return (data ?? []).map((row) => row.product_id);
+  }
 
   /**
    * `lib/productFilters.ts`'s `applyFilters`, moved into the database.

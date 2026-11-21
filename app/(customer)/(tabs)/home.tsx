@@ -98,8 +98,8 @@ export default function CustomerHomeScreen() {
   }, [vendors]);
 
   /**
-   * Actually the best sellers, counted over every order the platform has taken
-   * (`ordersApi.getTopProductIds`) — the section used to be headed "Populaires"
+   * Actually the best sellers, counted over the platform's last 30 days of
+   * orders (`ordersApi.getTopProductIds`) — the section used to be headed "Populaires"
    * over a list sorted by whether an item carried a struck-through price.
    *
    * A brand-new catalogue has no sales to rank, and an empty rail under

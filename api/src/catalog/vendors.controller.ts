@@ -3,10 +3,12 @@ import { ApiTags } from '@nestjs/swagger';
 
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import {
+  bestSellersQuerySchema,
   productIdsSchema,
   productListSchema,
   productQuerySchema,
   productSearchSchema,
+  type BestSellersQuery,
   type ProductIdsQuery,
   type ProductListQuery,
   type ProductQuery,
@@ -85,6 +87,18 @@ export class CatalogController {
   @UsePipes(new ZodValidationPipe(productIdsSchema))
   productsByIds(@Query() query: ProductIdsQuery) {
     return this.products.byIds(query.ids);
+  }
+
+  /**
+   * The best sellers of the last 30 days, platform-wide — ids, most units
+   * first. Public, like the rest of the catalogue: the ranking is what the
+   * home screen shows everyone. Above `products/:id` for the same reason as
+   * `by-ids`.
+   */
+  @Get('products/best-sellers')
+  @UsePipes(new ZodValidationPipe(bestSellersQuerySchema))
+  async bestSellers(@Query() query: BestSellersQuery) {
+    return { ids: await this.products.bestSellerIds(query.limit) };
   }
 
   @Get('products/search')
