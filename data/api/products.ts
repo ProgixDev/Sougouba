@@ -115,6 +115,16 @@ export async function searchProducts(query: string): Promise<Product[]> {
   return page.items.map(toProduct);
 }
 
+/**
+ * The signed-in merchant's own shelves, **at any shop status** — the merchant
+ * screens' read. `getProductsByVendor` is the shopper's view and answers a
+ * pending shop with a 404, which is exactly the state a new merchant is in.
+ */
+export async function getMyProducts(): Promise<Product[]> {
+  const page = await api<Page<any>>('/vendors/me/products', { query: { limit: ALL } });
+  return page.items.map(toProduct);
+}
+
 export async function createProduct(input: Omit<Product, 'id'>): Promise<Product> {
   // `vendorId` is not sent: the API takes the shop from the token, and letting
   // a client name the shop it is stocking is how a product ends up on someone

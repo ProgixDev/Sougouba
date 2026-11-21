@@ -42,7 +42,7 @@ export default function BusinessCatalogScreen() {
   const load = useCallback(async () => {
     if (!vendor) return;
     const [nextProducts, nextCategories] = await Promise.all([
-      productsApi.getProductsByVendor(vendor.id),
+      productsApi.getMyProducts(),
       categoriesApi.getCategories(),
     ]);
     setProducts(nextProducts);

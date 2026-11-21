@@ -39,7 +39,7 @@ export default function BusinessDashboardScreen() {
     if (!vendor) return;
     const [nextOrders, nextProducts] = await Promise.all([
       ordersApi.getOrdersByVendor(vendor.id),
-      productsApi.getProductsByVendor(vendor.id),
+      productsApi.getMyProducts(),
     ]);
     setOrders(nextOrders);
     setProducts(nextProducts);
