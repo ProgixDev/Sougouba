@@ -134,7 +134,7 @@ function Members({
 }) {
   const toast = useToast();
   const { me } = useAdmin();
-  const [adding, setAdding] = useState(false);
+  const [dialog, setDialog] = useState<AdminAccount | 'new' | null>(null);
   const [created, setCreated] = useState<{ email: string; password: string; role: string } | null>(null);
   const [revoking, setRevoking] = useState<AdminAccount | null>(null);
   const [busy, setBusy] = useState(false);
@@ -201,19 +201,20 @@ function Members({
         </Card>
       )}
 
-      {manage && !adding && (
-        <Button className="self-start" onClick={() => setAdding(true)}>
+      {manage && (
+        <Button className="self-start" onClick={() => setDialog('new')}>
           <UserPlus size={15} /> Ajouter un administrateur
         </Button>
       )}
-      {manage && adding && (
-        <AddAdmin
+      {dialog !== null && (
+        <AccessDialog
+          admin={dialog === 'new' ? null : dialog}
           roles={roles}
           catalogue={catalogue}
-          onCancel={() => setAdding(false)}
-          onCreated={(result) => {
-            setCreated(result);
-            setAdding(false);
+          onClose={() => setDialog(null)}
+          onDone={({ created: made }) => {
+            if (made) setCreated(made);
+            setDialog(null);
             onChanged();
           }}
         />
@@ -260,8 +261,10 @@ function Members({
                       <select
                         value={a.role?.id ?? ''}
                         disabled={busy}
-                        onChange={(e) => changeRole(a, e.target.value)}
-                        className={`${SELECT} max-w-[200px]`}
+                        onChange={(e) =>
+                          e.target.value === CUSTOM ? setDialog(a) : changeRole(a, e.target.value)
+                        }
+                        className={`${SELECT} max-w-[220px]`}
                         aria-label={`Rôle de ${a.fullName}`}
                       >
                         {roles.map((r) => (
@@ -269,6 +272,7 @@ function Members({
                             {r.name}
                           </option>
                         ))}
+                        <option value={CUSTOM}>Personnaliser…</option>
                       </select>
                     ) : (
                       <Badge tone={a.role?.slug === 'owner' ? 'secondary' : 'neutral'}>{a.role?.name ?? '—'}</Badge>
@@ -312,85 +316,230 @@ function Members({
   );
 }
 
-function AddAdmin({
+const CUSTOM = '__custom';
+
+/**
+ * Who gets access, and to exactly what — one dialog for a new administrator
+ * and for changing an existing one's access.
+ *
+ * Picking a role ticks its modules; ticking or unticking anything turns the
+ * choice into "Personnalisé". On save, ticks that match an existing role use
+ * that role; anything else becomes a custom role named after the person
+ * ("Personnalisé — Awa Diallo"), listed in the Rôles tab like any other — so
+ * every administrator still has exactly one role, and every permission still
+ * lives in one place.
+ */
+function AccessDialog({
+  admin,
   roles,
   catalogue,
-  onCancel,
-  onCreated,
+  onClose,
+  onDone,
 }: {
+  /** Null to add someone; an administrator to change their access. */
+  admin: AdminAccount | null;
   roles: AdminRole[];
   catalogue: PermissionGroup[];
-  onCancel: () => void;
-  onCreated: (result: { email: string; password: string; role: string }) => void;
+  onClose: () => void;
+  onDone: (result: { created?: { email: string; password: string; role: string } }) => void;
 }) {
   const toast = useToast();
-  const [fullName, setFullName] = useState('');
+  const [fullName, setFullName] = useState(admin?.fullName ?? '');
   const [email, setEmail] = useState('');
   // The least-powerful built-in role first: access is granted, not assumed.
-  const [roleId, setRoleId] = useState(roles.find((r) => r.slug === 'readonly')?.id ?? roles[0]?.id ?? '');
+  const initialRole = admin?.role
+    ? roles.find((r) => r.id === admin.role!.id)
+    : (roles.find((r) => r.slug === 'readonly') ?? roles[0]);
+  const [roleId, setRoleId] = useState(initialRole?.id ?? CUSTOM);
+  const [selected, setSelected] = useState<Set<string>>(new Set(initialRole?.permissions ?? ['dashboard.view']));
   const [busy, setBusy] = useState(false);
-  const role = roles.find((r) => r.id === roleId);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  /** The role whose permissions are exactly these ticks, if one exists. */
+  function matchingRole(set: Set<string>) {
+    return roles.find((r) => r.permissions.length === set.size && r.permissions.every((p) => set.has(p)));
+  }
+
+  function pickRole(id: string) {
+    setRoleId(id);
+    const role = roles.find((r) => r.id === id);
+    if (role) setSelected(new Set(role.permissions));
+  }
+
+  function update(next: Set<string>) {
+    setSelected(next);
+    setRoleId(matchingRole(next)?.id ?? CUSTOM);
+  }
+
+  /** A module's checkbox is its "view"; turning it off takes its action with it. */
+  function toggleModule(group: PermissionGroup) {
+    const view = group.permissions[0].key;
+    const next = new Set(selected);
+    if (next.has(view)) group.permissions.forEach((p) => next.delete(p.key));
+    else next.add(view);
+    update(next);
+  }
+
+  /** An action brings its view: acting on something you cannot see makes no sense. */
+  function toggleAction(group: PermissionGroup, key: string) {
+    const next = new Set(selected);
+    if (next.has(key)) next.delete(key);
+    else {
+      next.add(key);
+      next.add(group.permissions[0].key);
+    }
+    update(next);
+  }
+
+  const modulesOn = catalogue.filter((g) => g.permissions.some((p) => selected.has(p.key))).length;
+
+  async function resolveRoleId(): Promise<{ id: string; name: string }> {
+    const existing = roles.find((r) => r.id === roleId) ?? matchingRole(selected);
+    if (existing) return { id: existing.id, name: existing.name };
+    const base = `Personnalisé — ${fullName.trim()}`.slice(0, 40);
+    const input = {
+      description: `Accès sur mesure pour ${fullName.trim()}.`,
+      permissions: [...selected],
+    };
+    try {
+      const role = await createRole({ ...input, name: base });
+      return { id: role.id, name: role.name };
+    } catch {
+      // The name is taken (same person, or a namesake): make it distinct.
+      const role = await createRole({ ...input, name: `${base.slice(0, 34)} · ${Math.random().toString(36).slice(2, 6)}` });
+      return { id: role.id, name: role.name };
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     try {
-      const result = await createAdmin({ email: email.trim(), fullName: fullName.trim(), roleId });
-      onCreated({ email: result.admin.email ?? email.trim(), password: result.temporaryPassword, role: role?.name ?? '' });
+      const role = await resolveRoleId();
+      if (admin) {
+        await setAdminRole(admin.id, role.id);
+        toast('success', `Accès de ${admin.fullName} mis à jour — ${role.name}.`);
+        onDone({});
+      } else {
+        const result = await createAdmin({ email: email.trim(), fullName: fullName.trim(), roleId: role.id });
+        onDone({ created: { email: result.admin.email ?? email.trim(), password: result.temporaryPassword, role: role.name } });
+      }
     } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'Création impossible.');
+      toast('error', error instanceof Error ? error.message : 'Enregistrement impossible.');
     }
     setBusy(false);
   }
 
+  const canSubmit = selected.size > 0 && (admin !== null || (fullName.trim().length >= 2 && email.trim().length > 0));
+
   return (
-    <Card className="p-5">
-      <form onSubmit={submit} className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <UserPlus size={17} className="text-primary" />
-            <Text variant="subtitle">Nouvel administrateur</Text>
-          </div>
-          <Input label="Nom" required value={fullName} onChange={(e) => setFullName(e.target.value)} />
-          <Input
-            label="Courriel"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            helper="Une adresse réservée à l’administration — pas un compte client ou commerçant existant."
-          />
-          <label className="flex flex-col gap-1.5">
-            <span className="font-sans text-[0.8125rem] font-semibold">Rôle</span>
-            <select value={roleId} onChange={(e) => setRoleId(e.target.value)} className={SELECT}>
-              {roles.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                  {r.isSystem ? '' : ' (personnalisé)'}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="flex gap-2">
-            <Button type="submit" disabled={busy || fullName.trim().length < 2 || !email.trim() || !roleId}>
-              <ShieldCheck size={15} /> {busy ? 'Création…' : 'Créer l’accès'}
-            </Button>
-            <Button type="button" variant="ghost" onClick={onCancel}>
-              Annuler
-            </Button>
-          </div>
-        </div>
-        {role && (
-          <div className="flex flex-col gap-2 rounded-lg bg-muted/50 p-4">
-            <Text variant="label">Ce que « {role.name} » peut faire</Text>
-            <Text variant="caption" tone="muted">
-              {role.description}
-            </Text>
-            <PermissionSummary permissions={role.permissions} catalogue={catalogue} />
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={admin ? `Accès de ${admin.fullName}` : 'Ajouter un administrateur'}
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <form onSubmit={submit} className="my-6 flex w-full max-w-2xl flex-col gap-5 rounded-card bg-card p-6 shadow-xl sm:p-8">
+        <Text variant="title">{admin ? `Accès de ${admin.fullName}` : 'Ajouter un administrateur'}</Text>
+
+        {!admin && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Input label="Nom et prénom" required value={fullName} onChange={(e) => setFullName(e.target.value)} />
+            <Input
+              label="Courriel professionnel"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              helper="Une adresse réservée à l’administration."
+            />
           </div>
         )}
+
+        <label className="flex flex-col gap-1.5">
+          <span className="font-sans text-[0.8125rem] font-semibold">Rôle</span>
+          <select value={roleId} onChange={(e) => pickRole(e.target.value)} className={SELECT}>
+            {roles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+                {r.isSystem ? '' : ' (personnalisé)'}
+              </option>
+            ))}
+            <option value={CUSTOM} disabled={roleId !== CUSTOM}>
+              Personnalisé — selon les modules cochés
+            </option>
+          </select>
+          <span className="font-sans text-[0.75rem] text-muted-foreground">
+            {roleId === CUSTOM
+              ? 'Un rôle sur mesure sera créé pour cette personne, visible dans l’onglet Rôles.'
+              : roles.find((r) => r.id === roleId)?.description}
+          </span>
+        </label>
+
+        <div className="flex flex-col gap-2.5">
+          <Text variant="label">
+            Modules autorisés ({modulesOn} / {catalogue.length})
+          </Text>
+          <div className="grid grid-cols-1 gap-2 rounded-lg bg-muted/40 p-3 sm:grid-cols-2">
+            {catalogue.map((group) => {
+              const [view, ...actions] = group.permissions;
+              const on = selected.has(view.key);
+              return (
+                <div
+                  key={group.area}
+                  className={`flex flex-col gap-1.5 rounded-lg border px-3 py-2.5 transition-colors ${
+                    on ? 'border-forest-600/40 bg-card' : 'border-transparent'
+                  }`}
+                >
+                  <label className="flex cursor-pointer items-center gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() => toggleModule(group)}
+                      className="h-4 w-4 cursor-pointer accent-forest-600"
+                    />
+                    <span className="font-sans text-[0.875rem] font-semibold">{group.area}</span>
+                  </label>
+                  {actions.map((action) => (
+                    <label key={action.key} className="ml-6 flex cursor-pointer items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(action.key)}
+                        onChange={() => toggleAction(group, action.key)}
+                        className="h-3.5 w-3.5 cursor-pointer accent-forest-600"
+                      />
+                      <span className="font-sans text-[0.75rem] text-muted-foreground">{action.label}</span>
+                    </label>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+          {selected.has('admins.manage') && (
+            <Text variant="caption" tone="accent">
+              « Administrateurs » permet d’ajouter, retirer et changer les accès de tous — le droit le plus étendu.
+            </Text>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Annuler
+          </Button>
+          <Button type="submit" disabled={busy || !canSubmit}>
+            <ShieldCheck size={15} /> {busy ? 'Enregistrement…' : admin ? 'Enregistrer l’accès' : 'Créer l’accès'}
+          </Button>
+        </div>
       </form>
-    </Card>
+    </div>
   );
 }
 
