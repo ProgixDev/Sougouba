@@ -28,7 +28,13 @@ import {
 import type { Page } from './dto/query.dto.js';
 import { containsPattern } from '../common/sql/like.js';
 import { orIlike } from '../common/sql/postgrest.js';
-import { assertMediaPath, MERCHANT_DOCUMENTS_BUCKET, VENDOR_MEDIA_BUCKET } from './media-paths.js';
+import {
+  assertMediaPath,
+  createMediaUpload,
+  MERCHANT_DOCUMENTS_BUCKET,
+  VENDOR_MEDIA_BUCKET,
+  type MediaImageUploadInput,
+} from './media-paths.js';
 import { toVendor, type VendorResponse, type VendorRow } from './mappers.js';
 import { slugify } from './slugify.js';
 import { SpecialtiesService } from './specialties.controller.js';
@@ -456,6 +462,14 @@ export class VendorsService {
     }
 
     return this.oneOrFail((q) => q.eq('id', vendorId));
+  }
+
+  /**
+   * Somewhere to upload the shop's cover (or logo) photo — see
+   * `createMediaUpload`. The returned path is then sent as `coverUrl`.
+   */
+  async createMediaUpload(userId: string, input: MediaImageUploadInput) {
+    return createMediaUpload(this.db, VENDOR_MEDIA_BUCKET, await this.ownedVendorId(userId), input);
   }
 
   async setHours(userId: string, week: SetHoursInput): Promise<VendorResponse> {

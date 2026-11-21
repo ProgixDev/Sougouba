@@ -1,11 +1,13 @@
 import { File } from 'expo-file-system';
 import { fetch } from 'expo/fetch';
 
+import type { PickedImage } from '../../hooks/useImagePicker';
 import type { PickedDocument } from '../../lib/validation/merchant';
 
 import { ApiError, api, type Page } from '../http';
-import type { Address, ID, Vendor, VendorStatus, VendorType } from '../types';
+import type { Address, ID, Vendor, VendorHours, VendorStatus, VendorType } from '../types';
 import { toVendor } from './mappers';
+import { uploadMediaImage, type MediaImageType } from './media';
 
 /**
  * ⚠️ Every read here returns **approved shops only** — the API enforces it, not
@@ -177,6 +179,31 @@ export async function setVendorStatus(_id: ID, _status: VendorStatus): Promise<V
   throw new Error(
     'setVendorStatus is not available to the app — approving a shop is an administrator action in the back office.'
   );
+}
+
+// ── merchant self-service ───────────────────────────────────────────────────
+
+/** What a merchant may change about their own shop — `updateVendorSchema` on the API. */
+export interface ShopPatch {
+  name?: string;
+  isHalalCertified?: boolean;
+  deliveryEtaMin?: number;
+  /** A Storage path returned by {@link uploadShopCover}, or `''` to remove the photo. */
+  coverUrl?: string;
+}
+
+export async function updateMyShop(patch: ShopPatch): Promise<Vendor> {
+  return toVendor(await api<any>('/vendors/me', { method: 'PATCH', body: patch }));
+}
+
+/** The whole week, all seven days — the API replaces it in one transaction. */
+export async function setMyHours(week: VendorHours[]): Promise<Vendor> {
+  return toVendor(await api<any>('/vendors/me/hours', { method: 'PUT', body: week }));
+}
+
+/** Upload the shop's cover photo and return the Storage path to save as `coverUrl`. */
+export async function uploadShopCover(image: PickedImage, contentType: MediaImageType): Promise<string> {
+  return uploadMediaImage('/vendors/me/media-upload', image, contentType);
 }
 
 // ── test phase ──────────────────────────────────────────────────────────────

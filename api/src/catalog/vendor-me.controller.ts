@@ -19,11 +19,9 @@ import { SupabaseAuthGuard } from '../auth/supabase-auth.guard.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import {
   createProductSchema,
-  productImageUploadSchema,
   productQuerySchema,
   updateProductSchema,
   type CreateProductInput,
-  type ProductImageUploadInput,
   type ProductQuery,
   type UpdateProductInput,
 } from './dto/product.dto.js';
@@ -39,6 +37,7 @@ import {
   type SetHoursInput,
   type UpdateVendorInput,
 } from './dto/vendor.dto.js';
+import { mediaImageUploadSchema, type MediaImageUploadInput } from './media-paths.js';
 import { ProductsService } from './products.service.js';
 import { VendorsService } from './vendors.service.js';
 import { VendorDemoService } from './vendor-demo.service.js';
@@ -97,6 +96,12 @@ export class VendorMeController {
     return this.vendors.update(userId, body);
   }
 
+  /** A signed upload URL for the shop's cover photo; send the returned `path` as `coverUrl`. */
+  @Post('me/media-upload')
+  mediaUpload(@CurrentUser() userId: string, @Body(new ZodValidationPipe(mediaImageUploadSchema)) body: MediaImageUploadInput) {
+    return this.vendors.createMediaUpload(userId, body);
+  }
+
   /** The whole week at once — see `setHoursSchema` for why this is a PUT and not a PATCH. */
   @Put('me/hours')
   setHours(@CurrentUser() userId: string, @Body(new ZodValidationPipe(setHoursSchema)) body: SetHoursInput) {
@@ -142,7 +147,7 @@ export class VendorMeController {
   @Post('me/products/image-upload')
   productImageUpload(
     @CurrentUser() userId: string,
-    @Body(new ZodValidationPipe(productImageUploadSchema)) body: ProductImageUploadInput
+    @Body(new ZodValidationPipe(mediaImageUploadSchema)) body: MediaImageUploadInput
   ) {
     return this.products.createImageUpload(userId, body);
   }

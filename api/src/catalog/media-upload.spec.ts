@@ -2,9 +2,9 @@ import { InternalServerErrorException, NotFoundException } from '@nestjs/common'
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Db } from '../db/client.js';
-import { productImageUploadSchema } from './dto/product.dto.js';
-import { assertMediaPath, PRODUCT_MEDIA_BUCKET } from './media-paths.js';
+import { assertMediaPath, mediaImageUploadSchema, PRODUCT_MEDIA_BUCKET, VENDOR_MEDIA_BUCKET } from './media-paths.js';
 import { ProductsService } from './products.service.js';
+import { VendorsService } from './vendors.service.js';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const VENDOR = '5eed0000-0000-4000-8000-000000000001';
@@ -31,10 +31,10 @@ function fakeDb({ vendor = { id: VENDOR }, uploadError = null as unknown } = {})
 describe('product photo upload', () => {
   it('accepts the formats every phone can draw, and only those', () => {
     for (const contentType of ['image/jpeg', 'image/png', 'image/webp']) {
-      expect(productImageUploadSchema.safeParse({ contentType }).success).toBe(true);
+      expect(mediaImageUploadSchema.safeParse({ contentType }).success).toBe(true);
     }
     for (const contentType of ['image/heic', 'application/pdf', 'image/gif', '']) {
-      expect(productImageUploadSchema.safeParse({ contentType }).success).toBe(false);
+      expect(mediaImageUploadSchema.safeParse({ contentType }).success).toBe(false);
     }
   });
 
@@ -69,5 +69,18 @@ describe('product photo upload', () => {
     await expect(service.createImageUpload(OWNER, { contentType: 'image/jpeg' })).rejects.toBeInstanceOf(
       InternalServerErrorException
     );
+  });
+});
+
+describe('shop cover upload', () => {
+  it("signs a path in the shop's own vendor-media folder, which coverUrl then accepts", async () => {
+    const { db, from, createSignedUploadUrl } = fakeDb();
+    // The cover upload needs neither geocoding nor the specialty list.
+    const service = new VendorsService(db, undefined as never, undefined as never);
+    const upload = await service.createMediaUpload(OWNER, { contentType: 'image/jpeg' });
+
+    expect(from).toHaveBeenCalledWith(VENDOR_MEDIA_BUCKET);
+    expect(createSignedUploadUrl.mock.calls[0][0]).toMatch(new RegExp(`^${VENDOR}/[0-9a-f-]{36}\\.jpg$`));
+    expect(assertMediaPath(upload.path, VENDOR_MEDIA_BUCKET, VENDOR, 'coverUrl')).toBe(upload.path);
   });
 });

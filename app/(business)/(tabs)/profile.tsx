@@ -1,5 +1,21 @@
 import { router } from 'expo-router';
-import { ChevronRight, Clock, Clock3, LogOut, MapPin, Moon, Receipt, Star, Store, Sun, TicketPercent, Trash2, Truck } from 'lucide-react-native';
+import {
+  ChevronRight,
+  Clock,
+  Clock3,
+  LogOut,
+  MapPin,
+  Moon,
+  PencilLine,
+  Receipt,
+  Star,
+  Store,
+  Sun,
+  TicketPercent,
+  Trash2,
+  Truck,
+  type LucideIcon,
+} from 'lucide-react-native';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { CounterHeader, DeliveryGrid } from '@/components/business';
@@ -155,27 +171,28 @@ export default function BusinessProfileScreen() {
           </View>
         )}
 
-        {approved && vendor ? (
+        {/* Editing is open to a pending shop too — hours and a cover are what a
+            merchant sets up while waiting. Promo codes are not: there is
+            nothing to apply them to yet. */}
+        {vendor ? (
           <Reveal delay={90} className="mt-4 mx-5 rounded-[20px] bg-card overflow-hidden">
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('business.coupons.title')}
-              onPress={() => router.push(routes.businessCoupons)}
-              className="flex-row items-center gap-3 p-4 active:bg-muted"
-            >
-              <View className="w-9 h-9 items-center justify-center rounded-full bg-muted">
-                <TicketPercent size={17} color={colors.mutedForeground} strokeWidth={2} />
-              </View>
-              <View className="flex-1 gap-0.5">
-                <Text variant="caption" weight="semibold">
-                  {t('business.coupons.title')}
-                </Text>
-                <Text variant="caption" tone="muted" className="text-[12px]">
-                  {t('business.coupons.rowHint')}
-                </Text>
-              </View>
-              <ChevronRight size={17} color={colors.mutedForeground} strokeWidth={2} />
-            </Pressable>
+            <MenuRow
+              icon={PencilLine}
+              title={t('business.shopEdit.title')}
+              hint={t('business.shopEdit.rowHint')}
+              onPress={() => router.push(routes.businessShopEdit)}
+            />
+            {approved ? (
+              <>
+                <View className="h-px bg-border ml-16" />
+                <MenuRow
+                  icon={TicketPercent}
+                  title={t('business.coupons.title')}
+                  hint={t('business.coupons.rowHint')}
+                  onPress={() => router.push(routes.businessCoupons)}
+                />
+              </>
+            ) : null}
           </Reveal>
         ) : null}
 
@@ -271,6 +288,41 @@ export default function BusinessProfileScreen() {
         </Reveal>
       </ScrollView>
     </View>
+  );
+}
+
+function MenuRow({
+  icon: Icon,
+  title,
+  hint,
+  onPress,
+}: {
+  icon: LucideIcon;
+  title: string;
+  hint: string;
+  onPress: () => void;
+}) {
+  const colors = useThemeColors();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      onPress={onPress}
+      className="flex-row items-center gap-3 p-4 active:bg-muted"
+    >
+      <View className="w-9 h-9 items-center justify-center rounded-full bg-muted">
+        <Icon size={17} color={colors.mutedForeground} strokeWidth={2} />
+      </View>
+      <View className="flex-1 gap-0.5">
+        <Text variant="caption" weight="semibold">
+          {title}
+        </Text>
+        <Text variant="caption" tone="muted" className="text-[12px]">
+          {hint}
+        </Text>
+      </View>
+      <ChevronRight size={17} color={colors.mutedForeground} strokeWidth={2} />
+    </Pressable>
   );
 }
 

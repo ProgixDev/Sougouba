@@ -1,11 +1,9 @@
-import { File } from 'expo-file-system';
-import { fetch } from 'expo/fetch';
-
 import type { PickedImage } from '../../hooks/useImagePicker';
 
 import { api, ApiError, type Page } from '../http';
 import type { ID, Product } from '../types';
 import { toProduct } from './mappers';
+import { uploadMediaImage, type MediaImageType } from './media';
 
 /**
  * The API's own ceiling (`MAX_PAGE_SIZE`), and it **rejects** a bigger one
@@ -144,42 +142,9 @@ export async function getMyProduct(id: ID): Promise<Product | undefined> {
   }
 }
 
-/** What the API accepts for a product photo (`PRODUCT_IMAGE_TYPES`) — no HEIC, Android cannot draw it. */
-export type ProductImageType = 'image/jpeg' | 'image/png' | 'image/webp';
-
-/** The picker does not always report a type, so the extension decides. `null` is a format we refuse. */
-export function productImageType(image: Pick<PickedImage, 'fileName' | 'mimeType'>): ProductImageType | null {
-  const reported = image.mimeType?.toLowerCase();
-  if (reported === 'image/jpeg' || reported === 'image/png' || reported === 'image/webp') return reported;
-  if (reported === 'image/jpg') return 'image/jpeg';
-  const ext = image.fileName.split('.').pop()?.toLowerCase();
-  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
-  if (ext === 'png') return 'image/png';
-  if (ext === 'webp') return 'image/webp';
-  return null;
-}
-
-/**
- * Upload one product photo and return the Storage path to save as `imageUrl`.
- *
- * Same two hops as `uploadRegistrationDocument`: the API picks the path (under
- * this merchant's own shop) and signs a one-shot URL for it, then the bytes go
- * straight to Storage rather than through the API.
- */
-export async function uploadProductImage(image: PickedImage, contentType: ProductImageType): Promise<string> {
-  const { path, uploadUrl } = await api<{ path: string; uploadUrl: string }>('/vendors/me/products/image-upload', {
-    method: 'POST',
-    body: { contentType },
-  });
-  const response = await fetch(uploadUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': contentType },
-    body: new File(image.uri),
-  });
-  if (!response.ok) {
-    throw new ApiError(response.status, 'Envoi de la photo impossible. Veuillez réessayer.');
-  }
-  return path;
+/** Upload one product photo and return the Storage path to save as `imageUrl`. */
+export async function uploadProductImage(image: PickedImage, contentType: MediaImageType): Promise<string> {
+  return uploadMediaImage('/vendors/me/products/image-upload', image, contentType);
 }
 
 export async function createProduct(input: Omit<Product, 'id'>): Promise<Product> {

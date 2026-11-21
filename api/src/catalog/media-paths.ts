@@ -1,4 +1,9 @@
-import { BadRequestException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+
+import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { z } from 'zod';
+
+import type { Db } from '../db/client.js';
 
 /**
  * Image handling, and why there is no upload endpoint here.
@@ -25,6 +30,46 @@ export const VENDOR_MEDIA_BUCKET = 'vendor-media';
 /** Private: identity papers, permits, bank letters. Read only through signed URLs. */
 export const MERCHANT_DOCUMENTS_BUCKET = 'merchant-documents';
 export const PRODUCT_MEDIA_BUCKET = 'product-media';
+
+/**
+ * What a shop or product photo may be, and the extension it is stored under.
+ *
+ * Narrower than the registration documents: no PDF, and no HEIC — these photos
+ * are shown to every shopper, and Android cannot draw HEIC. iOS hands the
+ * picker's result back as JPEG once `quality` is below 1, so this costs the
+ * merchant nothing.
+ */
+export const MEDIA_IMAGE_TYPES = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+} as const;
+
+export const mediaImageUploadSchema = z.object({
+  contentType: z.enum(Object.keys(MEDIA_IMAGE_TYPES) as [keyof typeof MEDIA_IMAGE_TYPES], {
+    message: 'Format accepté : JPEG, PNG ou WebP',
+  }),
+});
+
+export type MediaImageUploadInput = z.infer<typeof mediaImageUploadSchema>;
+
+/**
+ * A one-shot signed upload URL for one photo under `<bucket>/<vendorId>/`.
+ *
+ * The API picks the whole path, with a random name, so the device never names
+ * a file: it cannot write into another shop's folder or over an existing
+ * photo. The returned `path` is the `<bucket>/<vendorId>/<file>` form that
+ * {@link assertMediaPath} then accepts on the row.
+ *
+ * ⚠️ A replaced or abandoned photo stays in the bucket — nothing purges
+ * unreferenced files yet.
+ */
+export async function createMediaUpload(db: Db, bucket: string, vendorId: string, input: MediaImageUploadInput) {
+  const file = `${vendorId}/${randomUUID()}.${MEDIA_IMAGE_TYPES[input.contentType]}`;
+  const { data, error } = await db.storage.from(bucket).createSignedUploadUrl(file);
+  if (error || !data) throw new InternalServerErrorException('Could not prepare the upload');
+  return { path: `${bucket}/${file}`, uploadUrl: data.signedUrl, contentType: input.contentType };
+}
 
 /**
  * Accepts an empty string (the seeded value — `CatalogImage` draws a stable

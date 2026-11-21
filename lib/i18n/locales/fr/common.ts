@@ -108,6 +108,12 @@ export const common = {
     choosePhoto: 'Choisir dans la galerie',
     cameraDeniedTitle: 'Appareil photo non autorisé',
     cameraDeniedBody: 'Autorisez l’accès à l’appareil photo dans les réglages, ou choisissez une photo dans la galerie.',
+    add: 'Ajouter une photo',
+    change: 'Changer',
+    remove: 'Retirer la photo',
+    unsupportedTitle: 'Format non accepté',
+    unsupportedBody: 'Choisissez une photo JPEG, PNG ou WebP.',
+    uploadFailed: 'Envoi de la photo impossible. Vérifiez votre connexion et réessayez.',
   },
   /** One wording for the three profiles: the consequence is the same whatever the role. */
   deleteAccount: {

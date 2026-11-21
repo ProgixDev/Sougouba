@@ -1,21 +1,11 @@
-import { randomUUID } from 'node:crypto';
-
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  InternalServerErrorException,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
 import { unwrap } from '../db/unwrap.js';
 import {
   PRICE_BANDS,
-  PRODUCT_IMAGE_TYPES,
   type CreateProductInput,
-  type ProductImageUploadInput,
   type ProductListQuery,
   type ProductQuery,
   type ProductSearchQuery,
@@ -23,7 +13,7 @@ import {
 } from './dto/product.dto.js';
 import type { Page } from './dto/query.dto.js';
 import { containsPattern } from '../common/sql/like.js';
-import { assertMediaPath, PRODUCT_MEDIA_BUCKET } from './media-paths.js';
+import { assertMediaPath, createMediaUpload, PRODUCT_MEDIA_BUCKET, type MediaImageUploadInput } from './media-paths.js';
 import { toProduct, type ProductResponse, type ProductRow } from './mappers.js';
 
 const PRODUCT_COLUMNS = `id, vendorId:vendor_id, categoryId:category_id, sectionId:section_id,
@@ -329,25 +319,11 @@ export class ProductsService {
   }
 
   /**
-   * Somewhere to upload one product photo.
-   *
-   * Same two hops as the registration documents: the API picks the whole path
-   * — under this merchant's own vendor folder, with a random name — and signs a
-   * one-shot upload URL for exactly it, so the device never names a file and
-   * cannot write into another shop's folder or over an existing photo. The
-   * returned `path` is what `imageUrl` then accepts (`assertMediaPath`).
-   *
-   * Allowed while the shop is pending: a merchant stocks the shelves before
-   * approval, and that is when the photos go in.
-   *
-   * ⚠️ A replaced or abandoned photo stays in the bucket — nothing purges
-   * unreferenced files yet.
+   * Somewhere to upload one product photo — see `createMediaUpload`. Allowed
+   * while the shop is pending: a merchant stocks the shelves before approval,
+   * and that is when the photos go in.
    */
-  async createImageUpload(userId: string, input: ProductImageUploadInput) {
-    const vendorId = await this.ownedVendorId(userId);
-    const file = `${vendorId}/${randomUUID()}.${PRODUCT_IMAGE_TYPES[input.contentType]}`;
-    const { data, error } = await this.db.storage.from(PRODUCT_MEDIA_BUCKET).createSignedUploadUrl(file);
-    if (error || !data) throw new InternalServerErrorException('Could not prepare the upload');
-    return { path: `${PRODUCT_MEDIA_BUCKET}/${file}`, uploadUrl: data.signedUrl, contentType: input.contentType };
+  async createImageUpload(userId: string, input: MediaImageUploadInput) {
+    return createMediaUpload(this.db, PRODUCT_MEDIA_BUCKET, await this.ownedVendorId(userId), input);
   }
 }

@@ -25,19 +25,44 @@ export const shopIdentitySchema = z.object({
 });
 export type ShopIdentityValues = z.infer<typeof shopIdentitySchema>;
 
+/** Minutes, typed as text. The API holds the same 10–180 bounds (`updateVendorSchema`). */
+const deliveryEtaMinSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{1,3}$/, 'validation.merchant.etaFormat')
+  .refine((v) => Number(v) >= 10 && Number(v) <= 180, 'validation.merchant.etaRange');
+
 export const shopAddressSchema = z
   .object({
     street: z.string().trim().min(4, 'validation.address.streetRequired'),
     city: citySchema,
     postalCode: postalCodeSchema,
-    deliveryEtaMin: z
-      .string()
-      .trim()
-      .regex(/^\d{1,3}$/, 'validation.merchant.etaFormat')
-      .refine((v) => Number(v) >= 10 && Number(v) <= 180, 'validation.merchant.etaRange'),
+    deliveryEtaMin: deliveryEtaMinSchema,
   })
   .superRefine(refinePostalCodeCity);
 export type ShopAddressInput = z.input<typeof shopAddressSchema>;
+
+/** `HH:MM`, 24-hour — what `vendor_hours` stores and `setHoursSchema` accepts. */
+const clockSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'validation.merchant.hoursFormat');
+
+/**
+ * One day of the week as the shop editor holds it. A closed day keeps its
+ * times (the API still wants valid ones) but they are not checked against each
+ * other — the merchant cannot see them. No overnight hours: the API compares
+ * the two times as strings, so `22:00 – 02:00` is refused here too.
+ */
+export const shopHoursDaySchema = z
+  .object({ day: z.number().int().min(0).max(6), open: clockSchema, close: clockSchema, closed: z.boolean() })
+  .refine((h) => h.closed || h.open < h.close, { message: 'validation.merchant.hoursOrder', path: ['close'] });
+
+/** The "Edit my shop" screen — the self-service subset of `updateVendorSchema`, plus the week. */
+export const shopSettingsSchema = z.object({
+  name: shopIdentitySchema.shape.name,
+  isHalalCertified: z.boolean(),
+  deliveryEtaMin: deliveryEtaMinSchema,
+  hours: z.array(shopHoursDaySchema).length(7),
+});
+export type ShopSettingsValues = z.infer<typeof shopSettingsSchema>;
 export type ShopAddressValues = z.infer<typeof shopAddressSchema>;
 
 /**

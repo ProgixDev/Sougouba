@@ -44,6 +44,8 @@ export const validation = {
     specialtyRequired: 'Spécialité requise',
     etaFormat: 'Délai en minutes',
     etaRange: 'Entre 10 et 180 minutes',
+    hoursFormat: 'Heure au format HH:MM',
+    hoursOrder: 'La fermeture doit suivre l’ouverture',
     neqFormat: 'NEQ à 10 chiffres',
     neqOrProof: 'Indiquez votre NEQ ou joignez une preuve d’immatriculation',
     legalNameRequired: 'Nom légal de l’entreprise requis',

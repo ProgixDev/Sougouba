@@ -5,7 +5,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, Switch, View } from 'react-
 
 import { Button, Chip, Input, Text } from '@/components/ui';
 import { categoriesApi, productsApi } from '@/data/api';
-import { productImageType } from '@/data/api/products';
+import { mediaImageType } from '@/data/api/media';
 import type { Category, Product, Vendor } from '@/data/types';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import {
@@ -19,7 +19,7 @@ import { i18nResolver } from '@/lib/validation/resolver';
 import { useLocalized } from '@/lib/localized';
 import { useT } from '@/lib/i18n/useT';
 
-import { ProductPhotoField, type ProductPhotoValue } from './ProductPhotoField';
+import { PhotoField, type PhotoValue } from './PhotoField';
 
 export interface ProductFormProps {
   /** The shop being edited — its `sections` are the shelves a product can go on. */
@@ -47,7 +47,7 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
 
   const [categories, setCategories] = useState<Category[]>([]);
   // Outside react-hook-form: a picked photo is a file, not a field the schema checks.
-  const [photo, setPhoto] = useState<ProductPhotoValue>(product?.imageUrl ?? '');
+  const [photo, setPhoto] = useState<PhotoValue>(product?.imageUrl ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -93,10 +93,10 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
       // A failed save after this leaves the photo behind; keeping the path means
       // a retry does not upload it a second time.
       imageUrl =
-        typeof photo === 'string' ? photo : await productsApi.uploadProductImage(photo, productImageType(photo)!);
+        typeof photo === 'string' ? photo : await productsApi.uploadProductImage(photo, mediaImageType(photo)!);
       setPhoto(imageUrl);
     } catch {
-      setFormError(t('business.productForm.photoUploadFailed'));
+      setFormError(t('common.imagePicker.uploadFailed'));
       setSubmitting(false);
       return;
     }
@@ -115,7 +115,14 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 20 }}
       >
-        <ProductPhotoField value={photo} onChange={setPhoto} disabled={submitting} />
+        <PhotoField
+          label={t('business.productForm.photo')}
+          hint={t('business.productForm.photoHint')}
+          shape="square"
+          value={photo}
+          onChange={setPhoto}
+          disabled={submitting}
+        />
 
         <View className="gap-4">
           <Controller

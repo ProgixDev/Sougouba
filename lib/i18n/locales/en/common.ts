@@ -96,6 +96,12 @@ export const common: Widen<typeof reference> = {
     choosePhoto: 'Choose from gallery',
     cameraDeniedTitle: 'Camera not allowed',
     cameraDeniedBody: 'Allow camera access in Settings, or choose a photo from your gallery.',
+    add: 'Add a photo',
+    change: 'Change',
+    remove: 'Remove photo',
+    unsupportedTitle: 'Format not accepted',
+    unsupportedBody: 'Choose a JPEG, PNG or WebP photo.',
+    uploadFailed: 'Could not upload the photo. Check your connection and try again.',
   },
   deleteAccount: {
     action: 'Delete my account',

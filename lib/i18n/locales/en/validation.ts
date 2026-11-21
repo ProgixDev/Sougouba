@@ -38,6 +38,8 @@ export const validation: Widen<typeof reference> = {
     specialtyRequired: 'Speciality required',
     etaFormat: 'Lead time in minutes',
     etaRange: 'Between 10 and 180 minutes',
+    hoursFormat: 'Time as HH:MM',
+    hoursOrder: 'Closing must come after opening',
     /** NEQ is the Québec business number; it keeps its name in English too. */
     neqFormat: 'NEQ must be 10 digits',
     neqOrProof: 'Give your NEQ or attach proof of registration',
