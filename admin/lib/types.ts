@@ -24,7 +24,6 @@ export type {
   VehicleType,
   CourierStatus,
   CourierInsurance,
-  CourierPayout,
   Courier,
   OrderDelivery,
   Order,
