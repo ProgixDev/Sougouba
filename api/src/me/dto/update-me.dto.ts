@@ -1,16 +1,17 @@
 import { z } from 'zod';
 
 /**
- * `avatarUrl` is a plain string, not a file upload — the mobile app uploads
- * directly to Supabase Storage's `avatars` bucket (RLS-gated to the caller's
- * own folder, see `drizzle/0006_avatars_bucket_and_policies.sql`) using its
- * own Supabase session, then hands this endpoint the resulting URL to
- * persist. NestJS never sees the file bytes — the same division of labour
- * as auth itself (Supabase does the primitive, this API records the result).
+ * `avatarUrl` is a Storage path, not a file upload: the app uploads through
+ * the one-shot URL `POST /me/avatar-upload` signs, then sends the returned
+ * `avatars/<userId>/<file>` path here. `MeService` checks it is in the
+ * caller's own folder. `''` removes the photo. NestJS never sees the bytes.
+ *
+ * A path rather than a full URL, like product and shop photos: an absolute
+ * URL pins the image to today's project hostname.
  */
 export const updateMeSchema = z.object({
   fullName: z.string().trim().min(2, 'Nom complet requis').optional(),
-  avatarUrl: z.string().url().optional(),
+  avatarUrl: z.string().trim().max(300).optional(),
 });
 
 export type UpdateMeInput = z.infer<typeof updateMeSchema>;

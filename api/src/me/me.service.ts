@@ -1,11 +1,15 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 
+import { assertMediaPath, createMediaUpload, type MediaImageUploadInput } from '../catalog/media-paths.js';
 import { referralCodeFor } from '../common/loyalty/referral.js';
 import type { Db, Tables } from '../db/client.js';
 import { camelize, snakeize } from '../db/case.js';
 import { DB } from '../db/db.module.js';
 import { unwrap } from '../db/unwrap.js';
 import type { UpdateMeInput } from './dto/update-me.dto.js';
+
+/** Public bucket, one folder per account (`0006_avatars_bucket_and_policies.sql`). */
+export const AVATARS_BUCKET = 'avatars';
 
 /** The camelCase shape this service has always returned. */
 type Profile = Record<string, any>;
@@ -28,15 +32,26 @@ export class MeService {
 
   async updateMe(userId: string, patch: UpdateMeInput) {
     await this.getMe(userId); // 404s before the update if the row is somehow missing
+    // Only a photo in the caller's own folder — otherwise anyone could show
+    // someone else's picture, or any object in the bucket, as theirs.
+    const columns: Record<string, unknown> = { ...patch };
+    if (patch.avatarUrl !== undefined) {
+      columns.avatarUrl = assertMediaPath(patch.avatarUrl, AVATARS_BUCKET, userId, 'avatarUrl') || null;
+    }
     const updated = await unwrap<Tables<'profiles'>>(
       this.db
         .from('profiles')
-        .update({ ...snakeize(patch), updated_at: new Date().toISOString() } as never)
+        .update({ ...snakeize(columns), updated_at: new Date().toISOString() } as never)
         .eq('id', userId)
         .select('*')
         .single()
     );
     return camelize<Profile>(updated);
+  }
+
+  /** Somewhere to upload a new profile photo — see `createMediaUpload`. Send the returned path as `avatarUrl`. */
+  async createAvatarUpload(userId: string, input: MediaImageUploadInput) {
+    return createMediaUpload(this.db, AVATARS_BUCKET, userId, input);
   }
 
   /** One-way, exactly like the mock: a role, once set, is never rewritten through this endpoint. */

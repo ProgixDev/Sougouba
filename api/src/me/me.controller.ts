@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { SupabaseAuthGuard } from '../auth/supabase-auth.guard.js';
+import { mediaImageUploadSchema, type MediaImageUploadInput } from '../catalog/media-paths.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import { AccountDeletionService } from './account-deletion.service.js';
 import { claimReferralSchema, type ClaimReferralInput } from './dto/claim-referral.dto.js';
@@ -36,6 +37,13 @@ export class MeController {
    * no way to aim this at someone else's. The raw token is passed along only
    * so every other device can be signed out with it.
    */
+  /** A signed upload URL for a new profile photo; send the returned `path` as `avatarUrl`. */
+  @Post('avatar-upload')
+  @UsePipes(new ZodValidationPipe(mediaImageUploadSchema))
+  avatarUpload(@CurrentUser() userId: string, @Body() body: MediaImageUploadInput) {
+    return this.me.createAvatarUpload(userId, body);
+  }
+
   @Delete()
   @HttpCode(204)
   deleteMe(@CurrentUser() userId: string, @Headers('authorization') authorization?: string) {

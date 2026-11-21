@@ -3,9 +3,11 @@ import * as Crypto from 'expo-crypto';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 
+import type { PickedImage } from '../../hooks/useImagePicker';
 import { supabase } from '../../lib/supabase';
 import { api, ApiError } from '../http';
 import type { Address, ID, User, UserRole } from '../types';
+import { uploadMediaImage, type MediaImageType } from './media';
 
 /** What went wrong, as a code. The words are `auth.error.*` in the catalogue. */
 export type AuthErrorCode =
@@ -63,6 +65,16 @@ async function currentUser(): Promise<User> {
     addresses,
     referredBy: profile.referredBy ?? undefined,
   };
+}
+
+/** Upload a new profile photo and return the Storage path to save as `avatarUrl`. */
+export async function uploadAvatar(image: PickedImage, contentType: MediaImageType): Promise<string> {
+  return uploadMediaImage('/me/avatar-upload', image, contentType);
+}
+
+/** Save the profile: name and/or photo path (`''` removes the photo). */
+export async function updateProfile(patch: { fullName?: string; avatarUrl?: string }): Promise<void> {
+  await api('/me', { method: 'PATCH', body: patch });
 }
 
 const normalise = (email: string) => email.trim().toLowerCase();

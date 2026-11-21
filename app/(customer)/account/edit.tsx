@@ -7,9 +7,12 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, BackHeader, Button, Input, Text } from '@/components/ui';
-import { api, ApiError } from '@/data/http';
+import { authApi } from '@/data/api';
+import { mediaImageType } from '@/data/api/media';
+import { ApiError } from '@/data/http';
 import { useThemeColors } from '@/hooks/useColorScheme';
-import { useImagePicker } from '@/hooks/useImagePicker';
+import { useImagePicker, type PickedImage } from '@/hooks/useImagePicker';
+import { mediaUrl } from '@/lib/media';
 import { type ProfileValues, profileSchema } from '@/lib/validation/profile';
 import { useT } from '@/lib/i18n/useT';
 import { i18nResolver } from '@/lib/validation/resolver';
@@ -22,8 +25,9 @@ export default function EditProfileScreen() {
   const user = useSessionStore((s) => s.user);
   const updateUser = useSessionStore((s) => s.updateUser);
 
-  // Held locally so leaving without saving discards the new portrait too.
-  const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl);
+  // Held locally so leaving without saving discards the new portrait too: the
+  // stored path, or a photo just picked and only uploaded on save.
+  const [photo, setPhoto] = useState<string | PickedImage>(user?.avatarUrl ?? '');
 
   const {
     control,
@@ -39,16 +43,31 @@ export default function EditProfileScreen() {
       title: t('customer.account.edit.changePhoto'),
       square: true,
       quality: 0.8,
-      onPick: (image) => setAvatarUrl(image.uri),
+      onPick: (image) => {
+        if (!mediaImageType(image)) {
+          Alert.alert(t('common.imagePicker.unsupportedTitle'), t('common.imagePicker.unsupportedBody'));
+          return;
+        }
+        setPhoto(image);
+      },
     });
   }
 
   async function onSubmit(values: ProfileValues) {
-    // Only the name goes to the API. The email is the sign-in identity and is
-    // not editable here; the photo is still a local file URI, and the API takes
-    // an https URL — it stays on this device until photo upload exists.
+    // The email is the sign-in identity and is not editable here. A newly
+    // picked photo is uploaded first, then saved with the name in one call.
+    let avatarUrl: string;
     try {
-      await api('/me', { method: 'PATCH', body: { fullName: values.fullName.trim() } });
+      avatarUrl = typeof photo === 'string' ? photo : await authApi.uploadAvatar(photo, mediaImageType(photo)!);
+    } catch {
+      Alert.alert(t('common.imagePicker.uploadFailed'));
+      return;
+    }
+    try {
+      await authApi.updateProfile({
+        fullName: values.fullName.trim(),
+        ...(avatarUrl !== (user?.avatarUrl ?? '') ? { avatarUrl } : {}),
+      });
     } catch (error) {
       Alert.alert(
         t('common.genericError'),
@@ -56,7 +75,7 @@ export default function EditProfileScreen() {
       );
       return;
     }
-    updateUser({ fullName: values.fullName.trim(), avatarUrl });
+    updateUser({ fullName: values.fullName.trim(), avatarUrl: avatarUrl || undefined });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     if (router.canGoBack()) router.back();
   }
@@ -72,7 +91,11 @@ export default function EditProfileScreen() {
               accessibilityLabel={t('customer.account.edit.changePhotoA11y')}
               onPress={pickPhoto}
             >
-              <Avatar fullName={user?.fullName ?? '?'} uri={avatarUrl} size={104} />
+              <Avatar
+                fullName={user?.fullName ?? '?'}
+                uri={(typeof photo === 'string' ? mediaUrl(photo) : photo.uri) ?? undefined}
+                size={104}
+              />
               <View
                 className="absolute bottom-0 right-0 w-9 h-9 items-center justify-center rounded-full border-[3px]"
                 style={{ backgroundColor: colors.primary, borderColor: colors.background }}

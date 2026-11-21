@@ -19,17 +19,19 @@ import {
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, Switch, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { ProfileHeader } from '@/components/customer';
 import { LanguageToggle, Reveal, Text } from '@/components/ui';
-import { loyaltyApi } from '@/data/api';
+import { authApi, loyaltyApi } from '@/data/api';
+import { mediaImageType } from '@/data/api/media';
 import { useColorScheme, useThemeColors } from '@/hooks/useColorScheme';
 import { useCustomerStats } from '@/hooks/useCustomerStats';
 import { useDeleteAccount } from '@/hooks/useDeleteAccount';
 import { useImagePicker } from '@/hooks/useImagePicker';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { formatCad, formatMonthYear } from '@/lib/format';
+import { mediaUrl } from '@/lib/media';
 import { useT } from '@/lib/i18n/useT';
 import { routes } from '@/lib/routes';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
@@ -84,9 +86,25 @@ export default function CustomerProfileScreen() {
       title: t('customer.account.edit.changePhoto'),
       square: true,
       quality: 0.8,
-      onPick: (image) => {
+      onPick: async (image) => {
+        const contentType = mediaImageType(image);
+        if (!contentType) {
+          Alert.alert(t('common.imagePicker.unsupportedTitle'), t('common.imagePicker.unsupportedBody'));
+          return;
+        }
+        // Shown at once from the device, then swapped for the stored copy —
+        // and put back as it was if the upload or the save fails.
+        const previous = user?.avatarUrl;
         updateUser({ avatarUrl: image.uri });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        try {
+          const path = await authApi.uploadAvatar(image, contentType);
+          await authApi.updateProfile({ avatarUrl: path });
+          updateUser({ avatarUrl: path });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch {
+          updateUser({ avatarUrl: previous });
+          Alert.alert(t('common.imagePicker.uploadFailed'));
+        }
       },
     });
   }
@@ -102,7 +120,7 @@ export default function CustomerProfileScreen() {
         <ProfileHeader
           fullName={user?.fullName ?? ''}
           email={user?.email ?? ''}
-          avatarUrl={user?.avatarUrl}
+          avatarUrl={mediaUrl(user?.avatarUrl) ?? undefined}
           memberSinceLabel={
             user?.memberSince
               ? t('customer.profile.memberSince', { date: formatMonthYear(user.memberSince) })
