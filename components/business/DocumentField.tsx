@@ -1,10 +1,10 @@
 import * as DocumentPicker from 'expo-document-picker';
-import * as ImagePicker from 'expo-image-picker';
 import { FileCheck2, FileUp, X } from 'lucide-react-native';
 import { Alert, Pressable, View } from 'react-native';
 
 import { Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
+import { useImagePicker } from '@/hooks/useImagePicker';
 import { useT } from '@/lib/i18n/useT';
 import { MAX_DOCUMENT_BYTES, pickedDocumentSchema, type PickedDocument } from '@/lib/validation/merchant';
 
@@ -40,6 +40,7 @@ function mimeTypeOf(name: string, reported?: string | null): PickedDocument['mim
 export function DocumentField({ label, helperText, value, onChange, error, required }: DocumentFieldProps) {
   const t = useT();
   const colors = useThemeColors();
+  const { chooseSource } = useImagePicker();
 
   function accept(uri: string, name: string, reportedType?: string | null, size?: number | null) {
     const mimeType = mimeTypeOf(name, reportedType);
@@ -54,25 +55,6 @@ export function DocumentField({ label, helperText, value, onChange, error, requi
     onChange(pickedDocumentSchema.parse({ uri, name, mimeType }));
   }
 
-  async function fromCamera() {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(t('business.documentField.cameraDeniedTitle'), t('business.documentField.cameraDeniedBody'));
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
-    if (result.canceled) return;
-    const asset = result.assets[0];
-    accept(asset.uri, asset.fileName ?? 'photo.jpg', asset.mimeType ?? 'image/jpeg', asset.fileSize);
-  }
-
-  async function fromLibrary() {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
-    if (result.canceled) return;
-    const asset = result.assets[0];
-    accept(asset.uri, asset.fileName ?? 'photo.jpg', asset.mimeType, asset.fileSize);
-  }
-
   async function fromFiles() {
     const result = await DocumentPicker.getDocumentAsync({ type: ACCEPTED, copyToCacheDirectory: true });
     if (result.canceled) return;
@@ -81,12 +63,11 @@ export function DocumentField({ label, helperText, value, onChange, error, requi
   }
 
   function choose() {
-    Alert.alert(label, undefined, [
-      { text: t('business.documentField.takePhoto'), onPress: fromCamera },
-      { text: t('business.documentField.choosePhoto'), onPress: fromLibrary },
-      { text: t('business.documentField.chooseFile'), onPress: fromFiles },
-      { text: t('common.cancel'), style: 'cancel' },
-    ]);
+    chooseSource({
+      title: label,
+      onPick: (image) => accept(image.uri, image.fileName, image.mimeType, image.fileSize),
+      extraActions: [{ text: t('business.documentField.chooseFile'), onPress: fromFiles }],
+    });
   }
 
   const tint = error ? colors.destructive : value ? colors.primary : colors.mutedForeground;

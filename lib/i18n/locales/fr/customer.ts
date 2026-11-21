@@ -198,9 +198,6 @@ export const customer = {
     notificationsValue: '%{count} sur 4',
     about: 'À propos',
     signOut: 'Se déconnecter',
-    photoDeniedTitle: 'Accès aux photos refusé',
-    photoDeniedBody:
-      'Autorisez l’accès à vos photos dans les réglages de l’appareil pour changer votre portrait.',
   },
   orderDetail: {
     notFoundBody: 'Cette commande n’existe plus ou le lien est expiré.',

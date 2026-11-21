@@ -91,6 +91,12 @@ export const common: Widen<typeof reference> = {
   rating: {
     value: '%{value} out of 5',
   },
+  imagePicker: {
+    takePhoto: 'Take a photo',
+    choosePhoto: 'Choose from gallery',
+    cameraDeniedTitle: 'Camera not allowed',
+    cameraDeniedBody: 'Allow camera access in Settings, or choose a photo from your gallery.',
+  },
   deleteAccount: {
     action: 'Delete my account',
     confirmTitle: 'Delete your account?',

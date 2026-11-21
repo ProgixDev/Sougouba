@@ -102,6 +102,13 @@ export const common = {
     /** Read aloud for each star, and for a read-only row. */
     value: '%{value} sur 5',
   },
+  /** `useImagePicker` — the one sheet every photo field opens. */
+  imagePicker: {
+    takePhoto: 'Prendre une photo',
+    choosePhoto: 'Choisir dans la galerie',
+    cameraDeniedTitle: 'Appareil photo non autorisé',
+    cameraDeniedBody: 'Autorisez l’accès à l’appareil photo dans les réglages, ou choisissez une photo dans la galerie.',
+  },
   /** One wording for the three profiles: the consequence is the same whatever the role. */
   deleteAccount: {
     action: 'Supprimer mon compte',

@@ -1,5 +1,4 @@
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
 import { Camera, Check, Delete, PenLine, ShieldCheck } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { Pressable, View, type LayoutChangeEvent } from 'react-native';
@@ -11,6 +10,7 @@ import { Button, Text } from '@/components/ui';
 import { useT } from '@/lib/i18n/useT';
 import type { DeliveryProof, ProofMethod } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
+import { useImagePicker } from '@/hooks/useImagePicker';
 import { forest } from '@/theme/tokens';
 
 export interface ProofCaptureProps {
@@ -48,6 +48,7 @@ const METHODS: { key: ProofMethod; label: string; icon: typeof Camera }[] = [
 export function ProofCapture({ onSubmit, busy = false }: ProofCaptureProps) {
   const t = useT();
   const colors = useThemeColors();
+  const imagePicker = useImagePicker();
   const [method, setMethod] = useState<ProofMethod>('pin');
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
@@ -88,13 +89,11 @@ export function ProofCapture({ onSubmit, busy = false }: ProofCaptureProps) {
   }
 
   async function takePhoto() {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) return;
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.6, allowsEditing: false });
-    if (result.canceled) return;
-    const asset = result.assets[0];
+    // Camera only: a proof is taken at the door, not picked from the library.
+    const image = await imagePicker.takePhoto({ quality: 0.6 });
+    if (!image) return;
     setSubmitError(null);
-    setPhoto({ uri: asset.uri, mimeType: asset.mimeType ?? mimeFromUri(asset.uri) });
+    setPhoto({ uri: image.uri, mimeType: image.mimeType ?? mimeFromUri(image.uri) });
   }
 
   async function submit() {

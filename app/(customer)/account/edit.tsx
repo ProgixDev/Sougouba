@@ -1,5 +1,4 @@
 import * as Haptics from 'expo-haptics';
-import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { Camera, Mail, User as UserIcon } from 'lucide-react-native';
 import { useState } from 'react';
@@ -10,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, BackHeader, Button, Input, Text } from '@/components/ui';
 import { api, ApiError } from '@/data/http';
 import { useThemeColors } from '@/hooks/useColorScheme';
+import { useImagePicker } from '@/hooks/useImagePicker';
 import { type ProfileValues, profileSchema } from '@/lib/validation/profile';
 import { useT } from '@/lib/i18n/useT';
 import { i18nResolver } from '@/lib/validation/resolver';
@@ -18,6 +18,7 @@ import { useSessionStore } from '@/store/useSessionStore';
 export default function EditProfileScreen() {
   const t = useT();
   const colors = useThemeColors();
+  const { chooseSource } = useImagePicker();
   const user = useSessionStore((s) => s.user);
   const updateUser = useSessionStore((s) => s.updateUser);
 
@@ -33,22 +34,13 @@ export default function EditProfileScreen() {
     defaultValues: { fullName: user?.fullName ?? '', email: user?.email ?? '' },
   });
 
-  async function pickPhoto() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(
-        t('customer.profile.photoDeniedTitle'),
-        t('customer.profile.photoDeniedBody')
-      );
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
+  function pickPhoto() {
+    chooseSource({
+      title: t('customer.account.edit.changePhoto'),
+      square: true,
       quality: 0.8,
+      onPick: (image) => setAvatarUrl(image.uri),
     });
-    if (!result.canceled) setAvatarUrl(result.assets[0].uri);
   }
 
   async function onSubmit(values: ProfileValues) {

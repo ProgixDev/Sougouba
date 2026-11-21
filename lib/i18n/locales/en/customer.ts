@@ -190,9 +190,6 @@ export const customer: Widen<typeof reference> = {
     notificationsValue: '%{count} of 4',
     about: 'About',
     signOut: 'Sign out',
-    photoDeniedTitle: 'Photo access denied',
-    photoDeniedBody:
-      'Allow access to your photos in the device settings to change your picture.',
   },
   orderDetail: {
     notFoundBody: 'This order no longer exists, or the link has expired.',

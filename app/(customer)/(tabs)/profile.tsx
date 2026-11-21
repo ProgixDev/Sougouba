@@ -1,6 +1,5 @@
 import Constants from 'expo-constants';
 import * as Haptics from 'expo-haptics';
-import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect } from 'expo-router';
 import {
   Bell,
@@ -20,7 +19,7 @@ import {
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, Switch, View } from 'react-native';
+import { Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { ProfileHeader } from '@/components/customer';
 import { LanguageToggle, Reveal, Text } from '@/components/ui';
@@ -28,6 +27,7 @@ import { loyaltyApi } from '@/data/api';
 import { useColorScheme, useThemeColors } from '@/hooks/useColorScheme';
 import { useCustomerStats } from '@/hooks/useCustomerStats';
 import { useDeleteAccount } from '@/hooks/useDeleteAccount';
+import { useImagePicker } from '@/hooks/useImagePicker';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { formatCad, formatMonthYear } from '@/lib/format';
 import { useT } from '@/lib/i18n/useT';
@@ -46,6 +46,7 @@ export default function CustomerProfileScreen() {
   const updateUser = useSessionStore((s) => s.updateUser);
   const signOut = useSessionStore((s) => s.signOut);
   const { confirmDeleteAccount } = useDeleteAccount();
+  const { chooseSource } = useImagePicker();
 
   const preference = useThemeStore((s) => s.preference);
   const setPreference = useThemeStore((s) => s.setPreference);
@@ -78,25 +79,16 @@ export default function CustomerProfileScreen() {
     }, [user])
   );
 
-  async function pickPhoto() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(
-        t('customer.profile.photoDeniedTitle'),
-        t('customer.profile.photoDeniedBody')
-      );
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
+  function pickPhoto() {
+    chooseSource({
+      title: t('customer.account.edit.changePhoto'),
+      square: true,
       quality: 0.8,
+      onPick: (image) => {
+        updateUser({ avatarUrl: image.uri });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      },
     });
-    if (result.canceled) return;
-    updateUser({ avatarUrl: result.assets[0].uri });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }
 
   // No imperative navigation on sign-out — clearing the session makes the
