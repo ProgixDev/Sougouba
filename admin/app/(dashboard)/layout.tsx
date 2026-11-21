@@ -97,7 +97,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="flex h-dvh overflow-hidden bg-background">
           <Sidebar counts={counts} mobileOpen={mobileNavOpen} onCloseMobile={() => setMobileNavOpen(false)} />
           <div className="flex min-w-0 flex-1 flex-col">
-            <Topbar session={session} onOpenMenu={() => setMobileNavOpen(true)} />
+            <Topbar session={session} counts={counts} onOpenMenu={() => setMobileNavOpen(true)} />
             <main className="flex-1 overflow-y-auto p-4 sm:p-5 md:p-8">
               {allowed ? (
                 children

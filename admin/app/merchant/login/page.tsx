@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { LogoMark } from '@/components/layout/LogoMark';
 import {
   getMerchantSession,
   MerchantAuthError,
@@ -78,9 +79,7 @@ export default function MerchantLoginPage() {
     <main className="flex min-h-dvh items-center justify-center bg-background px-4">
       <Card className="w-full max-w-sm p-8">
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-terracotta-600 font-display text-[1.3rem] font-bold text-white">
-            S
-          </div>
+          <LogoMark size={56} className="mb-3" />
           <Text variant="title">Espace commerçant</Text>
           <Text variant="body" tone="muted" className="mt-1">
             Sougouba — suivez les commandes de votre boutique

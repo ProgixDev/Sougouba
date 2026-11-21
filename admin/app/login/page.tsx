@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { signIn, getSession, DEMO_CREDENTIALS } from '@/lib/auth';
 import { useEffect } from 'react';
+import { LogoMark } from '@/components/layout/LogoMark';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -43,9 +44,7 @@ export default function LoginPage() {
     <main className="flex min-h-dvh items-center justify-center bg-background px-4">
       <Card className="w-full max-w-sm p-8">
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-forest-600 font-display text-[1.3rem] font-bold text-white">
-            S
-          </div>
+          <LogoMark size={56} className="mb-3" />
           <Text variant="title">Console d&apos;administration</Text>
           <Text variant="body" tone="muted" className="mt-1">
             Sougouba — accès réservé à l&apos;équipe plateforme

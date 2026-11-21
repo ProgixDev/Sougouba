@@ -20,6 +20,19 @@ export function GlobalSearch() {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // ⌘K / Ctrl+K from anywhere in the dashboard.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   /**
    * Debounced by 250 ms.
@@ -67,10 +80,11 @@ export function GlobalSearch() {
   }
 
   return (
-    <div ref={containerRef} className="relative hidden sm:block md:w-72">
-      <div className="flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-muted-foreground focus-within:border-primary">
+    <div ref={containerRef} className="relative hidden w-72 sm:block lg:w-80">
+      <div className="flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2.5 text-muted-foreground transition-shadow focus-within:border-primary focus-within:ring-4 focus-within:ring-forest-500/10">
         <Search size={16} className="shrink-0" />
         <input
+          ref={inputRef}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setOpen(true)}
@@ -92,6 +106,9 @@ export function GlobalSearch() {
           aria-label="Recherche globale"
           className="w-full bg-transparent font-sans text-[0.8125rem] text-foreground outline-none placeholder:text-muted-foreground"
         />
+        <kbd className="hidden shrink-0 rounded-md border border-border bg-muted px-1.5 py-0.5 font-sans text-[0.6875rem] font-semibold text-muted-foreground lg:inline">
+          ⌘K
+        </kbd>
       </div>
 
       {open && query.trim().length >= 2 && (
