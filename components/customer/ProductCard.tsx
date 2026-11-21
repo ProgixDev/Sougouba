@@ -39,7 +39,9 @@ const LOW_STOCK = 5;
  *
  * Height is content-driven on purpose — no `flex-1`. See the note in
  * ProductGrid: growing to fill a stretch-aligned row is what made these render
- * far taller than their content.
+ * far taller than their content. Equal heights come from the content instead:
+ * the name's two lines, the weight line and the struck-through price line are
+ * all reserved whether or not they have anything to show.
  */
 export function ProductCard({ product, width, categoryIcon, vendorName, onPress, onAdd }: ProductCardProps) {
   const t = useT();
@@ -144,22 +146,21 @@ export function ProductCard({ product, width, categoryIcon, vendorName, onPress,
         <Text variant="caption" weight="semibold" numberOfLines={2} className="text-[14px] leading-[18px] min-h-[36px]">
           {product.name}
         </Text>
-        {weight ? (
-          <Text variant="caption" tone="muted" className="text-[11px] leading-[14px]">
-            {weight}
-          </Text>
-        ) : null}
+        {/* Reserved even when empty, like the name's second line: a product with
+            no weight would otherwise be a line shorter than its neighbours. */}
+        <Text variant="caption" tone="muted" numberOfLines={1} className="text-[11px] leading-[14px] min-h-[14px]">
+          {weight ?? ''}
+        </Text>
       </View>
 
       <View className="mt-2 flex-row items-end justify-between gap-2">
         <View className="flex-1">
           {/* Stacked, not side by side: two prices in a row overflow the room
-              beside the add button and wrap. */}
-          {discountPct > 0 ? (
-            <Text variant="caption" tone="muted" className="text-[11px] leading-[13px] line-through">
-              {formatCad(product.compareAtPriceCad!)}
-            </Text>
-          ) : null}
+              beside the add button and wrap. The struck-through line keeps its
+              height when there is no discount, so every card is the same height. */}
+          <Text variant="caption" tone="muted" className="text-[11px] leading-[13px] min-h-[13px] line-through">
+            {discountPct > 0 ? formatCad(product.compareAtPriceCad!) : ''}
+          </Text>
           <Text
             variant="subtitle"
             weight="bold"
