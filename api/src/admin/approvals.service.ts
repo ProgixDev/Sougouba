@@ -92,13 +92,16 @@ export class ApprovalsService {
   // ── merchants ─────────────────────────────────────────────────────────────
 
   async listVendors(query: ReviewQuery): Promise<Page<unknown>> {
+    // `vendors` points at `profiles` twice (`owner_id`, and `reviewed_by` since
+    // 0023), so the embed must name its foreign key: a bare `profiles` is
+    // ambiguous and PostgREST refuses the whole query (PGRST201).
     let q = this.db
       .from('vendors')
       .select(
         `id, name, slug, vendorType:vendor_type, city,
          addressStreet:address_street, addressPostalCode:address_postal_code,
          status, statusReason:status_reason, reviewedAt:reviewed_at, createdAt:created_at,
-         profiles!inner(ownerName:full_name),
+         profiles!vendors_owner_id_profiles_id_fk!inner(ownerName:full_name),
          vendor_registrations(legalName:legal_name, neq, contactName:contact_name, contactPhone:contact_phone,
                               mapaqNumber:mapaq_number, submittedAt:submitted_at)`,
         { count: 'exact' }
