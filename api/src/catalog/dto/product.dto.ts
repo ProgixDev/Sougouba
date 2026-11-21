@@ -5,7 +5,13 @@ import { paginationSchema, queryBool } from './query.dto.js';
 // ── browse ──────────────────────────────────────────────────────────────────
 
 /** The four orderings of `lib/productFilters.ts`'s `SortKey`, unchanged. */
-export const sortKeySchema = z.enum(['relevance', 'price_asc', 'price_desc', 'name']).default('relevance');
+/**
+ * `section`: the shop's own section order — for one shop's page, which reads
+ * section by section. `stock_asc`: lowest stock first, for the merchant.
+ */
+export const sortKeySchema = z
+  .enum(['relevance', 'price_asc', 'price_desc', 'name', 'section', 'stock_asc'])
+  .default('relevance');
 
 /** The four bands of `lib/productFilters.ts`'s `PriceBand`, unchanged. */
 export const priceBandSchema = z.enum(['all', 'under_10', '10_to_20', 'over_20']).default('all');
@@ -37,6 +43,8 @@ export const productQuerySchema = paginationSchema.extend({
   /** Only products carrying a struck-through original price. */
   onSale: queryBool,
   inStockOnly: queryBool,
+  /** Available products at or under this stock — the merchant's restock list. */
+  maxStock: z.coerce.number().int().min(0).max(100_000).optional(),
   sectionId: z.uuid().optional(),
   categoryId: z.uuid().optional(),
   /** Substring of the name, or of any one tag — the same test `searchProducts` makes. */

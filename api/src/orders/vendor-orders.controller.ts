@@ -33,6 +33,12 @@ export class VendorOrdersController {
     return this.orders.listForVendorOwner(userId, query);
   }
 
+  /** Declared before `:id`, which would otherwise try to parse "summary" as a uuid. */
+  @Get('summary')
+  summary(@CurrentUser() userId: string) {
+    return this.orders.vendorOrderSummary(userId);
+  }
+
   @Get(':id')
   byId(@CurrentUser() userId: string, @Param('id', ParseUUIDPipe) id: string) {
     return this.orders.byId(userId, id, 'merchant');

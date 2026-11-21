@@ -5,7 +5,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BackHeader, EmptyState, Reveal, Skeleton, Text } from '@/components/ui';
+import { BackHeader, EmptyState, ListFooter, Reveal, Skeleton, Text } from '@/components/ui';
 import { loyaltyApi } from '@/data/api';
 import {
   MAX_REDEMPTION_SHARE,
@@ -16,6 +16,7 @@ import {
 } from '@/data/loyalty';
 import type { LoyaltyTransaction } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
+import { isNearBottom, usePagedList } from '@/hooks/usePagedList';
 import { formatCad, formatDate, formatMonthYear, formatPercent } from '@/lib/format';
 import { useT } from '@/lib/i18n/useT';
 import { formatPoints, loyaltyReasonKey } from '@/lib/loyalty';
@@ -27,28 +28,31 @@ export default function PointsScreen() {
   const colors = useThemeColors();
   const user = useSessionStore((s) => s.user);
   const [balance, setBalance] = useState(0);
-  const [history, setHistory] = useState<LoyaltyTransaction[]>([]);
-  const [loading, setLoading] = useState(true);
+  // The ledger, newest first, a page at a time as the screen scrolls.
+  const ledger = usePagedList<LoyaltyTransaction>(
+    ['loyalty', 'history', user?.id],
+    (offset, limit) => loyaltyApi.getHistoryPage(offset, limit),
+    { enabled: !!user }
+  );
+  const history = ledger.items;
+  const loading = ledger.loading;
 
+  const { reload } = ledger;
   useFocusEffect(
     useCallback(() => {
       if (!user) return;
       let active = true;
-      Promise.all([loyaltyApi.getBalance(user.id), loyaltyApi.getHistory(user.id)])
-        .then(([nextBalance, nextHistory]) => {
-          if (!active) return;
-          setBalance(nextBalance);
-          setHistory(nextHistory);
+      void reload();
+      loyaltyApi
+        .getBalance(user.id)
+        .then((next) => {
+          if (active) setBalance(next);
         })
-        .catch(() => undefined)
-        // Always end the skeleton — a failed load shows an empty ledger, not a spinner forever.
-        .finally(() => {
-          if (active) setLoading(false);
-        });
+        .catch(() => undefined);
       return () => {
         active = false;
       };
-    }, [user])
+    }, [user, reload])
   );
 
   return (
@@ -64,6 +68,10 @@ export default function PointsScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerClassName="px-5 pt-2 pb-8 gap-5"
+          onScroll={({ nativeEvent }) => {
+            if (isNearBottom(nativeEvent)) ledger.loadMore();
+          }}
+          scrollEventThrottle={200}
         >
           <Reveal>
             <View className="rounded-[20px] bg-card p-5 gap-4">
@@ -171,6 +179,7 @@ export default function PointsScreen() {
                 ))}
               </View>
             )}
+            <ListFooter loading={ledger.loadingMore} />
           </View>
         </ScrollView>
       )}

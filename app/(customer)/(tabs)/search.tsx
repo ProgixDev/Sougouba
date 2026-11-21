@@ -1,32 +1,41 @@
 import { router } from 'expo-router';
 import { SearchX } from 'lucide-react-native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
 import { Keyboard, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FilterSheet, ProductGrid, SearchField, useCartBarInset } from '@/components/customer';
-import { Chip, EmptyState, Text } from '@/components/ui';
-import { useCategories, useProductSearch, useProducts, useVendors } from '@/data/queries';
-import type { Category, ID, Product, Vendor } from '@/data/types';
+import { Chip, EmptyState, ListFooter, Text } from '@/components/ui';
+import { productsApi } from '@/data/api';
+import type { ProductPageFilters } from '@/data/api/products';
+import { useCategories, useVendors } from '@/data/queries';
+import type { Category, ID, Vendor } from '@/data/types';
+import { isNearBottom, usePagedList } from '@/hooks/usePagedList';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useT } from '@/lib/i18n/useT';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
-import {
-  activeFilterCount,
-  applyFilters,
-  emptyFilters,
-  type ProductFilters,
-} from '@/lib/productFilters';
+import { activeFilterCount, emptyFilters, type ProductFilters } from '@/lib/productFilters';
 import { dynamicRoutes } from '@/lib/routes';
 import { useLocalized } from '@/lib/localized';
 import { useCartStore } from '@/store/useCartStore';
 
 /** Stable empty fallbacks — see the note in home.tsx. */
 const EMPTY_CATEGORIES: Category[] = [];
-const EMPTY_PRODUCTS: Product[] = [];
 const EMPTY_VENDORS: Vendor[] = [];
 
-const BROWSE_LIMIT = 24;
+/** The API's filters for what the screen shows: search term, category chip and the sheet. */
+function pageFilters(q: string, categoryId: ID | null, f: ProductFilters): ProductPageFilters {
+  return {
+    q,
+    categoryId,
+    vendorId: f.vendorId,
+    sort: f.sort,
+    priceBand: f.priceBand,
+    onSale: f.onSale,
+    inStockOnly: f.inStockOnly,
+  };
+}
 
 export default function SearchScreen() {
   const cartBarInset = useCartBarInset();
@@ -47,48 +56,34 @@ export default function SearchScreen() {
   const debouncedQuery = useDebounce(query, 250);
 
   // Shared with home and the rest of the catalogue screens, so arriving here
-  // usually paints from cache with no request at all.
+  // usually paints from cache with no request at all. Shops feed the filter
+  // sheet's shop picker and the shop name on each card.
   const categoriesQuery = useCategories();
-  const allProductsQuery = useProducts();
   const vendorsQuery = useVendors();
-
   const categories = categoriesQuery.data ?? EMPTY_CATEGORIES;
-  const allProducts = allProductsQuery.data ?? EMPTY_PRODUCTS;
   const vendors = vendorsQuery.data ?? EMPTY_VENDORS;
 
-  // Disabled on a blank term, so `data` is `undefined` when not searching —
-  // which is exactly the `null` the browse path below looks for. An empty
-  // array would read as "no results" rather than "no query".
-  const searchQuery = useProductSearch(debouncedQuery);
-  const results = debouncedQuery.trim() ? searchQuery.data ?? null : null;
-  const searching = !!debouncedQuery.trim() && searchQuery.isPending;
-
-  /** The full narrowing pipeline for a given filter set: query → category → filters. */
-  const narrow = useCallback(
-    (active: ProductFilters) => {
-      const pool = results ?? allProducts;
-      const byCategory = categoryId ? pool.filter((p) => p.categoryId === categoryId) : pool;
-      return applyFilters(byCategory, active);
-    },
-    [results, allProducts, categoryId]
+  // Search term, category and filters all go to the API, which pages the
+  // answer: every product is reachable by scrolling, not just the first 100.
+  const term = debouncedQuery.trim();
+  const applied = pageFilters(term, categoryId, filters);
+  const list = usePagedList(['products', 'page', applied], (offset, limit) =>
+    productsApi.getProductsPage(applied, offset, limit)
   );
+  const visible = list.items;
+  const searching = list.loading;
+
+  // The sheet's button counts what its draft would show — one row asked for,
+  // just for the total, and only while the sheet is open.
+  const draft = pageFilters(term, categoryId, draftFilters);
+  const draftCount = useQuery({
+    queryKey: ['products', 'count', draft],
+    queryFn: () => productsApi.getProductsPage(draft, 0, 1),
+    enabled: sheetOpen,
+  });
+  const draftResultCount = draftCount.data?.total ?? list.total;
 
   const filterCount = activeFilterCount(filters);
-
-  const { visible, browseTruncated } = useMemo(() => {
-    const narrowed = narrow(filters);
-    // Idle browse would otherwise mount all 78 cards at once — each with its own
-    // Reanimated value and pressable — which stutters on first paint. A query, a
-    // category or a filter narrows things enough to show every match.
-    const browsing = !results && !categoryId && filterCount === 0;
-    return {
-      visible: browsing ? narrowed.slice(0, BROWSE_LIMIT) : narrowed,
-      browseTruncated: browsing && narrowed.length > BROWSE_LIMIT,
-    };
-  }, [narrow, filters, results, categoryId, filterCount]);
-
-  /** Live count behind the sheet's button, computed from the draft, not what is applied. */
-  const draftResultCount = useMemo(() => narrow(draftFilters).length, [narrow, draftFilters]);
 
   const iconByCategory = useMemo(
     () => Object.fromEntries(categories.map((c) => [c.id, c.icon])),
@@ -136,19 +131,21 @@ export default function SearchScreen() {
         contentContainerStyle={{ paddingBottom: tabBarInset + cartBarInset + 24 }}
         keyboardShouldPersistTaps="handled"
         onScrollBeginDrag={Keyboard.dismiss}
+        onScroll={({ nativeEvent }) => {
+          if (isNearBottom(nativeEvent)) list.loadMore();
+        }}
+        scrollEventThrottle={200}
       >
         <View className="px-5 pb-3 flex-row items-center gap-3">
           <Text variant="caption" tone="muted" className="flex-1">
             {searching
               ? t('customer.search.searching')
-              : browseTruncated
-                ? t('customer.browseTruncated', { count: visible.length })
-                : hasQuery
-                  ? t('customer.search.resultsForQuery', {
-                      count: visible.length,
-                      query: debouncedQuery.trim(),
-                    })
-                  : t('customer.search.results', { count: visible.length })}
+              : hasQuery
+                ? t('customer.search.resultsForQuery', {
+                    count: list.total,
+                    query: debouncedQuery.trim(),
+                  })
+                : t('customer.search.results', { count: list.total })}
           </Text>
           {filterCount > 0 ? (
             <Text
@@ -197,6 +194,7 @@ export default function SearchScreen() {
             }
           />
         )}
+        <ListFooter loading={list.loadingMore} />
       </ScrollView>
 
       <FilterSheet

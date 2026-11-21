@@ -5,12 +5,13 @@ import { useCallback, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BackHeader, Badge, Button, Chip, EmptyState, Input, Skeleton, Text } from '@/components/ui';
+import { BackHeader, Badge, Button, Chip, EmptyState, Input, ListFooter, Skeleton, Text } from '@/components/ui';
 import { couponsApi } from '@/data/api';
 import { ApiError } from '@/data/http';
 import type { Coupon } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
+import { isNearBottom, usePagedList } from '@/hooks/usePagedList';
 import { formatCad, formatDate } from '@/lib/format';
 import { useT } from '@/lib/i18n/useT';
 
@@ -37,7 +38,6 @@ export default function BusinessCouponsScreen() {
   const colors = useThemeColors();
   const { vendor, missing, approved, loading: vendorLoading } = useOwnerVendor();
 
-  const [coupons, setCoupons] = useState<Coupon[] | null>(null);
   const [code, setCode] = useState('');
   const [discountType, setDiscountType] = useState<Coupon['discountType']>('percentage');
   const [value, setValue] = useState('');
@@ -46,19 +46,18 @@ export default function BusinessCouponsScreen() {
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      setCoupons(await couponsApi.getMyCoupons());
-    } catch {
-      // An empty list with a working form beats a spinner that never ends.
-      setCoupons((current) => current ?? []);
-    }
-  }, []);
+  // Newest first, a page at a time as the screen scrolls.
+  const list = usePagedList<Coupon>(['coupons', 'mine'], (offset, limit) => couponsApi.getMyCouponsPage(offset, limit), {
+    enabled: approved,
+  });
+  // A failed load shows the empty list under a working form, not a spinner that never ends.
+  const coupons: Coupon[] | null = list.loading && !list.error ? null : list.items;
 
+  const { reload } = list;
   useFocusEffect(
     useCallback(() => {
-      if (approved) void load();
-    }, [approved, load])
+      if (approved) void reload();
+    }, [approved, reload])
   );
 
   // French keyboards type "7,50"; `Number` only reads a dot.
@@ -74,14 +73,15 @@ export default function BusinessCouponsScreen() {
     if (!ready || saving) return;
     setSaving(true);
     try {
-      const created = await couponsApi.createCoupon({
+      await couponsApi.createCoupon({
         code: code.trim().toUpperCase(),
         discountType,
         discountValue: parsedValue,
         usageLimit: parsedLimit,
         validDays: validDays ?? undefined,
       });
-      setCoupons((current) => [created, ...(current ?? [])]);
+      // Back to the first page, where the new code sits on top.
+      await reload();
       setCode('');
       setValue('');
       setUsageLimit('');
@@ -108,8 +108,8 @@ export default function BusinessCouponsScreen() {
           onPress: async () => {
             setBusyId(coupon.id);
             try {
-              const updated = await couponsApi.deactivateCoupon(coupon.id);
-              setCoupons((current) => (current ?? []).map((c) => (c.id === updated.id ? updated : c)));
+              await couponsApi.deactivateCoupon(coupon.id);
+              await reload();
             } catch (error) {
               Alert.alert(
                 t('business.coupons.title'),
@@ -159,6 +159,10 @@ export default function BusinessCouponsScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           contentContainerClassName="px-5 pb-10 gap-6"
+          onScroll={({ nativeEvent }) => {
+            if (isNearBottom(nativeEvent)) list.loadMore();
+          }}
+          scrollEventThrottle={200}
         >
           <View className="rounded-[20px] bg-card p-4 gap-4">
             <Text variant="subtitle" weight="bold">
@@ -303,6 +307,7 @@ export default function BusinessCouponsScreen() {
                 </View>
               ))
             )}
+            <ListFooter loading={list.loadingMore} />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

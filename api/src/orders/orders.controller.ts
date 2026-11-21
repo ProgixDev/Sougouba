@@ -67,6 +67,12 @@ export class OrdersController {
     return this.orders.listForCustomer(userId, query);
   }
 
+  /** Orders placed and money spent, over every order — the profile's two figures. Before `:id`. */
+  @Get('stats')
+  stats(@CurrentUser() userId: string) {
+    return this.orders.customerStats(userId);
+  }
+
   @Get(':id')
   byId(@CurrentUser() userId: string, @Param('id', ParseUUIDPipe) id: string) {
     return this.orders.byId(userId, id, 'customer');

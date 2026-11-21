@@ -12,7 +12,8 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MenuItemRow, ProductCard, useCardWidth, useCartBarInset } from '@/components/customer';
-import { Badge, CatalogImage, Chip, EmptyState, Skeleton, Text } from '@/components/ui';
+import { Badge, CatalogImage, Chip, EmptyState, ListFooter, Skeleton, Text } from '@/components/ui';
+import { usePagedList } from '@/hooks/usePagedList';
 import { categoriesApi, productsApi, vendorsApi } from '@/data/api';
 import { deliveryFeeBetween } from '@/data/deliveryPricing';
 import type { Category, Product, Vendor } from '@/data/types';
@@ -73,9 +74,8 @@ export default function VendorDetailScreen() {
   const destination = useMemo(() => deliveryAddressFor(user), [user]);
 
   const [vendor, setVendor] = useState<Vendor | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [vendorLoading, setVendorLoading] = useState(true);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
 
   const listRef = useRef<SectionList<SectionRow, MenuSection>>(null);
@@ -86,25 +86,32 @@ export default function VendorDetailScreen() {
   useEffect(() => {
     if (!id) return;
     let active = true;
-    setLoading(true);
-    Promise.all([
-      vendorsApi.getVendorById(id),
-      productsApi.getProductsByVendor(id),
-      categoriesApi.getCategories(),
-    ])
-      .then(([v, p, c]) => {
+    setVendorLoading(true);
+    Promise.all([vendorsApi.getVendorById(id), categoriesApi.getCategories()])
+      .then(([v, c]) => {
         if (!active) return;
         setVendor(v ?? null);
-        setProducts(p);
         setCategories(c);
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) setVendorLoading(false);
       });
     return () => {
       active = false;
     };
   }, [id]);
+
+  // The shelves, in the shop's own section order, a page at a time: a section
+  // arrives whole before the next one starts, so headings never repeat. Fifty
+  // per page covers most shops in one request, which keeps the section rail
+  // complete; a bigger shop's later sections join the rail as they load.
+  const shelves = usePagedList(
+    ['products', 'vendor', id, 'section'],
+    (offset, limit) => productsApi.getVendorProductsPage(id as string, { sort: 'section' }, offset, limit),
+    { enabled: !!id, pageSize: 50 }
+  );
+  const products: Product[] = shelves.items;
+  const loading = vendorLoading || shelves.loading;
 
   const iconByCategory = useMemo(
     () => Object.fromEntries(categories.map((c) => [c.id, c.icon])),
@@ -194,6 +201,9 @@ export default function VendorDetailScreen() {
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={16}
+        onEndReached={shelves.loadMore}
+        onEndReachedThreshold={0.6}
+        ListFooterComponent={<ListFooter loading={shelves.loadingMore} />}
         contentContainerStyle={{ paddingBottom: insets.bottom + cartBarInset + 32 }}
         onScrollToIndexFailed={() => {
           // Rows are content-sized, so a long jump can outrun the measured

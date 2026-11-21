@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 
 import type { Db, Tables } from '../db/client.js';
 import { DB } from '../db/db.module.js';
@@ -56,6 +56,21 @@ export class MerchantCouponsService {
     );
     const now = Date.now();
     return rows.map((row) => toResponse(row, now));
+  }
+
+  /** One page, newest first, with the total — what the app's list scrolls through. */
+  async page(userId: string, limit: number, offset: number) {
+    const vendor = await this.ownedVendor(userId);
+    const { data, count, error } = await this.db
+      .from('coupons')
+      .select('*', { count: 'exact' })
+      .eq('vendor_id', vendor.id)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(offset, offset + limit - 1);
+    if (error) throw new InternalServerErrorException('Database request failed');
+    const now = Date.now();
+    return { items: (data ?? []).map((row) => toResponse(row as Tables<'coupons'>, now)), total: count ?? 0, limit, offset };
   }
 
   async create(userId: string, input: CreateCouponInput): Promise<CouponResponse> {

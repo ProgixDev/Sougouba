@@ -20,6 +20,22 @@ export const vendorQuerySchema = paginationSchema.extend({
   q: z.string().trim().min(1).optional(),
   /** Only shops trading right now, by their own posted hours in Montreal time. */
   openNow: queryBool,
+  /** Halal-certified shops only. */
+  halal: queryBool,
+  /** Shops whose posted delivery time is at most this many minutes. */
+  maxEtaMin: z.coerce.number().int().positive().max(240).optional(),
+  /**
+   * The shopper's delivery point. With both set, shops come open first, then
+   * nearest (see `vendor_page_nearest`); without, by name.
+   */
+  /** Exactly these shops (comma-separated, at most 100) — the favourites screen. */
+  ids: z
+    .string()
+    .transform((v) => v.split(',').map((s) => s.trim()).filter(Boolean))
+    .pipe(z.array(z.uuid()).max(100))
+    .optional(),
+  lat: z.coerce.number().min(-90).max(90).optional(),
+  lng: z.coerce.number().min(-180).max(180).optional(),
 });
 
 export type VendorQuery = z.infer<typeof vendorQuerySchema>;

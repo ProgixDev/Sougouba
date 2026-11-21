@@ -14,7 +14,7 @@ import {
   Sun,
   Trash2,
 } from 'lucide-react-native';
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { CourierGate, CourierSlabSurface, onCourierSlab } from '@/components/courier';
@@ -27,7 +27,6 @@ import { useCourierPayouts } from '@/hooks/useCourierPayouts';
 import { useCourierProfile } from '@/hooks/useCourierProfile';
 import { useDeleteAccount } from '@/hooks/useDeleteAccount';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
-import { summariseRuns } from '@/lib/courierAnalytics';
 import { formatCad, formatMonthYear, formatRating } from '@/lib/format';
 import { formatDistance } from '@/lib/geo';
 import { useT } from '@/lib/i18n/useT';
@@ -71,8 +70,9 @@ export default function CourierProfileScreen() {
   const isDark = preference === 'dark';
 
   const { courier, loading, missing, pending, reload } = useCourierProfile();
-  const { runs } = useCourierEarnings(courier?.id);
-  const allTime = useMemo(() => summariseRuns(runs, 3650), [runs]);
+  // Summed by the database over the whole history.
+  const { allTimeRuns, allTimeKm, allTimeCad } = useCourierEarnings(courier?.id);
+  const allTime = { runCount: allTimeRuns, distanceKm: allTimeKm, earningsCad: allTimeCad };
   const payouts = useCourierPayouts(courier?.status === 'approved');
   const reloadPayouts = payouts.reload;
 
@@ -175,7 +175,7 @@ export default function CourierProfileScreen() {
                 // orders — and the Courses tab one swipe away prints the table's
                 // figure. A profile claiming 686 over a history holding 99 is
                 // the app contradicting itself in front of the user.
-                value={String(runs.length > 0 ? allTime.runCount : courier.deliveryCount)}
+                value={String(allTime.runCount > 0 ? allTime.runCount : courier.deliveryCount)}
                 label="courses"
               />
               <Stat

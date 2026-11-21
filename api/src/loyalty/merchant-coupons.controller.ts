@@ -1,9 +1,10 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { SupabaseAuthGuard } from '../auth/supabase-auth.guard.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
+import { pagedListSchema, type PagedListQuery } from '../catalog/dto/query.dto.js';
 import { createCouponSchema, type CreateCouponInput } from './dto/coupon.dto.js';
 import { MerchantCouponsService } from './merchant-coupons.service.js';
 
@@ -20,8 +21,8 @@ export class MerchantCouponsController {
   constructor(private readonly coupons: MerchantCouponsService) {}
 
   @Get()
-  list(@CurrentUser() userId: string) {
-    return this.coupons.list(userId);
+  list(@CurrentUser() userId: string, @Query(new ZodValidationPipe(pagedListSchema)) query: PagedListQuery) {
+    return query.paged ? this.coupons.page(userId, query.limit, query.offset) : this.coupons.list(userId);
   }
 
   @Post()

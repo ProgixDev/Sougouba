@@ -11,12 +11,13 @@ import { usePlatformPlan } from '@/data/queries';
 import type { ID, Order, Product } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
+import { useVendorRecentOrders } from '@/hooks/useVendorRecentOrders';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { comparePeriods } from '@/lib/analytics';
 import { customerName } from '@/lib/customerNames';
 import { useT } from '@/lib/i18n/useT';
 import { formatCad } from '@/lib/format';
-import { isActiveStatus, nextStatusFor } from '@/lib/orderStatus';
+import { nextStatusFor } from '@/lib/orderStatus';
 import { dynamicRoutes, routes } from '@/lib/routes';
 import { shopDay, shopStatusLine } from '@/lib/shopHours';
 
@@ -31,21 +32,31 @@ export default function BusinessDashboardScreen() {
   const { vendor, loading: vendorLoading, missing, pending, reload } = useOwnerVendor();
   const plan = usePlatformPlan();
 
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  // Two weeks of orders: this week and the one before, for the comparison.
+  const recent = useVendorRecentOrders(14);
+  const orders = recent.orders;
+  const { load: loadRecent } = recent;
+  const [queue, setQueue] = useState<Order[]>([]);
+  const [queueTotal, setQueueTotal] = useState(0);
+  const [lowStock, setLowStock] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [advancingId, setAdvancingId] = useState<ID | null>(null);
 
   const load = useCallback(async () => {
     if (!vendor) return;
-    const [nextOrders, nextProducts] = await Promise.all([
-      ordersApi.getOrdersByVendor(vendor.id),
-      productsApi.getMyProducts(),
+    const [, active, low] = await Promise.all([
+      loadRecent(),
+      // The queue, oldest first: the ticket that has waited longest needs a
+      // decision first. One page is plenty for a preview.
+      ordersApi.getVendorOrdersPage('active', 0, 20),
+      // The four lowest stocks across the whole shelf, picked by the database.
+      productsApi.getMyProductsPage({ maxStock: LOW_STOCK_THRESHOLD, sort: 'stock_asc' }, 0, 4),
     ]);
-    setOrders(nextOrders);
-    setProducts(nextProducts);
-  }, [vendor]);
+    setQueue(active.items);
+    setQueueTotal(active.total);
+    setLowStock(low.items);
+  }, [vendor, loadRecent]);
 
   // Advancing an order elsewhere in the stack has to be reflected on return.
   useFocusEffect(
@@ -101,26 +112,7 @@ export default function BusinessDashboardScreen() {
     [todayOrders]
   );
 
-  const queue = useMemo(
-    () =>
-      orders
-        .filter((o) => isActiveStatus(o.status))
-        // Oldest first: the ticket that has been waiting longest is the one that
-        // needs a decision, which is the reverse of every other list in the app.
-        .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
-    [orders]
-  );
-
   const week = useMemo(() => comparePeriods(orders, 7, plan.commissionRate), [orders, plan.commissionRate]);
-
-  const lowStock = useMemo(
-    () =>
-      products
-        .filter((p) => p.isAvailable && p.stockQty <= LOW_STOCK_THRESHOLD)
-        .sort((a, b) => a.stockQty - b.stockQty)
-        .slice(0, 4),
-    [products]
-  );
 
   const topProducts = useMemo(() => week.current.topProducts.slice(0, 3), [week]);
 
@@ -149,7 +141,7 @@ export default function BusinessDashboardScreen() {
               and rendering them as 0,00 $ reads as "you sold nothing today". */}
           <View className="flex-row items-end justify-between gap-4">
             <SlabMetric label={t('business.dashboard.revenueToday')} value={busy ? '—' : formatCad(todayRevenue)} />
-            <SlabMetric label={t('business.dashboard.toHandle')} value={busy ? '—' : String(queue.length)} align="right" />
+            <SlabMetric label={t('business.dashboard.toHandle')} value={busy ? '—' : String(queueTotal)} align="right" />
           </View>
           {day ? <DayStrip day={day} orders={todayOrders} loading={busy} /> : null}
         </CounterHeader>
@@ -164,10 +156,10 @@ export default function BusinessDashboardScreen() {
             <View className="mt-7 gap-3.5">
               <SectionHeader
                 title={t('business.dashboard.toHandle')}
-                count={queue.length}
-                actionLabel={queue.length > QUEUE_PREVIEW ? t('common.seeAllShort') : undefined}
+                count={queueTotal}
+                actionLabel={queueTotal > QUEUE_PREVIEW ? t('common.seeAllShort') : undefined}
                 onAction={
-                  queue.length > QUEUE_PREVIEW
+                  queueTotal > QUEUE_PREVIEW
                     ? () => router.push(routes.businessOrders)
                     : undefined
                 }

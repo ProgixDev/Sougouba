@@ -35,14 +35,15 @@ export function useCustomerStats(): CustomerStats {
       if (!user) return;
       let active = true;
 
+      // Summed by the database over every order, not the latest 100.
       ordersApi
-        .getOrdersByCustomer(user.id)
-        .then((orders) => {
+        .getMyOrderStats()
+        .then((stats) => {
           if (!active) return;
-          const counted = orders.filter((o) => o.status !== 'cancelled');
-          setOrderCount(counted.length);
-          setSpentCad(counted.reduce((sum, o) => sum + o.totalCad, 0));
+          setOrderCount(stats.orderCount);
+          setSpentCad(stats.spentCad);
         })
+        .catch(() => undefined)
         .finally(() => {
           if (active) setLoading(false);
         });

@@ -1,15 +1,18 @@
 import { useFocusEffect, router } from 'expo-router';
 import { PackagePlus, Plus } from 'lucide-react-native';
-import { useCallback, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, SectionList, View } from 'react-native';
 
 import { CounterHeader, PendingApproval, onSlab } from '@/components/business';
 import { useT } from '@/lib/i18n/useT';
 import { SearchField } from '@/components/customer';
-import { Badge, CatalogImage, EmptyState, Reveal, Skeleton, Text } from '@/components/ui';
+import { Badge, CatalogImage, EmptyState, ListFooter, Reveal, Skeleton, Text } from '@/components/ui';
 import { categoriesApi, productsApi } from '@/data/api';
 import type { Category, Product } from '@/data/types';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
+import { useDebounce } from '@/hooks/useDebounce';
+import { usePagedList } from '@/hooks/usePagedList';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { categoryIcons } from '@/lib/categoryIcons';
 import { useLocalized } from '@/lib/localized';
@@ -33,57 +36,59 @@ export default function BusinessCatalogScreen() {
   const tabBarInset = useTabBarInset();
   const { vendor, loading: vendorLoading, missing, pending, reload } = useOwnerVendor();
 
-  const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const term = useDebounce(query, 250).trim();
 
-  const load = useCallback(async () => {
-    if (!vendor) return;
-    const [nextProducts, nextCategories] = await Promise.all([
-      productsApi.getMyProducts(),
-      categoriesApi.getCategories(),
-    ]);
-    setProducts(nextProducts);
-    setCategories(nextCategories);
-  }, [vendor]);
+  useEffect(() => {
+    categoriesApi.getCategories().then(setCategories).catch(() => undefined);
+  }, []);
 
+  // The shelves, in the shop's section order, a page at a time; the search
+  // runs in the database over every product, not over what has loaded.
+  const shelves = usePagedList(
+    ['products', 'mine', vendor?.id, term],
+    (offset, limit) => productsApi.getMyProductsPage({ q: term, sort: 'section' }, offset, limit),
+    { enabled: !!vendor, pageSize: 50 }
+  );
+  // The header's counts are the whole shop's: one row asked for, for the totals.
+  const counts = useQuery({
+    queryKey: ['products', 'mine', vendor?.id, 'counts'],
+    queryFn: async () => {
+      const [all, low] = await Promise.all([
+        productsApi.getMyProductsPage({}, 0, 1),
+        productsApi.getMyProductsPage({ maxStock: LOW_STOCK_THRESHOLD }, 0, 1),
+      ]);
+      return { products: all.total, restock: low.total };
+    },
+    enabled: !!vendor,
+  });
+
+  const loading = shelves.loading;
+  const { reload: reloadShelves } = shelves;
+  const { refetch: refetchCounts } = counts;
   // Creating or editing a product replaces back to this screen, so refetch on
   // focus rather than trying to thread the new record back through params.
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-      // Guarded on `vendor`: load() returns immediately while the shop is still
-      // resolving, and clearing the flag then would drop the screen out of its
-      // loading state with nothing fetched — a flash of a zeroed dashboard.
-      load().finally(() => {
-        if (active && vendor) setLoading(false);
-      });
-      return () => {
-        active = false;
-      };
-    }, [load, vendor])
+      void reloadShelves();
+      void refetchCounts();
+    }, [reloadShelves, refetchCounts])
   );
 
+  const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await Promise.all([reloadShelves(), refetchCounts()]);
     setRefreshing(false);
-  }, [load]);
+  }, [reloadShelves, refetchCounts]);
 
   const iconByCategory = useMemo(
     () => Object.fromEntries(categories.map((c) => [c.id, c.icon])),
     [categories]
   );
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter(
-      (p) => p.name.toLowerCase().includes(q) || p.tags.some((tag) => tag.toLowerCase().includes(q))
-    );
-  }, [products, query]);
+  const visible: Product[] = shelves.items;
 
   /**
    * The catalogue, under the merchant's own headings.
@@ -111,10 +116,8 @@ export default function BusinessCatalogScreen() {
       : grouped;
   }, [vendor, visible]);
 
-  const outOfStock = useMemo(
-    () => products.filter((p) => p.isAvailable && p.stockQty <= LOW_STOCK_THRESHOLD).length,
-    [products]
-  );
+  const productCount = counts.data?.products ?? 0;
+  const outOfStock = counts.data?.restock ?? 0;
 
   // A shop that is filed but not cleared is as unusable as no shop at all,
   // and for the merchant it is a different sentence — see `PendingApproval`.
@@ -127,13 +130,13 @@ export default function BusinessCatalogScreen() {
       <CounterHeader
         title={t('business.tabs.catalog')}
         eyebrow={
-          products.length > 0
+          productCount > 0
             ? outOfStock > 0
               ? t('business.catalog.summary', {
-                  products: t('business.catalog.productCount', { count: products.length }),
+                  products: t('business.catalog.productCount', { count: productCount }),
                   restock: t('business.catalog.toRestock', { count: outOfStock }),
                 })
-              : t('business.catalog.productCount', { count: products.length })
+              : t('business.catalog.productCount', { count: productCount })
             : vendor?.name
         }
         right={
@@ -175,6 +178,9 @@ export default function BusinessCatalogScreen() {
             paddingBottom: tabBarInset + 24,
           }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          onEndReached={shelves.loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={<ListFooter loading={shelves.loadingMore} />}
           renderSectionHeader={({ section }) => (
             <View className="flex-row items-baseline gap-2 bg-background pt-5 pb-2.5">
               <Text variant="caption" weight="bold" className="text-[15px]">

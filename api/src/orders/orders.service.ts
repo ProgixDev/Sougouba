@@ -376,8 +376,22 @@ export class OrdersService {
     return { location: ping ?? null };
   }
 
+  async customerStats(customerId: string) {
+    return unwrap<{ orderCount: number; spentCad: number }>(
+      this.db.rpc('customer_order_stats', { p_customer_id: customerId })
+    );
+  }
+
   async listForCustomer(customerId: string, query: OrderQuery): Promise<Page<unknown>> {
     return this.list({ column: 'customer_id', value: customerId }, query);
+  }
+
+  /** Each chip of the merchant's orders tab: how many, and what they add up to. */
+  async vendorOrderSummary(userId: string) {
+    const vendor = await this.vendorOwnedBy(userId);
+    return unwrap<Record<string, { count: number; amountCad: number }>>(
+      this.db.rpc('vendor_order_summary', { p_vendor_id: vendor.id })
+    );
   }
 
   async listForVendorOwner(userId: string, query: OrderQuery): Promise<Page<unknown>> {
@@ -388,9 +402,16 @@ export class OrdersService {
   private async list(ownership: { column: 'customer_id' | 'vendor_id'; value: string }, query: OrderQuery): Promise<Page<unknown>> {
     // One request instead of two: `count: 'exact'` returns the total alongside
     // the page, so the separate `count(*)` query is gone.
-    let q = this.db.from('orders').select('*', { count: 'exact' }).eq(ownership.column, ownership.value);
+    // `disputes` lists only orders that have one: an inner embed filters the parent rows.
+    // Typed as plain `*`: the string union defeats supabase-js's select parser,
+    // and the embed is stripped from every row below anyway.
+    const columns = (query.view === 'disputes' ? '*, disputes!inner(order_id)' : '*') as '*';
+    let q = this.db.from('orders').select(columns, { count: 'exact' }).eq(ownership.column, ownership.value);
     if (query.status) q = q.eq('status', query.status);
     if (query.activeOnly) q = q.not('status', 'in', '("delivered","cancelled")');
+    if (query.view === 'active') q = q.not('status', 'in', '("delivered","cancelled")');
+    if (query.view === 'delivered') q = q.eq('status', 'delivered');
+    if (query.view === 'cancelled') q = q.eq('status', 'cancelled');
     if (query.search) {
       // `containsPattern` escapes `%` and `_`, so a search cannot match every order.
       q = UUID_RE.test(query.search)
@@ -398,16 +419,23 @@ export class OrdersService {
         : q.or(orIlike(['customer_name'], containsPattern(query.search)));
     }
 
+    // Newest first, matching every list in the app — except the merchant's
+    // active queue, worked from the oldest. `id` breaks ties so a page boundary
+    // can't repeat or drop a row when two share a timestamp.
+    const ascending = query.view === 'active';
     const { data, count, error } = await q
-      // Newest first, matching every list in the app. `id` breaks ties so a
-      // page boundary can't repeat or drop a row when two share a timestamp.
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
+      .order('created_at', { ascending })
+      .order('id', { ascending })
       .range(query.offset, query.offset + query.limit - 1);
     if (error) throw unexpectedDbError(error);
+    // The embed that filtered disputes is not part of an order.
+    const rows = (data ?? []).map((row) => {
+      const { disputes: _filter, ...order } = row as Record<string, unknown>;
+      return order;
+    });
 
     return {
-      items: await hydrateOrders(this.db, data ?? [], {
+      items: await hydrateOrders(this.db, rows, {
         revealPin: ownership.column === 'customer_id',
         courierCard: true,
         review: ownership.column === 'customer_id' ? 'customer' : 'merchant',

@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import { Heart } from 'lucide-react-native';
+import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProductGrid, VendorCard, useCartBarInset } from '@/components/customer';
 import { useT } from '@/lib/i18n/useT';
 import { BackHeader, EmptyState, SectionHeader, Skeleton } from '@/components/ui';
+import { vendorsApi } from '@/data/api';
 import { useCategories, useProductsByIds, useVendors } from '@/data/queries';
 import type { Category, Product, Vendor } from '@/data/types';
 import { dynamicRoutes, routes } from '@/lib/routes';
@@ -28,7 +30,14 @@ export default function FavoritesScreen() {
   // Only the favourited products, by id. This screen used to pull the entire
   // catalogue and filter it on the device to show a handful of cards.
   const productsQuery = useProductsByIds(productIds);
+  // The favourited shops themselves, by id — they used to be picked out of the
+  // first 100 shops, so a favourite past that page disappeared from here.
   const vendorsQuery = useVendors();
+  const favoriteVendorsQuery = useQuery({
+    queryKey: ['vendors', 'ids', [...vendorIds].sort().join(',')],
+    queryFn: async () => (await vendorsApi.getVendorsPage({ ids: vendorIds.slice(0, 100) }, 0, 100)).items,
+    enabled: vendorIds.length > 0,
+  });
   const categoriesQuery = useCategories();
 
   const products = productsQuery.data ?? EMPTY_PRODUCTS;
@@ -39,7 +48,7 @@ export default function FavoritesScreen() {
   // forever with nothing favourited — which would hold the skeletons up on a
   // screen whose real answer is the empty state.
   const loading =
-    (productIds.length > 0 && productsQuery.isPending) || vendorsQuery.isPending;
+    (productIds.length > 0 && productsQuery.isPending) || (vendorIds.length > 0 && favoriteVendorsQuery.isPending);
 
   // Derived from the store, so un-favouriting removes the card immediately
   // without a refetch.
@@ -48,8 +57,8 @@ export default function FavoritesScreen() {
     [products, productIds]
   );
   const favoriteVendors = useMemo(
-    () => vendors.filter((v) => vendorIds.includes(v.id)),
-    [vendors, vendorIds]
+    () => (favoriteVendorsQuery.data ?? EMPTY_VENDORS).filter((v) => vendorIds.includes(v.id)),
+    [favoriteVendorsQuery.data, vendorIds]
   );
 
   const iconByCategory = useMemo(

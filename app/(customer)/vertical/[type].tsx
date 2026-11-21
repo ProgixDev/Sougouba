@@ -1,20 +1,20 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft, SearchX, StoreIcon } from 'lucide-react-native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { VendorCard, useCartBarInset } from '@/components/customer';
-import { Chip, EmptyState, Reveal, Skeleton, Text } from '@/components/ui';
+import { Chip, EmptyState, ListFooter, Reveal, Skeleton, Text } from '@/components/ui';
 import { vendorsApi } from '@/data/api';
-import type { Vendor, VendorType } from '@/data/types';
+import type { VendorType } from '@/data/types';
+import { usePagedList } from '@/hooks/usePagedList';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { deliveryAddressFor } from '@/lib/deliveryAddress';
 import { useT } from '@/lib/i18n/useT';
 import { distanceKm } from '@/lib/geo';
 import { dynamicRoutes, routes } from '@/lib/routes';
-import { shopDay } from '@/lib/shopHours';
 import { verticalFor } from '@/lib/verticals';
 import { useSessionStore } from '@/store/useSessionStore';
 
@@ -43,50 +43,38 @@ export default function VerticalScreen() {
   const tabBarInset = useTabBarInset();
   const user = useSessionStore((s) => s.user);
 
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<FilterKey[]>([]);
-
-  useEffect(() => {
-    if (!vertical) return;
-    let alive = true;
-    setLoading(true);
-    vendorsApi
-      .getVendorsByType(vertical.type as VendorType)
-      .then((list) => {
-        if (alive) setVendors(list);
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [vertical]);
 
   // Where the shopper actually takes delivery, so the distances are theirs and
   // not the city's. Same helper the cart prices against — a shop listed at
   // 3,4 km must not quote its delivery from somewhere else.
   const origin = useMemo(() => deliveryAddressFor(user), [user]);
+  const near = origin.lat !== undefined && origin.lng !== undefined ? { lat: origin.lat, lng: origin.lng } : null;
 
-  const listed = useMemo(() => {
-    const kept = vendors.filter((vendor) => {
-      if (active.includes('halal') && !vendor.isHalalCertified) return false;
-      if (active.includes('fast') && vendor.deliveryEtaMin > FAST_ETA_MIN) return false;
-      if (active.includes('open') && !shopDay(vendor).isOpen) return false;
-      return true;
-    });
-
-    return kept
-      .map((vendor) => ({ vendor, km: distanceKm(origin, vendor.address) }))
-      // Nearest first — the one question a shop list is asked that a shop cannot
-      // answer for itself. Open shops still sort above closed ones, since a
-      // closed shop is not somewhere an order can go right now.
-      .sort((a, b) => {
-        const openDelta = Number(shopDay(b.vendor).isOpen) - Number(shopDay(a.vendor).isOpen);
-        return openDelta !== 0 ? openDelta : a.km - b.km;
-      });
-  }, [vendors, active, origin]);
+  // Filtered and ordered by the API, a page at a time: open shops first, then
+  // nearest the delivery point. Every shop in the vertical is reachable now,
+  // not just the first 100.
+  const list = usePagedList(
+    ['vendors', 'vertical', vertical?.type, active.join(','), near?.lat, near?.lng],
+    (offset, limit) =>
+      vendorsApi.getVendorsPage(
+        {
+          type: vertical?.type as VendorType,
+          halal: active.includes('halal'),
+          maxEtaMin: active.includes('fast') ? FAST_ETA_MIN : undefined,
+          openNow: active.includes('open'),
+          near,
+        },
+        offset,
+        limit
+      ),
+    { enabled: !!vertical }
+  );
+  const loading = list.loading;
+  const listed = useMemo(
+    () => list.items.map((vendor) => ({ vendor, km: distanceKm(origin, vendor.address) })),
+    [list.items, origin]
+  );
 
   const toggle = useCallback((key: FilterKey) => {
     setActive((current) =>
@@ -134,7 +122,7 @@ export default function VerticalScreen() {
         ) : (
           <Text variant="caption" tone="muted">
             {t('customer.vertical.listSummary', {
-              shops: t(`domain.vertical.${vertical.type}.count`, { count: listed.length }),
+              shops: t(`domain.vertical.${vertical.type}.count`, { count: list.total }),
             })}
           </Text>
         )}
@@ -167,8 +155,11 @@ export default function VerticalScreen() {
             gap: 16,
           }}
           showsVerticalScrollIndicator={false}
+          onEndReached={list.loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={<ListFooter loading={list.loadingMore} />}
           renderItem={({ item, index }) => (
-            <Reveal index={index}>
+            <Reveal index={index % 20}>
               <VendorCard
                 vendor={item.vendor}
                 layout="row"

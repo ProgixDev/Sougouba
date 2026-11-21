@@ -1,19 +1,21 @@
 import { useFocusEffect, router } from 'expo-router';
 import { Inbox, ShieldCheck } from 'lucide-react-native';
-import { useCallback, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useCallback, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CounterHeader, OrderQueueCard, PendingApproval } from '@/components/business';
-import { Chip, EmptyState, Reveal, Skeleton, Text } from '@/components/ui';
+import { Chip, EmptyState, ListFooter, Reveal, Skeleton, Text } from '@/components/ui';
 import { ordersApi } from '@/data/api';
 import type { ID, Order } from '@/data/types';
+import { usePagedList } from '@/hooks/usePagedList';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { customerName } from '@/lib/customerNames';
 import { useT } from '@/lib/i18n/useT';
 import { formatCad } from '@/lib/format';
-import { isActiveStatus, nextStatusFor } from '@/lib/orderStatus';
+import { nextStatusFor } from '@/lib/orderStatus';
 import { dynamicRoutes } from '@/lib/routes';
 
 type Filter = 'active' | 'disputes' | 'delivered' | 'cancelled' | 'all';
@@ -33,37 +35,42 @@ export default function BusinessOrdersScreen() {
   const t = useT();
   const tabBarInset = useTabBarInset();
   const { vendor, loading: vendorLoading, missing, pending, reload } = useOwnerVendor();
-  const [orders, setOrders] = useState<Order[]>([]);
   const [filter, setFilter] = useState<Filter>('active');
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [advancingId, setAdvancingId] = useState<ID | null>(null);
 
-  const load = useCallback(async () => {
-    if (!vendor) return;
-    setOrders(await ordersApi.getOrdersByVendor(vendor.id));
-  }, [vendor]);
+  // One page at a time, filtered and ordered by the API: the active queue
+  // oldest first (it is worked from the front), every other chip newest first.
+  const list = usePagedList(
+    ['orders', 'vendor', vendor?.id, filter],
+    (offset, limit) => ordersApi.getVendorOrdersPage(filter, offset, limit),
+    { enabled: !!vendor }
+  );
+  // The chips' counts and amounts cover the whole shop, not the loaded pages.
+  const summary = useQuery({
+    queryKey: ['orders', 'vendor', vendor?.id, 'summary'],
+    queryFn: ordersApi.getVendorOrderSummary,
+    enabled: !!vendor,
+  });
 
+  const reloadAll = useCallback(async () => {
+    await Promise.all([list.reload(), summary.refetch()]);
+  }, [list, summary]);
+
+  const { reload: reloadList } = list;
+  const { refetch: refetchSummary } = summary;
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-      // Guarded on `vendor`: load() returns immediately while the shop is still
-      // resolving, and clearing the flag then would drop the screen out of its
-      // loading state with nothing fetched — a flash of a zeroed dashboard.
-      load().finally(() => {
-        if (active && vendor) setLoading(false);
-      });
-      return () => {
-        active = false;
-      };
-    }, [load, vendor])
+      void reloadList();
+      void refetchSummary();
+    }, [reloadList, refetchSummary])
   );
 
+  const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await reloadAll();
     setRefreshing(false);
-  }, [load]);
+  }, [reloadAll]);
 
   const advance = useCallback(
     async (order: Order) => {
@@ -73,54 +80,16 @@ export default function BusinessOrdersScreen() {
       if (!next) return;
       setAdvancingId(order.id);
       await ordersApi.updateOrderStatus(order.id, next, new Date().toISOString());
-      await load();
+      await reloadAll();
       setAdvancingId(null);
     },
-    [load]
+    [reloadAll]
   );
 
-  const counts = useMemo<Record<Filter, number>>(
-    () => ({
-      active: orders.filter((o) => isActiveStatus(o.status)).length,
-      // Counts what is waiting on the merchant, not the whole history — a chip
-      // reading "Litiges (9)" beside nine already answered is a false alarm.
-      disputes: orders.filter((o) => o.dispute && o.dispute.status === 'open').length,
-      delivered: orders.filter((o) => o.status === 'delivered').length,
-      cancelled: orders.filter((o) => o.status === 'cancelled').length,
-      all: orders.length,
-    }),
-    [orders]
-  );
-
-  const visible = useMemo(() => {
-    switch (filter) {
-      case 'active':
-        // Oldest first while there is something to do about them; everywhere
-        // else newest-first is what you want.
-        return orders
-          .filter((o) => isActiveStatus(o.status))
-          .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-      case 'disputes':
-        // Unanswered first — the answered ones are here for the record.
-        return orders
-          .filter((o) => o.dispute)
-          .sort((a, b) => {
-            const pending = Number(a.dispute?.status !== 'open') - Number(b.dispute?.status !== 'open');
-            return pending !== 0 ? pending : b.createdAt.localeCompare(a.createdAt);
-          });
-      case 'delivered':
-        return orders.filter((o) => o.status === 'delivered');
-      case 'cancelled':
-        return orders.filter((o) => o.status === 'cancelled');
-      default:
-        return orders;
-    }
-  }, [orders, filter]);
-
-  const visibleTotal = useMemo(
-    () => visible.filter((o) => o.status !== 'cancelled').reduce((sum, o) => sum + o.totalCad, 0),
-    [visible]
-  );
+  const counts = (key: Filter) => summary.data?.[key].count ?? 0;
+  const visible = list.items;
+  const loading = list.loading;
+  const visibleTotal = summary.data?.[filter].amountCad ?? 0;
 
   // A shop that is filed but not cleared is as unusable as no shop at all,
   // and for the merchant it is a different sentence — see `PendingApproval`.
@@ -145,7 +114,7 @@ export default function BusinessOrdersScreen() {
           return (
             <Chip
               key={key}
-              label={counts[key] > 0 ? `${label} (${counts[key]})` : label}
+              label={counts(key) > 0 ? `${label} (${counts(key)})` : label}
               selected={filter === key}
               onPress={() => setFilter(key)}
             />
@@ -170,12 +139,15 @@ export default function BusinessOrdersScreen() {
             gap: 12,
           }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          onEndReached={list.loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={<ListFooter loading={list.loadingMore} />}
           ListHeaderComponent={
             visible.length > 0 ? (
               <Text variant="caption" tone="muted" className="text-[12px]">
                 {filter === 'disputes'
-                  ? t('business.counts.disputes', { count: visible.length })
-                  : t('business.counts.orders', { count: visible.length })}
+                  ? t('business.counts.disputes', { count: list.total })
+                  : t('business.counts.orders', { count: list.total })}
                 {filter !== 'cancelled' && filter !== 'disputes'
                   ? ` · ${formatCad(visibleTotal)}`
                   : ''}

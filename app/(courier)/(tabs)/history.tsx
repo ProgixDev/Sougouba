@@ -1,16 +1,16 @@
 import { router, useFocusEffect } from 'expo-router';
 import { History } from 'lucide-react-native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { RefreshControl, SectionList, View } from 'react-native';
 
 import { CourierGate, CourierSlab, RunRow, SlabFigure } from '@/components/courier';
-import { EmptyState, Skeleton, Text } from '@/components/ui';
-import { vendorsApi } from '@/data/api';
-import type { ID } from '@/data/types';
+import { EmptyState, ListFooter, Skeleton, Text } from '@/components/ui';
+import { ordersApi } from '@/data/api';
 import { useCourierEarnings } from '@/hooks/useCourierEarnings';
 import { useCourierProfile } from '@/hooks/useCourierProfile';
+import { usePagedList } from '@/hooks/usePagedList';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
-import { groupRunsByDay, summariseRuns } from '@/lib/courierAnalytics';
+import { groupRunsByDay } from '@/lib/courierAnalytics';
 import { formatCad, formatDayLong } from '@/lib/format';
 import { formatDistance } from '@/lib/geo';
 import type { TFunction } from '@/lib/i18n';
@@ -34,36 +34,27 @@ export default function CourierHistoryScreen() {
   const t = useT();
   const tabBarInset = useTabBarInset();
   const { courier, loading: profileLoading, missing, pending, reload } = useCourierProfile();
-  const { runs, loading, reload: reloadRuns } = useCourierEarnings(courier?.id);
+  // The totals over the whole history come from the database.
+  const totals = useCourierEarnings(courier?.id);
+  // Delivered runs, newest first, a page at a time as the courier scrolls back.
+  // Each carries its shop's name, so there is no per-shop lookup any more.
+  const list = usePagedList(
+    ['courier', 'runs', courier?.id],
+    (offset, limit) => ordersApi.getCourierRunsPage(offset, limit, { deliveredOnly: true }),
+    { enabled: !!courier }
+  );
+  const runs = useMemo(() => list.items.filter((o) => o.delivery), [list.items]);
+  const loading = list.loading;
 
-  const [vendorNames, setVendorNames] = useState<Record<ID, string>>({});
-  const [refreshing, setRefreshing] = useState(false);
-
+  const { reload: reloadList } = list;
+  const { reload: reloadTotals } = totals;
   useFocusEffect(
     useCallback(() => {
       void reload();
-      void reloadRuns();
-    }, [reload, reloadRuns])
+      void reloadList();
+      void reloadTotals();
+    }, [reload, reloadList, reloadTotals])
   );
-
-  useEffect(() => {
-    let active = true;
-    const missingIds = [...new Set(runs.map((o) => o.vendorId))].filter((id) => !vendorNames[id]);
-    if (missingIds.length === 0) return;
-    Promise.all(missingIds.map((id) => vendorsApi.getVendorById(id))).then((found) => {
-      if (!active) return;
-      setVendorNames((prev) => {
-        const next = { ...prev };
-        found.forEach((v) => {
-          if (v) next[v.id] = v.name;
-        });
-        return next;
-      });
-    });
-    return () => {
-      active = false;
-    };
-  }, [runs, vendorNames]);
 
   const sections = useMemo(
     () =>
@@ -75,7 +66,7 @@ export default function CourierHistoryScreen() {
     [runs, t]
   );
 
-  const allTime = useMemo(() => summariseRuns(runs, 3650), [runs]);
+  const allTime = { runCount: totals.allTimeRuns, distanceKm: totals.allTimeKm, earningsCad: totals.allTimeCad };
 
   if (profileLoading) return null;
   if (missing || pending) {
@@ -126,14 +117,15 @@ export default function CourierHistoryScreen() {
           }
           refreshControl={
             <RefreshControl
-              refreshing={refreshing}
+              refreshing={list.refreshing}
               onRefresh={async () => {
-                setRefreshing(true);
-                await reloadRuns();
-                setRefreshing(false);
+                await Promise.all([list.refresh(), reloadTotals()]);
               }}
             />
           }
+          onEndReached={list.loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={<ListFooter loading={list.loadingMore} />}
           renderSectionHeader={({ section }) => (
             <DayHeader
               title={section.title}
@@ -145,7 +137,7 @@ export default function CourierHistoryScreen() {
           renderItem={({ item, index, section }) => (
             <RunRow
               order={item}
-              vendorName={vendorNames[item.vendorId]}
+              vendorName={item.vendorName ?? undefined}
               // Rows within a day are one continuous column, so the connector
               // knows where it is: nothing above the first, nothing below the
               // last, a through-line everywhere between.

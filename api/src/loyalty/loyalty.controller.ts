@@ -4,12 +4,15 @@ import { z } from 'zod';
 
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { SupabaseAuthGuard } from '../auth/supabase-auth.guard.js';
-import { paginationSchema } from '../catalog/dto/query.dto.js';
+import { pagedListSchema } from '../catalog/dto/query.dto.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import { LoyaltyService } from './loyalty.service.js';
 import { SettingsService } from './settings.service.js';
 
-const historyQuerySchema = paginationSchema;
+const historyQuerySchema = pagedListSchema.extend({
+  /** The ledger lines of one order — what the order screen shows. */
+  orderId: z.uuid().optional(),
+});
 type HistoryQuery = z.infer<typeof historyQuerySchema>;
 
 /**
@@ -41,7 +44,7 @@ export class LoyaltyController {
 
   @Get('history')
   history(@CurrentUser() userId: string, @Query(new ZodValidationPipe(historyQuerySchema)) query: HistoryQuery) {
-    return this.loyalty.history(userId, query.limit, query.offset);
+    return this.loyalty.history(userId, query.limit, query.offset, query.paged, query.orderId);
   }
 
   @Get('referral-stats')

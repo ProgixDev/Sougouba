@@ -288,23 +288,30 @@ export class CouriersService {
    * money at the top level; the app reads `order.id` and `order.delivery`, so
    * history listed nothing and earnings summed to zero.
    */
-  async runs(userId: string, limit: number, offset: number) {
+  async runs(userId: string, query: { limit: number; offset: number; paged?: boolean; deliveredOnly?: boolean }) {
+    const { limit, offset } = query;
     const courierId = await this.courierIdFor(userId);
-    const runs = await unwrap<{ order_id: string }[]>(
-      this.db
-        .from('order_deliveries')
-        .select('order_id')
-        .eq('courier_id', courierId)
-        .order('accepted_at', { ascending: false })
-        .range(offset, offset + limit - 1)
-    );
-    if (runs.length === 0) return [];
+    let q = this.db.from('order_deliveries').select('order_id', { count: 'exact' }).eq('courier_id', courierId);
+    if (query.deliveredOnly) q = q.not('delivered_at', 'is', null);
+    const { data, count, error } = await q
+      .order('accepted_at', { ascending: false })
+      // Two runs accepted in the same instant would otherwise swap between
+      // requests, and a page boundary would repeat one and drop the other.
+      .order('order_id', { ascending: false })
+      .range(offset, offset + limit - 1);
+    if (error) throw new InternalServerErrorException('Database request failed');
+    const runs = data ?? [];
 
-    const ids = runs.map((r) => r.order_id);
-    const rows = await unwrap<Record<string, unknown>[]>(this.db.from('orders').select('*').in('id', ids));
-    const byId = new Map((await hydrateOrders(this.db, rows, { revealPin: false, courierCard: false })).map((o) => [o.id, o]));
-    // `in` does not keep order; the run list's does.
-    return ids.map((id) => byId.get(id)).filter((o) => o !== undefined);
+    let items: Awaited<ReturnType<typeof hydrateOrders>> = [];
+    if (runs.length > 0) {
+      const ids = runs.map((r) => r.order_id);
+      const rows = await unwrap<Record<string, unknown>[]>(this.db.from('orders').select('*').in('id', ids));
+      const byId = new Map((await hydrateOrders(this.db, rows, { revealPin: false, courierCard: false })).map((o) => [o.id, o]));
+      // `in` does not keep order; the run list's does.
+      items = ids.map((id) => byId.get(id)).filter((o) => o !== undefined);
+    }
+    // The bare array is what builds already installed expect; `paged` opts in.
+    return query.paged ? { items, total: count ?? 0, limit, offset } : items;
   }
 
   /**

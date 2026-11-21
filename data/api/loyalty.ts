@@ -1,4 +1,4 @@
-import { api } from '../http';
+import { api, type Page } from '../http';
 import type { ID, LoyaltyTransaction, Order } from '../types';
 
 /**
@@ -60,8 +60,11 @@ export async function getBalanceDetail(): Promise<BalanceDetail> {
  * a filter over data the caller has usually already fetched.
  */
 export async function getTransactionForOrder(orderId: ID): Promise<LoyaltyTransaction | undefined> {
-  const history = await getHistory('');
-  return history.find((t) => t.orderId === orderId && t.reason === 'order_delivered');
+  // Asked of the API by order, not searched for in the latest 100 ledger lines.
+  const page = await api<Page<LoyaltyTransaction>>('/me/loyalty/history', {
+    query: { paged: true, orderId, limit: 20 },
+  });
+  return page.items.find((t) => t.reason === 'order_delivered');
 }
 
 export interface ReferralStats {
@@ -100,4 +103,9 @@ export async function debitForRedemption(_customerId: ID, _points: number, _orde
 /** Was waiting for a refund flow to exist. It exists, and it calls this itself. */
 export async function reverseForOrder(_orderId: ID): Promise<void> {
   throw new Error(SERVER_OWNED);
+}
+
+/** One page of the points ledger, newest first, with its total. */
+export async function getHistoryPage(offset: number, limit: number): Promise<Page<LoyaltyTransaction>> {
+  return api<Page<LoyaltyTransaction>>('/me/loyalty/history', { query: { paged: true, offset, limit } });
 }

@@ -98,7 +98,8 @@ export async function hydrateOrders(
   const rows = camelize<(Record<string, unknown> & { id: string })[]>(rawRows);
   const ids = rows.map((r) => r.id);
 
-  const [items, history, disputes, deliveries, issues, reviews] = await Promise.all([
+  const vendorIds = [...new Set(rows.map((r) => r.vendorId as string))];
+  const [items, history, disputes, deliveries, issues, reviews, vendors] = await Promise.all([
     unwrap<{ orderId: string; productId: string; name: string; qty: number; unitPriceCad: string }[]>(
       db
         .from('order_items')
@@ -121,7 +122,11 @@ export async function hydrateOrders(
       db.from('courier_issues').select('order_id, reason, message, at, status').in('order_id', ids)
     ),
     opts.review ? reviewsFor(db, ids) : Promise.resolve([] as ReviewRow[]),
+    // The shop's name on each order, so a list never has to fetch every shop
+    // to label its rows (the customer's tab used to load 100 shops for this).
+    unwrap<{ id: string; name: string }[]>(db.from('vendors').select('id, name').in('id', vendorIds)),
   ]);
+  const vendorNameById = new Map(vendors.map((v) => [v.id, v.name]));
 
   const courierIds = [...new Set(deliveries.map((d) => d.courier_id as string))];
   const cards =
@@ -198,6 +203,7 @@ export async function hydrateOrders(
       qstCad: Number(row.qstCad),
       deliveryFeeCad: Number(row.deliveryFeeCad),
       totalCad: Number(row.totalCad),
+      vendorName: vendorNameById.get(row.vendorId as string) ?? null,
       pointsDiscountCad: num(row.pointsDiscountCad),
       couponDiscountCad: num(row.couponDiscountCad),
       deliveryAddress: {

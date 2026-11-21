@@ -1,14 +1,14 @@
 import { useFocusEffect, router } from 'expo-router';
 import { ChevronRight, ReceiptText } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Badge, EmptyState, Reveal, Skeleton, Text } from '@/components/ui';
+import { Badge, EmptyState, ListFooter, Reveal, Skeleton, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
-import { ordersApi, vendorsApi } from '@/data/api';
-import type { ID, Order } from '@/data/types';
+import { ordersApi } from '@/data/api';
+import { usePagedList } from '@/hooks/usePagedList';
 import { formatCad, formatDate } from '@/lib/format';
 import { orderStatusKey, orderStatusTone, orderSummaryLine } from '@/lib/orderStatus';
 import { useT } from '@/lib/i18n/useT';
@@ -21,40 +21,22 @@ export default function CustomerOrdersScreen() {
   const tabBarInset = useTabBarInset();
   const colors = useThemeColors();
   const user = useSessionStore((s) => s.user);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [vendorNames, setVendorNames] = useState<Record<ID, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const load = useCallback(async () => {
-    if (!user) return;
-    const [next, vendors] = await Promise.all([
-      ordersApi.getOrdersByCustomer(user.id),
-      vendorsApi.getVendors(),
-    ]);
-    setOrders(next);
-    setVendorNames(Object.fromEntries(vendors.map((v) => [v.id, v.name])));
-  }, [user]);
+  // A page at a time, newest first; each order carries its shop's name, so
+  // there is no longer a list of every shop to fetch just to label the rows.
+  const list = usePagedList(['orders', 'mine', user?.id], (offset, limit) => ordersApi.getMyOrdersPage(offset, limit), {
+    enabled: !!user,
+  });
+  const orders = list.items;
+  const loading = list.loading;
 
   // Refetch on focus: placing an order elsewhere in the stack must be reflected
-  // when the shopper lands back here, and the mock store is mutated in place.
+  // when the shopper lands back here.
+  const { reload } = list;
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-      load().finally(() => {
-        if (active) setLoading(false);
-      });
-      return () => {
-        active = false;
-      };
-    }, [load])
+      void reload();
+    }, [reload])
   );
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  }, [load]);
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
@@ -87,11 +69,14 @@ export default function CustomerOrdersScreen() {
           keyExtractor={(order) => order.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: tabBarInset + 24, gap: 12 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={<RefreshControl refreshing={list.refreshing} onRefresh={list.refresh} />}
+          onEndReached={list.loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={<ListFooter loading={list.loadingMore} />}
           renderItem={({ item: order, index }) => {
             const statusLabel = t(orderStatusKey(order.status));
             return (
-              <Reveal index={index}>
+              <Reveal index={index % 20}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={t('customer.orders.rowA11y', {
@@ -106,7 +91,7 @@ export default function CustomerOrdersScreen() {
                 <View className="flex-1 gap-1.5">
                   <View className="flex-row items-center gap-2">
                     <Text variant="caption" weight="bold" numberOfLines={1} className="flex-1">
-                      {vendorNames[order.vendorId] ?? t('common.genericShop')}
+                      {order.vendorName ?? t('common.genericShop')}
                     </Text>
                     <Badge label={statusLabel} tone={orderStatusTone[order.status]} size="sm" />
                   </View>

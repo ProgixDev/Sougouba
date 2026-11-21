@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { reportCourierIssueSchema, type ReportCourierIssueInput } from '../admin/dto/admin.dto.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { SupabaseAuthGuard } from '../auth/supabase-auth.guard.js';
-import { paginationSchema } from '../catalog/dto/query.dto.js';
+import { pagedListSchema, queryBool } from '../catalog/dto/query.dto.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import { CouriersService } from './couriers.service.js';
 import { DeliveryService } from './delivery.service.js';
@@ -30,10 +30,15 @@ import {
 } from './dto/courier.dto.js';
 
 const earningsQuerySchema = z.object({
-  days: z.coerce.number().int().min(1).max(90).default(7),
+  // Up to ten years: "all time" on the history screen is a window like any other.
+  days: z.coerce.number().int().min(1).max(3650).default(7),
 });
 type EarningsQuery = z.infer<typeof earningsQuerySchema>;
-type RunsQuery = z.infer<typeof paginationSchema>;
+const runsQuerySchema = pagedListSchema.extend({
+  /** History and earnings only care about runs that reached the door. */
+  deliveredOnly: queryBool,
+});
+type RunsQuery = z.infer<typeof runsQuerySchema>;
 
 /**
  * Everything a courier does, scoped to the file behind their own token. No
@@ -110,8 +115,8 @@ export class CourierController {
   }
 
   @Get('me/runs')
-  runs(@CurrentUser() userId: string, @Query(new ZodValidationPipe(paginationSchema)) query: RunsQuery) {
-    return this.couriers.runs(userId, query.limit, query.offset);
+  runs(@CurrentUser() userId: string, @Query(new ZodValidationPipe(runsQuerySchema)) query: RunsQuery) {
+    return this.couriers.runs(userId, query);
   }
 
   // ── dispatch ──────────────────────────────────────────────────────────────

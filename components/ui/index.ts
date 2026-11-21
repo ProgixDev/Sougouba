@@ -15,6 +15,7 @@ export { Reveal } from './Reveal';
 export { Skeleton, SkeletonCircle, SkeletonCard } from './Skeleton';
 export { EmptyState } from './EmptyState';
 export { LanguageToggle } from './LanguageToggle';
+export { ListFooter } from './ListFooter';
 export { SectionHeader } from './SectionHeader';
 export { SelectField } from './SelectField';
 export type { SelectOption } from './SelectField';

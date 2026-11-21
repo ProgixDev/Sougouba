@@ -14,10 +14,10 @@ import {
   onSlab,
 } from '@/components/business';
 import { Badge, Reveal, Skeleton, Text } from '@/components/ui';
-import { ordersApi } from '@/data/api';
 import { usePlatformPlan } from '@/data/queries';
-import type { Order, OrderStatus } from '@/data/types';
+import type { OrderStatus } from '@/data/types';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
+import { useVendorRecentOrders } from '@/hooks/useVendorRecentOrders';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { comparePeriods } from '@/lib/analytics';
@@ -36,14 +36,18 @@ export default function BusinessAnalyticsScreen() {
   const { width } = useWindowDimensions();
   const colors = useThemeColors();
 
-  const [orders, setOrders] = useState<Order[]>([]);
   const [days, setDays] = useState<number>(7);
   const [loading, setLoading] = useState(true);
 
+  // Sixty days: the longest range (30) and the one before it, for the
+  // comparison — every order in them, not the latest 100.
+  const recent = useVendorRecentOrders(60);
+  const orders = recent.orders;
+  const { load: loadRecent } = recent;
   const load = useCallback(async () => {
     if (!vendor) return;
-    setOrders(await ordersApi.getOrdersByVendor(vendor.id));
-  }, [vendor]);
+    await loadRecent();
+  }, [vendor, loadRecent]);
 
   useFocusEffect(
     useCallback(() => {

@@ -1,4 +1,4 @@
-import { api } from '../http';
+import { api, type Page } from '../http';
 import type { Coupon, ID } from '../types';
 
 /**
@@ -32,4 +32,9 @@ export async function createCoupon(input: CreateCouponInput): Promise<Coupon> {
 /** Ends the code now. Safe to call twice. */
 export async function deactivateCoupon(id: ID): Promise<Coupon> {
   return api<Coupon>(`/vendors/me/coupons/${id}/deactivate`, { method: 'POST' });
+}
+
+/** One page of the shop's promo codes, newest first, with its total. */
+export async function getMyCouponsPage(offset: number, limit: number): Promise<Page<Coupon>> {
+  return api<Page<Coupon>>('/vendors/me/coupons', { query: { paged: true, offset, limit } });
 }

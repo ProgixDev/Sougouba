@@ -15,7 +15,7 @@ export const queryBool = z
  * The mock ships the whole catalogue to the phone and filters it there; a real
  * API must not (docs/BACKEND-BUILD-PHASES.md, Phase 2). Every list endpoint
  * below is paginated, and the ceiling is the API's, not the caller's — a
- * `?limit=100000` is answered with 100, not with the whole table.
+ * `?limit=100000` is refused with a 400, not answered with the whole table.
  */
 export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 100;
@@ -26,6 +26,15 @@ export const paginationSchema = z.object({
 });
 
 export type Pagination = z.infer<typeof paginationSchema>;
+
+/**
+ * For the few endpoints that answered with a bare array before they were
+ * paginated: `?paged=true` returns a `Page<T>` with its `total`, and without
+ * it the old array shape is kept, so builds already on phones keep working.
+ */
+export const pagedListSchema = paginationSchema.extend({ paged: queryBool });
+
+export type PagedListQuery = z.infer<typeof pagedListSchema>;
 
 /** What every paginated endpoint returns, so the client always knows if there is more. */
 export interface Page<T> {

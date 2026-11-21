@@ -6,7 +6,10 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 import { AddressPickerSheet, HomeHeader, ProductGrid, VendorCard, VerticalCard, useCartBarInset } from '@/components/customer';
 import { useT } from '@/lib/i18n/useT';
 import { EmptyState, Reveal, SectionHeader, SkeletonCard, Text } from '@/components/ui';
-import { useCategories, useProducts, useTopProductIds, useVendors } from '@/data/queries';
+import { useQuery } from '@tanstack/react-query';
+
+import { vendorsApi } from '@/data/api';
+import { useCategories, useProducts, useProductsByIds, useTopProductIds, useVendors } from '@/data/queries';
 import type { Category, ID, Product, Vendor, VendorType } from '@/data/types';
 import { distanceKm } from '@/data/utils/geo';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
@@ -51,6 +54,31 @@ export default function CustomerHomeScreen() {
   const products = productsQuery.data ?? EMPTY_PRODUCTS;
   const vendors = vendorsQuery.data ?? EMPTY_VENDORS;
   const bestSellerIds = bestSellersQuery.data ?? EMPTY_IDS;
+  // The ranked products themselves, by id — not looked up in the first page of
+  // the catalogue, where a best seller past the 100th product went missing.
+  const rankedQuery = useProductsByIds(bestSellerIds);
+
+  /** Where the shopper takes delivery — the distances below are theirs, not the city's. */
+  const origin = useMemo(() => deliveryAddressFor(user), [user]);
+
+  // How many shops each front door leads to, counted by the API over every
+  // approved shop (one row asked for, for its total).
+  const verticalTotals = useQuery({
+    queryKey: ['vendors', 'totals'],
+    queryFn: async () =>
+      Object.fromEntries(
+        await Promise.all(
+          verticals.map(async ({ type }) => [type, (await vendorsApi.getVendorsPage({ type }, 0, 1)).total] as const)
+        )
+      ) as Record<VendorType, number>,
+  });
+
+  // The nearest restaurants, picked by the API from every approved shop.
+  const nearbyQuery = useQuery({
+    queryKey: ['vendors', 'nearby', origin.lat, origin.lng],
+    queryFn: () =>
+      vendorsApi.getVendorsPage({ type: 'restaurant', near: { lat: origin.lat, lng: origin.lng } }, 0, NEARBY_LIMIT),
+  });
 
   // Only the first load shows skeletons. A background revalidation must not
   // blank a screen that already has content on it.
@@ -65,6 +93,8 @@ export default function CustomerHomeScreen() {
       productsQuery.refetch(),
       vendorsQuery.refetch(),
       bestSellersQuery.refetch(),
+      verticalTotals.refetch(),
+      nearbyQuery.refetch(),
     ]);
     setRefreshing(false);
     // Deliberately no deps: the query objects are recreated every render, so
@@ -88,14 +118,14 @@ export default function CustomerHomeScreen() {
     for (const { type } of verticals) {
       const shops = vendors.filter((v) => v.vendorType === type);
       byType[type] = {
-        count: shops.length,
+        count: verticalTotals.data?.[type] ?? shops.length,
         fastestEtaMin: shops.length
           ? Math.min(...shops.map((v) => v.deliveryEtaMin))
           : undefined,
       };
     }
     return byType;
-  }, [vendors]);
+  }, [vendors, verticalTotals.data]);
 
   /**
    * Actually the best sellers, counted over the platform's last 30 days of
@@ -107,7 +137,7 @@ export default function CustomerHomeScreen() {
    * one, so the deals-first order is kept as the tail-filler it always was.
    */
   const bestSellers = useMemo(() => {
-    const byId = new Map(products.map((p) => [p.id, p]));
+    const byId = new Map([...products, ...(rankedQuery.data ?? [])].map((p) => [p.id, p]));
     const ranked = bestSellerIds
       .map((id) => byId.get(id))
       .filter((p): p is Product => p !== undefined);
@@ -118,10 +148,7 @@ export default function CustomerHomeScreen() {
       .filter((p) => !seen.has(p.id))
       .sort((a, b) => Number(Boolean(b.compareAtPriceCad)) - Number(Boolean(a.compareAtPriceCad)));
     return [...ranked, ...filler].slice(0, BEST_SELLER_LIMIT);
-  }, [products, bestSellerIds]);
-
-  /** Where the shopper takes delivery — the distances below are theirs, not the city's. */
-  const origin = useMemo(() => deliveryAddressFor(user), [user]);
+  }, [products, bestSellerIds, rankedQuery.data]);
 
   /**
    * What the header names: the same address `origin` measures from, or nothing.
@@ -136,21 +163,16 @@ export default function CustomerHomeScreen() {
   const [pickingAddress, setPickingAddress] = useState(false);
 
   /**
-   * Restaurants only, nearest first (client, août 2026).
+   * Restaurants only, nearest first (client, août 2026) — open ones ahead of
+   * closed ones, the same order `vertical/[type]` lists them in, so a
+   * restaurant does not change place between the two screens.
    *
    * It listed every shop sorted by announced ETA, under a heading that said
-   * "près de vous" — neither the vertical nor the proximity was true. Distance
-   * is measured the same way `vertical/[type]` measures it, so a restaurant does
-   * not change place between the two screens.
+   * "près de vous" — neither the vertical nor the proximity was true.
    */
   const nearbyRestaurants = useMemo(
-    () =>
-      vendors
-        .filter((v) => v.vendorType === 'restaurant')
-        .map((vendor) => ({ vendor, km: distanceKm(origin, vendor.address) }))
-        .sort((a, b) => a.km - b.km)
-        .slice(0, NEARBY_LIMIT),
-    [vendors, origin]
+    () => (nearbyQuery.data?.items ?? []).map((vendor) => ({ vendor, km: distanceKm(origin, vendor.address) })),
+    [nearbyQuery.data, origin]
   );
 
   return (

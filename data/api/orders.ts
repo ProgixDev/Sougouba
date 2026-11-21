@@ -351,3 +351,54 @@ export async function getTopProductIds(limit = 6): Promise<ID[]> {
   const { ids } = await api<{ ids: ID[] }>('/products/best-sellers', { anonymous: true, query: { limit } });
   return ids;
 }
+
+// ── pages ───────────────────────────────────────────────────────────────────
+
+/** One page of the signed-in shopper's orders, newest first. Each carries its shop's `vendorName`. */
+export async function getMyOrdersPage(offset: number, limit: number): Promise<Page<Order>> {
+  return api<Page<Order>>('/orders', { query: { offset, limit } });
+}
+
+/** The merchant tab's chips. `active` lists oldest first; the rest newest first. */
+export type VendorOrderView = 'active' | 'disputes' | 'delivered' | 'cancelled' | 'all';
+
+export async function getVendorOrdersPage(view: VendorOrderView, offset: number, limit: number): Promise<Page<Order>> {
+  return api<Page<Order>>('/vendors/me/orders', { query: { view, offset, limit } });
+}
+
+/** Each chip's count and amount, counted by the database over the whole shop. */
+export type VendorOrderSummary = Record<VendorOrderView, { count: number; amountCad: number }>;
+
+export async function getVendorOrderSummary(): Promise<VendorOrderSummary> {
+  return api<VendorOrderSummary>('/vendors/me/orders/summary');
+}
+
+/** One page of the signed-in courier's runs, newest first. */
+export async function getCourierRunsPage(
+  offset: number,
+  limit: number,
+  { deliveredOnly = false }: { deliveredOnly?: boolean } = {}
+): Promise<Page<Order>> {
+  return api<Page<Order>>('/couriers/me/runs', {
+    query: { paged: true, deliveredOnly: deliveredOnly || undefined, offset, limit },
+  });
+}
+
+/** A courier's totals over the last `days` days, summed by the database. */
+export interface CourierTotals {
+  days: number;
+  earningsCad: number;
+  tipsCad: number;
+  distanceKm: number;
+  runCount: number;
+  avgPerRunCad: number;
+}
+
+export async function getCourierTotals(days: number): Promise<CourierTotals> {
+  return api<CourierTotals>('/couriers/me/earnings', { query: { days } });
+}
+
+/** The shopper's profile figures, over every order — cancelled ones excluded. */
+export async function getMyOrderStats(): Promise<{ orderCount: number; spentCad: number }> {
+  return api<{ orderCount: number; spentCad: number }>('/orders/stats');
+}

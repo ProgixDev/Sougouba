@@ -126,6 +126,9 @@ export class VendorsService {
    * order from it is the thing the approval step exists to prevent.
    */
   async list(query: VendorQuery): Promise<Page<VendorResponse>> {
+    if (query.lat !== undefined && query.lng !== undefined && !query.categoryId && !query.city && !query.q && !query.ids) {
+      return this.listNearest(query, query.lat, query.lng);
+    }
     let q = this.db.from('vendors').select(VENDOR_COLUMNS, { count: 'exact' }).eq('status', 'approved');
 
     if (query.type) q = q.eq('vendor_type', query.type);
@@ -153,6 +156,9 @@ export class VendorsService {
     // the generated column union — the generator only sees real columns. The
     // filter is valid and is exercised by the live check in verify-catalog.
     if (query.openNow !== undefined) q = (q as any).eq('is_open', query.openNow);
+    if (query.halal) q = q.eq('is_halal_certified', true);
+    if (query.ids) q = q.in('id', query.ids.length > 0 ? query.ids : ['00000000-0000-0000-0000-000000000000']);
+    if (query.maxEtaMin !== undefined) q = q.lte('delivery_eta_min', query.maxEtaMin);
 
     const { data, count, error } = await q
       // `id` breaks ties, and it has to: `name` is not unique, and duplicate
@@ -171,6 +177,32 @@ export class VendorsService {
       limit: query.limit,
       offset: query.offset,
     };
+  }
+
+  /**
+   * Open shops first, then nearest the given point — sorted and cut into pages
+   * in SQL, then hydrated like every other shop list. Category, city and text
+   * search keep the name order: they go through `list`'s PostgREST path.
+   */
+  private async listNearest(query: VendorQuery, lat: number, lng: number): Promise<Page<VendorResponse>> {
+    const page = await unwrap<{ ids: string[]; total: number }>(
+      this.db.rpc('vendor_page_nearest', {
+        p_lat: lat,
+        p_lng: lng,
+        p_type: query.type,
+        p_halal: query.halal || undefined,
+        p_max_eta: query.maxEtaMin,
+        p_open_now: query.openNow,
+        p_limit: query.limit,
+        p_offset: query.offset,
+      })
+    );
+    if (page.ids.length === 0) return { items: [], total: page.total, limit: query.limit, offset: query.offset };
+    const rows = await unwrap<VendorRow[]>(this.db.from('vendors').select(VENDOR_COLUMNS).in('id', page.ids));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    // `in` does not keep order; the function's does.
+    const ordered = page.ids.map((id) => byId.get(id)).filter((r): r is VendorRow => r !== undefined);
+    return { items: await this.hydrate(ordered), total: page.total, limit: query.limit, offset: query.offset };
   }
 
   /**

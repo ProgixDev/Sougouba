@@ -63,6 +63,12 @@ export const orderQuerySchema = paginationSchema.extend({
    * prefix-matched through PostgREST, so a truncated id only matches by name.
    */
   search: z.string().trim().min(1).max(100).optional(),
+  /**
+   * The merchant tab's chips. `active` lists oldest first (the queue is worked
+   * from the front); every other view is newest first. `disputes` is every
+   * order that has one, answered or not.
+   */
+  view: z.enum(['active', 'disputes', 'delivered', 'cancelled', 'all']).optional(),
 });
 
 export type OrderQuery = z.infer<typeof orderQuerySchema>;

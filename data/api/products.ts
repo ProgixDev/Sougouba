@@ -188,3 +188,66 @@ function toBody(input: Partial<Product>): Record<string, unknown> {
     ...(nutrition !== undefined ? { nutrition: nutrition ?? null } : {}),
   };
 }
+
+/** The filters every product list can ask the API for — the same set `applyFilters` used to apply on the phone. */
+export interface ProductPageFilters {
+  q?: string;
+  categoryId?: ID | null;
+  vendorId?: ID | null;
+  sectionId?: ID | null;
+  /** `section` keeps one shop's page in its own section order. */
+  sort?: 'relevance' | 'price_asc' | 'price_desc' | 'name' | 'section' | 'stock_asc';
+  /** Available products at or under this stock — the merchant's restock list. */
+  maxStock?: number;
+  priceBand?: 'all' | 'under_10' | '10_to_20' | 'over_20';
+  onSale?: boolean;
+  inStockOnly?: boolean;
+}
+
+function productQuery(filters: ProductPageFilters, offset: number, limit: number) {
+  return {
+    q: filters.q?.trim() || undefined,
+    categoryId: filters.categoryId ?? undefined,
+    vendorId: filters.vendorId ?? undefined,
+    sectionId: filters.sectionId ?? undefined,
+    sort: filters.sort,
+    priceBand: filters.priceBand,
+    onSale: filters.onSale || undefined,
+    inStockOnly: filters.inStockOnly || undefined,
+    maxStock: filters.maxStock,
+    offset,
+    limit,
+  };
+}
+
+/**
+ * One page of the shopper's catalogue, filtered, searched and sorted by the
+ * API. With a search term it goes through `/products/search`; without, the
+ * browse endpoint — the same `product_page` underneath.
+ */
+export async function getProductsPage(filters: ProductPageFilters, offset: number, limit: number): Promise<Page<Product>> {
+  const path = filters.q?.trim() ? '/products/search' : '/products';
+  const page = await api<Page<any>>(path, { anonymous: true, query: productQuery(filters, offset, limit) });
+  return { ...page, items: page.items.map(toProduct) };
+}
+
+/** One page of one shop's shelves, for the shopper. */
+export async function getVendorProductsPage(
+  vendorId: ID,
+  filters: ProductPageFilters,
+  offset: number,
+  limit: number
+): Promise<Page<Product>> {
+  const { vendorId: _ignored, ...rest } = filters;
+  const page = await api<Page<any>>(`/vendors/${vendorId}/products`, {
+    anonymous: true,
+    query: productQuery(rest, offset, limit),
+  });
+  return { ...page, items: page.items.map(toProduct) };
+}
+
+/** One page of the signed-in merchant's own shelves, at any shop status. */
+export async function getMyProductsPage(filters: ProductPageFilters, offset: number, limit: number): Promise<Page<Product>> {
+  const page = await api<Page<any>>('/vendors/me/products', { query: productQuery(filters, offset, limit) });
+  return { ...page, items: page.items.map(toProduct) };
+}

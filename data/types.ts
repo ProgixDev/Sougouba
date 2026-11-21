@@ -287,6 +287,8 @@ export interface Order {
    */
   customerName?: string;
   vendorId: ID;
+  /** The shop's name, joined by the API — so an order list needs no separate shop lookup. */
+  vendorName?: string | null;
   items: OrderItem[];
   status: OrderStatus;
   subtotalCad: number;

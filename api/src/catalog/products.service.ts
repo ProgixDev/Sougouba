@@ -101,6 +101,7 @@ export class ProductsService {
         p_sort: query.sort,
         p_limit: query.limit,
         p_offset: query.offset,
+        p_max_stock: query.maxStock,
       })
     );
 

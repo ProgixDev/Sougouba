@@ -229,3 +229,34 @@ export async function demoApproveMine(): Promise<void> {
 export async function adoptDemoShop(): Promise<{ id: ID; name: string }> {
   return api('/vendors/me/demo-adopt', { method: 'POST', body: {} });
 }
+
+export interface VendorPageFilters {
+  type?: VendorType;
+  halal?: boolean;
+  /** Posted delivery time at most this many minutes. */
+  maxEtaMin?: number;
+  openNow?: boolean;
+  /** The shopper's delivery point: with it, open shops first, then nearest. */
+  near?: { lat: number; lng: number } | null;
+  /** Exactly these shops (at most 100). */
+  ids?: ID[];
+}
+
+/** One page of approved shops, filtered and ordered by the API. */
+export async function getVendorsPage(filters: VendorPageFilters, offset: number, limit: number): Promise<Page<Vendor>> {
+  const page = await api<Page<any>>('/vendors', {
+    anonymous: true,
+    query: {
+      type: filters.type,
+      halal: filters.halal || undefined,
+      maxEtaMin: filters.maxEtaMin,
+      openNow: filters.openNow || undefined,
+      lat: filters.near?.lat,
+      lng: filters.near?.lng,
+      ids: filters.ids?.join(','),
+      offset,
+      limit,
+    },
+  });
+  return { ...page, items: page.items.map(toVendor) };
+}

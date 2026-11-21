@@ -18,7 +18,7 @@ import { useCourierEarnings } from '@/hooks/useCourierEarnings';
 import { useCourierPayouts } from '@/hooks/useCourierPayouts';
 import { useCourierProfile } from '@/hooks/useCourierProfile';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
-import { compareRuns, summariseRuns } from '@/lib/courierAnalytics';
+import { compareRuns } from '@/lib/courierAnalytics';
 import { formatCad } from '@/lib/format';
 import { useT } from '@/lib/i18n/useT';
 import { formatDistance } from '@/lib/geo';
@@ -66,7 +66,7 @@ export default function CourierEarningsScreen() {
   const t = useT();
   const tabBarInset = useTabBarInset();
   const { courier, loading: profileLoading, missing, pending, reload } = useCourierProfile();
-  const { runs, loading, reload: reloadRuns } = useCourierEarnings(courier?.id);
+  const { runs, loading, reload: reloadRuns, allTimeCad, allTimeRuns } = useCourierEarnings(courier?.id);
   const payouts = useCourierPayouts(courier?.status === 'approved');
   const reloadPayouts = payouts.reload;
 
@@ -94,7 +94,8 @@ export default function CourierEarningsScreen() {
     return runs.filter((o) => Date.parse(o.delivery!.deliveredAt ?? o.createdAt) >= from);
   }, [runs, selected.days]);
 
-  const allTime = useMemo(() => summariseRuns(runs, 3650), [runs]);
+  // Summed by the database over the whole history, not over the recent runs loaded here.
+  const allTime = { runCount: allTimeRuns, earningsCad: allTimeCad };
 
   if (profileLoading) return null;
   if (missing || pending) {

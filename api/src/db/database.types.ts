@@ -2160,6 +2160,7 @@ export type Database = {
         }
         Returns: string
       }
+      customer_order_stats: { Args: { p_customer_id: string }; Returns: Json }
       delivery_complete: {
         Args: {
           p_courier_id: string
@@ -2307,6 +2308,7 @@ export type Database = {
           p_category_id?: string
           p_in_stock_only?: boolean
           p_limit?: number
+          p_max_stock?: number
           p_offset?: number
           p_on_sale?: boolean
           p_price_max?: number
@@ -2388,6 +2390,20 @@ export type Database = {
           p_vendor_type: string
         }
         Returns: string
+      }
+      vendor_order_summary: { Args: { p_vendor_id: string }; Returns: Json }
+      vendor_page_nearest: {
+        Args: {
+          p_halal?: boolean
+          p_lat: number
+          p_limit?: number
+          p_lng: number
+          p_max_eta?: number
+          p_offset?: number
+          p_open_now?: boolean
+          p_type?: string
+        }
+        Returns: Json
       }
       vendor_set_categories: {
         Args: { p_category_ids: string[]; p_vendor_id: string }

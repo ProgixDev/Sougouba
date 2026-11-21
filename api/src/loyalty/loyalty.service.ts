@@ -67,17 +67,17 @@ export class LoyaltyService {
   }
 
   /** Newest first, matching the points screen. Includes expired rows — the history is a record, not a balance. */
-  async history(customerId: string, limit: number, offset: number) {
-    const rows = await unwrap<Record<string, unknown>[]>(
-      this.db
-        .from('loyalty_transactions')
-        .select('*')
-        .eq('customer_id', customerId)
-        .order('created_at', { ascending: false })
-        .order('id', { ascending: false })
-        .range(offset, offset + limit - 1)
-    );
-    return camelize<unknown[]>(rows);
+  async history(customerId: string, limit: number, offset: number, paged = false, orderId?: string) {
+    let q = this.db.from('loyalty_transactions').select('*', { count: 'exact' }).eq('customer_id', customerId);
+    if (orderId) q = q.eq('order_id', orderId);
+    const { data, count, error } = await q
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(offset, offset + limit - 1);
+    if (error) throw new InternalServerErrorException('Database request failed');
+    const items = camelize<unknown[]>(data ?? []);
+    // The bare array is what builds already installed expect; `paged` opts in.
+    return paged ? { items, total: count ?? 0, limit, offset } : items;
   }
 
   /** How this account's own referral code has paid off — read off the ledger rather than a separate counter. */
