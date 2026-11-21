@@ -10,7 +10,10 @@ export type AuditSubject =
   | 'settings'
   | 'user'
   | 'specialty'
-  | 'support';
+  | 'support'
+  | 'review'
+  | 'coupon'
+  | 'product';
 
 /** One line of `GET /admin/audit-log`, newest first. Written by the database, never edited. */
 export interface AuditEntry {

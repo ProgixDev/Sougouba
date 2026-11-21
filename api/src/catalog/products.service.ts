@@ -20,7 +20,8 @@ const PRODUCT_COLUMNS = `id, vendorId:vendor_id, categoryId:category_id, section
   name, description, priceCad:price_cad, compareAtPriceCad:compare_at_price_cad,
   imageUrl:image_url, stockQty:stock_qty, isAvailable:is_available, tags,
   nutritionCalories:nutrition_calories, nutritionProteinG:nutrition_protein_g,
-  nutritionFatG:nutrition_fat_g, nutritionWeightG:nutrition_weight_g`;
+  nutritionFatG:nutrition_fat_g, nutritionWeightG:nutrition_weight_g,
+  hiddenAt:hidden_at, hiddenReason:hidden_reason`;
 
 /** PostgREST's "no such function" and Postgres's own — `0037` not applied yet. */
 const MISSING_FUNCTION = new Set(['PGRST202', '42883']);
@@ -157,6 +158,8 @@ export class ProductsService {
         .select(`${PRODUCT_COLUMNS}, vendors!inner(status)`)
         .in('id', ids)
         .eq('vendors.status', 'approved')
+        // Hidden by the back office: gone from the shopper's cart too.
+        .is('hidden_at', null)
     );
     return rows.map((row) => toProduct(row));
   }
@@ -171,6 +174,7 @@ export class ProductsService {
         .select(`${PRODUCT_COLUMNS}, vendors!inner(status)`)
         .eq('id', id)
         .eq('vendors.status', 'approved')
+        .is('hidden_at', null)
         .maybeSingle()
     );
     if (!row) throw new NotFoundException('Product not found');

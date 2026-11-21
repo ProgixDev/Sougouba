@@ -233,7 +233,9 @@ export default function BusinessCatalogScreen() {
                       })}
                     </Text>
                     <View className="flex-row gap-1.5 mt-0.5">
-                      {!product.isAvailable ? (
+                      {product.hiddenByAdmin ? (
+                        <Badge label={t('business.catalog.hiddenByAdmin')} tone="destructive" size="sm" />
+                      ) : !product.isAvailable ? (
                         <Badge label={t('business.catalog.offSale')} tone="neutral" size="sm" />
                       ) : lowStock ? (
                         <Badge label={t('business.catalog.lowStock')} tone="warning" size="sm" />

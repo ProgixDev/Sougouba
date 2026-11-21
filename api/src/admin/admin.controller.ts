@@ -1,4 +1,16 @@
-import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { AdminGuard } from '../auth/admin.guard.js';
@@ -10,11 +22,15 @@ import { AdminService } from './admin.service.js';
 import { ApprovalsService } from './approvals.service.js';
 import { AuditService } from './audit.service.js';
 import {
+  adminCouponQuerySchema,
+  adminProductQuerySchema,
+  adminReviewQuerySchema,
   adminSearchQuerySchema,
   auditQuerySchema,
   courierIssueQuerySchema,
   createSpecialtySchema,
   disputeQuerySchema,
+  moderateReviewSchema,
   orderListQuerySchema,
   overviewQuerySchema,
   refundOrderSchema,
@@ -27,11 +43,15 @@ import {
   updateSettingsSchema,
   updateSpecialtySchema,
   userQuerySchema,
+  type AdminCouponQuery,
+  type AdminProductQuery,
+  type AdminReviewQuery,
   type AdminSearchQuery,
   type AuditQuery,
   type CourierIssueQuery,
   type CreateSpecialtyInput,
   type DisputeQuery,
+  type ModerateReviewInput,
   type OrderListQuery,
   type OverviewQuery,
   type RefundOrderInput,
@@ -48,6 +68,7 @@ import {
 import { RefundsService } from './refunds.service.js';
 import { SpecialtiesAdminService } from './specialties-admin.service.js';
 import { SupportAdminService } from './support-admin.service.js';
+import { ModerationService } from './moderation.service.js';
 
 /**
  * A rejection or suspension without a stated reason is refused.
@@ -82,7 +103,8 @@ export class AdminController {
     private readonly platformSettings: SettingsService,
     private readonly audit: AuditService,
     private readonly specialtiesAdmin: SpecialtiesAdminService,
-    private readonly supportAdmin: SupportAdminService
+    private readonly supportAdmin: SupportAdminService,
+    private readonly moderation: ModerationService
   ) {}
 
   @Get('stats')
@@ -293,6 +315,66 @@ export class AdminController {
   @Post('support/:id/resolve')
   resolveSupport(@CurrentUser() adminId: string, @Param('id', ParseUUIDPipe) id: string) {
     return this.supportAdmin.resolve(adminId, id);
+  }
+
+  // ── moderation ────────────────────────────────────────────────────────────
+
+  @Get('reviews')
+  reviews(@Query(new ZodValidationPipe(adminReviewQuerySchema)) query: AdminReviewQuery) {
+    return this.moderation.listReviews(query);
+  }
+
+  /** Hide/show the comment, remove/restore the review. Hiding or removing needs a reason. */
+  @Post('reviews/:orderId/moderate')
+  @HttpCode(204)
+  moderateReview(
+    @CurrentUser() adminId: string,
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+    @Body(new ZodValidationPipe(moderateReviewSchema)) body: ModerateReviewInput
+  ) {
+    return this.moderation.moderateReview(adminId, orderId, body);
+  }
+
+  @Get('coupons')
+  coupons(@Query(new ZodValidationPipe(adminCouponQuerySchema)) query: AdminCouponQuery) {
+    return this.moderation.listCoupons(query);
+  }
+
+  /** Ends a merchant's code now. A reason is required. */
+  @Post('coupons/:id/deactivate')
+  @HttpCode(204)
+  deactivateCoupon(
+    @CurrentUser() adminId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(reviewDecisionSchema)) body: ReviewDecisionInput
+  ) {
+    return this.moderation.deactivateCoupon(adminId, id, requireReason(body).reason);
+  }
+
+  @Get('products')
+  products(@Query(new ZodValidationPipe(adminProductQuerySchema)) query: AdminProductQuery) {
+    return this.moderation.listProducts(query);
+  }
+
+  /** Out of every shopper read, checkout included; the merchant still sees it, marked. A reason is required. */
+  @Post('products/:id/hide')
+  @HttpCode(204)
+  hideProduct(
+    @CurrentUser() adminId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(reviewDecisionSchema)) body: ReviewDecisionInput
+  ) {
+    return this.moderation.setProductHidden(adminId, id, true, requireReason(body).reason);
+  }
+
+  @Post('products/:id/unhide')
+  @HttpCode(204)
+  unhideProduct(
+    @CurrentUser() adminId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(reviewDecisionSchema)) body: ReviewDecisionInput
+  ) {
+    return this.moderation.setProductHidden(adminId, id, false, body.reason);
   }
 
   // ── shop specialties ──────────────────────────────────────────────────────

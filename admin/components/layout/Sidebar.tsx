@@ -12,6 +12,7 @@ import {
   Users,
   ScrollText,
   Settings,
+  ShieldAlert,
   Tags,
   X,
 } from 'lucide-react';
@@ -34,6 +35,7 @@ const NAV = (counts: SidebarCounts) => [
   { href: '/disputes', label: 'Litiges', icon: MessageCircleWarning, count: counts.openDisputes },
   { href: '/courier-issues', label: 'Incidents livreurs', icon: TriangleAlert, count: counts.openCourierIssues },
   { href: '/support', label: 'Support', icon: Headset, count: counts.supportWaiting },
+  { href: '/moderation', label: 'Modération', icon: ShieldAlert, count: 0 },
   { href: '/users', label: 'Utilisateurs', icon: Users, count: 0 },
   { href: '/specialties', label: 'Spécialités', icon: Tags, count: 0 },
   { href: '/audit', label: 'Journal d’audit', icon: ScrollText, count: 0 },

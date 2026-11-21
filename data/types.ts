@@ -174,6 +174,11 @@ export interface Product {
   stockQty: number;
   isAvailable: boolean;
   tags: string[];
+  /**
+   * Set when the Sougouba team hid the product: shoppers no longer see it.
+   * Only present on the merchant's own reads — a shopper never receives one.
+   */
+  hiddenByAdmin?: { at: string; reason: string | null };
 }
 
 export interface CartItem {

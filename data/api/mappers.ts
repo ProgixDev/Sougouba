@@ -117,6 +117,8 @@ type ProductRow = {
   tags?: string[];
   /** Nested by the API when set, absent otherwise — never flat columns. */
   nutrition?: { calories: number; proteinG: number; fatG: number; weightG: number };
+  /** Only on the merchant's own reads: the back office hid this product. */
+  hiddenByAdmin?: { at: string; reason: string | null };
 };
 
 export function toProduct(row: ProductRow): Product {
@@ -145,5 +147,6 @@ export function toProduct(row: ProductRow): Product {
     stockQty: row.stockQty,
     isAvailable: row.isAvailable,
     tags: row.tags ?? [],
+    ...(row.hiddenByAdmin ? { hiddenByAdmin: row.hiddenByAdmin } : {}),
   } as Product;
 }

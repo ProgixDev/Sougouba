@@ -222,7 +222,7 @@ export type RefundOrderInput = z.infer<typeof refundOrderSchema>;
  */
 export const auditQuerySchema = paginationSchema.extend({
   action: z.string().trim().min(1).max(60).optional(),
-  subjectType: z.enum(['vendor', 'courier', 'order', 'dispute', 'courier_issue', 'settings', 'user', 'specialty', 'support']).optional(),
+  subjectType: z.enum(['vendor', 'courier', 'order', 'dispute', 'courier_issue', 'settings', 'user', 'specialty', 'support', 'review', 'coupon', 'product']).optional(),
   subjectId: z.string().uuid().optional(),
   actorId: z.string().uuid().optional(),
   since: z.coerce.date().optional(),
@@ -271,3 +271,33 @@ export const supportReplySchema = z.object({
 });
 
 export type SupportReplyInput = z.infer<typeof supportReplySchema>;
+
+// ── moderation: reviews, coupons, products ──────────────────────────────────
+
+export const adminReviewQuerySchema = paginationSchema.extend({
+  /** `low` is 2 stars or fewer for the shop — where abuse and real problems both show up first. */
+  filter: z.enum(['all', 'with_comment', 'low', 'hidden', 'removed']).default('all'),
+});
+
+export type AdminReviewQuery = z.infer<typeof adminReviewQuerySchema>;
+
+export const moderateReviewSchema = z.object({
+  action: z.enum(['hide_comment', 'show_comment', 'remove', 'restore']),
+  reason: z.string().trim().max(1000).optional(),
+});
+
+export type ModerateReviewInput = z.infer<typeof moderateReviewSchema>;
+
+export const adminCouponQuerySchema = paginationSchema.extend({
+  status: z.enum(['active', 'ended', 'all']).default('all'),
+  search: z.string().trim().min(1).max(40).optional(),
+});
+
+export type AdminCouponQuery = z.infer<typeof adminCouponQuerySchema>;
+
+export const adminProductQuerySchema = paginationSchema.extend({
+  search: z.string().trim().min(1).max(100).optional(),
+  hidden: z.enum(['all', 'only']).default('all'),
+});
+
+export type AdminProductQuery = z.infer<typeof adminProductQuerySchema>;

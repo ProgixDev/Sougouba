@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ProductForm } from '@/components/business';
 import { useT } from '@/lib/i18n/useT';
-import { BackHeader, EmptyState, Skeleton } from '@/components/ui';
+import { BackHeader, EmptyState, Skeleton, Text } from '@/components/ui';
 import { productsApi } from '@/data/api';
 import type { Product } from '@/data/types';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
@@ -89,6 +89,20 @@ export default function EditProductScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <BackHeader title={t('business.productDetail.edit')} />
+      {/* Hidden by the back office: the merchant can still edit it, but no
+          edit brings it back — only the Sougouba team can. */}
+      {product.hiddenByAdmin ? (
+        <View className="mx-5 mb-2 rounded-2xl bg-destructive/10 px-4 py-3 gap-1">
+          <Text variant="caption" weight="semibold" tone="destructive">
+            {t('business.productDetail.hiddenTitle')}
+          </Text>
+          <Text variant="caption" className="text-[13px] leading-[19px]">
+            {product.hiddenByAdmin.reason
+              ? t('business.productDetail.hiddenBodyReason', { reason: product.hiddenByAdmin.reason })
+              : t('business.productDetail.hiddenBody')}
+          </Text>
+        </View>
+      ) : null}
       <ProductForm
         vendor={vendor}
         product={product}

@@ -22,6 +22,9 @@ const SUBJECT_TABS: { key: AuditSubject | 'all'; label: string }[] = [
   { key: 'dispute', label: 'Litiges' },
   { key: 'courier_issue', label: 'Incidents' },
   { key: 'support', label: 'Support' },
+  { key: 'review', label: 'Avis' },
+  { key: 'coupon', label: 'Codes promo' },
+  { key: 'product', label: 'Produits' },
   { key: 'specialty', label: 'Spécialités' },
   { key: 'settings', label: 'Paramètres' },
 ];
@@ -44,6 +47,10 @@ const ACTION_LABELS: Record<string, { label: string; tone: Tone }> = {
   'specialty.update': { label: 'Spécialité modifiée', tone: 'secondary' },
   'support.reply': { label: 'Réponse au support', tone: 'primary' },
   'support.resolve': { label: 'Support résolu', tone: 'success' },
+  'review.moderate': { label: 'Avis modéré', tone: 'warning' },
+  'coupon.deactivate': { label: 'Code promo désactivé', tone: 'destructive' },
+  'product.hide': { label: 'Produit masqué', tone: 'destructive' },
+  'product.unhide': { label: 'Produit réaffiché', tone: 'success' },
 };
 
 /** Where each kind of subject lives in this dashboard. Disputes and courier issues are keyed by their order. */
@@ -51,8 +58,12 @@ function subjectHref(entry: AuditEntry): string | null {
   if (entry.subjectType === 'settings') return '/settings';
   // One page lists them all; there is no page per specialty.
   if (entry.subjectType === 'specialty') return '/specialties';
+  // A review is keyed by its order; coupons and products are moderated from one page.
+  if (entry.subjectType === 'review') return entry.subjectId ? `/orders/${entry.subjectId}` : null;
+  if (entry.subjectType === 'coupon') return '/moderation?tab=coupons';
+  if (entry.subjectType === 'product') return '/moderation?tab=products';
   if (!entry.subjectId) return null;
-  const base: Record<Exclude<AuditSubject, 'settings' | 'specialty'>, string> = {
+  const base: Record<Exclude<AuditSubject, 'settings' | 'specialty' | 'review' | 'coupon' | 'product'>, string> = {
     vendor: '/merchants',
     courier: '/couriers',
     user: '/users',

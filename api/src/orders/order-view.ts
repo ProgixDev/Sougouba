@@ -42,6 +42,8 @@ type ReviewRow = {
   courierRating: number | null;
   comment: string | null;
   createdAt: string;
+  commentHiddenAt: string | null;
+  removedAt: string | null;
 };
 
 /** PostgREST's and Postgres's "no such table" — see `reviewsFor`. */
@@ -61,7 +63,9 @@ let warnedMissingReviews = false;
 async function reviewsFor(db: Db, orderIds: string[]): Promise<ReviewRow[]> {
   const { data, error } = await db
     .from('order_reviews')
-    .select('orderId:order_id, vendorRating:vendor_rating, courierRating:courier_rating, comment, createdAt:created_at')
+    .select(
+      'orderId:order_id, vendorRating:vendor_rating, courierRating:courier_rating, comment, createdAt:created_at, commentHiddenAt:comment_hidden_at, removedAt:removed_at'
+    )
     .in('order_id', orderIds);
   if (error) {
     if (MISSING_TABLE.has(error.code)) {
@@ -168,8 +172,17 @@ export async function hydrateOrders(
     parts.get(orderId)!.courierIssue = rest;
   }
   for (const review of reviews) {
-    const { orderId, courierRating, ...rest } = review;
-    parts.get(orderId)!.review = opts.review === 'customer' ? { ...rest, courierRating } : rest;
+    const { orderId, courierRating, commentHiddenAt, removedAt, ...rest } = review;
+    if (opts.review === 'customer') {
+      // The customer keeps seeing what they wrote — moderation is about what
+      // others read, not about rewriting their own record.
+      parts.get(orderId)!.review = { ...rest, courierRating };
+      continue;
+    }
+    // The merchant: a review the back office removed is not shown at all, and
+    // a hidden comment leaves only the stars.
+    if (removedAt) continue;
+    parts.get(orderId)!.review = commentHiddenAt ? { ...rest, comment: null } : rest;
   }
   // Oldest first, so the timeline reads top to bottom. `at` is an ISO string —
   // PostgREST never hands back a Date.

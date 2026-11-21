@@ -30,7 +30,11 @@ export type AdminAction =
   | 'specialty.create'
   | 'specialty.update'
   | 'support.reply'
-  | 'support.resolve';
+  | 'support.resolve'
+  | 'review.moderate'
+  | 'coupon.deactivate'
+  | 'product.hide'
+  | 'product.unhide';
 
 export const ADMIN_ACTIONS: AdminAction[] = [
   'vendor.approve',
@@ -49,9 +53,13 @@ export const ADMIN_ACTIONS: AdminAction[] = [
   'specialty.update',
   'support.reply',
   'support.resolve',
+  'review.moderate',
+  'coupon.deactivate',
+  'product.hide',
+  'product.unhide',
 ];
 
-export type AuditSubject = 'vendor' | 'courier' | 'order' | 'dispute' | 'courier_issue' | 'settings' | 'user' | 'specialty' | 'support';
+export type AuditSubject = 'vendor' | 'courier' | 'order' | 'dispute' | 'courier_issue' | 'settings' | 'user' | 'specialty' | 'support' | 'review' | 'coupon' | 'product';
 
 export type AuditEntry = {
   actorId: string;

@@ -126,6 +126,11 @@ export interface ProductResponse {
   isAvailable: boolean;
   tags: string[];
   nutrition?: { calories: number; proteinG: number; fatG: number; weightG: number };
+  /**
+   * Set when the back office hid the product. Only ever present on the
+   * merchant's own reads: every shopper read leaves hidden products out.
+   */
+  hiddenByAdmin?: { at: string; reason: string | null };
 }
 
 export interface ProductRow {
@@ -145,6 +150,8 @@ export interface ProductRow {
   nutritionProteinG: string | null;
   nutritionFatG: string | null;
   nutritionWeightG: string | null;
+  hiddenAt?: string | null;
+  hiddenReason?: string | null;
 }
 
 export function toProduct(row: ProductRow): ProductResponse {
@@ -176,5 +183,6 @@ export function toProduct(row: ProductRow): ProductResponse {
           },
         }
       : {}),
+    ...(row.hiddenAt ? { hiddenByAdmin: { at: row.hiddenAt, reason: row.hiddenReason ?? null } } : {}),
   };
 }

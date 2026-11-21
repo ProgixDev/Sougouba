@@ -93,7 +93,9 @@ export class OrdersService {
     const rows = await unwrap<ProductRow[]>(
       this.db
         .from('products')
-        .select('id, vendorId:vendor_id, name, priceCad:price_cad, stockQty:stock_qty, isAvailable:is_available')
+        .select(
+          'id, vendorId:vendor_id, name, priceCad:price_cad, stockQty:stock_qty, isAvailable:is_available, hiddenAt:hidden_at'
+        )
         .in('id', productIds)
     );
 
@@ -107,7 +109,10 @@ export class OrdersService {
       if (product.vendorId !== cart.vendorId) {
         throw new BadRequestException(`"${product.name}" is not sold by this shop`);
       }
-      if (!product.isAvailable) throw new ConflictException(`"${product.name}" is no longer available`);
+      // Hidden by the back office reads, to the shopper, exactly like withdrawn.
+      if (!product.isAvailable || product.hiddenAt) {
+        throw new ConflictException(`"${product.name}" is no longer available`);
+      }
       if (product.stockQty < item.qty) {
         throw new ConflictException(`"${product.name}": only ${product.stockQty} left`);
       }
@@ -587,4 +592,5 @@ type ProductRow = {
   priceCad: string;
   stockQty: number;
   isAvailable: boolean;
+  hiddenAt: string | null;
 };

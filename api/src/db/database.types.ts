@@ -891,31 +891,43 @@ export type Database = {
       order_reviews: {
         Row: {
           comment: string | null
+          comment_hidden_at: string | null
           courier_id: string | null
           courier_rating: number | null
           created_at: string
           customer_id: string
+          moderated_by: string | null
+          moderation_reason: string | null
           order_id: string
+          removed_at: string | null
           vendor_id: string
           vendor_rating: number
         }
         Insert: {
           comment?: string | null
+          comment_hidden_at?: string | null
           courier_id?: string | null
           courier_rating?: number | null
           created_at?: string
           customer_id: string
+          moderated_by?: string | null
+          moderation_reason?: string | null
           order_id: string
+          removed_at?: string | null
           vendor_id: string
           vendor_rating: number
         }
         Update: {
           comment?: string | null
+          comment_hidden_at?: string | null
           courier_id?: string | null
           courier_rating?: number | null
           created_at?: string
           customer_id?: string
+          moderated_by?: string | null
+          moderation_reason?: string | null
           order_id?: string
+          removed_at?: string | null
           vendor_id?: string
           vendor_rating?: number
         }
@@ -930,6 +942,13 @@ export type Database = {
           {
             foreignKeyName: "order_reviews_customer_id_fkey"
             columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_reviews_moderated_by_fkey"
+            columns: ["moderated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1141,6 +1160,9 @@ export type Database = {
           compare_at_price_cad: number | null
           created_at: string
           description: string
+          hidden_at: string | null
+          hidden_by: string | null
+          hidden_reason: string | null
           id: string
           image_url: string | null
           is_available: boolean
@@ -1161,6 +1183,9 @@ export type Database = {
           compare_at_price_cad?: number | null
           created_at?: string
           description: string
+          hidden_at?: string | null
+          hidden_by?: string | null
+          hidden_reason?: string | null
           id?: string
           image_url?: string | null
           is_available?: boolean
@@ -1181,6 +1206,9 @@ export type Database = {
           compare_at_price_cad?: number | null
           created_at?: string
           description?: string
+          hidden_at?: string | null
+          hidden_by?: string | null
+          hidden_reason?: string | null
           id?: string
           image_url?: string | null
           is_available?: boolean
@@ -1202,6 +1230,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_hidden_by_fkey"
+            columns: ["hidden_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -1759,6 +1794,10 @@ export type Database = {
           phone: string
         }[]
       }
+      admin_coupon_deactivate: {
+        Args: { p_admin_id: string; p_coupon_id: string; p_reason: string }
+        Returns: undefined
+      }
       admin_courier_stats: { Args: { p_courier_id: string }; Returns: Json }
       admin_decide_courier: {
         Args: {
@@ -1874,6 +1913,15 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_product_set_hidden: {
+        Args: {
+          p_admin_id: string
+          p_hidden: boolean
+          p_product_id: string
+          p_reason: string
+        }
+        Returns: undefined
+      }
       admin_record_user_block: {
         Args: {
           p_admin_id: string
@@ -1927,6 +1975,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      admin_review_moderate: {
+        Args: {
+          p_action: string
+          p_admin_id: string
+          p_order_id: string
+          p_reason: string
+        }
+        Returns: undefined
       }
       admin_search: {
         Args: { p_id_prefix?: string; p_pattern: string; p_per_type?: number }
@@ -2257,6 +2314,9 @@ export type Database = {
         | "user"
         | "specialty"
         | "support"
+        | "review"
+        | "coupon"
+        | "product"
       coupon_discount_type: "percentage" | "fixed"
       courier_issue_reason:
         | "customer_absent"
@@ -2434,6 +2494,9 @@ export const Constants = {
         "user",
         "specialty",
         "support",
+        "review",
+        "coupon",
+        "product",
       ],
       coupon_discount_type: ["percentage", "fixed"],
       courier_issue_reason: [
