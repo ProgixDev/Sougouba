@@ -1855,6 +1855,19 @@ export type Database = {
         }
         Returns: undefined
       }
+      admin_specialty_save: {
+        Args: {
+          p_admin_id: string
+          p_id: string | null
+          p_is_active: boolean
+          p_name_en: string
+          p_name_fr: string
+          p_position: number
+          p_slug: string
+          p_vendor_type: Database["public"]["Enums"]["vendor_type"]
+        }
+        Returns: Database["public"]["Tables"]["specialties"]["Row"]
+      }
       admin_resolve_courier_issue: {
         Args: { p_admin_id: string; p_note: string; p_order_id: string }
         Returns: {
@@ -2185,6 +2198,7 @@ export type Database = {
         | "courier_issue"
         | "settings"
         | "user"
+        | "specialty"
       coupon_discount_type: "percentage" | "fixed"
       courier_issue_reason:
         | "customer_absent"
@@ -2360,6 +2374,7 @@ export const Constants = {
         "courier_issue",
         "settings",
         "user",
+        "specialty",
       ],
       coupon_discount_type: ["percentage", "fixed"],
       courier_issue_reason: [

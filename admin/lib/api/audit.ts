@@ -1,7 +1,15 @@
 import { apiGet, type Page } from './client';
 
 /** What an audit line is about — `admin_audit_log.subject_type`. */
-export type AuditSubject = 'vendor' | 'courier' | 'order' | 'dispute' | 'courier_issue' | 'settings' | 'user';
+export type AuditSubject =
+  | 'vendor'
+  | 'courier'
+  | 'order'
+  | 'dispute'
+  | 'courier_issue'
+  | 'settings'
+  | 'user'
+  | 'specialty';
 
 /** One line of `GET /admin/audit-log`, newest first. Written by the database, never edited. */
 export interface AuditEntry {

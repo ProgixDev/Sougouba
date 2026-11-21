@@ -13,6 +13,7 @@ import {
   adminSearchQuerySchema,
   auditQuerySchema,
   courierIssueQuerySchema,
+  createSpecialtySchema,
   disputeQuerySchema,
   orderListQuerySchema,
   overviewQuerySchema,
@@ -22,10 +23,12 @@ import {
   reviewDecisionSchema,
   reviewQuerySchema,
   updateSettingsSchema,
+  updateSpecialtySchema,
   userQuerySchema,
   type AdminSearchQuery,
   type AuditQuery,
   type CourierIssueQuery,
+  type CreateSpecialtyInput,
   type DisputeQuery,
   type OrderListQuery,
   type OverviewQuery,
@@ -35,9 +38,11 @@ import {
   type ReviewDecisionInput,
   type ReviewQuery,
   type UpdateSettingsInput,
+  type UpdateSpecialtyInput,
   type UserQuery,
 } from './dto/admin.dto.js';
 import { RefundsService } from './refunds.service.js';
+import { SpecialtiesAdminService } from './specialties-admin.service.js';
 
 /**
  * A rejection or suspension without a stated reason is refused.
@@ -70,7 +75,8 @@ export class AdminController {
     private readonly refunds: RefundsService,
     private readonly approvals: ApprovalsService,
     private readonly platformSettings: SettingsService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly specialtiesAdmin: SpecialtiesAdminService
   ) {}
 
   @Get('stats')
@@ -253,6 +259,32 @@ export class AdminController {
     @Body(new ZodValidationPipe(reviewDecisionSchema)) body: ReviewDecisionInput
   ) {
     return this.approvals.setUserBlocked(adminId, id, false, body.reason);
+  }
+
+  // ── shop specialties ──────────────────────────────────────────────────────
+
+  /** Every entry, retired ones included, with how many shops use each. */
+  @Get('specialties')
+  specialties() {
+    return this.specialtiesAdmin.list();
+  }
+
+  @Post('specialties')
+  createSpecialty(
+    @CurrentUser() adminId: string,
+    @Body(new ZodValidationPipe(createSpecialtySchema)) body: CreateSpecialtyInput
+  ) {
+    return this.specialtiesAdmin.create(adminId, body);
+  }
+
+  /** Rename, reorder, retire or bring back — a rename reaches the shops that use it. */
+  @Patch('specialties/:id')
+  updateSpecialty(
+    @CurrentUser() adminId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(updateSpecialtySchema)) body: UpdateSpecialtyInput
+  ) {
+    return this.specialtiesAdmin.update(adminId, id, body);
   }
 
   // ── platform settings ─────────────────────────────────────────────────────

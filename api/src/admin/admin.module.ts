@@ -9,6 +9,7 @@ import { AuditModule } from './audit.module.js';
 import { RefundsService } from './refunds.service.js';
 import { RetentionScheduler } from './retention.scheduler.js';
 import { RetentionService } from './retention.service.js';
+import { SpecialtiesAdminService } from './specialties-admin.service.js';
 
 /**
  * The back office (CDC: "WEB SÉCURISÉ"). An **API only** — the admin web
@@ -23,7 +24,14 @@ import { RetentionService } from './retention.service.js';
 @Module({
   imports: [OrdersModule, LoyaltyModule, AuditModule],
   controllers: [AdminController],
-  providers: [AdminService, RefundsService, ApprovalsService, RetentionService, RetentionScheduler],
+  providers: [
+    AdminService,
+    RefundsService,
+    ApprovalsService,
+    RetentionService,
+    RetentionScheduler,
+    SpecialtiesAdminService,
+  ],
   exports: [RefundsService, RetentionScheduler],
 })
 export class AdminModule {}

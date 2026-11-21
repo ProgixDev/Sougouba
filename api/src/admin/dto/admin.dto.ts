@@ -222,7 +222,7 @@ export type RefundOrderInput = z.infer<typeof refundOrderSchema>;
  */
 export const auditQuerySchema = paginationSchema.extend({
   action: z.string().trim().min(1).max(60).optional(),
-  subjectType: z.enum(['vendor', 'courier', 'order', 'dispute', 'courier_issue', 'settings', 'user']).optional(),
+  subjectType: z.enum(['vendor', 'courier', 'order', 'dispute', 'courier_issue', 'settings', 'user', 'specialty']).optional(),
   subjectId: z.string().uuid().optional(),
   actorId: z.string().uuid().optional(),
   since: z.coerce.date().optional(),
@@ -230,3 +230,29 @@ export const auditQuerySchema = paginationSchema.extend({
 });
 
 export type AuditQuery = z.infer<typeof auditQuerySchema>;
+
+// ── shop specialties ────────────────────────────────────────────────────────
+
+/** 40: one line under a shop's name — the table's own check (`0033`). */
+const specialtyName = z.string().trim().min(2, 'Au moins 2 caractères').max(40, '40 caractères maximum');
+
+export const createSpecialtySchema = z.object({
+  vendorType: z.enum(['grocery', 'restaurant']),
+  nameFr: specialtyName,
+  nameEn: specialtyName,
+  position: z.number().int().min(0).max(10_000).optional(),
+});
+
+export type CreateSpecialtyInput = z.infer<typeof createSpecialtySchema>;
+
+/** The type is not editable: a shop's specialty must stay in its own list. */
+export const updateSpecialtySchema = z
+  .object({
+    nameFr: specialtyName.optional(),
+    nameEn: specialtyName.optional(),
+    position: z.number().int().min(0).max(10_000).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, 'Aucun champ à modifier');
+
+export type UpdateSpecialtyInput = z.infer<typeof updateSpecialtySchema>;

@@ -26,7 +26,9 @@ export type AdminAction =
   | 'settings.update'
   | 'order.refund'
   | 'user.block'
-  | 'user.unblock';
+  | 'user.unblock'
+  | 'specialty.create'
+  | 'specialty.update';
 
 export const ADMIN_ACTIONS: AdminAction[] = [
   'vendor.approve',
@@ -41,9 +43,11 @@ export const ADMIN_ACTIONS: AdminAction[] = [
   'order.refund',
   'user.block',
   'user.unblock',
+  'specialty.create',
+  'specialty.update',
 ];
 
-export type AuditSubject = 'vendor' | 'courier' | 'order' | 'dispute' | 'courier_issue' | 'settings' | 'user';
+export type AuditSubject = 'vendor' | 'courier' | 'order' | 'dispute' | 'courier_issue' | 'settings' | 'user' | 'specialty';
 
 export type AuditEntry = {
   actorId: string;
