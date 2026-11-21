@@ -48,7 +48,7 @@ export default function NewProductScreen() {
       <ProductForm
         vendor={vendor}
         submitLabel={t('business.queue.addToCatalog')}
-        onSubmit={async (values, tags) => {
+        onSubmit={async (values, tags, imageUrl) => {
           await productsApi.createProduct({
             vendorId: vendor.id,
             categoryId: values.categoryId,
@@ -57,10 +57,8 @@ export default function NewProductScreen() {
             description: values.description,
             priceCad: values.priceCad,
             compareAtPriceCad: values.compareAtPriceCad,
-            // Photography is bundled per-id by scripts/fetch-product-images.mjs,
-            // so a product created in-app has no image and falls back to the
-            // branded placeholder.
-            imageUrl: '',
+            // Uploaded by the form already; `''` falls back to the branded placeholder.
+            imageUrl,
             // `hasNutrition` gates the four fields, and the schema guarantees
             // they are all present once it is set — so this is either the whole
             // block or none of it, never a partial one.

@@ -23,9 +23,13 @@ export default function EditProductScreen() {
     if (!id) return;
     let active = true;
     productsApi
-      .getProductById(id)
+      .getMyProduct(id)
       .then((found) => {
         if (active) setProduct(found ?? null);
+      })
+      // A network failure lands on "not found" rather than an unhandled rejection.
+      .catch(() => {
+        if (active) setProduct(null);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -90,8 +94,9 @@ export default function EditProductScreen() {
         product={product}
         submitLabel="Enregistrer"
         onDelete={confirmDelete}
-        onSubmit={async (values, tags) => {
+        onSubmit={async (values, tags, imageUrl) => {
           await productsApi.updateProduct(product.id, {
+            imageUrl,
             categoryId: values.categoryId,
             sectionId: values.sectionId,
             name: values.name,

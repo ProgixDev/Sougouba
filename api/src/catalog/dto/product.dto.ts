@@ -229,3 +229,27 @@ export const updateProductSchema = productFields
   .superRefine(comparePriceRule);
 
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;
+
+// ── photos ──────────────────────────────────────────────────────────────────
+
+/**
+ * What a product photo may be, and the extension it is stored under.
+ *
+ * Narrower than the registration documents: no PDF, and no HEIC — a product
+ * photo is shown to every shopper, and Android cannot draw HEIC. iOS hands the
+ * picker's result back as JPEG once `quality` is below 1, so this costs the
+ * merchant nothing.
+ */
+export const PRODUCT_IMAGE_TYPES = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+} as const;
+
+export const productImageUploadSchema = z.object({
+  contentType: z.enum(Object.keys(PRODUCT_IMAGE_TYPES) as [keyof typeof PRODUCT_IMAGE_TYPES], {
+    message: 'Format accepté : JPEG, PNG ou WebP',
+  }),
+});
+
+export type ProductImageUploadInput = z.infer<typeof productImageUploadSchema>;

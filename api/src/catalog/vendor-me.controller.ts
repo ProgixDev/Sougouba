@@ -19,9 +19,11 @@ import { SupabaseAuthGuard } from '../auth/supabase-auth.guard.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import {
   createProductSchema,
+  productImageUploadSchema,
   productQuerySchema,
   updateProductSchema,
   type CreateProductInput,
+  type ProductImageUploadInput,
   type ProductQuery,
   type UpdateProductInput,
 } from './dto/product.dto.js';
@@ -129,6 +131,20 @@ export class VendorMeController {
     @Query(new ZodValidationPipe(productQuerySchema)) query: ProductQuery
   ) {
     return this.products.listMine(userId, query);
+  }
+
+  @Get('me/products/:id')
+  product(@CurrentUser() userId: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.products.byIdMine(userId, id);
+  }
+
+  /** A signed upload URL for one product photo; send the returned `path` as `imageUrl`. */
+  @Post('me/products/image-upload')
+  productImageUpload(
+    @CurrentUser() userId: string,
+    @Body(new ZodValidationPipe(productImageUploadSchema)) body: ProductImageUploadInput
+  ) {
+    return this.products.createImageUpload(userId, body);
   }
 
   @Post('me/products')

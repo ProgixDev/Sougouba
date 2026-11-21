@@ -1,11 +1,21 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
 import { unwrap } from '../db/unwrap.js';
 import {
   PRICE_BANDS,
+  PRODUCT_IMAGE_TYPES,
   type CreateProductInput,
+  type ProductImageUploadInput,
   type ProductListQuery,
   type ProductQuery,
   type ProductSearchQuery,
@@ -171,6 +181,21 @@ export class ProductsService {
   }
 
   /**
+   * One of the merchant's own products, at any vendor status — what the editor
+   * opens. `byId` is the shopper's read and hides every product of a shop that
+   * is not approved, so a pending merchant could stock a product and then never
+   * open it again. Another shop's id answers 404, like a missing one.
+   */
+  async byIdMine(userId: string, id: string): Promise<ProductResponse> {
+    const vendorId = await this.ownedVendorId(userId);
+    const row = await unwrap<ProductRow | null>(
+      this.db.from('products').select(PRODUCT_COLUMNS).eq('id', id).eq('vendor_id', vendorId).maybeSingle()
+    );
+    if (!row) throw new NotFoundException('Product not found');
+    return toProduct(row);
+  }
+
+  /**
    * A section belongs to one shop, so a merchant filing a product under someone
    * else's section id would otherwise put their product on another shop's page.
    * Checked as "this section, owned by this vendor" rather than trusting the FK,
@@ -301,5 +326,28 @@ export class ProductsService {
       this.db.from('products').delete().eq('id', id).eq('vendor_id', vendorId).select('id')
     );
     if (deleted.length === 0) throw new NotFoundException('Product not found');
+  }
+
+  /**
+   * Somewhere to upload one product photo.
+   *
+   * Same two hops as the registration documents: the API picks the whole path
+   * — under this merchant's own vendor folder, with a random name — and signs a
+   * one-shot upload URL for exactly it, so the device never names a file and
+   * cannot write into another shop's folder or over an existing photo. The
+   * returned `path` is what `imageUrl` then accepts (`assertMediaPath`).
+   *
+   * Allowed while the shop is pending: a merchant stocks the shelves before
+   * approval, and that is when the photos go in.
+   *
+   * ⚠️ A replaced or abandoned photo stays in the bucket — nothing purges
+   * unreferenced files yet.
+   */
+  async createImageUpload(userId: string, input: ProductImageUploadInput) {
+    const vendorId = await this.ownedVendorId(userId);
+    const file = `${vendorId}/${randomUUID()}.${PRODUCT_IMAGE_TYPES[input.contentType]}`;
+    const { data, error } = await this.db.storage.from(PRODUCT_MEDIA_BUCKET).createSignedUploadUrl(file);
+    if (error || !data) throw new InternalServerErrorException('Could not prepare the upload');
+    return { path: `${PRODUCT_MEDIA_BUCKET}/${file}`, uploadUrl: data.signedUrl, contentType: input.contentType };
   }
 }

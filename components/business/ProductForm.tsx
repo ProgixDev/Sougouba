@@ -4,7 +4,8 @@ import { Controller, useForm, useWatch } from 'react-hook-form';
 import { KeyboardAvoidingView, Platform, ScrollView, Switch, View } from 'react-native';
 
 import { Button, Chip, Input, Text } from '@/components/ui';
-import { categoriesApi } from '@/data/api';
+import { categoriesApi, productsApi } from '@/data/api';
+import { productImageType } from '@/data/api/products';
 import type { Category, Product, Vendor } from '@/data/types';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import {
@@ -18,13 +19,16 @@ import { i18nResolver } from '@/lib/validation/resolver';
 import { useLocalized } from '@/lib/localized';
 import { useT } from '@/lib/i18n/useT';
 
+import { ProductPhotoField, type ProductPhotoValue } from './ProductPhotoField';
+
 export interface ProductFormProps {
   /** The shop being edited — its `sections` are the shelves a product can go on. */
   vendor: Vendor;
   /** Omit to create. */
   product?: Product;
   submitLabel: string;
-  onSubmit: (values: ProductFormValues, tags: string[]) => Promise<void>;
+  /** `imageUrl` is the Storage path to save — already uploaded if a new photo was picked, `''` for none. */
+  onSubmit: (values: ProductFormValues, tags: string[], imageUrl: string) => Promise<void>;
   onDelete?: () => void;
 }
 
@@ -42,6 +46,8 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
   const colors = colorScheme === 'dark' ? darkColors : lightColors;
 
   const [categories, setCategories] = useState<Category[]>([]);
+  // Outside react-hook-form: a picked photo is a file, not a field the schema checks.
+  const [photo, setPhoto] = useState<ProductPhotoValue>(product?.imageUrl ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -81,8 +87,21 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
   async function submit(values: ProductFormValues) {
     setFormError(null);
     setSubmitting(true);
+    let imageUrl: string;
     try {
-      await onSubmit(values, parseTags(values.tags));
+      // Uploaded only now, so backing out of the form leaves nothing in Storage.
+      // A failed save after this leaves the photo behind; keeping the path means
+      // a retry does not upload it a second time.
+      imageUrl =
+        typeof photo === 'string' ? photo : await productsApi.uploadProductImage(photo, productImageType(photo)!);
+      setPhoto(imageUrl);
+    } catch {
+      setFormError(t('business.productForm.photoUploadFailed'));
+      setSubmitting(false);
+      return;
+    }
+    try {
+      await onSubmit(values, parseTags(values.tags), imageUrl);
     } catch {
       setFormError(t('business.saveFailed'));
       setSubmitting(false);
@@ -96,6 +115,8 @@ export function ProductForm({ vendor, product, submitLabel, onSubmit, onDelete }
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 20 }}
       >
+        <ProductPhotoField value={photo} onChange={setPhoto} disabled={submitting} />
+
         <View className="gap-4">
           <Controller
             control={control}
