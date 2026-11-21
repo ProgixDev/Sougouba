@@ -7,7 +7,6 @@ import { Text } from '@/components/ui/Text';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { DataTable, type Column } from '@/components/data/DataTable';
 import { listMerchantOrders } from '@/lib/api/merchantOrders';
-import { getMerchantSession } from '@/lib/merchantAuth';
 import { orderStatusMeta } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
 import type { Order, OrderStatus } from '@/lib/types';
@@ -30,9 +29,8 @@ export default function MerchantOrdersPage() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    const session = getMerchantSession();
-    if (!session) return;
-    listMerchantOrders({ vendorId: session.vendorId }).then(setOrders);
+    // An empty list rather than a skeleton forever if the API is unreachable.
+    listMerchantOrders().then(setOrders).catch(() => setOrders([]));
   }, []);
 
   const rows = useMemo(() => {
@@ -46,7 +44,7 @@ export default function MerchantOrdersPage() {
   }, [orders, status, search]);
 
   const columns: Column<Order>[] = [
-    { key: 'id', header: 'Commande', render: (o) => <Text variant="body" className="font-semibold">#{o.id}</Text> },
+    { key: 'id', header: 'Commande', render: (o) => <Text variant="body" className="font-semibold">#{o.id.slice(0, 8)}</Text> },
     { key: 'customer', header: 'Client', sortable: true, sortValue: (o) => o.customerName ?? '', render: (o) => <Text variant="body">{o.customerName ?? '—'}</Text> },
     {
       key: 'createdAt',

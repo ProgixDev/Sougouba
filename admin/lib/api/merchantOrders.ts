@@ -1,47 +1,30 @@
 import type { ID, Order } from '../types';
-import { getSeed } from './seed';
-import { delay, loadTable } from './storage';
+import { ApiError, merchantApiGet, type Page } from './client';
 
 /**
- * Order reads for the **merchant portal**, still backed by the localStorage
- * mock.
+ * Order reads for the **merchant portal**, from the API's merchant endpoints.
  *
- * This is the mock implementation that used to live in `orders.ts`, lifted here
- * unchanged when that file was rewritten to call the real API. The split is
- * deliberate rather than incidental: `/admin/orders` is guarded by `AdminGuard`,
- * so a merchant session holds no token that could reach it, and pointing the
- * portal at the admin endpoint would 403 on every screen.
- *
- * Wiring the merchant portal for real needs endpoints that do not exist yet —
- * a merchant-scoped `GET /merchant/orders` and `GET /merchant/orders/:id` that
- * resolve the shop from the caller's own session. That matters beyond
- * convenience: `app/merchant/(portal)/orders/[id]/page.tsx` currently enforces
- * tenancy **client-side**, by fetching any order and blanking it if
- * `vendorId` does not match. Against a real API that check has to move to the
- * server and 404, or one merchant can read another's orders by editing a URL.
- *
- * Until then this stays on the mock, where every "shop" is fictional and there
- * is nothing to leak.
+ * `/vendors/me/orders` resolves the shop from the caller's own token, so there
+ * is no `vendorId` to pass and none a merchant could swap: another shop's order
+ * id answers 404 on the server. (This used to be a localStorage mock that
+ * filtered by `vendorId` in the browser.)
  */
 
-const TABLE_KEY = 'sougouba-admin-orders';
+/** The API's own page ceiling. A shop with more orders than this needs paging, not a bigger number. */
+const ALL = 100;
 
-function table(): Order[] {
-  return loadTable(TABLE_KEY, getSeed().orders);
+/** Newest first, as the API returns them. */
+export async function listMerchantOrders(): Promise<Order[]> {
+  const page = await merchantApiGet<Page<Order>>('/vendors/me/orders', { limit: ALL });
+  return page.items;
 }
 
-export interface MerchantOrderFilters {
-  vendorId?: ID;
-}
-
-export async function listMerchantOrders(filters: MerchantOrderFilters = {}): Promise<Order[]> {
-  await delay();
-  let rows = table();
-  if (filters.vendorId) rows = rows.filter((o) => o.vendorId === filters.vendorId);
-  return rows;
-}
-
+/** `undefined` for an order that is not this shop's — or not there at all; the API answers both alike. */
 export async function getMerchantOrder(id: ID): Promise<Order | undefined> {
-  await delay(150, 300);
-  return table().find((o) => o.id === id);
+  try {
+    return await merchantApiGet<Order>(`/vendors/me/orders/${id}`);
+  } catch (error) {
+    if (error instanceof ApiError && (error.status === 404 || error.status === 400)) return undefined;
+    throw error;
+  }
 }

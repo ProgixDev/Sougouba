@@ -10,7 +10,6 @@ import { Skeleton } from '@/components/data/Skeleton';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { getVendorOverview, type VendorOverviewStats } from '@/lib/api/stats';
 import { listMerchantOrders } from '@/lib/api/merchantOrders';
-import { getMerchantSession } from '@/lib/merchantAuth';
 import { orderStatusMeta } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
 import type { Order } from '@/lib/types';
@@ -20,11 +19,14 @@ export default function MerchantOverviewPage() {
   const [stats, setStats] = useState<VendorOverviewStats | null>(null);
   const [recent, setRecent] = useState<Order[] | null>(null);
 
+  const [failed, setFailed] = useState(false);
+
   useEffect(() => {
-    const session = getMerchantSession();
-    if (!session) return;
-    getVendorOverview(session.vendorId, 30).then(setStats);
-    listMerchantOrders({ vendorId: session.vendorId }).then((orders) => setRecent(orders.slice(0, 6)));
+    // The shop comes from the session's token on the server — nothing to pass.
+    getVendorOverview(30).then(setStats).catch(() => setFailed(true));
+    listMerchantOrders()
+      .then((orders) => setRecent(orders.slice(0, 6)))
+      .catch(() => setFailed(true));
   }, []);
 
   return (
@@ -37,6 +39,12 @@ export default function MerchantOverviewPage() {
           Vos commandes des 30 derniers jours.
         </Text>
       </div>
+
+      {failed ? (
+        <Text variant="body" tone="destructive">
+          Impossible de charger vos données. Vérifiez votre connexion et rechargez la page.
+        </Text>
+      ) : null}
 
       {!stats ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -85,7 +93,7 @@ export default function MerchantOverviewPage() {
                 >
                   <div>
                     <Text variant="body" className="font-semibold">
-                      #{o.id} · {o.customerName ?? '—'}
+                      #{o.id.slice(0, 8)} · {o.customerName ?? '—'}
                     </Text>
                     <Text variant="caption" tone="muted">
                       {formatDateTime(o.createdAt)}

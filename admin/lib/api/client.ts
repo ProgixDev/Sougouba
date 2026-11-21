@@ -1,6 +1,6 @@
 'use client';
 
-import { supabase } from '../supabase';
+import { merchantSupabase, supabase } from '../supabase';
 
 /**
  * The HTTP layer between this dashboard and the API (`api/`).
@@ -60,10 +60,18 @@ export class ApiError extends Error {
   }
 }
 
-async function authHeaders(): Promise<Record<string, string>> {
+/**
+ * Whose token a request carries: the administrator's, the merchant portal's
+ * (`merchantSupabase`, a separate session), or none — the sign-in calls that
+ * run before there is a session.
+ */
+type Caller = 'admin' | 'merchant' | 'anonymous';
+
+async function authHeaders(caller: Caller): Promise<Record<string, string>> {
+  if (caller === 'anonymous') return {};
   // `getSession()` refreshes an expired token transparently, which is why this
   // is read per request rather than captured once at sign-in.
-  const { data } = await supabase().auth.getSession();
+  const { data } = await (caller === 'merchant' ? merchantSupabase() : supabase()).auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new ApiError(401, 'Session expirée. Reconnectez-vous.');
   return { Authorization: `Bearer ${token}` };
@@ -83,8 +91,12 @@ function buildUrl(path: string, params?: QueryParams): string {
 
 export type QueryParams = Record<string, string | number | boolean | undefined | null>;
 
-async function request<T>(method: string, path: string, opts: { params?: QueryParams; body?: unknown } = {}): Promise<T> {
-  const headers: Record<string, string> = { ...(await authHeaders()) };
+async function request<T>(
+  method: string,
+  path: string,
+  opts: { params?: QueryParams; body?: unknown; caller?: Caller } = {}
+): Promise<T> {
+  const headers: Record<string, string> = { ...(await authHeaders(opts.caller ?? 'admin')) };
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
 
   let res: Response;
@@ -117,6 +129,16 @@ async function request<T>(method: string, path: string, opts: { params?: QueryPa
 export const apiGet = <T>(path: string, params?: QueryParams) => request<T>('GET', path, { params });
 export const apiPost = <T>(path: string, body?: unknown) => request<T>('POST', path, { body });
 export const apiPatch = <T>(path: string, body?: unknown) => request<T>('PATCH', path, { body });
+
+/** The merchant portal's calls — the shop owner's own token, never the admin's. */
+export const merchantApiGet = <T>(path: string, params?: QueryParams) =>
+  request<T>('GET', path, { params, caller: 'merchant' });
+export const merchantApiPost = <T>(path: string, body?: unknown) =>
+  request<T>('POST', path, { body, caller: 'merchant' });
+
+/** No token at all — signing in, before there is a session to send. */
+export const anonymousApiPost = <T>(path: string, body?: unknown) =>
+  request<T>('POST', path, { body, caller: 'anonymous' });
 
 /** The envelope every paginated admin list returns. */
 export interface Page<T> {

@@ -8,7 +8,6 @@ import { Text } from '@/components/ui/Text';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { Skeleton } from '@/components/data/Skeleton';
 import { getMerchantOrder } from '@/lib/api/merchantOrders';
-import { getMerchantSession } from '@/lib/merchantAuth';
 import { orderStatusMeta, DISPUTE_REASON_LABELS, COURIER_ISSUE_REASON_LABELS } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
 import type { Order } from '@/lib/types';
@@ -18,11 +17,10 @@ export default function MerchantOrderDetailPage() {
   const [order, setOrder] = useState<Order | null | undefined>(undefined);
 
   useEffect(() => {
-    const session = getMerchantSession();
-    getMerchantOrder(id).then((o) => {
-      // Scoped to this shop's own orders — a merchant should never see another shop's order.
-      setOrder(o && session && o.vendorId === session.vendorId ? o : null);
-    });
+    // Scoped on the server: another shop's order answers 404, like a missing one.
+    getMerchantOrder(id)
+      .then((o) => setOrder(o ?? null))
+      .catch(() => setOrder(null));
   }, [id]);
 
   if (order === undefined) {
@@ -41,13 +39,13 @@ export default function MerchantOrderDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Breadcrumbs items={[{ label: 'Commandes', href: '/merchant/orders' }, { label: `#${order.id}` }]} />
+      <Breadcrumbs items={[{ label: 'Commandes', href: '/merchant/orders' }, { label: `#${order.id.slice(0, 8)}` }]} />
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
             <Text as="h1" variant="display">
-              Commande #{order.id}
+              Commande #{order.id.slice(0, 8)}
             </Text>
             <StatusBadge label={meta.label} tone={meta.tone} />
           </div>

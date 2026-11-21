@@ -10,12 +10,19 @@ export default function MerchantPortalLayout({ children }: { children: React.Rea
   const [session, setSession] = useState<MerchantSession | null | undefined>(undefined);
 
   useEffect(() => {
-    const s = getMerchantSession();
-    if (!s) {
-      router.replace('/merchant/login');
-      return;
-    }
-    setSession(s);
+    let active = true;
+    getMerchantSession()
+      .then((s) => {
+        if (!active) return;
+        if (!s) router.replace('/merchant/login');
+        else setSession(s);
+      })
+      // The API unreachable is not "signed out" — but the portal cannot render
+      // anything without it, and the login page says why when it is tried.
+      .catch(() => active && router.replace('/merchant/login'));
+    return () => {
+      active = false;
+    };
   }, [router]);
 
   if (!session) return null;

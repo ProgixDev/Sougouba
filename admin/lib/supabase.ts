@@ -59,3 +59,29 @@ export function supabase(): SupabaseClient {
   });
   return client;
 }
+
+let merchantClient: SupabaseClient | undefined;
+
+/**
+ * The merchant portal's own session, kept under a different storage key.
+ *
+ * Same project, separate slot: an administrator and a shop owner signed in on
+ * one browser (the client demoing both, say) would otherwise share one
+ * session, and signing out of one would sign out of the other — or worse, the
+ * portal would send the admin's token. Two account kinds, two sessions.
+ */
+export function merchantSupabase(): SupabaseClient {
+  merchantClient ??= createClient(
+    required(SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL'),
+    required(SUPABASE_ANON_KEY, 'NEXT_PUBLIC_SUPABASE_ANON_KEY'),
+    {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+        storageKey: 'sougouba-merchant-auth',
+      },
+    }
+  );
+  return merchantClient;
+}

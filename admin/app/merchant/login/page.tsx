@@ -2,35 +2,76 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LockKeyhole } from 'lucide-react';
+import { Mail } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { merchantSignIn, getMerchantSession, demoMerchantAccounts, MERCHANT_DEMO_PASSWORD } from '@/lib/merchantAuth';
+import {
+  getMerchantSession,
+  MerchantAuthError,
+  startMerchantSignIn,
+  verifyMerchantSignIn,
+  type MerchantSignInError,
+} from '@/lib/merchantAuth';
 
+const ERRORS: Record<MerchantSignInError, string> = {
+  code_invalid: 'Code incorrect. Vérifiez-le et réessayez.',
+  code_expired: 'Ce code a expiré. Demandez-en un nouveau.',
+  cooldown: 'Patientez une minute avant de demander un autre code.',
+  no_shop: 'Aucune boutique n’est liée à ce compte. Inscrivez votre commerce depuis l’application Sougouba.',
+  unreachable: 'Impossible de joindre le serveur. Réessayez dans un instant.',
+};
+
+/**
+ * The shop owner signs in the way they do in the app: their email, then the
+ * 6-digit code sent to it. No password exists for a merchant account.
+ */
 export default function MerchantLoginPage() {
   const router = useRouter();
+  const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
-  const demoAccounts = demoMerchantAccounts();
 
   useEffect(() => {
-    if (getMerchantSession()) router.replace('/merchant');
+    getMerchantSession()
+      .then((session) => {
+        if (session) router.replace('/merchant');
+      })
+      .catch(() => undefined);
   }, [router]);
 
-  function onSubmit(e: FormEvent) {
+  function messageFor(caught: unknown): string {
+    return caught instanceof MerchantAuthError ? ERRORS[caught.code] : 'Connexion impossible. Réessayez.';
+  }
+
+  async function sendCode(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(undefined);
-    setTimeout(() => {
-      const result = merchantSignIn(email, password);
+    try {
+      await startMerchantSignIn(email);
+      setStep('code');
+    } catch (caught) {
+      setError(messageFor(caught));
+    } finally {
       setBusy(false);
-      if (result.ok) router.replace('/merchant');
-      else setError(result.error);
-    }, 350);
+    }
+  }
+
+  async function verify(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(undefined);
+    try {
+      await verifyMerchantSignIn(email, code);
+      router.replace('/merchant');
+    } catch (caught) {
+      setError(messageFor(caught));
+      setBusy(false);
+    }
   }
 
   return (
@@ -45,32 +86,56 @@ export default function MerchantLoginPage() {
             Sougouba — suivez les commandes de votre boutique
           </Text>
         </div>
-        <form onSubmit={onSubmit} className="flex flex-col gap-4">
-          <Input label="Courriel" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
-          <Input
-            label="Mot de passe"
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            error={error}
-          />
-          <Button type="submit" size="lg" variant="cta" className="mt-1 w-full" disabled={busy}>
-            {busy ? 'Connexion…' : 'Se connecter'}
-          </Button>
-        </form>
-        <div className="mt-5 flex flex-col gap-1.5 rounded-lg bg-muted p-3 text-muted-foreground">
-          <div className="flex items-start gap-2">
-            <LockKeyhole size={15} className="mt-0.5 shrink-0" />
-            <Text variant="caption">Démo — mot de passe : {MERCHANT_DEMO_PASSWORD}</Text>
-          </div>
-          {demoAccounts.map((a) => (
-            <Text key={a.email} variant="caption" className="pl-[23px]">
-              {a.email} — {a.vendorName}
-            </Text>
-          ))}
-        </div>
+
+        {step === 'email' ? (
+          <form onSubmit={sendCode} className="flex flex-col gap-4">
+            <Input
+              label="Courriel"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              helper="Le courriel de votre compte dans l’application Sougouba."
+              error={error}
+            />
+            <Button type="submit" size="lg" variant="cta" className="mt-1 w-full" disabled={busy}>
+              {busy ? 'Envoi…' : 'Recevoir un code'}
+            </Button>
+          </form>
+        ) : (
+          <form onSubmit={verify} className="flex flex-col gap-4">
+            <div className="flex items-start gap-2 rounded-lg bg-muted p-3 text-muted-foreground">
+              <Mail size={15} className="mt-0.5 shrink-0" />
+              <Text variant="caption">Un code à 6 chiffres a été envoyé à {email.trim()}.</Text>
+            </div>
+            <Input
+              label="Code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              required
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              error={error}
+            />
+            <Button type="submit" size="lg" variant="cta" className="mt-1 w-full" disabled={busy || code.length !== 6}>
+              {busy ? 'Connexion…' : 'Se connecter'}
+            </Button>
+            <button
+              type="button"
+              onClick={() => {
+                setStep('email');
+                setCode('');
+                setError(undefined);
+              }}
+              className="font-sans text-[0.8125rem] font-medium text-muted-foreground hover:text-foreground hover:underline"
+            >
+              Changer de courriel
+            </button>
+          </form>
+        )}
+
         <Link
           href="/login"
           className="mt-4 block text-center font-sans text-[0.8125rem] font-medium text-muted-foreground hover:text-foreground hover:underline"

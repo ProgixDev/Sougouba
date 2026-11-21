@@ -55,8 +55,8 @@ export function MerchantHeader({ session }: { session: MerchantSession }) {
           <button
             type="button"
             aria-label="Se déconnecter"
-            onClick={() => {
-              merchantSignOut();
+            onClick={async () => {
+              await merchantSignOut();
               router.push('/merchant/login');
             }}
             className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"

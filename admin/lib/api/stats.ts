@@ -1,7 +1,4 @@
-import { apiGet } from './client';
-import { delay } from './storage';
-import { getSeed } from './seed';
-import type { Order } from '../types';
+import { apiGet, merchantApiGet } from './client';
 
 export interface DailyPoint {
   date: string; // yyyy-mm-dd
@@ -122,59 +119,54 @@ export async function getQueueCounts(): Promise<QueueCounts> {
   };
 }
 
-// ── merchant portal — still on mock data ────────────────────────────────────
+// ── merchant portal ─────────────────────────────────────────────────────────
 //
-// The merchant portal was out of scope for the API wiring, so everything below
-// still reads `getSeed()`. Note it reads the seed's orders *directly* rather
-// than calling `listOrders()` as it used to: that function now speaks HTTP to
-// an admin-only endpoint, which a merchant session has no token for. Repointing
-// it here is what keeps `/merchant` working unchanged.
+// The shop owner's own numbers, from `GET /vendors/me/analytics` — the same
+// call the mobile app's analytics screen makes, with the merchant's token
+// (`merchantApiGet`), never the admin's.
 
 export interface VendorOverviewStats {
-  vendorId: string;
-  vendorName: string;
+  /**
+   * Product subtotal over the window, cancelled orders excluded — what the shop
+   * sold. Not the order total: the delivery fee pays the courier, and TPS/TVQ
+   * are collected for the government.
+   */
   revenueCad: number;
   orderCount: number;
-  /** Orders still moving through the kitchen/dispatch — not yet delivered or cancelled. */
+  /** Orders in the window still moving through the kitchen or dispatch. */
   activeCount: number;
   series: DailyPoint[];
 }
 
-function isCounted(o: Order) {
-  return o.status !== 'cancelled';
-}
+const ACTIVE_STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery'];
 
-/** Scoped to one shop's own orders — what the merchant order dashboard reads. */
-export async function getVendorOverview(vendorId: string, rangeDays: 7 | 30 | 90 = 30): Promise<VendorOverviewStats> {
-  await delay(150, 300);
-  const { vendors, orders: allOrders } = getSeed();
-  const vendor = vendors.find((v) => v.id === vendorId);
-  const orders = allOrders.filter((o) => o.vendorId === vendorId);
+export async function getVendorOverview(rangeDays: 7 | 30 | 90 = 30): Promise<VendorOverviewStats> {
+  const a = await merchantApiGet<{
+    revenueCad: number;
+    orderCount: number;
+    buckets: { date: string; revenueCad: number; orderCount: number }[];
+    statusCounts: Record<string, number>;
+  }>('/vendors/me/analytics', { days: rangeDays });
 
-  const now = Date.now();
-  const cutoff = now - rangeDays * 86400000;
-  const inRange = orders.filter((o) => new Date(o.createdAt).getTime() >= cutoff && isCounted(o));
-
+  // The API sends only days that had orders; the chart wants every day.
+  const byDate = new Map(a.buckets.map((b) => [b.date, b]));
   const series: DailyPoint[] = [];
   for (let i = rangeDays - 1; i >= 0; i--) {
-    const dayStart = now - i * 86400000;
-    const date = new Date(dayStart).toISOString().slice(0, 10);
-    const dayOrders = inRange.filter((o) => o.createdAt.slice(0, 10) === date);
-    series.push({ date, gmv: round2(dayOrders.reduce((s, o) => s + o.totalCad, 0)), orders: dayOrders.length });
+    const date = localDate(new Date(Date.now() - i * 86400000));
+    const bucket = byDate.get(date);
+    series.push({ date, gmv: bucket?.revenueCad ?? 0, orders: bucket?.orderCount ?? 0 });
   }
 
-  const activeStatuses: Order['status'][] = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery'];
-
   return {
-    vendorId,
-    vendorName: vendor?.name ?? vendorId,
-    revenueCad: round2(inRange.reduce((s, o) => s + o.totalCad, 0)),
-    orderCount: inRange.length,
-    activeCount: orders.filter((o) => activeStatuses.includes(o.status)).length,
+    revenueCad: a.revenueCad,
+    orderCount: a.orderCount,
+    activeCount: ACTIVE_STATUSES.reduce((sum, status) => sum + (a.statusCounts[status] ?? 0), 0),
     series,
   };
 }
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
+/** `yyyy-mm-dd` in the browser's day — the API buckets by Montréal day, which is the merchant's. */
+function localDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
