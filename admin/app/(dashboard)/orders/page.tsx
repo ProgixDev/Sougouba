@@ -1,11 +1,13 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Package, Search } from 'lucide-react';
+import { AlertCircle, Ban, Package, Search, ShoppingCart, Wallet } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { DataTable, type Column } from '@/components/data/DataTable';
+import { Avatar, BarSeries, Breakdown, CHART, KpiCard, KpiGrid, PageHeader, SectionCard } from '@/components/insights/Insights';
+import { getOrderInsights, shortDay, type OrderInsights } from '@/lib/api/insights';
 import { listOrders } from '@/lib/api/orders';
 import { useToast } from '@/components/Toast';
 import { orderStatusMeta } from '@/lib/statusMeta';
@@ -29,6 +31,13 @@ export default function OrdersPage() {
   const [rows, setRows] = useState<AdminOrderListItem[] | null>(null);
   const [status, setStatus] = useState<OrderStatus | 'all'>('all');
   const [search, setSearch] = useState('');
+  const [insights, setInsights] = useState<OrderInsights | null>(null);
+
+  useEffect(() => {
+    getOrderInsights()
+      .then(setInsights)
+      .catch(() => undefined);
+  }, []);
 
   // Debounced, because this now reaches the network on every keystroke and the
   // API allows 120 requests a minute per account.
@@ -63,7 +72,12 @@ export default function OrdersPage() {
 
   const columns: Column<AdminOrderListItem>[] = [
     { key: 'id', header: 'Commande', render: (o) => <Text variant="body" className="font-semibold">#{o.id.slice(0, 8)}</Text> },
-    { key: 'customer', header: 'Client', sortable: true, sortValue: (o) => o.customerName ?? '', render: (o) => <Text variant="body">{o.customerName ?? '—'}</Text> },
+    { key: 'customer', header: 'Client', sortable: true, sortValue: (o) => o.customerName ?? '', render: (o) => (
+        <div className="flex items-center gap-2.5">
+          <Avatar name={o.customerName ?? '?'} size={30} />
+          <Text variant="body">{o.customerName ?? '—'}</Text>
+        </div>
+      ) },
     { key: 'vendor', header: 'Commerce', render: (o) => <Text variant="body">{o.vendorName}</Text> },
     {
       key: 'createdAt',
@@ -100,14 +114,67 @@ export default function OrdersPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <div>
-        <Text as="h1" variant="display">
-          Commandes
-        </Text>
-        <Text variant="body" tone="muted" className="mt-1">
-          Vue d&apos;ensemble des commandes sur toute la plateforme.
-        </Text>
-      </div>
+      <PageHeader icon={Package} title="Commandes" description="Toutes les commandes de la plateforme, et leur tendance." />
+
+      <KpiGrid>
+        <KpiCard
+          loading={!insights}
+          icon={ShoppingCart}
+          label="Commandes · 30 j"
+          value={String(insights?.orders30 ?? 0)}
+          hint={`${insights?.today ?? 0} aujourd’hui · ${insights?.active ?? 0} en cours`}
+        />
+        <KpiCard
+          loading={!insights}
+          icon={Wallet}
+          tone="forest"
+          label="Volume d’affaires · 30 j"
+          value={formatCad(insights?.gmv30 ?? 0)}
+          hint={`Panier moyen ${insights?.avgBasket ? formatCad(insights.avgBasket) : '—'}`}
+        />
+        <KpiCard
+          loading={!insights}
+          icon={AlertCircle}
+          tone="mustard"
+          label="Sans livreur"
+          value={String(insights?.unassigned ?? 0)}
+          hint="Commandes prêtes ou en préparation, en attente d’un livreur"
+        />
+        <KpiCard
+          loading={!insights}
+          icon={Ban}
+          tone="terracotta"
+          label="Taux d’annulation · 30 j"
+          value={insights?.cancelRate !== null && insights?.cancelRate !== undefined ? `${insights.cancelRate.toLocaleString('fr-CA')} %` : '—'}
+          hint={`${formatCad(insights?.refunded30 ?? 0)} remboursés`}
+        />
+      </KpiGrid>
+
+      {insights && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <SectionCard title="Volume d’affaires par jour" subtitle="Total des commandes, hors annulées, 30 jours" className="lg:col-span-2">
+            <BarSeries
+              data={insights.byDay.map((d) => ({ label: shortDay(d.date), value: Number(d.gmv) }))}
+              format={(v) => formatCad(v)}
+              color={CHART.forestDeep}
+              height={200}
+            />
+          </SectionCard>
+          <SectionCard title="Par statut" subtitle="Commandes des 30 derniers jours">
+            <Breakdown
+              items={[
+                { label: 'Livrées', value: insights.byStatus.delivered ?? 0 },
+                { label: 'En livraison', value: insights.byStatus.out_for_delivery ?? 0 },
+                {
+                  label: 'En préparation',
+                  value: (insights.byStatus.pending ?? 0) + (insights.byStatus.confirmed ?? 0) + (insights.byStatus.preparing ?? 0) + (insights.byStatus.ready ?? 0),
+                },
+                { label: 'Annulées', value: insights.byStatus.cancelled ?? 0 },
+              ]}
+            />
+          </SectionCard>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <select

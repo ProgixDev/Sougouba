@@ -1,9 +1,11 @@
 'use client';
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import type { DailyPoint } from '@/lib/api/stats';
+import { ChartTooltip } from './ChartTooltip';
 import { formatCad, formatDate } from '@/lib/format';
 
-const GRID = '#E2DED7';
+/** Translucent, so the grid stays quiet on the light and the dark theme alike. */
+const GRID = 'rgba(138, 129, 117, 0.22)';
 const AXIS = '#8A8175';
 
 export function TrendChart({ data }: { data: DailyPoint[] }) {
@@ -27,9 +29,13 @@ export function TrendChart({ data }: { data: DailyPoint[] }) {
           width={64}
         />
         <Tooltip
-          formatter={(value: number, name: string) => [name === 'gmv' ? formatCad(value) : value, name === 'gmv' ? 'GMV' : 'Commandes']}
-          labelFormatter={(d: string) => formatDate(d)}
-          contentStyle={{ borderRadius: 12, border: '1px solid #E2DED7', fontSize: 12.5 }}
+          content={
+            <ChartTooltip
+              formatLabel={(d) => formatDate(String(d))}
+              formatValue={(v, name) => (name === 'gmv' ? formatCad(v) : String(v))}
+              name={(n) => (n === 'gmv' ? 'Volume' : 'Commandes')}
+            />
+          }
         />
         <Line type="monotone" dataKey="gmv" stroke="#246B47" strokeWidth={2.25} dot={false} activeDot={{ r: 4 }} />
       </LineChart>

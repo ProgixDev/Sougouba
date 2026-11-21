@@ -1,13 +1,15 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Headset } from 'lucide-react';
+import { Bot, CheckCircle2, Clock, Headset } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { DataTable, type Column } from '@/components/data/DataTable';
 import { useToast } from '@/components/Toast';
+import { KpiCard, KpiGrid, PageHeader } from '@/components/insights/Insights';
+import { formatHours, getSupportInsights, type SupportInsights } from '@/lib/api/insights';
 import { listSupport, type SupportInboxItem } from '@/lib/api/support';
 import { formatDateTime } from '@/lib/format';
 
@@ -35,6 +37,13 @@ export default function SupportInboxPage() {
   const [rows, setRows] = useState<SupportInboxItem[] | null>(null);
   const [total, setTotal] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [insights, setInsights] = useState<SupportInsights | null>(null);
+
+  useEffect(() => {
+    getSupportInsights()
+      .then(setInsights)
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -118,15 +127,49 @@ export default function SupportInboxPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <div>
-        <Text as="h1" variant="display">
-          Support
-        </Text>
-        <Text variant="body" tone="muted" className="mt-1">
-          Les conversations que des clients ont transmises de l’assistant à l’équipe. Votre réponse arrive dans leur
-          conversation, avec une notification.
-        </Text>
-      </div>
+      <PageHeader
+        icon={Headset}
+        title="Support"
+        description="Conversations transmises de l’assistant à l’équipe. Votre réponse arrive dans l’application du client."
+      />
+
+      <KpiGrid>
+        <KpiCard
+          loading={!insights}
+          icon={Headset}
+          tone="terracotta"
+          label="En attente de l’équipe"
+          value={String(insights?.waiting ?? 0)}
+          hint="Conversations à traiter"
+        />
+        <KpiCard
+          loading={!insights}
+          icon={CheckCircle2}
+          label="Résolues · 30 j"
+          value={String(insights?.resolved30 ?? 0)}
+          hint={`${insights?.escalated30 ?? 0} transmises à l’équipe sur la période`}
+        />
+        <KpiCard
+          loading={!insights}
+          icon={Clock}
+          tone="mustard"
+          label="Délai moyen de résolution"
+          value={formatHours(insights?.avgResolutionHours)}
+          hint="De la demande d’un humain à la résolution"
+        />
+        <KpiCard
+          loading={!insights}
+          icon={Bot}
+          tone="neutral"
+          label="Réglées par l’assistant · 30 j"
+          value={
+            insights && insights.conversations30 > 0
+              ? `${Math.round(100 * (1 - insights.escalated30 / insights.conversations30))} %`
+              : '—'
+          }
+          hint={`${insights?.conversations30 ?? 0} conversations, ${insights?.messages30 ?? 0} messages de clients`}
+        />
+      </KpiGrid>
 
       <div className="flex gap-1.5 self-start rounded-full border border-border bg-card p-1">
         {TABS.map((t) => (

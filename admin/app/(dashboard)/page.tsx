@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { DollarSign, Package, TrendingUp, Store, Bike, AlertCircle } from 'lucide-react';
+import { DollarSign, Package, TrendingUp, Store, Bike, AlertCircle, LayoutDashboard } from 'lucide-react';
+import { PageHeader } from '@/components/insights/Insights';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { StatCard } from '@/components/data/StatCard';
@@ -34,14 +35,11 @@ export default function OverviewPage() {
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <Text as="h1" variant="display">
-            Aperçu de la plateforme
-          </Text>
-          <Text variant="body" tone="muted" className="mt-1">
-            Vue d&apos;ensemble de l&apos;activité, des revenus et des files d&apos;attente.
-          </Text>
-        </div>
+        <PageHeader
+          icon={LayoutDashboard}
+          title="Aperçu de la plateforme"
+          description="L’activité, les revenus et les files d’attente, en un coup d’œil."
+        />
         <div className="flex gap-1.5 rounded-full border border-border bg-card p-1">
           {RANGES.map((r) => (
             <button
@@ -69,8 +67,8 @@ export default function OverviewPage() {
             <StatCard label="GMV" value={formatCad(stats.gmvCad)} icon={DollarSign} deltaPct={stats.gmvDeltaPct} tint="forest" />
             <StatCard label="Commandes" value={String(stats.orderCount)} icon={Package} deltaPct={stats.orderDeltaPct} tint="terracotta" />
             <StatCard label="Revenu de commission" value={formatCad(stats.commissionRevenueCad)} icon={TrendingUp} tint="mustard" />
-            <StatCard label="Commerçants actifs" value={String(stats.activeMerchants)} icon={Store} tint="forest" />
-            <StatCard label="Livreurs actifs" value={String(stats.activeCouriers)} icon={Bike} tint="terracotta" />
+            <StatCard label="Commerçants approuvés" value={String(stats.activeMerchants)} icon={Store} tint="forest" />
+            <StatCard label="Livreurs approuvés" value={String(stats.activeCouriers)} icon={Bike} tint="terracotta" />
             <StatCard
               label="En attente d'approbation"
               value={String(stats.pendingMerchants + stats.pendingCouriers)}

@@ -357,6 +357,59 @@ export class AdminController {
     return this.supportAdmin.resolve(adminId, id);
   }
 
+  // ── insights: the KPIs above each list ────────────────────────────────────
+  //
+  // One route per area rather than `/insights/:area`, so each carries the
+  // permission of the section it summarises.
+
+  @RequirePermission('vendors.view')
+  @Get('insights/vendors')
+  vendorInsights() {
+    return this.admin.insights('vendors');
+  }
+
+  @RequirePermission('couriers.view')
+  @Get('insights/couriers')
+  courierInsights() {
+    return this.admin.insights('couriers');
+  }
+
+  @RequirePermission('orders.view')
+  @Get('insights/orders')
+  orderInsights() {
+    return this.admin.insights('orders');
+  }
+
+  @RequirePermission('users.view')
+  @Get('insights/users')
+  userInsights() {
+    return this.admin.insights('users');
+  }
+
+  @RequirePermission('disputes.view')
+  @Get('insights/disputes')
+  disputeInsights() {
+    return this.admin.insights('disputes');
+  }
+
+  @RequirePermission('courier_issues.view')
+  @Get('insights/courier-issues')
+  courierIssueInsights() {
+    return this.admin.insights('courier_issues');
+  }
+
+  @RequirePermission('support.view')
+  @Get('insights/support')
+  supportInsights() {
+    return this.admin.insights('support');
+  }
+
+  @RequirePermission('moderation.view')
+  @Get('insights/moderation')
+  moderationInsights() {
+    return this.admin.insights('moderation');
+  }
+
   // ── administrator accounts ────────────────────────────────────────────────
 
   /** Who is signed in, their role and permissions — what the dashboard draws itself from. */

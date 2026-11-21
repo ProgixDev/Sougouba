@@ -2,7 +2,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Check, Copy, KeyRound, Lock, Pencil, Plus, ShieldCheck, Trash2, UserMinus, UserPlus, Users, X } from 'lucide-react';
+import { Check, Clock, Copy, KeyRound, Lock, Pencil, Plus, ShieldCheck, Trash2, UserCog, UserMinus, UserPlus, Users, X } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
 import { Card } from '@/components/ui/Card';
@@ -27,6 +27,7 @@ import {
 } from '@/lib/api/admins';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { useAdmin } from '@/lib/permissions';
+import { KpiCard, KpiGrid, PageHeader } from '@/components/insights/Insights';
 
 const SELECT =
   'w-full cursor-pointer rounded-lg border border-border bg-background px-3 py-2 font-sans text-[0.875rem] text-foreground outline-none focus:border-forest-600';
@@ -79,15 +80,41 @@ function Admins() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <div>
-        <Text as="h1" variant="display">
-          Administrateurs
-        </Text>
-        <Text variant="body" tone="muted" className="mt-1">
-          Qui peut ouvrir ce tableau de bord, et ce que chacun peut y faire. Chaque changement est inscrit au journal
-          d’audit.
-        </Text>
-      </div>
+      <PageHeader
+        icon={UserCog}
+        title="Administrateurs"
+        description="Qui peut ouvrir ce tableau de bord, et ce que chacun peut y faire. Chaque changement est inscrit au journal d’audit."
+      />
+
+      <KpiGrid>
+        <KpiCard loading={admins === null} icon={Users} label="Membres de l’équipe" value={String(admins?.length ?? 0)} hint="Avec un accès au tableau de bord" />
+        <KpiCard
+          loading={roles === null}
+          icon={ShieldCheck}
+          tone="forest"
+          label="Rôles"
+          value={String(roles?.length ?? 0)}
+          hint={`${roles?.filter((r) => !r.isSystem).length ?? 0} personnalisés · ${roles?.filter((r) => r.isSystem).length ?? 0} prédéfinis`}
+        />
+        <KpiCard
+          loading={admins === null}
+          icon={KeyRound}
+          tone="mustard"
+          label="Peuvent gérer les accès"
+          value={String(
+            admins?.filter((a) => roles?.find((r) => r.id === a.role?.id)?.permissions.includes('admins.manage')).length ?? 0
+          )}
+          hint="Toujours au moins un"
+        />
+        <KpiCard
+          loading={admins === null}
+          icon={Clock}
+          tone="neutral"
+          label="Jamais connectés"
+          value={String(admins?.filter((a) => !a.lastSignInAt).length ?? 0)}
+          hint="Mot de passe temporaire pas encore utilisé"
+        />
+      </KpiGrid>
 
       <div className="flex gap-1.5 self-start rounded-full border border-border bg-card p-1">
         {[

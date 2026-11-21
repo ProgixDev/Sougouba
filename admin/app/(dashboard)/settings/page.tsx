@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Save } from 'lucide-react';
+import { Save, Settings } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Input } from '@/components/ui/Input';
@@ -10,6 +10,7 @@ import { useToast } from '@/components/Toast';
 import { getSettings, updateSettings } from '@/lib/api/settings';
 import type { PlatformSettings } from '@/lib/types';
 import { useAdmin } from '@/lib/permissions';
+import { PageHeader } from '@/components/insights/Insights';
 
 /**
  * Every numeric field is edited as a free-typed local string, not a value
@@ -102,25 +103,22 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <Text as="h1" variant="display">
-            Paramètres de la plateforme
-          </Text>
-          <Text variant="body" tone="muted" className="mt-1">
-            Monétisation et règles du programme de fidélité.
-          </Text>
-        </div>
-        {can('settings.manage') ? (
-          <Button variant="primary" onClick={handleSave} disabled={saving}>
-            <Save size={16} /> {saving ? 'Enregistrement…' : 'Enregistrer'}
-          </Button>
-        ) : (
-          <Text variant="caption" tone="muted">
-            Lecture seule — votre rôle ne permet pas de modifier les paramètres.
-          </Text>
-        )}
-      </div>
+      <PageHeader
+        icon={Settings}
+        title="Paramètres de la plateforme"
+        description="Monétisation et règles du programme de fidélité, appliquées à toute la plateforme."
+        actions={
+          can('settings.manage') ? (
+            <Button variant="primary" onClick={handleSave} disabled={saving}>
+              <Save size={16} /> {saving ? 'Enregistrement…' : 'Enregistrer'}
+            </Button>
+          ) : (
+            <Text variant="caption" tone="muted">
+              Lecture seule — votre rôle ne permet pas de modifier les paramètres.
+            </Text>
+          )
+        }
+      />
 
       <Card className="p-6">
         <Text variant="subtitle" className="mb-1">

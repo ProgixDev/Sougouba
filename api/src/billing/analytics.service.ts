@@ -62,6 +62,17 @@ export class AnalyticsService {
       topProducts: { productId: string; name: string; qty: number; revenueCad: number }[];
     }>(this.db.rpc('merchant_analytics', { p_vendor_id: vendorId, p_days: days }));
 
+    // In progress *now*, whenever the order was placed. `statusCounts` only
+    // covers orders placed inside the window, so an order taken 31 days ago
+    // and still not delivered would vanish from "En cours" if counted there.
+    const active = await this.db
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('vendor_id', vendorId)
+      .in('status', ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery']);
+    await unwrap(Promise.resolve(active));
+    const activeCount = active.count;
+
     const revenueCad = agg.revenueCad ?? 0;
     const orderCount = agg.orderCount ?? 0;
 
@@ -85,6 +96,7 @@ export class AnalyticsService {
       // nothing.
       buckets: agg.buckets ?? [],
       statusCounts: agg.statusCounts ?? {},
+      activeCount: activeCount ?? 0,
       topProducts: agg.topProducts ?? [],
     };
   }

@@ -52,6 +52,16 @@ export function looksLikeIdFragment(value: string): boolean {
  * unclosable. Both enums gained their missing values in the first migration;
  * these are the endpoints that use them.
  */
+export type InsightsArea =
+  | 'vendors'
+  | 'couriers'
+  | 'orders'
+  | 'users'
+  | 'disputes'
+  | 'courier_issues'
+  | 'support'
+  | 'moderation';
+
 @Injectable()
 export class AdminService {
   // No `AuditService` here any more: every audited action writes its own log
@@ -312,6 +322,14 @@ export class AdminService {
    * back-office landing page needs to decide where to look next: how much is
    * queued, and how much is stuck.
    */
+  /**
+   * One area's KPIs — the numbers above its list (`admin_insights`, `0044`).
+   * The controller gates each area behind that area's own view permission.
+   */
+  async insights(area: InsightsArea): Promise<Record<string, unknown>> {
+    return unwrap<Record<string, unknown>>(this.db.rpc('admin_insights', { p_area: area }));
+  }
+
   async stats() {
     // Twelve scalar subqueries in one round trip. Rebuilt as PostgREST calls
     // this would be twelve requests, and the Montreal-midnight boundary in

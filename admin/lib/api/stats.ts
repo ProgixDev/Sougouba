@@ -150,6 +150,7 @@ export async function getVendorOverview(rangeDays: 7 | 30 | 90 = 30): Promise<Ve
     orderCount: number;
     buckets: { date: string; revenueCad: number; orderCount: number }[];
     statusCounts: Record<string, number>;
+    activeCount?: number;
   }>('/vendors/me/analytics', { days: rangeDays });
 
   // The API sends only days that had orders; the chart wants every day.
@@ -164,7 +165,9 @@ export async function getVendorOverview(rangeDays: 7 | 30 | 90 = 30): Promise<Ve
   return {
     revenueCad: a.revenueCad,
     orderCount: a.orderCount,
-    activeCount: ACTIVE_STATUSES.reduce((sum, status) => sum + (a.statusCounts[status] ?? 0), 0),
+    // The API's all-time count; the window's statusCounts only as a fallback
+    // for an API that predates it.
+    activeCount: a.activeCount ?? ACTIVE_STATUSES.reduce((sum, status) => sum + (a.statusCounts[status] ?? 0), 0),
     series,
   };
 }

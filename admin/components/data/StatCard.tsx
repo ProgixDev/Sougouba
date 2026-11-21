@@ -43,7 +43,7 @@ export function StatCard({
           )}
         >
           {deltaPct >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-          {Math.abs(deltaPct).toFixed(1)} % vs période précédente
+          {Math.abs(deltaPct).toLocaleString('fr-CA', { maximumFractionDigits: 1 })} % vs période précédente
         </div>
       )}
     </Card>

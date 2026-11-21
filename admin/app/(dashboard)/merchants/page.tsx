@@ -1,12 +1,15 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Store, Search } from 'lucide-react';
+import { Clock, Search, Star, Store, TrendingUp } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { DataTable, type Column } from '@/components/data/DataTable';
+import { Avatar, BarSeries, Breakdown, KpiCard, KpiGrid, PageHeader, Ranking, SectionCard } from '@/components/insights/Insights';
+import { formatHours, getVendorInsights, shortDay, type VendorInsights } from '@/lib/api/insights';
 import { listVendors } from '@/lib/api/vendors';
+import { formatCad } from '@/lib/format';
 import { vendorStatusMeta } from '@/lib/statusMeta';
 import { formatDate } from '@/lib/format';
 import type { AdminVendorListItem, AdminVendorStatus } from '@/lib/types';
@@ -26,8 +29,13 @@ export default function MerchantsPage() {
   const [tab, setTab] = useState<AdminVendorStatus>('pending');
   const [search, setSearch] = useState('');
 
+  const [insights, setInsights] = useState<VendorInsights | null>(null);
+
   useEffect(() => {
     listVendors().then(setAll);
+    getVendorInsights()
+      .then(setInsights)
+      .catch(() => undefined);
   }, []);
 
   const counts = useMemo(() => {
@@ -52,13 +60,16 @@ export default function MerchantsPage() {
       sortable: true,
       sortValue: (v) => v.name,
       render: (v) => (
-        <div>
-          <Text variant="body" className="font-semibold">
-            {v.name}
-          </Text>
-          <Text variant="caption" tone="muted">
-            {v.ownerName}
-          </Text>
+        <div className="flex items-center gap-3">
+          <Avatar name={v.name} />
+          <div>
+            <Text variant="body" className="font-semibold">
+              {v.name}
+            </Text>
+            <Text variant="caption" tone="muted">
+              {v.ownerName}
+            </Text>
+          </div>
         </div>
       ),
     },
@@ -91,14 +102,76 @@ export default function MerchantsPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <div>
-        <Text as="h1" variant="display">
-          Commerçants
-        </Text>
-        <Text variant="body" tone="muted" className="mt-1">
-          File d&apos;approbation et annuaire des boutiques.
-        </Text>
-      </div>
+      <PageHeader icon={Store} title="Commerçants" description="File d’approbation, annuaire des boutiques et leur activité." />
+
+      <KpiGrid>
+        <KpiCard
+          loading={!insights}
+          icon={Store}
+          label="Boutiques en ligne"
+          value={String(insights?.byStatus.approved ?? 0)}
+          hint={`${insights?.new30 ?? 0} inscriptions sur 30 jours`}
+        />
+        <KpiCard
+          loading={!insights}
+          icon={Clock}
+          tone="mustard"
+          label="Dossiers en attente"
+          value={String(insights?.byStatus.pending ?? 0)}
+          hint={`Approbation en ${formatHours(insights?.avgApprovalHours)} en moyenne`}
+        />
+        <KpiCard
+          loading={!insights}
+          icon={TrendingUp}
+          tone="forest"
+          label="Ventes des boutiques · 30 j"
+          value={formatCad(insights?.sales30 ?? 0)}
+          hint={`${insights?.orders30 ?? 0} commandes, hors annulées`}
+        />
+        <KpiCard
+          loading={!insights}
+          icon={Star}
+          tone="terracotta"
+          label="Note moyenne"
+          value={insights?.avgRating ? `${insights.avgRating.toLocaleString('fr-CA')} / 5` : '—'}
+          hint="Boutiques approuvées ayant des avis"
+        />
+      </KpiGrid>
+
+      {insights && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <SectionCard title="Inscriptions" subtitle="Nouvelles boutiques par semaine, 8 semaines">
+            <BarSeries data={insights.signupsByWeek.map((w) => ({ label: shortDay(w.week), value: w.count }))} />
+          </SectionCard>
+          <SectionCard title="Répartition" subtitle="Boutiques en ligne par secteur, et tous les dossiers par statut">
+            <Breakdown
+              items={[
+                { label: 'Épiceries', value: insights.byType.grocery ?? 0 },
+                { label: 'Restaurants', value: insights.byType.restaurant ?? 0 },
+              ]}
+            />
+            <Breakdown
+              items={[
+                { label: 'Approuvés', value: insights.byStatus.approved ?? 0 },
+                { label: 'En attente', value: insights.byStatus.pending ?? 0 },
+                { label: 'Suspendus', value: insights.byStatus.suspended ?? 0 },
+                { label: 'Refusés', value: insights.byStatus.rejected ?? 0 },
+              ]}
+            />
+          </SectionCard>
+          <SectionCard title="Meilleures ventes · 30 j" subtitle="Sous-total des commandes, hors annulées">
+            <Ranking
+              items={insights.top.map((t) => ({
+                id: t.id,
+                label: t.name,
+                value: Number(t.sales),
+                display: `${formatCad(Number(t.sales))} · ${t.orders} cmd`,
+                href: `/merchants/${t.id}`,
+              }))}
+            />
+          </SectionCard>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1.5 rounded-full border border-border bg-card p-1">

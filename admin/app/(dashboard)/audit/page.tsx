@@ -10,6 +10,7 @@ import { DataTable, type Column } from '@/components/data/DataTable';
 import { useToast } from '@/components/Toast';
 import { listAudit, type AuditEntry, type AuditSubject } from '@/lib/api/audit';
 import { formatDateTime } from '@/lib/format';
+import { PageHeader } from '@/components/insights/Insights';
 
 const PAGE_SIZE = 50;
 
@@ -208,27 +209,33 @@ export default function AuditLogPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <div>
-        <Text as="h1" variant="display">
-          Journal d’audit
-        </Text>
-        <Text variant="body" tone="muted" className="mt-1">
-          Chaque décision prise depuis ce tableau de bord : qui, quand, sur quoi, et pourquoi. Il ne peut pas être modifié.
-        </Text>
-      </div>
+      <PageHeader
+        icon={ScrollText}
+        title="Journal d’audit"
+        description="Chaque décision prise depuis ce tableau de bord : qui, quand, sur quoi, et pourquoi. Il ne peut pas être modifié."
+        actions={
+          <span className="rounded-full bg-muted px-3 py-1.5 font-sans text-[0.8125rem] font-semibold tabular">
+            {total} entrée{total > 1 ? 's' : ''}
+          </span>
+        }
+      />
 
-      <div className="flex flex-wrap gap-1.5 self-start rounded-full border border-border bg-card p-1">
+      {/* One row that scrolls sideways: fourteen filters wrapped inside a pill
+          made a two-line capsule. */}
+      <div className="max-w-full self-start overflow-x-auto rounded-full border border-border bg-card p-1 [scrollbar-width:none]">
+        <div className="flex w-max gap-1">
         {SUBJECT_TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setSubject(t.key)}
-            className={`cursor-pointer rounded-full px-4 py-1.5 font-sans text-[0.8125rem] font-semibold transition-colors ${
+            className={`shrink-0 cursor-pointer whitespace-nowrap rounded-full px-4 py-1.5 font-sans text-[0.8125rem] font-semibold transition-colors ${
               subject === t.key ? 'bg-forest-600 text-white' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             {t.label}
           </button>
         ))}
+        </div>
       </div>
 
       <Card elevated>

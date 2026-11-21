@@ -1,11 +1,13 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users as UsersIcon, Search } from 'lucide-react';
+import { Ban, Search, ShoppingBag, Store, UserPlus, Users as UsersIcon } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
 import { DataTable, type Column } from '@/components/data/DataTable';
+import { Avatar, BarSeries, Breakdown, KpiCard, KpiGrid, PageHeader, SectionCard } from '@/components/insights/Insights';
+import { getUserInsights, shortDay, type UserInsights } from '@/lib/api/insights';
 import { listUsers } from '@/lib/api/users';
 import { useToast } from '@/components/Toast';
 import type { AdminUserListItem, UserRole } from '@/lib/types';
@@ -24,6 +26,13 @@ export default function UsersPage() {
   const [rows, setRows] = useState<AdminUserListItem[] | null>(null);
   const [role, setRole] = useState<UserRole | 'all'>('all');
   const [search, setSearch] = useState('');
+  const [insights, setInsights] = useState<UserInsights | null>(null);
+
+  useEffect(() => {
+    getUserInsights()
+      .then(setInsights)
+      .catch(() => undefined);
+  }, []);
 
   // Debounced — this reaches the network per keystroke now, and the /admin
   // budget is 120 requests a minute.
@@ -57,9 +66,12 @@ export default function UsersPage() {
       sortable: true,
       sortValue: (u) => u.fullName,
       render: (u) => (
-        <Text variant="body" className="font-semibold">
-          {u.fullName}
-        </Text>
+        <div className="flex items-center gap-3">
+          <Avatar name={u.fullName || '?'} />
+          <Text variant="body" className="font-semibold">
+            {u.fullName}
+          </Text>
+        </div>
       ),
     },
     { key: 'email', header: 'Courriel', render: (u) => <Text variant="body" tone="muted">{u.email ?? '—'}</Text> },
@@ -81,14 +93,60 @@ export default function UsersPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <div>
-        <Text as="h1" variant="display">
-          Utilisateurs
-        </Text>
-        <Text variant="body" tone="muted" className="mt-1">
-          Annuaire des comptes clients, commerçants et livreurs.
-        </Text>
-      </div>
+      <PageHeader icon={UsersIcon} title="Utilisateurs" description="Tous les comptes de la plateforme : clients, commerçants et livreurs." />
+
+      <KpiGrid>
+        <KpiCard
+          loading={!insights}
+          icon={ShoppingBag}
+          label="Clients"
+          value={String(insights?.byRole.customer ?? 0)}
+          hint={`${insights?.withOrders ?? 0} ont déjà commandé`}
+        />
+        <KpiCard
+          loading={!insights}
+          icon={UserPlus}
+          tone="forest"
+          label="Nouveaux comptes · 30 j"
+          value={String(insights?.new30 ?? 0)}
+          hint="Tous rôles confondus"
+        />
+        <KpiCard
+          loading={!insights}
+          icon={Store}
+          tone="mustard"
+          label="Commerçants · livreurs"
+          value={`${insights?.byRole.business ?? 0} · ${insights?.byRole.courier ?? 0}`}
+          hint={`${insights?.byRole.none ?? 0} comptes sans rôle choisi`}
+        />
+        <KpiCard
+          loading={!insights}
+          icon={Ban}
+          tone="terracotta"
+          label="Comptes bloqués"
+          value={String(insights?.blocked ?? 0)}
+          hint="Connexion et paiement refusés"
+        />
+      </KpiGrid>
+
+      {insights && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <SectionCard title="Inscriptions" subtitle="Nouveaux comptes par semaine, 8 semaines" className="lg:col-span-2">
+            <BarSeries data={insights.signupsByWeek.map((w) => ({ label: shortDay(w.week), value: w.count }))} />
+          </SectionCard>
+          <SectionCard title="Par rôle">
+            <Breakdown
+              items={[
+                { label: 'Clients', value: insights.byRole.customer ?? 0 },
+                { label: 'Commerçants', value: insights.byRole.business ?? 0 },
+                { label: 'Livreurs', value: insights.byRole.courier ?? 0 },
+                { label: 'Sans rôle', value: insights.byRole.none ?? 0 },
+                { label: 'Administrateurs', value: insights.byRole.admin ?? 0 },
+              ]}
+            />
+          </SectionCard>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1.5 rounded-full border border-border bg-card p-1">

@@ -2,7 +2,7 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { EyeOff, Package, Search, Star, TicketPercent } from 'lucide-react';
+import { EyeOff, Package, Search, ShieldAlert, Star, TicketPercent } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
 import { Card } from '@/components/ui/Card';
@@ -26,6 +26,8 @@ import {
   type ReviewAction,
   type ReviewFilter,
 } from '@/lib/api/moderation';
+import { KpiCard, KpiGrid, PageHeader } from '@/components/insights/Insights';
+import { getModerationInsights, type ModerationInsights } from '@/lib/api/insights';
 import { formatCad, formatDate, formatDateTime } from '@/lib/format';
 import { useAdmin } from '@/lib/permissions';
 
@@ -69,6 +71,13 @@ function Moderation() {
   const toast = useToast();
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [busy, setBusy] = useState(false);
+  const [insights, setInsights] = useState<ModerationInsights | null>(null);
+
+  useEffect(() => {
+    getModerationInsights()
+      .then(setInsights)
+      .catch(() => undefined);
+  }, []);
 
   async function confirm(reason?: string) {
     if (!pending) return;
@@ -84,15 +93,45 @@ function Moderation() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <div>
-        <Text as="h1" variant="display">
-          Modération
-        </Text>
-        <Text variant="body" tone="muted" className="mt-1">
-          Avis des clients, codes promo des commerçants et fiches produits. Chaque décision est inscrite au journal
-          d’audit.
-        </Text>
-      </div>
+      <PageHeader
+        icon={ShieldAlert}
+        title="Modération"
+        description="Avis des clients, codes promo des commerçants et fiches produits. Chaque décision est inscrite au journal d’audit."
+      />
+
+      <KpiGrid>
+        <KpiCard
+          loading={!insights}
+          icon={Star}
+          label="Avis publiés"
+          value={String(insights?.reviews ?? 0)}
+          hint={insights?.avgReview ? `Note moyenne ${insights.avgReview.toLocaleString('fr-CA')} / 5` : 'Pas encore d’avis'}
+        />
+        <KpiCard
+          loading={!insights}
+          icon={Star}
+          tone="terracotta"
+          label="Avis à 2 étoiles ou moins · 30 j"
+          value={String(insights?.lowReviews30 ?? 0)}
+          hint={`${insights?.commentsHidden ?? 0} commentaires masqués · ${insights?.reviewsRemoved ?? 0} avis retirés`}
+        />
+        <KpiCard
+          loading={!insights}
+          icon={TicketPercent}
+          tone="mustard"
+          label="Codes promo actifs"
+          value={String(insights?.couponsActive ?? 0)}
+          hint={`${insights?.couponUses ?? 0} utilisations au total`}
+        />
+        <KpiCard
+          loading={!insights}
+          icon={Package}
+          tone="neutral"
+          label="Produits masqués"
+          value={String(insights?.productsHidden ?? 0)}
+          hint={`sur ${insights?.products ?? 0} produits au catalogue`}
+        />
+      </KpiGrid>
 
       <div className="flex gap-1.5 self-start rounded-full border border-border bg-card p-1">
         {TABS.map((t) => (

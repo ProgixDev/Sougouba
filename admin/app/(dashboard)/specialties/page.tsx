@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, type FormEvent } from 'react';
-import { ArrowDown, ArrowUp, Pencil, Plus } from 'lucide-react';
+import { ArrowDown, ArrowUp, Archive, ChefHat, Pencil, Plus, ShoppingBasket, Store, Tags } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/data/Skeleton';
 import { useToast } from '@/components/Toast';
 import { createSpecialty, listSpecialties, updateSpecialty, type AdminSpecialty } from '@/lib/api/specialties';
 import { useAdmin } from '@/lib/permissions';
+import { KpiCard, KpiGrid, PageHeader } from '@/components/insights/Insights';
 
 const LISTS: { type: AdminSpecialty['vendorType']; title: string; hint: string }[] = [
   { type: 'grocery', title: 'Épiceries', hint: 'Le type de commerce : épicerie africaine, boucherie halal…' },
@@ -49,15 +50,45 @@ export default function SpecialtiesPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <div>
-        <Text as="h1" variant="display">
-          Spécialités
-        </Text>
-        <Text variant="body" tone="muted" className="mt-1">
-          La liste proposée aux commerçants à l’inscription — la ligne sous le nom de leur boutique. Une spécialité retirée
-          n’est plus proposée, mais les boutiques qui l’ont choisie la gardent.
-        </Text>
-      </div>
+      <PageHeader
+        icon={Tags}
+        title="Spécialités"
+        description="La liste proposée aux commerçants à l’inscription. Une spécialité retirée n’est plus proposée, mais les boutiques qui l’ont choisie la gardent."
+      />
+
+      <KpiGrid>
+        <KpiCard
+          loading={rows === null}
+          icon={ShoppingBasket}
+          label="Épiceries · actives"
+          value={String(rows?.filter((r) => r.vendorType === 'grocery' && r.isActive).length ?? 0)}
+          hint="Proposées aux épiceries"
+        />
+        <KpiCard
+          loading={rows === null}
+          icon={ChefHat}
+          tone="mustard"
+          label="Restaurants · actives"
+          value={String(rows?.filter((r) => r.vendorType === 'restaurant' && r.isActive).length ?? 0)}
+          hint="Proposées aux restaurants"
+        />
+        <KpiCard
+          loading={rows === null}
+          icon={Store}
+          tone="forest"
+          label="Boutiques classées"
+          value={String(rows?.reduce((s, r) => s + r.vendorCount, 0) ?? 0)}
+          hint="Ayant choisi une spécialité de la liste"
+        />
+        <KpiCard
+          loading={rows === null}
+          icon={Archive}
+          tone="neutral"
+          label="Retirées"
+          value={String(rows?.filter((r) => !r.isActive).length ?? 0)}
+          hint="Gardées par les boutiques qui les ont choisies"
+        />
+      </KpiGrid>
 
       {rows === null ? (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

@@ -1935,6 +1935,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      admin_insights: { Args: { p_area: string }; Returns: Json }
       admin_list_orders: {
         Args: {
           p_id_prefix?: string
