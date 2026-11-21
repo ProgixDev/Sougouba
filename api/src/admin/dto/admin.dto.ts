@@ -301,3 +301,13 @@ export const adminProductQuerySchema = paginationSchema.extend({
 });
 
 export type AdminProductQuery = z.infer<typeof adminProductQuerySchema>;
+
+// ── administrator accounts ──────────────────────────────────────────────────
+
+export const createAdminSchema = z.object({
+  // Trimmed and lowered before the format check — a pasted address often carries a space.
+  email: z.string().trim().toLowerCase().pipe(z.email('Courriel invalide')),
+  fullName: z.string().trim().min(2, 'Nom requis').max(80, 'Nom trop long'),
+});
+
+export type CreateAdminInput = z.infer<typeof createAdminSchema>;

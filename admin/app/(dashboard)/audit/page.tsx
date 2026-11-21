@@ -51,6 +51,8 @@ const ACTION_LABELS: Record<string, { label: string; tone: Tone }> = {
   'coupon.deactivate': { label: 'Code promo désactivé', tone: 'destructive' },
   'product.hide': { label: 'Produit masqué', tone: 'destructive' },
   'product.unhide': { label: 'Produit réaffiché', tone: 'success' },
+  'admin.create': { label: 'Administrateur ajouté', tone: 'primary' },
+  'admin.revoke': { label: 'Administrateur retiré', tone: 'destructive' },
 };
 
 /** Where each kind of subject lives in this dashboard. Disputes and courier issues are keyed by their order. */

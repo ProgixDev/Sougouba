@@ -28,6 +28,7 @@ import {
   adminSearchQuerySchema,
   auditQuerySchema,
   courierIssueQuerySchema,
+  createAdminSchema,
   createSpecialtySchema,
   disputeQuerySchema,
   moderateReviewSchema,
@@ -49,6 +50,7 @@ import {
   type AdminSearchQuery,
   type AuditQuery,
   type CourierIssueQuery,
+  type CreateAdminInput,
   type CreateSpecialtyInput,
   type DisputeQuery,
   type ModerateReviewInput,
@@ -69,6 +71,7 @@ import { RefundsService } from './refunds.service.js';
 import { SpecialtiesAdminService } from './specialties-admin.service.js';
 import { SupportAdminService } from './support-admin.service.js';
 import { ModerationService } from './moderation.service.js';
+import { AdminAccountsService } from './admin-accounts.service.js';
 
 /**
  * A rejection or suspension without a stated reason is refused.
@@ -104,7 +107,8 @@ export class AdminController {
     private readonly audit: AuditService,
     private readonly specialtiesAdmin: SpecialtiesAdminService,
     private readonly supportAdmin: SupportAdminService,
-    private readonly moderation: ModerationService
+    private readonly moderation: ModerationService,
+    private readonly adminAccounts: AdminAccountsService
   ) {}
 
   @Get('stats')
@@ -315,6 +319,30 @@ export class AdminController {
   @Post('support/:id/resolve')
   resolveSupport(@CurrentUser() adminId: string, @Param('id', ParseUUIDPipe) id: string) {
     return this.supportAdmin.resolve(adminId, id);
+  }
+
+  // ── administrator accounts ────────────────────────────────────────────────
+
+  @Get('admins')
+  admins() {
+    return this.adminAccounts.list();
+  }
+
+  /** A fresh account with a one-time password, returned once — see `AdminAccountsService`. */
+  @Post('admins')
+  createAdmin(@CurrentUser() actorId: string, @Body(new ZodValidationPipe(createAdminSchema)) body: CreateAdminInput) {
+    return this.adminAccounts.create(actorId, body);
+  }
+
+  /** Never yourself, never the last one. */
+  @Post('admins/:id/revoke')
+  @HttpCode(204)
+  revokeAdmin(
+    @CurrentUser() actorId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(reviewDecisionSchema)) body: ReviewDecisionInput
+  ) {
+    return this.adminAccounts.revoke(actorId, id, body.reason);
   }
 
   // ── moderation ────────────────────────────────────────────────────────────

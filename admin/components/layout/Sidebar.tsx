@@ -9,6 +9,7 @@ import {
   Package,
   MessageCircleWarning,
   TriangleAlert,
+  UserCog,
   Users,
   ScrollText,
   Settings,
@@ -39,6 +40,7 @@ const NAV = (counts: SidebarCounts) => [
   { href: '/users', label: 'Utilisateurs', icon: Users, count: 0 },
   { href: '/specialties', label: 'Spécialités', icon: Tags, count: 0 },
   { href: '/audit', label: 'Journal d’audit', icon: ScrollText, count: 0 },
+  { href: '/admins', label: 'Administrateurs', icon: UserCog, count: 0 },
   { href: '/settings', label: 'Paramètres', icon: Settings, count: 0 },
 ];
 

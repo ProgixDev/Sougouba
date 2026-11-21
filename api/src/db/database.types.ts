@@ -1883,6 +1883,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_grant_admin: {
+        Args: { p_actor_id: string; p_full_name: string; p_user_id: string }
+        Returns: undefined
+      }
       admin_list_orders: {
         Args: {
           p_id_prefix?: string
@@ -1983,6 +1987,10 @@ export type Database = {
           p_order_id: string
           p_reason: string
         }
+        Returns: undefined
+      }
+      admin_revoke_admin: {
+        Args: { p_actor_id: string; p_reason: string; p_user_id: string }
         Returns: undefined
       }
       admin_search: {

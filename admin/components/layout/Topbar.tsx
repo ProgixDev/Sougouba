@@ -1,5 +1,6 @@
 'use client';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { LogOut, Menu } from 'lucide-react';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { Text } from '../ui/Text';
@@ -28,14 +29,18 @@ export function Topbar({ session, title, onOpenMenu }: { session: AdminSession |
       )}
       <div className="ml-auto flex items-center gap-3">
         <ThemeToggle />
-        <div className="hidden items-center gap-2 border-l border-border pl-3 sm:flex">
+        <Link
+          href="/account"
+          title="Mon compte"
+          className="hidden items-center gap-2 rounded-full border-l border-border pl-3 hover:opacity-80 sm:flex"
+        >
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-mustard-400 font-sans text-[0.75rem] font-bold text-mustard-950">
             {session?.name.slice(0, 1) ?? 'A'}
           </div>
           <Text variant="caption" className="max-w-[120px] truncate">
             {session?.name ?? 'Administrateur'}
           </Text>
-        </div>
+        </Link>
         <button
           type="button"
           aria-label="Se déconnecter"

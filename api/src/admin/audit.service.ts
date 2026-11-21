@@ -34,7 +34,9 @@ export type AdminAction =
   | 'review.moderate'
   | 'coupon.deactivate'
   | 'product.hide'
-  | 'product.unhide';
+  | 'product.unhide'
+  | 'admin.create'
+  | 'admin.revoke';
 
 export const ADMIN_ACTIONS: AdminAction[] = [
   'vendor.approve',
@@ -57,6 +59,8 @@ export const ADMIN_ACTIONS: AdminAction[] = [
   'coupon.deactivate',
   'product.hide',
   'product.unhide',
+  'admin.create',
+  'admin.revoke',
 ];
 
 export type AuditSubject = 'vendor' | 'courier' | 'order' | 'dispute' | 'courier_issue' | 'settings' | 'user' | 'specialty' | 'support' | 'review' | 'coupon' | 'product';
