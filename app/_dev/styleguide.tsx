@@ -1,3 +1,4 @@
+import { Redirect } from 'expo-router';
 import { Heart, Leaf, Lock, Mail, MapPin, ShoppingCart } from 'lucide-react-native';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
@@ -39,8 +40,17 @@ import { useThemeStore } from '@/store/useThemeStore';
 /**
  * Phase 0 checkpoint: design-system styleguide. Not part of the real app flow —
  * app/index.tsx becomes the animated splash + redirect slot in Phase 1.
+ *
+ * Development builds only. Expo Router does not hide `_`-prefixed folders, so
+ * without this guard `/_dev/styleguide` is a real route in the store build,
+ * reachable by deep link.
  */
 export default function StyleguideScreen() {
+  if (!__DEV__) return <Redirect href="/" />;
+  return <Styleguide />;
+}
+
+function Styleguide() {
   const L = useLocalized();
   const { preference, toggle } = useThemeStore();
   const [selectedChip, setSelectedChip] = useState('cat_produce');
