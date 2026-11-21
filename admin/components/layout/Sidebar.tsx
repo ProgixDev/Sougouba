@@ -9,6 +9,7 @@ import {
   MessageCircleWarning,
   TriangleAlert,
   Users,
+  ScrollText,
   Settings,
   X,
 } from 'lucide-react';
@@ -30,6 +31,7 @@ const NAV = (counts: SidebarCounts) => [
   { href: '/disputes', label: 'Litiges', icon: MessageCircleWarning, count: counts.openDisputes },
   { href: '/courier-issues', label: 'Incidents livreurs', icon: TriangleAlert, count: counts.openCourierIssues },
   { href: '/users', label: 'Utilisateurs', icon: Users, count: 0 },
+  { href: '/audit', label: 'Journal d’audit', icon: ScrollText, count: 0 },
   { href: '/settings', label: 'Paramètres', icon: Settings, count: 0 },
 ];
 
