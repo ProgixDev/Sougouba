@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { Text } from '@/components/ui';
 import { useT } from '@/lib/i18n/useT';
 import { formatCad, formatPercent } from '@/lib/format';
-import { COMMISSION_RATE, MONTHLY_SUBSCRIPTION_CAD } from '@/lib/monetization';
+import { usePlatformPlan } from '@/data/queries';
 
 export interface PayoutSummaryProps {
   /** Goods sold over the selected range. */
@@ -29,6 +29,7 @@ export interface PayoutSummaryProps {
  */
 export function PayoutSummary({ salesCad, commissionCad, netCad, rangeLabel }: PayoutSummaryProps) {
   const t = useT();
+  const plan = usePlatformPlan();
   return (
     <View className="rounded-[20px] bg-card p-4 gap-3">
       <Text variant="label" tone="muted" className="text-[10px]">
@@ -38,7 +39,7 @@ export function PayoutSummary({ salesCad, commissionCad, netCad, rangeLabel }: P
       <View className="gap-2.5">
         <Row label={t('business.payout.sales')} value={formatCad(salesCad)} />
         <Row
-          label={t('business.payout.commission', { rate: formatPercent(COMMISSION_RATE) })}
+          label={t('business.payout.commission', { rate: formatPercent(plan.commissionRate) })}
           value={`− ${formatCad(commissionCad)}`}
           minor
         />
@@ -47,7 +48,7 @@ export function PayoutSummary({ salesCad, commissionCad, netCad, rangeLabel }: P
       </View>
 
       <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
-        {t('business.payout.subscriptionNote', { amount: formatCad(MONTHLY_SUBSCRIPTION_CAD) })}
+        {t('business.payout.subscriptionNote', { amount: formatCad(plan.monthlySubscriptionCad) })}
       </Text>
     </View>
   );

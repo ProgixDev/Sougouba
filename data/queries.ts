@@ -1,5 +1,7 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
+import { DEFAULT_PLAN, type PlatformPlan } from '../lib/monetization';
+
 import { categoriesApi, ordersApi, productsApi, vendorsApi } from './api';
 import type { Category, ID, Product, Vendor } from './types';
 
@@ -22,6 +24,7 @@ export const keys = {
   productsByIds: (ids: readonly ID[]) => ['products', 'ids', [...ids].sort().join(',')] as const,
   productSearch: (term: string) => ['products', 'search', term] as const,
   topProducts: (limit: number) => ['products', 'top', limit] as const,
+  platformPlan: ['platformPlan'] as const,
 };
 
 export function useCategories(): UseQueryResult<Category[]> {
@@ -77,16 +80,29 @@ export function useProductSearch(term: string): UseQueryResult<Product[]> {
 }
 
 /**
- * The best-seller ranking.
- *
- * ⚠️ `getTopProductIds` is still a stub that answers `[]` without a request,
- * so this query is free and the home screen's "best sellers" rail is empty by
- * construction. It goes through the cache anyway so that implementing the
- * endpoint is a change in one file rather than a screen rewrite.
+ * The best-seller ranking — the platform's last 30 days, ids only. An empty
+ * list (no sales yet) leaves the home screen to fill the rail with deals.
  */
 export function useTopProductIds(limit: number): UseQueryResult<ID[]> {
   return useQuery({
     queryKey: keys.topProducts(limit),
     queryFn: () => ordersApi.getTopProductIds(limit),
   });
+}
+
+/**
+ * The commission rate and monthly subscription an administrator has set.
+ *
+ * Never undefined: until the request answers — or if it fails — this is
+ * `DEFAULT_PLAN`, so a merchant screen always has a rate to show and to
+ * compute with. Cached for the session; a rate changing mid-session is rare
+ * enough that the next launch picking it up is fine.
+ */
+export function usePlatformPlan(): PlatformPlan {
+  const { data } = useQuery({
+    queryKey: keys.platformPlan,
+    queryFn: vendorsApi.getMyPlan,
+    staleTime: Infinity,
+  });
+  return data ?? DEFAULT_PLAN;
 }

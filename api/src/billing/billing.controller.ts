@@ -45,6 +45,12 @@ export class MerchantBillingController {
     return this.analytics.forOwner(userId, query.days);
   }
 
+  /** The live commission rate and monthly subscription — the app's hardcoded pair is only a loading fallback. */
+  @Get('plan')
+  plan() {
+    return this.analytics.plan();
+  }
+
   @Post('stripe/onboard')
   onboard(@CurrentUser() userId: string, @Body(new ZodValidationPipe(onboardSchema)) body: OnboardInput) {
     return this.connect.onboardVendor(userId, body.returnUrl, body.refreshUrl);

@@ -2,6 +2,7 @@ import { File } from 'expo-file-system';
 import { fetch } from 'expo/fetch';
 
 import type { PickedImage } from '../../hooks/useImagePicker';
+import type { PlatformPlan } from '../../lib/monetization';
 import type { PickedDocument } from '../../lib/validation/merchant';
 
 import { ApiError, api, type Page } from '../http';
@@ -199,6 +200,11 @@ export async function updateMyShop(patch: ShopPatch): Promise<Vendor> {
 /** The whole week, all seven days — the API replaces it in one transaction. */
 export async function setMyHours(week: VendorHours[]): Promise<Vendor> {
   return toVendor(await api<any>('/vendors/me/hours', { method: 'PUT', body: week }));
+}
+
+/** The commission rate and monthly subscription an administrator has set — the same for every merchant. */
+export async function getMyPlan(): Promise<PlatformPlan> {
+  return api<PlatformPlan>('/vendors/me/plan');
 }
 
 /** Upload the shop's cover photo and return the Storage path to save as `coverUrl`. */

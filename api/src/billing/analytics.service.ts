@@ -36,6 +36,16 @@ export class AnalyticsService {
     return row.id;
   }
 
+  /**
+   * What selling here costs today — the rates an administrator set in
+   * `platform_settings`, for the merchant screens that state them. Same
+   * numbers every merchant pays, so there is no shop to look up.
+   */
+  async plan() {
+    const rates = await this.settings.all();
+    return { commissionRate: rates.commissionRate, monthlySubscriptionCad: rates.monthlySubscriptionCad };
+  }
+
   async forOwner(userId: string, days: number) {
     const vendorId = await this.vendorIdFor(userId);
     const rates = await this.settings.all();

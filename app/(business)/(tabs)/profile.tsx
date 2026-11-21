@@ -29,6 +29,7 @@ import {
   Text,
 } from '@/components/ui';
 import { MIN_DELIVERY_FEE_CAD } from '@/data/deliveryPricing';
+import { usePlatformPlan } from '@/data/queries';
 import type { VendorHours } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useDeleteAccount } from '@/hooks/useDeleteAccount';
@@ -36,7 +37,6 @@ import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
 import { formatCad, formatPercent } from '@/lib/format';
 import { useT } from '@/lib/i18n/useT';
-import { COMMISSION_RATE, MONTHLY_SUBSCRIPTION_CAD } from '@/lib/monetization';
 import { routes } from '@/lib/routes';
 import { shopDay, shopStatusLine, shopWeekday } from '@/lib/shopHours';
 import { weekdayLongKey } from '@/lib/weekdays';
@@ -52,6 +52,7 @@ export default function BusinessProfileScreen() {
   const signOut = useSessionStore((s) => s.signOut);
   const { confirmDeleteAccount } = useDeleteAccount();
   const { vendor, loading, missing, approved } = useOwnerVendor();
+  const plan = usePlatformPlan();
 
   const preference = useThemeStore((s) => s.preference);
   const setPreference = useThemeStore((s) => s.setPreference);
@@ -210,10 +211,10 @@ export default function BusinessProfileScreen() {
               </View>
               <View className="flex-1 gap-0.5">
                 <Text variant="caption" weight="semibold">
-                  {t('business.shopProfile.monthlyFee', { amount: formatCad(MONTHLY_SUBSCRIPTION_CAD) })}
+                  {t('business.shopProfile.monthlyFee', { amount: formatCad(plan.monthlySubscriptionCad) })}
                 </Text>
                 <Text variant="caption" tone="muted" className="text-[12px]">
-                  {t('business.shopProfile.commissionLine', { rate: formatPercent(COMMISSION_RATE) })}
+                  {t('business.shopProfile.commissionLine', { rate: formatPercent(plan.commissionRate) })}
                 </Text>
               </View>
             </View>

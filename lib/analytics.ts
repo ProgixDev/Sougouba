@@ -38,8 +38,11 @@ export interface RangeSummary {
  * TPS and TVQ, money the merchant collects on the government's behalf and does
  * not keep. A dashboard that counts it as "Recettes" tells a merchant they
  * earned about 20 % more than they did.
+ *
+ * `commissionRate` is the live one from `usePlatformPlan` — the administrator
+ * can change it, so it is passed in rather than read from a constant.
  */
-export function summariseOrders(orders: Order[], days: number, now = new Date()): RangeSummary {
+export function summariseOrders(orders: Order[], days: number, commissionRate: number, now = new Date()): RangeSummary {
   const start = startOfDay(now);
   start.setDate(start.getDate() - (days - 1));
 
@@ -98,7 +101,7 @@ export function summariseOrders(orders: Order[], days: number, now = new Date())
     .slice(0, 5);
 
   const sales = round2(revenueCad);
-  const commissionCad = commissionOn(sales);
+  const commissionCad = commissionOn(sales, commissionRate);
 
   return {
     revenueCad: sales,
@@ -129,12 +132,17 @@ export interface PeriodComparison {
  * is the same summary taken `days` earlier, so the two are computed identically
  * and cannot drift apart.
  */
-export function comparePeriods(orders: Order[], days: number, now = new Date()): PeriodComparison {
+export function comparePeriods(
+  orders: Order[],
+  days: number,
+  commissionRate: number,
+  now = new Date()
+): PeriodComparison {
   const previousNow = new Date(now);
   previousNow.setDate(previousNow.getDate() - days);
 
-  const current = summariseOrders(orders, days, now);
-  const previous = summariseOrders(orders, days, previousNow);
+  const current = summariseOrders(orders, days, commissionRate, now);
+  const previous = summariseOrders(orders, days, commissionRate, previousNow);
 
   return {
     current,

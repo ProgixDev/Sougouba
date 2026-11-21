@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CounterHeader, DayStrip, OrderQueueCard, PendingApproval, SlabMetric, StatColumns } from '@/components/business';
 import { Reveal, SectionHeader, Skeleton, Text } from '@/components/ui';
 import { ordersApi, productsApi } from '@/data/api';
+import { usePlatformPlan } from '@/data/queries';
 import type { ID, Order, Product } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
@@ -28,6 +29,7 @@ export default function BusinessDashboardScreen() {
   const tabBarInset = useTabBarInset();
   const colors = useThemeColors();
   const { vendor, loading: vendorLoading, missing, pending, reload } = useOwnerVendor();
+  const plan = usePlatformPlan();
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -109,7 +111,7 @@ export default function BusinessDashboardScreen() {
     [orders]
   );
 
-  const week = useMemo(() => comparePeriods(orders, 7), [orders]);
+  const week = useMemo(() => comparePeriods(orders, 7, plan.commissionRate), [orders, plan.commissionRate]);
 
   const lowStock = useMemo(
     () =>

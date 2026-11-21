@@ -15,6 +15,7 @@ import {
 } from '@/components/business';
 import { Badge, Reveal, Skeleton, Text } from '@/components/ui';
 import { ordersApi } from '@/data/api';
+import { usePlatformPlan } from '@/data/queries';
 import type { Order, OrderStatus } from '@/data/types';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
@@ -31,6 +32,7 @@ export default function BusinessAnalyticsScreen() {
   const t = useT();
   const tabBarInset = useTabBarInset();
   const { vendor, loading: vendorLoading, missing, pending, reload } = useOwnerVendor();
+  const plan = usePlatformPlan();
   const { width } = useWindowDimensions();
   const colors = useThemeColors();
 
@@ -58,7 +60,10 @@ export default function BusinessAnalyticsScreen() {
     }, [load, vendor])
   );
 
-  const comparison = useMemo(() => comparePeriods(orders, days), [orders, days]);
+  const comparison = useMemo(
+    () => comparePeriods(orders, days, plan.commissionRate),
+    [orders, days, plan.commissionRate]
+  );
   const rangeLabel = t('common.rangeDays', { count: days });
   const summary = comparison.current;
 
