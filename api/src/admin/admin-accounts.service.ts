@@ -46,7 +46,10 @@ export interface AdminRole extends AdminRoleSummary {
 export interface CurrentAdmin {
   id: string;
   fullName: string;
-  role: AdminRoleSummary | null;
+  email: string | null;
+  memberSince: string | null;
+  lastSignInAt: string | null;
+  role: (AdminRoleSummary & { description: string }) | null;
   permissions: string[];
 }
 
@@ -79,19 +82,27 @@ export class AdminAccountsService {
   // ── the signed-in administrator ─────────────────────────────────────────
 
   async me(userId: string): Promise<CurrentAdmin> {
-    const row = await unwrap<{ id: string; fullName: string | null; adminRole: unknown } | null>(
-      this.db
-        .from('profiles')
-        .select('id, fullName:full_name, adminRole:admin_roles(id, slug, name, permissions)')
-        .eq('id', userId)
-        .maybeSingle()
-    );
+    const [row, auth] = await Promise.all([
+      unwrap<{ id: string; fullName: string | null; memberSince: string | null; adminRole: unknown } | null>(
+        this.db
+          .from('profiles')
+          .select('id, fullName:full_name, memberSince:member_since, adminRole:admin_roles(id, slug, name, description, permissions)')
+          .eq('id', userId)
+          .maybeSingle()
+      ),
+      unwrap<{ email: string | null; last_sign_in_at: string | null }[]>(
+        this.db.rpc('admin_auth_users', { p_ids: [userId] })
+      ),
+    ]);
     if (!row) throw new NotFoundException('Profile not found');
-    const role = one<AdminRoleSummary & { permissions: string[] }>(row.adminRole as never);
+    const role = one<AdminRoleSummary & { description: string; permissions: string[] }>(row.adminRole as never);
     return {
       id: row.id,
       fullName: row.fullName ?? '',
-      role: role ? { id: role.id, slug: role.slug, name: role.name } : null,
+      email: auth[0]?.email ?? null,
+      memberSince: row.memberSince,
+      lastSignInAt: auth[0]?.last_sign_in_at ?? null,
+      role: role ? { id: role.id, slug: role.slug, name: role.name, description: role.description } : null,
       permissions: role?.permissions ?? [],
     };
   }

@@ -6,8 +6,10 @@ import { ThemeToggle } from '../ui/ThemeToggle';
 import { Text } from '../ui/Text';
 import { GlobalSearch } from './GlobalSearch';
 import { signOut, type AdminSession } from '@/lib/auth';
+import { useAdmin } from '@/lib/permissions';
 
 export function Topbar({ session, title, onOpenMenu }: { session: AdminSession | null; title?: string; onOpenMenu?: () => void }) {
+  const { me } = useAdmin();
   const router = useRouter();
 
   return (
@@ -35,10 +37,10 @@ export function Topbar({ session, title, onOpenMenu }: { session: AdminSession |
           className="hidden items-center gap-2 rounded-full border-l border-border pl-3 hover:opacity-80 sm:flex"
         >
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-mustard-400 font-sans text-[0.75rem] font-bold text-mustard-950">
-            {session?.name.slice(0, 1) ?? 'A'}
+            {(me.fullName || session?.name || 'A').slice(0, 1)}
           </div>
           <Text variant="caption" className="max-w-[120px] truncate">
-            {session?.name ?? 'Administrateur'}
+            {me.fullName || session?.name || 'Administrateur'}
           </Text>
         </Link>
         <button

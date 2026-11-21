@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar, type SidebarCounts } from '@/components/layout/Sidebar';
 import { Topbar } from '@/components/layout/Topbar';
@@ -15,6 +15,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const [session, setSession] = useState<AdminSession | null | undefined>(undefined);
   const [me, setMe] = useState<CurrentAdmin | null>(null);
+  const reloadMe = useCallback(async () => {
+    setMe(await getCurrentAdmin());
+  }, []);
   const [counts, setCounts] = useState<SidebarCounts>({
     pendingMerchants: 0,
     pendingCouriers: 0,
@@ -84,11 +87,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!session || !me) return null;
 
+
   const needed = permissionForPath(pathname);
   const allowed = needed === null || me.permissions.includes(needed);
 
   return (
-    <AdminProvider me={me}>
+    <AdminProvider me={me} reload={reloadMe}>
       <ToastProvider>
         <div className="flex h-dvh overflow-hidden bg-background">
           <Sidebar counts={counts} mobileOpen={mobileNavOpen} onCloseMobile={() => setMobileNavOpen(false)} />

@@ -21,6 +21,7 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import { SettingsService } from '../loyalty/settings.service.js';
 import { AdminService } from './admin.service.js';
 import { ApprovalsService } from './approvals.service.js';
+import { paginationSchema, type Pagination } from '../catalog/dto/query.dto.js';
 import { AuditService } from './audit.service.js';
 import { ANY_ADMIN, RequirePermission } from './permissions.js';
 import {
@@ -363,6 +364,16 @@ export class AdminController {
   @Get('me')
   me(@CurrentUser() userId: string) {
     return this.adminAccounts.me(userId);
+  }
+
+  /**
+   * Your own lines in the audit log — for any administrator, with or without
+   * `audit.view`: what you did yourself is not someone else's record.
+   */
+  @RequirePermission(ANY_ADMIN)
+  @Get('me/activity')
+  myActivity(@CurrentUser() userId: string, @Query(new ZodValidationPipe(paginationSchema)) query: Pagination) {
+    return this.audit.list({ ...query, actorId: userId });
   }
 
   @RequirePermission('admins.view')

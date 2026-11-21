@@ -1,4 +1,5 @@
-import { apiDelete, apiGet, apiPatch, apiPost } from './client';
+import type { AuditEntry } from './audit';
+import { apiDelete, apiGet, apiPatch, apiPost, type Page } from './client';
 
 export interface AdminRoleSummary {
   id: string;
@@ -32,12 +33,25 @@ export interface PermissionGroup {
 export interface CurrentAdmin {
   id: string;
   fullName: string;
-  role: AdminRoleSummary | null;
+  email: string | null;
+  memberSince: string | null;
+  lastSignInAt: string | null;
+  role: (AdminRoleSummary & { description: string }) | null;
   permissions: string[];
 }
 
 export async function getCurrentAdmin(): Promise<CurrentAdmin> {
   return apiGet<CurrentAdmin>('/admin/me');
+}
+
+/** Your own lines in the audit log — readable by any administrator, whatever their role. */
+export async function getMyActivity(offset = 0, limit = 15): Promise<Page<AuditEntry>> {
+  return apiGet<Page<AuditEntry>>('/admin/me/activity', { offset, limit });
+}
+
+/** Your display name — the profile endpoint every account uses, not an admin one. */
+export async function updateMyName(fullName: string): Promise<void> {
+  await apiPatch('/me', { fullName });
 }
 
 export async function listAdmins(): Promise<AdminAccount[]> {

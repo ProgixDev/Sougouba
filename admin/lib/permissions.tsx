@@ -35,14 +35,27 @@ export function permissionForPath(pathname: string): string | null {
 interface AdminContextValue {
   me: CurrentAdmin;
   can: (permission: string) => boolean;
+  /** Re-reads the signed-in administrator — after changing your own name, say. */
+  reload: () => Promise<void>;
 }
 
 const AdminContext = createContext<AdminContextValue | null>(null);
 
-export function AdminProvider({ me, children }: { me: CurrentAdmin; children: React.ReactNode }) {
+export function AdminProvider({
+  me,
+  reload,
+  children,
+}: {
+  me: CurrentAdmin;
+  reload: () => Promise<void>;
+  children: React.ReactNode;
+}) {
   // Stable across renders, so pages can list `can` in an effect's dependencies
   // without refetching every time the layout re-renders.
-  const value = useMemo(() => ({ me, can: (permission: string) => me.permissions.includes(permission) }), [me]);
+  const value = useMemo(
+    () => ({ me, reload, can: (permission: string) => me.permissions.includes(permission) }),
+    [me, reload]
+  );
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>;
 }
 
