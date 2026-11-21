@@ -22,6 +22,8 @@ import {
   resolveDisputeSchema,
   reviewDecisionSchema,
   reviewQuerySchema,
+  supportQuerySchema,
+  supportReplySchema,
   updateSettingsSchema,
   updateSpecialtySchema,
   userQuerySchema,
@@ -37,12 +39,15 @@ import {
   type ResolveDisputeInput,
   type ReviewDecisionInput,
   type ReviewQuery,
+  type SupportQuery,
+  type SupportReplyInput,
   type UpdateSettingsInput,
   type UpdateSpecialtyInput,
   type UserQuery,
 } from './dto/admin.dto.js';
 import { RefundsService } from './refunds.service.js';
 import { SpecialtiesAdminService } from './specialties-admin.service.js';
+import { SupportAdminService } from './support-admin.service.js';
 
 /**
  * A rejection or suspension without a stated reason is refused.
@@ -76,7 +81,8 @@ export class AdminController {
     private readonly approvals: ApprovalsService,
     private readonly platformSettings: SettingsService,
     private readonly audit: AuditService,
-    private readonly specialtiesAdmin: SpecialtiesAdminService
+    private readonly specialtiesAdmin: SpecialtiesAdminService,
+    private readonly supportAdmin: SupportAdminService
   ) {}
 
   @Get('stats')
@@ -259,6 +265,34 @@ export class AdminController {
     @Body(new ZodValidationPipe(reviewDecisionSchema)) body: ReviewDecisionInput
   ) {
     return this.approvals.setUserBlocked(adminId, id, false, body.reason);
+  }
+
+  // ── support inbox ─────────────────────────────────────────────────────────
+
+  /** Conversations customers handed to the team — waiting ones first, oldest activity on top. */
+  @Get('support')
+  supportInbox(@Query(new ZodValidationPipe(supportQuerySchema)) query: SupportQuery) {
+    return this.supportAdmin.list(query);
+  }
+
+  @Get('support/:id')
+  supportConversation(@Param('id', ParseUUIDPipe) id: string) {
+    return this.supportAdmin.detail(id);
+  }
+
+  /** Answers in the customer's own thread, and pushes them. */
+  @Post('support/:id/reply')
+  replySupport(
+    @CurrentUser() adminId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(supportReplySchema)) body: SupportReplyInput
+  ) {
+    return this.supportAdmin.reply(adminId, id, body.content);
+  }
+
+  @Post('support/:id/resolve')
+  resolveSupport(@CurrentUser() adminId: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.supportAdmin.resolve(adminId, id);
   }
 
   // ── shop specialties ──────────────────────────────────────────────────────

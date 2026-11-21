@@ -21,6 +21,7 @@ const SUBJECT_TABS: { key: AuditSubject | 'all'; label: string }[] = [
   { key: 'order', label: 'Commandes' },
   { key: 'dispute', label: 'Litiges' },
   { key: 'courier_issue', label: 'Incidents' },
+  { key: 'support', label: 'Support' },
   { key: 'specialty', label: 'Spécialités' },
   { key: 'settings', label: 'Paramètres' },
 ];
@@ -41,6 +42,8 @@ const ACTION_LABELS: Record<string, { label: string; tone: Tone }> = {
   'settings.update': { label: 'Paramètres modifiés', tone: 'secondary' },
   'specialty.create': { label: 'Spécialité ajoutée', tone: 'success' },
   'specialty.update': { label: 'Spécialité modifiée', tone: 'secondary' },
+  'support.reply': { label: 'Réponse au support', tone: 'primary' },
+  'support.resolve': { label: 'Support résolu', tone: 'success' },
 };
 
 /** Where each kind of subject lives in this dashboard. Disputes and courier issues are keyed by their order. */
@@ -56,6 +59,7 @@ function subjectHref(entry: AuditEntry): string | null {
     order: '/orders',
     dispute: '/disputes',
     courier_issue: '/courier-issues',
+    support: '/support',
   };
   return `${base[entry.subjectType]}/${entry.subjectId}`;
 }

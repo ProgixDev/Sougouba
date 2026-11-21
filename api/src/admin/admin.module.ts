@@ -10,6 +10,7 @@ import { RefundsService } from './refunds.service.js';
 import { RetentionScheduler } from './retention.scheduler.js';
 import { RetentionService } from './retention.service.js';
 import { SpecialtiesAdminService } from './specialties-admin.service.js';
+import { SupportAdminService } from './support-admin.service.js';
 
 /**
  * The back office (CDC: "WEB SÉCURISÉ"). An **API only** — the admin web
@@ -31,6 +32,7 @@ import { SpecialtiesAdminService } from './specialties-admin.service.js';
     RetentionService,
     RetentionScheduler,
     SpecialtiesAdminService,
+    SupportAdminService,
   ],
   exports: [RefundsService, RetentionScheduler],
 })

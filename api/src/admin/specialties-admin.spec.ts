@@ -22,6 +22,8 @@ function fakeDb({ current = ROW as typeof ROW | null, rpcError = null as { code:
   const query: Record<string, unknown> = {};
   for (const m of ['select', 'eq', 'order', 'limit']) query[m] = () => query;
   query.maybeSingle = () => Promise.resolve({ data: current ? { ...current, position: 120 } : null, error: null });
+  // A query builder is awaited directly, as PostgREST's is — the fake has to be thenable.
+  // oxlint-disable-next-line unicorn/no-thenable
   query.then = (resolve: (v: unknown) => unknown) =>
     resolve({ data: [{ ...ROW, vendors: [{ count: 3 }] }], error: null });
   const rpc = vi.fn(() => Promise.resolve({ data: rpcError ? null : ROW, error: rpcError }));

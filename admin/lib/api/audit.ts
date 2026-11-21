@@ -9,7 +9,8 @@ export type AuditSubject =
   | 'courier_issue'
   | 'settings'
   | 'user'
-  | 'specialty';
+  | 'specialty'
+  | 'support';
 
 /** One line of `GET /admin/audit-log`, newest first. Written by the database, never edited. */
 export interface AuditEntry {

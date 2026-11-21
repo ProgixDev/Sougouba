@@ -11,7 +11,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
   const [session, setSession] = useState<AdminSession | null | undefined>(undefined);
-  const [counts, setCounts] = useState<SidebarCounts>({ pendingMerchants: 0, pendingCouriers: 0, openDisputes: 0, openCourierIssues: 0 });
+  const [counts, setCounts] = useState<SidebarCounts>({
+    pendingMerchants: 0,
+    pendingCouriers: 0,
+    openDisputes: 0,
+    openCourierIssues: 0,
+    supportWaiting: 0,
+  });
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {

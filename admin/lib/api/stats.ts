@@ -57,6 +57,8 @@ interface ApiOverview {
     ordersUnassigned: number;
     disputesOpen: number;
     courierIssuesOpen: number;
+    /** Support conversations handed to the team and not yet resolved. */
+    supportWaiting: number;
     customers: number;
   };
 }
@@ -100,6 +102,7 @@ export interface QueueCounts {
   pendingCouriers: number;
   openDisputes: number;
   openCourierIssues: number;
+  supportWaiting: number;
 }
 
 /**
@@ -116,6 +119,7 @@ export async function getQueueCounts(): Promise<QueueCounts> {
     pendingCouriers: s.couriersPending,
     openDisputes: s.disputesOpen,
     openCourierIssues: s.courierIssuesOpen,
+    supportWaiting: s.supportWaiting ?? 0,
   };
 }
 

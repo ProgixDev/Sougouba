@@ -317,7 +317,22 @@ export class AdminService {
     // this would be twelve requests, and the Montreal-midnight boundary in
     // `ordersToday` — which was a real over-count once — would have to be
     // recomputed client-side against a moving target. See `admin_stats`.
-    return unwrap<Record<string, number>>(this.db.rpc('admin_stats'));
+    //
+    // Plus the support inbox's count, read here rather than added to the SQL
+    // function: one cheap indexed count beside it, no migration to the
+    // function's body. Escalated means a customer handed the thread to the team.
+    const [stats, supportWaiting] = await Promise.all([
+      unwrap<Record<string, number>>(this.db.rpc('admin_stats')),
+      this.db
+        .from('support_conversations')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'escalated')
+        .then(({ count, error }) => {
+          if (error) throw unexpectedDbError(error);
+          return count ?? 0;
+        }),
+    ]);
+    return { ...stats, supportWaiting };
   }
 
   /**

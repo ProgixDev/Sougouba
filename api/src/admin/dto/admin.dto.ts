@@ -222,7 +222,7 @@ export type RefundOrderInput = z.infer<typeof refundOrderSchema>;
  */
 export const auditQuerySchema = paginationSchema.extend({
   action: z.string().trim().min(1).max(60).optional(),
-  subjectType: z.enum(['vendor', 'courier', 'order', 'dispute', 'courier_issue', 'settings', 'user', 'specialty']).optional(),
+  subjectType: z.enum(['vendor', 'courier', 'order', 'dispute', 'courier_issue', 'settings', 'user', 'specialty', 'support']).optional(),
   subjectId: z.string().uuid().optional(),
   actorId: z.string().uuid().optional(),
   since: z.coerce.date().optional(),
@@ -256,3 +256,18 @@ export const updateSpecialtySchema = z
   .refine((v) => Object.keys(v).length > 0, 'Aucun champ à modifier');
 
 export type UpdateSpecialtyInput = z.infer<typeof updateSpecialtySchema>;
+
+// ── support inbox ───────────────────────────────────────────────────────────
+
+/** `escalated` is the inbox; `closed` the resolved ones; `all` both (never the assistant-only `open`). */
+export const supportQuerySchema = paginationSchema.extend({
+  status: z.enum(['escalated', 'closed', 'all']).default('escalated'),
+});
+
+export type SupportQuery = z.infer<typeof supportQuerySchema>;
+
+export const supportReplySchema = z.object({
+  content: z.string().trim().min(1, 'Message vide').max(2000, 'Message trop long (2000 caractères au plus)'),
+});
+
+export type SupportReplyInput = z.infer<typeof supportReplySchema>;

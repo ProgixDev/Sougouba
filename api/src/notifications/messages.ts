@@ -109,6 +109,19 @@ export const customerCopy = {
         body: `See the decision for order ${ref}.`,
       },
     )) as Copy<{ ref: string }>,
+
+  supportReplied: ((_params, l) =>
+    pick(
+      l,
+      {
+        title: 'L’équipe Sougouba vous a répondu',
+        body: 'Ouvrez l’assistance pour lire la réponse.',
+      },
+      {
+        title: 'The Sougouba team replied',
+        body: 'Open support to read the answer.',
+      },
+    )) as Copy<Record<string, never>>,
 };
 
 /** Merchant-facing. */

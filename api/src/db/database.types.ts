@@ -1360,19 +1360,31 @@ export type Database = {
         Row: {
           created_at: string
           customer_id: string
+          escalated_at: string | null
           id: string
+          last_message_at: string
+          resolved_at: string | null
+          resolved_by: string | null
           status: Database["public"]["Enums"]["support_conversation_status"]
         }
         Insert: {
           created_at?: string
           customer_id: string
+          escalated_at?: string | null
           id?: string
+          last_message_at?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
           status?: Database["public"]["Enums"]["support_conversation_status"]
         }
         Update: {
           created_at?: string
           customer_id?: string
+          escalated_at?: string | null
           id?: string
+          last_message_at?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
           status?: Database["public"]["Enums"]["support_conversation_status"]
         }
         Relationships: [
@@ -1383,10 +1395,18 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "support_conversations_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       support_messages: {
         Row: {
+          author_id: string | null
           content: string
           conversation_id: string
           created_at: string
@@ -1394,6 +1414,7 @@ export type Database = {
           role: Database["public"]["Enums"]["support_message_role"]
         }
         Insert: {
+          author_id?: string | null
           content: string
           conversation_id: string
           created_at?: string
@@ -1401,6 +1422,7 @@ export type Database = {
           role: Database["public"]["Enums"]["support_message_role"]
         }
         Update: {
+          author_id?: string | null
           content?: string
           conversation_id?: string
           created_at?: string
@@ -1408,6 +1430,13 @@ export type Database = {
           role?: Database["public"]["Enums"]["support_message_role"]
         }
         Relationships: [
+          {
+            foreignKeyName: "support_messages_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "support_messages_conversation_id_support_conversations_id_fk"
             columns: ["conversation_id"]
@@ -1855,19 +1884,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      admin_specialty_save: {
-        Args: {
-          p_admin_id: string
-          p_id: string | null
-          p_is_active: boolean
-          p_name_en: string
-          p_name_fr: string
-          p_position: number
-          p_slug: string
-          p_vendor_type: Database["public"]["Enums"]["vendor_type"]
-        }
-        Returns: Database["public"]["Tables"]["specialties"]["Row"]
-      }
       admin_resolve_courier_issue: {
         Args: { p_admin_id: string; p_note: string; p_order_id: string }
         Returns: {
@@ -1916,7 +1932,48 @@ export type Database = {
         Args: { p_id_prefix?: string; p_pattern: string; p_per_type?: number }
         Returns: Json
       }
+      admin_specialty_save: {
+        Args: {
+          p_admin_id: string
+          p_id: string
+          p_is_active: boolean
+          p_name_en: string
+          p_name_fr: string
+          p_position: number
+          p_slug: string
+          p_vendor_type: Database["public"]["Enums"]["vendor_type"]
+        }
+        Returns: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name_en: string
+          name_fr: string
+          position: number
+          slug: string
+          updated_at: string
+          vendor_type: Database["public"]["Enums"]["vendor_type"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "specialties"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_stats: { Args: never; Returns: Json }
+      admin_support_reply: {
+        Args: {
+          p_admin_id: string
+          p_content: string
+          p_conversation_id: string
+        }
+        Returns: string
+      }
+      admin_support_resolve: {
+        Args: { p_admin_id: string; p_conversation_id: string }
+        Returns: undefined
+      }
       admin_user_activity: { Args: { p_profile_id: string }; Returns: Json }
       admin_vendor_stats: { Args: { p_vendor_id: string }; Returns: Json }
       courier_apply: {
@@ -2199,6 +2256,7 @@ export type Database = {
         | "settings"
         | "user"
         | "specialty"
+        | "support"
       coupon_discount_type: "percentage" | "fixed"
       courier_issue_reason:
         | "customer_absent"
@@ -2235,7 +2293,7 @@ export type Database = {
       role: "customer" | "business" | "courier" | "admin"
       subscription_status: "inactive" | "active" | "past_due" | "canceled"
       support_conversation_status: "open" | "escalated" | "closed"
-      support_message_role: "user" | "assistant" | "system"
+      support_message_role: "user" | "assistant" | "system" | "agent"
       vehicle_type: "bike" | "scooter" | "car"
       vendor_status: "pending" | "approved" | "suspended" | "rejected"
       vendor_type: "grocery" | "restaurant"
@@ -2375,6 +2433,7 @@ export const Constants = {
         "settings",
         "user",
         "specialty",
+        "support",
       ],
       coupon_discount_type: ["percentage", "fixed"],
       courier_issue_reason: [
@@ -2416,7 +2475,7 @@ export const Constants = {
       role: ["customer", "business", "courier", "admin"],
       subscription_status: ["inactive", "active", "past_due", "canceled"],
       support_conversation_status: ["open", "escalated", "closed"],
-      support_message_role: ["user", "assistant", "system"],
+      support_message_role: ["user", "assistant", "system", "agent"],
       vehicle_type: ["bike", "scooter", "car"],
       vendor_status: ["pending", "approved", "suspended", "rejected"],
       vendor_type: ["grocery", "restaurant"],

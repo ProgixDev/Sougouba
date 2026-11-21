@@ -43,6 +43,12 @@ export class SupportController {
     return this.support.send(userId, body.content);
   }
 
+  /** Hand the conversation to the Sougouba team — see `SupportService.escalate`. */
+  @Post('escalate')
+  escalate(@CurrentUser() userId: string) {
+    return this.support.escalate(userId);
+  }
+
   @Post('close')
   close(@CurrentUser() userId: string) {
     return this.support.close(userId);

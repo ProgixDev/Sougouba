@@ -22,7 +22,8 @@ const MAX_USER_MESSAGES = 30;
 
 export interface SupportMessageView {
   id: string;
-  role: 'user' | 'assistant';
+  /** `agent` is a reply from the Sougouba team, once the conversation was handed to them. */
+  role: 'user' | 'assistant' | 'agent';
   content: string;
   createdAt: string;
 }
@@ -31,8 +32,16 @@ export interface SupportConversationView {
   /** False until `OPENAI_API_KEY` is set — the app shows "bientôt disponible" instead of a chat box. */
   available: boolean;
   conversationId: string | null;
+  /**
+   * `escalated`: handed to the team — messages go to a person, not the
+   * assistant, so the chat works even when `available` is false. Null when
+   * there is no open conversation.
+   */
+  status: 'open' | 'escalated' | null;
   messages: SupportMessageView[];
 }
+
+type OpenConversation = { id: string; status: 'open' | 'escalated' };
 
 /**
  * The AI support assistant (devis: "Assistant IA de support client").
@@ -57,12 +66,38 @@ export class SupportService {
   ) {}
 
   async current(userId: string): Promise<SupportConversationView> {
-    const conversation = await this.openConversation(userId);
-    return {
-      available: this.openai.configured,
-      conversationId: conversation?.id ?? null,
-      messages: conversation ? await this.messages(conversation.id) : [],
-    };
+    return this.view(await this.openConversation(userId));
+  }
+
+  /**
+   * "Parler à un membre de l'équipe": the conversation goes to the back
+   * office's inbox, history included, and from here the customer's messages
+   * reach a person instead of the assistant. Works with no conversation yet
+   * (one is opened, already escalated) and when the assistant is not
+   * configured. Asking twice changes nothing.
+   */
+  async escalate(userId: string): Promise<SupportConversationView> {
+    const existing = await this.openConversation(userId);
+    const now = new Date().toISOString();
+    if (!existing) {
+      const created = await unwrap<OpenConversation>(
+        this.db
+          .from('support_conversations')
+          .insert({ customer_id: userId, status: 'escalated', escalated_at: now, last_message_at: now })
+          .select('id, status')
+          .single(),
+      );
+      return this.view(created);
+    }
+    if (existing.status === 'escalated') return this.view(existing);
+    await unwrap(
+      this.db
+        .from('support_conversations')
+        .update({ status: 'escalated', escalated_at: now, last_message_at: now })
+        .eq('id', existing.id)
+        .eq('status', 'open'),
+    );
+    return this.view({ ...existing, status: 'escalated' });
   }
 
   /**
@@ -77,6 +112,22 @@ export class SupportService {
     content: string,
   ): Promise<SupportConversationView> {
     const existing = await this.openConversation(userId);
+
+    // Handed to the team: stored for a person to read, no model call, and no
+    // cap — the cap exists for the model's bill.
+    if (existing?.status === 'escalated') {
+      const sentAt = new Date().toISOString();
+      await unwrap(
+        this.db
+          .from('support_messages')
+          .insert({ conversation_id: existing.id, role: 'user', content, created_at: sentAt }),
+      );
+      await unwrap(
+        this.db.from('support_conversations').update({ last_message_at: sentAt }).eq('id', existing.id),
+      );
+      return this.view(existing);
+    }
+
     const history = existing ? await this.messages(existing.id) : [];
 
     if (history.filter((m) => m.role === 'user').length >= MAX_USER_MESSAGES) {
@@ -105,6 +156,8 @@ export class SupportService {
     });
     const turns: ChatTurn[] = [
       ...history
+        // The model only ever sees its own side and the customer's.
+        .filter((m): m is SupportMessageView & { role: 'user' | 'assistant' } => m.role !== 'agent')
         .slice(-HISTORY_WINDOW)
         .map(({ role, content: text }) => ({ role, content: text })),
       { role: 'user', content },
@@ -144,11 +197,14 @@ export class SupportService {
       ]),
     );
 
-    return {
-      available: true,
-      conversationId,
-      messages: await this.messages(conversationId),
-    };
+    await unwrap(
+      this.db
+        .from('support_conversations')
+        .update({ last_message_at: new Date(askedAt.getTime() + 1).toISOString() })
+        .eq('id', conversationId),
+    );
+
+    return this.view({ id: conversationId, status: 'open' });
   }
 
   /** "Nouvelle conversation". The old one is kept, closed — it is the shopper's history, not ours to delete. */
@@ -160,22 +216,27 @@ export class SupportService {
         .eq('customer_id', userId)
         .neq('status', 'closed'),
     );
-    return {
-      available: this.openai.configured,
-      conversationId: null,
-      messages: [],
-    };
+    return this.view(null);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
 
+  private async view(conversation: OpenConversation | null): Promise<SupportConversationView> {
+    return {
+      available: this.openai.configured,
+      conversationId: conversation?.id ?? null,
+      status: conversation?.status ?? null,
+      messages: conversation ? await this.messages(conversation.id) : [],
+    };
+  }
+
   private async openConversation(
     userId: string,
-  ): Promise<{ id: string } | null> {
-    return unwrap<{ id: string } | null>(
+  ): Promise<OpenConversation | null> {
+    return unwrap<OpenConversation | null>(
       this.db
         .from('support_conversations')
-        .select('id')
+        .select('id, status')
         .eq('customer_id', userId)
         .neq('status', 'closed')
         .order('created_at', { ascending: false })
@@ -192,7 +253,7 @@ export class SupportService {
         .from('support_messages')
         .select('id, role, content, createdAt:created_at')
         .eq('conversation_id', conversationId)
-        .in('role', ['user', 'assistant'])
+        .in('role', ['user', 'assistant', 'agent'])
         .order('created_at', { ascending: true }),
     );
     return rows;

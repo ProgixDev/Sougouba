@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { ArrowUp, ChevronLeft, Mail, MessageCircleQuestion, RotateCcw, Sparkles } from 'lucide-react-native';
+import { ArrowUp, ChevronLeft, Headset, MessageCircleQuestion, RotateCcw, Sparkles, UserRound } from 'lucide-react-native';
 import { MotiView } from 'moti';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -44,7 +44,15 @@ const SUGGESTIONS = ['whereIsOrder', 'points', 'zones', 'problem'] as const;
  *
  * The greeting is drawn here, not stored: it is the same for everyone, and
  * saving it would make every conversation start with a message nobody wrote.
+ *
+ * "Parler à l'équipe" hands the same conversation to the back office
+ * (`escalated`): from then on messages reach a person, the team's replies show
+ * as theirs, and the screen checks for new ones while it is open — a push
+ * also announces each reply.
  */
+
+/** How often an open, escalated conversation looks for the team's reply. */
+const TEAM_POLL_MS = 15_000;
 export default function SupportScreen() {
   const t = useT();
   const colors = useThemeColors();
@@ -56,14 +64,21 @@ export default function SupportScreen() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [escalated, setEscalated] = useState(false);
+  const [escalating, setEscalating] = useState(false);
   const scroll = useRef<ScrollView>(null);
+  const sendingRef = useRef(false);
+  sendingRef.current = sending;
 
   const load = useCallback(async () => {
     setStatus('loading');
     try {
       const conversation = await supportApi.getConversation();
+      const withTeam = conversation.status === 'escalated';
       setMessages(conversation.messages);
-      setStatus(conversation.available ? 'ready' : 'unavailable');
+      setEscalated(withTeam);
+      // A conversation with the team works without the assistant.
+      setStatus(conversation.available || withTeam ? 'ready' : 'unavailable');
     } catch {
       setStatus('error');
     }
@@ -72,6 +87,24 @@ export default function SupportScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // While the team has the conversation, pick up their replies without a
+  // manual refresh. Skipped mid-send so a reply in flight is not overwritten.
+  useEffect(() => {
+    if (!escalated || status !== 'ready') return;
+    const timer = setInterval(() => {
+      if (sendingRef.current) return;
+      supportApi
+        .getConversation()
+        .then((conversation) => {
+          if (sendingRef.current) return;
+          setMessages(conversation.messages);
+          setEscalated(conversation.status === 'escalated');
+        })
+        .catch(() => undefined);
+    }, TEAM_POLL_MS);
+    return () => clearInterval(timer);
+  }, [escalated, status]);
 
   async function send(text: string, retryOf?: string) {
     const content = text.trim();
@@ -88,6 +121,7 @@ export default function SupportScreen() {
     try {
       const conversation = await supportApi.sendMessage(content);
       setMessages(conversation.messages);
+      setEscalated(conversation.status === 'escalated');
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 503) {
         setStatus('unavailable');
@@ -99,10 +133,27 @@ export default function SupportScreen() {
     }
   }
 
+  async function talkToTeam() {
+    if (escalating || escalated) return;
+    setError(null);
+    setEscalating(true);
+    try {
+      const conversation = await supportApi.escalate();
+      setMessages(conversation.messages);
+      setEscalated(true);
+      setStatus('ready');
+    } catch {
+      setError(t('customer.account.support.escalateFailed'));
+    } finally {
+      setEscalating(false);
+    }
+  }
+
   async function startOver() {
     if (sending) return;
     setMessages([]);
     setError(null);
+    setEscalated(false);
     try {
       await supportApi.closeConversation();
     } catch {
@@ -111,7 +162,7 @@ export default function SupportScreen() {
     }
   }
 
-  const contactHuman = () => void Linking.openURL(`mailto:${SUPPORT_EMAIL}`);
+  const emailSupport = () => void Linking.openURL(`mailto:${SUPPORT_EMAIL}`);
   const goBack = () => (router.canGoBack() ? router.back() : router.replace(routes.customerProfile));
 
   return (
@@ -155,7 +206,7 @@ export default function SupportScreen() {
           <ActivityIndicator color={colors.primary} />
         </View>
       ) : status === 'unavailable' && messages.length === 0 ? (
-        <Unavailable onContact={contactHuman} />
+        <Unavailable onTalkToTeam={talkToTeam} onEmail={emailSupport} busy={escalating} error={error} />
       ) : status === 'error' ? (
         <View className="flex-1 items-center justify-center px-8 gap-4">
           <Text variant="body" tone="muted" className="text-center">
@@ -181,7 +232,7 @@ export default function SupportScreen() {
               text={t('customer.account.support.greeting', { name: firstName ? ` ${firstName}` : '' })}
             />
 
-            {messages.length === 0 ? (
+            {messages.length === 0 && !escalated ? (
               <View className="flex-row flex-wrap gap-2 pl-10 pt-1">
                 {SUGGESTIONS.map((key, i) => (
                   <MotiView
@@ -204,9 +255,20 @@ export default function SupportScreen() {
               </View>
             ) : null}
 
+            {escalated ? (
+              <View className="flex-row items-start gap-2.5 rounded-2xl bg-primary/10 px-4 py-3">
+                <Headset size={18} color={colors.primary} strokeWidth={2} />
+                <Text variant="caption" className="flex-1 text-[13px] leading-[19px]">
+                  {t('customer.account.support.escalatedBanner')}
+                </Text>
+              </View>
+            ) : null}
+
             {messages.map((message) =>
               message.role === 'assistant' ? (
                 <AssistantBubble key={message.id} text={message.content} />
+              ) : message.role === 'agent' ? (
+                <TeamBubble key={message.id} text={message.content} label={t('customer.account.support.teamName')} />
               ) : (
                 <UserBubble
                   key={message.id}
@@ -217,7 +279,8 @@ export default function SupportScreen() {
               )
             )}
 
-            {sending ? <TypingBubble label={t('customer.account.support.typing')} /> : null}
+            {/* A person answers later, not while the request is in flight. */}
+            {sending && !escalated ? <TypingBubble label={t('customer.account.support.typing')} /> : null}
 
             {error ? (
               <Text variant="caption" tone="destructive" className="text-center px-6">
@@ -258,14 +321,25 @@ export default function SupportScreen() {
                 />
               </Pressable>
             </View>
-            <Pressable onPress={contactHuman} accessibilityRole="link" className="flex-row flex-wrap justify-center">
+            {escalated ? (
               <Text variant="caption" tone="muted" className="text-[11px] text-center">
-                {t('customer.account.support.disclaimer')}{' '}
-                <Text variant="caption" weight="semibold" tone="primary" className="text-[11px]">
-                  {t('customer.account.support.contactHuman')}
-                </Text>
+                {t('customer.account.support.teamDisclaimer')}
               </Text>
-            </Pressable>
+            ) : (
+              <Pressable
+                onPress={talkToTeam}
+                disabled={escalating}
+                accessibilityRole="button"
+                className="flex-row flex-wrap justify-center"
+              >
+                <Text variant="caption" tone="muted" className="text-[11px] text-center">
+                  {t('customer.account.support.disclaimer')}{' '}
+                  <Text variant="caption" weight="semibold" tone="primary" className="text-[11px]">
+                    {t('customer.account.support.contactHuman')}
+                  </Text>
+                </Text>
+              </Pressable>
+            )}
           </View>
         </KeyboardAvoidingView>
       )}
@@ -299,6 +373,33 @@ function AssistantBubble({ text }: { text: string }) {
         <Text variant="body" className="text-[15px] leading-[21px]" selectable>
           {text}
         </Text>
+      </View>
+    </MotiView>
+  );
+}
+
+/** A reply from a person on the team — a different mark and a name, so it never reads as the assistant. */
+function TeamBubble({ text, label }: { text: string; label: string }) {
+  const colors = useThemeColors();
+  return (
+    <MotiView
+      from={{ opacity: 0, translateY: 6 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: 'timing', duration: 220 }}
+      className="flex-row items-end gap-2 pr-10"
+    >
+      <View className="w-7 h-7 items-center justify-center rounded-full bg-secondary">
+        <UserRound size={15} color={colors.secondaryForeground} strokeWidth={2.2} />
+      </View>
+      <View className="flex-shrink gap-1">
+        <Text variant="caption" weight="semibold" tone="muted" className="text-[11px] pl-1">
+          {label}
+        </Text>
+        <View className="rounded-[20px] rounded-bl-md bg-card px-4 py-3 border-[1.5px] border-primary/40">
+          <Text variant="body" className="text-[15px] leading-[21px]" selectable>
+            {text}
+          </Text>
+        </View>
       </View>
     </MotiView>
   );
@@ -350,7 +451,17 @@ function TypingBubble({ label }: { label: string }) {
   );
 }
 
-function Unavailable({ onContact }: { onContact: () => void }) {
+function Unavailable({
+  onTalkToTeam,
+  onEmail,
+  busy,
+  error,
+}: {
+  onTalkToTeam: () => void;
+  onEmail: () => void;
+  busy: boolean;
+  error: string | null;
+}) {
   const t = useT();
   const colors = useThemeColors();
   return (
@@ -374,12 +485,20 @@ function Unavailable({ onContact }: { onContact: () => void }) {
       <Button
         label={t('customer.account.support.contactHuman')}
         variant="primary"
-        icon={<Mail size={18} color={colors.primaryForeground} strokeWidth={2} />}
-        onPress={onContact}
+        icon={<Headset size={18} color={colors.primaryForeground} strokeWidth={2} />}
+        loading={busy}
+        onPress={onTalkToTeam}
       />
-      <Text variant="caption" tone="muted">
-        {SUPPORT_EMAIL}
-      </Text>
+      {error ? (
+        <Text variant="caption" tone="destructive" className="text-center">
+          {error}
+        </Text>
+      ) : null}
+      <Pressable onPress={onEmail} accessibilityRole="link" hitSlop={6}>
+        <Text variant="caption" tone="muted">
+          {t('customer.account.support.emailInstead', { email: SUPPORT_EMAIL })}
+        </Text>
+      </Pressable>
     </View>
   );
 }

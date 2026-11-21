@@ -127,6 +127,21 @@ export class NotifyService {
   }
 
   /**
+   * A team member answered the customer's escalated support conversation.
+   * No category: it is the answer to something they asked for, not a
+   * notification type they could have switched off.
+   */
+  async supportReplied(customerId: string): Promise<void> {
+    await this.guard('supportReplied', async () => {
+      await this.push.send([customerId], {
+        content: (l) => customerCopy.supportReplied({}, l),
+        url: '/(customer)/account/support',
+        channel: 'orders',
+      });
+    });
+  }
+
+  /**
    * The back office approved a shop or a courier. Only approvals are pushed:
    * a refusal or a suspension deserves a reason a lock screen cannot carry.
    */
