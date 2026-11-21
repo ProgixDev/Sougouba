@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/data/Skeleton';
 import { useToast } from '@/components/Toast';
 import { createSpecialty, listSpecialties, updateSpecialty, type AdminSpecialty } from '@/lib/api/specialties';
+import { useAdmin } from '@/lib/permissions';
 
 const LISTS: { type: AdminSpecialty['vendorType']; title: string; hint: string }[] = [
   { type: 'grocery', title: 'Épiceries', hint: 'Le type de commerce : épicerie africaine, boucherie halal…' },
@@ -95,6 +96,8 @@ function SpecialtyList({
   onChanged: (row: AdminSpecialty) => void;
 }) {
   const toast = useToast();
+  const { can } = useAdmin();
+  const manage = can('specialties.manage');
   const [nameFr, setNameFr] = useState('');
   const [nameEn, setNameEn] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -209,6 +212,7 @@ function SpecialtyList({
                     {row.nameEn} · {row.vendorCount} boutique{row.vendorCount > 1 ? 's' : ''}
                   </Text>
                 </div>
+                {manage && (
                 <div className="flex items-center gap-1">
                   <IconButton label="Monter" disabled={index === 0 || busyId !== null} onClick={() => move(index, -1)}>
                     <ArrowUp size={15} />
@@ -234,12 +238,14 @@ function SpecialtyList({
                     {row.isActive ? 'Retirer' : 'Réactiver'}
                   </Button>
                 </div>
+                )}
               </div>
             )}
           </li>
         ))}
       </ul>
 
+      {manage && (
       <form onSubmit={add} className="mt-auto flex flex-col gap-2 border-t border-border bg-muted/40 p-5">
         <Text variant="label">Ajouter</Text>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -250,6 +256,7 @@ function SpecialtyList({
           <Plus size={15} /> Ajouter
         </Button>
       </form>
+      )}
     </Card>
   );
 }

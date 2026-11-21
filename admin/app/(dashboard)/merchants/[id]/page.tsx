@@ -14,9 +14,11 @@ import { getVendor, approveVendor, rejectVendor, suspendVendor } from '@/lib/api
 import { vendorStatusMeta } from '@/lib/statusMeta';
 import { formatDate } from '@/lib/format';
 import type { AdminVendorDetail } from '@/lib/types';
+import { useAdmin } from '@/lib/permissions';
 
 export default function MerchantDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { can } = useAdmin();
   const toast = useToast();
 
   const [vendor, setVendor] = useState<AdminVendorDetail | null | undefined>(undefined);
@@ -110,6 +112,7 @@ export default function MerchantDetailPage() {
             {vendor.vendorType === 'restaurant' ? 'Restaurant' : 'Épicerie'}
           </Text>
         </div>
+        {can('vendors.decide') && (
         <div className="flex gap-2.5">
           {vendor.status !== 'approved' && vendor.status !== 'rejected' && (
             <Button variant="primary" onClick={handleApprove} disabled={busy}>
@@ -127,6 +130,7 @@ export default function MerchantDetailPage() {
             </Button>
           )}
         </div>
+        )}
       </div>
 
       {vendor.statusReason && (

@@ -14,11 +14,13 @@ import { Skeleton } from '@/components/data/Skeleton';
 import { blockUser, getUser, unblockUser } from '@/lib/api/users';
 import { formatDate } from '@/lib/format';
 import type { AdminUserDetail } from '@/lib/types';
+import { useAdmin } from '@/lib/permissions';
 
 const ROLE_LABELS: Record<string, string> = { customer: 'Client', business: 'Commerçant', courier: 'Livreur', admin: 'Administrateur' };
 
 export default function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { can } = useAdmin();
   const toast = useToast();
   const [user, setUser] = useState<AdminUserDetail | null | undefined>(undefined);
   const [dialog, setDialog] = useState<'block' | 'unblock' | null>(null);
@@ -89,6 +91,7 @@ export default function UserDetailPage() {
         </div>
         {/* An administrator is not blocked from this dashboard, on purpose — the API refuses it too. */}
         {user.role !== 'admin' &&
+          can('users.block') &&
           (blocked ? (
             <Button variant="primary" onClick={() => setDialog('unblock')} disabled={busy}>
               <ShieldCheck size={16} /> Débloquer

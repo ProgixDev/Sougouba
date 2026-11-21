@@ -27,6 +27,7 @@ import {
   type ReviewFilter,
 } from '@/lib/api/moderation';
 import { formatCad, formatDate, formatDateTime } from '@/lib/format';
+import { useAdmin } from '@/lib/permissions';
 
 const PAGE_SIZE = 50;
 
@@ -241,6 +242,7 @@ const REVIEW_FILTERS: { key: ReviewFilter; label: string }[] = [
 
 function ReviewsTab({ ask }: { ask: (a: PendingAction) => void }) {
   const toast = useToast();
+  const canAct = useAdmin().can('moderation.act');
   const [filter, setFilter] = useState<ReviewFilter>('all');
   const { rows, total, loadMore, loadingMore, reload } = usePaged<AdminReview>(filter, (offset) =>
     listReviews(filter, offset, PAGE_SIZE)
@@ -321,6 +323,7 @@ function ReviewsTab({ ask }: { ask: (a: PendingAction) => void }) {
                 </Text>
               )}
 
+              {canAct && (
               <div className="flex flex-wrap gap-2">
                 {r.comment &&
                   (r.commentHiddenAt ? (
@@ -342,6 +345,7 @@ function ReviewsTab({ ask }: { ask: (a: PendingAction) => void }) {
                   </Button>
                 )}
               </div>
+              )}
             </Card>
           ))}
         </div>
@@ -361,6 +365,7 @@ const COUPON_STATUS: { key: 'all' | 'active' | 'ended'; label: string }[] = [
 
 function CouponsTab({ ask }: { ask: (a: PendingAction) => void }) {
   const toast = useToast();
+  const canAct = useAdmin().can('moderation.act');
   const [status, setStatus] = useState<'all' | 'active' | 'ended'>('all');
   const [search, setSearch] = useState('');
   const debounced = useDebounced(search.trim());
@@ -417,7 +422,7 @@ function CouponsTab({ ask }: { ask: (a: PendingAction) => void }) {
       key: 'action',
       header: '',
       render: (c) =>
-        c.active ? (
+        c.active && canAct ? (
           <Button
             size="sm"
             variant="destructive"
@@ -468,6 +473,7 @@ function CouponsTab({ ask }: { ask: (a: PendingAction) => void }) {
 
 function ProductsTab({ ask }: { ask: (a: PendingAction) => void }) {
   const toast = useToast();
+  const canAct = useAdmin().can('moderation.act');
   const [hiddenOnly, setHiddenOnly] = useState<'all' | 'only'>('all');
   const [search, setSearch] = useState('');
   const debounced = useDebounced(search.trim());
@@ -521,7 +527,7 @@ function ProductsTab({ ask }: { ask: (a: PendingAction) => void }) {
       key: 'action',
       header: '',
       render: (p) =>
-        p.hiddenAt ? (
+        !canAct ? null : p.hiddenAt ? (
           <Button
             size="sm"
             variant="outline"

@@ -16,6 +16,7 @@ import { getSupportConversation, replySupport, resolveSupport, type SupportConve
 import { orderStatusMeta } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
 import type { OrderStatus } from '@/lib/types';
+import { useAdmin } from '@/lib/permissions';
 
 /**
  * One conversation: the whole thread — the assistant's answers included, so
@@ -27,6 +28,7 @@ import type { OrderStatus } from '@/lib/types';
  */
 export default function SupportConversationPage() {
   const { id } = useParams<{ id: string }>();
+  const { can } = useAdmin();
   const toast = useToast();
   const [conversation, setConversation] = useState<SupportConversationDetail | null | undefined>(undefined);
   const [draft, setDraft] = useState('');
@@ -116,7 +118,7 @@ export default function SupportConversationPage() {
               : ''}
           </Text>
         </div>
-        {open && (
+        {open && can('support.reply') && (
           <Button variant="outline" onClick={() => setConfirmResolve(true)} disabled={busy}>
             <CheckCircle2 size={16} /> Résoudre
           </Button>
@@ -139,7 +141,7 @@ export default function SupportConversationPage() {
             ))}
           </ol>
 
-          {open ? (
+          {open && can('support.reply') ? (
             <form onSubmit={send} className="mt-5 flex flex-col gap-2 border-t border-border pt-4">
               <label htmlFor="reply" className="font-sans text-[0.8125rem] font-semibold">
                 Répondre à {name}
@@ -159,7 +161,9 @@ export default function SupportConversationPage() {
             </form>
           ) : (
             <Text variant="caption" tone="muted" className="mt-5 border-t border-border pt-4">
-              Conversation résolue. Si le client écrit de nouveau, une nouvelle conversation commence.
+              {open
+                ? 'Lecture seule — votre rôle ne permet pas de répondre au support.'
+                : 'Conversation résolue. Si le client écrit de nouveau, une nouvelle conversation commence.'}
             </Text>
           )}
         </Card>

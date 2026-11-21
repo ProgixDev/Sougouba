@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post, Query, Redirect, UseGuards } from '@nestjs
 import { ApiBearerAuth, ApiExcludeController, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 
+import { RequirePermission } from '../admin/permissions.js';
 import { AdminGuard } from '../auth/admin.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { SupabaseAuthGuard } from '../auth/supabase-auth.guard.js';
@@ -114,6 +115,7 @@ export class AdminPayoutsController {
    * per-courier idempotency key makes a repeat within the same day a no-op at
    * Stripe rather than a second payment.
    */
+  @RequirePermission('payouts.run')
   @Post('run')
   run() {
     return this.payouts.runBatch();

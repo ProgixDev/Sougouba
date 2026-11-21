@@ -36,7 +36,11 @@ export type AdminAction =
   | 'product.hide'
   | 'product.unhide'
   | 'admin.create'
-  | 'admin.revoke';
+  | 'admin.revoke'
+  | 'admin.role_change'
+  | 'role.create'
+  | 'role.update'
+  | 'role.delete';
 
 export const ADMIN_ACTIONS: AdminAction[] = [
   'vendor.approve',
@@ -61,9 +65,13 @@ export const ADMIN_ACTIONS: AdminAction[] = [
   'product.unhide',
   'admin.create',
   'admin.revoke',
+  'admin.role_change',
+  'role.create',
+  'role.update',
+  'role.delete',
 ];
 
-export type AuditSubject = 'vendor' | 'courier' | 'order' | 'dispute' | 'courier_issue' | 'settings' | 'user' | 'specialty' | 'support' | 'review' | 'coupon' | 'product';
+export type AuditSubject = 'vendor' | 'courier' | 'order' | 'dispute' | 'courier_issue' | 'settings' | 'user' | 'specialty' | 'support' | 'review' | 'coupon' | 'product' | 'admin_role';
 
 export type AuditEntry = {
   actorId: string;

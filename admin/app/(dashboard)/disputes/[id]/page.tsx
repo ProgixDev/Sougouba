@@ -15,9 +15,11 @@ import { getDispute, resolveDispute } from '@/lib/api/disputes';
 import { disputeStatusMeta, DISPUTE_REASON_LABELS } from '@/lib/statusMeta';
 import { formatDateTime } from '@/lib/format';
 import type { AdminDispute } from '@/lib/types';
+import { useAdmin } from '@/lib/permissions';
 
 export default function DisputeDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { can } = useAdmin();
   const toast = useToast();
   const [dispute, setDispute] = useState<AdminDispute | null | undefined>(undefined);
   const [dialog, setDialog] = useState<'resolved' | 'rejected' | null>(null);
@@ -79,7 +81,7 @@ export default function DisputeDetailPage() {
             </Link>
           </Text>
         </div>
-        {!settled && (
+        {!settled && can('disputes.resolve') && (
           <div className="flex gap-2.5">
             <Button variant="primary" onClick={() => setDialog('resolved')} disabled={busy}>
               <CheckCircle2 size={16} /> Marquer résolu

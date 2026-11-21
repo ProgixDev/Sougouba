@@ -108,6 +108,39 @@ export type Database = {
           },
         ]
       }
+      admin_roles: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          is_system: boolean
+          name: string
+          permissions: string[]
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          is_system?: boolean
+          name: string
+          permissions?: string[]
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          is_system?: boolean
+          name?: string
+          permissions?: string[]
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       categories: {
         Row: {
           color_token: string
@@ -1257,6 +1290,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          admin_role_id: string | null
           avatar_url: string | null
           courier_id: string | null
           created_at: string
@@ -1269,6 +1303,7 @@ export type Database = {
           vendor_id: string | null
         }
         Insert: {
+          admin_role_id?: string | null
           avatar_url?: string | null
           courier_id?: string | null
           created_at?: string
@@ -1281,6 +1316,7 @@ export type Database = {
           vendor_id?: string | null
         }
         Update: {
+          admin_role_id?: string | null
           avatar_url?: string | null
           courier_id?: string | null
           created_at?: string
@@ -1293,6 +1329,13 @@ export type Database = {
           vendor_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "profiles_admin_role_id_fkey"
+            columns: ["admin_role_id"]
+            isOneToOne: false
+            referencedRelation: "admin_roles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "profiles_courier_id_couriers_id_fk"
             columns: ["courier_id"]
@@ -1884,7 +1927,12 @@ export type Database = {
         }
       }
       admin_grant_admin: {
-        Args: { p_actor_id: string; p_full_name: string; p_user_id: string }
+        Args: {
+          p_actor_id: string
+          p_full_name: string
+          p_role_id: string
+          p_user_id: string
+        }
         Returns: undefined
       }
       admin_list_orders: {
@@ -1993,9 +2041,43 @@ export type Database = {
         Args: { p_actor_id: string; p_reason: string; p_user_id: string }
         Returns: undefined
       }
+      admin_role_delete: {
+        Args: { p_actor_id: string; p_id: string }
+        Returns: undefined
+      }
+      admin_role_save: {
+        Args: {
+          p_actor_id: string
+          p_description: string
+          p_id: string
+          p_name: string
+          p_permissions: string[]
+          p_slug: string
+        }
+        Returns: {
+          created_at: string
+          description: string
+          id: string
+          is_system: boolean
+          name: string
+          permissions: string[]
+          slug: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "admin_roles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_search: {
         Args: { p_id_prefix?: string; p_pattern: string; p_per_type?: number }
         Returns: Json
+      }
+      admin_set_admin_role: {
+        Args: { p_actor_id: string; p_role_id: string; p_user_id: string }
+        Returns: undefined
       }
       admin_specialty_save: {
         Args: {
@@ -2325,6 +2407,7 @@ export type Database = {
         | "review"
         | "coupon"
         | "product"
+        | "admin_role"
       coupon_discount_type: "percentage" | "fixed"
       courier_issue_reason:
         | "customer_absent"
@@ -2505,6 +2588,7 @@ export const Constants = {
         "review",
         "coupon",
         "product",
+        "admin_role",
       ],
       coupon_discount_type: ["percentage", "fixed"],
       courier_issue_reason: [

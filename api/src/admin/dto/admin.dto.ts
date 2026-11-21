@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { paginationSchema } from '../../catalog/dto/query.dto.js';
+import { PERMISSIONS, type Permission } from '../permissions.js';
 
 /**
  * `GET /admin/orders`.
@@ -222,7 +223,7 @@ export type RefundOrderInput = z.infer<typeof refundOrderSchema>;
  */
 export const auditQuerySchema = paginationSchema.extend({
   action: z.string().trim().min(1).max(60).optional(),
-  subjectType: z.enum(['vendor', 'courier', 'order', 'dispute', 'courier_issue', 'settings', 'user', 'specialty', 'support', 'review', 'coupon', 'product']).optional(),
+  subjectType: z.enum(['vendor', 'courier', 'order', 'dispute', 'courier_issue', 'settings', 'user', 'specialty', 'support', 'review', 'coupon', 'product', 'admin_role']).optional(),
   subjectId: z.string().uuid().optional(),
   actorId: z.string().uuid().optional(),
   since: z.coerce.date().optional(),
@@ -308,6 +309,22 @@ export const createAdminSchema = z.object({
   // Trimmed and lowered before the format check — a pasted address often carries a space.
   email: z.string().trim().toLowerCase().pipe(z.email('Courriel invalide')),
   fullName: z.string().trim().min(2, 'Nom requis').max(80, 'Nom trop long'),
+  roleId: z.uuid('Choisissez un rôle'),
 });
 
 export type CreateAdminInput = z.infer<typeof createAdminSchema>;
+
+export const setAdminRoleSchema = z.object({ roleId: z.uuid('Choisissez un rôle') });
+
+export type SetAdminRoleInput = z.infer<typeof setAdminRoleSchema>;
+
+/** A custom role. Its permissions must come from the catalogue — anything else is refused, not stored. */
+export const adminRoleSchema = z.object({
+  name: z.string().trim().min(2, 'Nom requis').max(40, 'Nom trop long'),
+  description: z.string().trim().max(300, 'Description trop longue').optional(),
+  permissions: z
+    .array(z.enum(PERMISSIONS as [Permission, ...Permission[]], { message: 'Permission inconnue' }))
+    .min(1, 'Cochez au moins une permission'),
+});
+
+export type AdminRoleInput = z.infer<typeof adminRoleSchema>;

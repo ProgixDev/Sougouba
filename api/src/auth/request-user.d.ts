@@ -10,5 +10,7 @@ import 'fastify';
 declare module 'fastify' {
   interface FastifyRequest {
     userId?: string;
+    /** Set by `AdminGuard`: the calling administrator's role permissions. */
+    adminPermissions?: string[];
   }
 }

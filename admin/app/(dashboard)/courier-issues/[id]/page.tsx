@@ -15,9 +15,11 @@ import { getCourierIssue, resolveCourierIssue } from '@/lib/api/courierIssues';
 import { courierIssueStatusMeta, COURIER_ISSUE_REASON_LABELS } from '@/lib/statusMeta';
 import { formatDateTime } from '@/lib/format';
 import type { AdminCourierIssue } from '@/lib/types';
+import { useAdmin } from '@/lib/permissions';
 
 export default function CourierIssueDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { can } = useAdmin();
   const toast = useToast();
   const [issue, setIssue] = useState<AdminCourierIssue | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
@@ -81,7 +83,7 @@ export default function CourierIssueDetailPage() {
             </Link>
           </Text>
         </div>
-        {issue.status === 'open' && (
+        {issue.status === 'open' && can('courier_issues.resolve') && (
           <Button variant="primary" onClick={() => setDialog(true)} disabled={busy}>
             <CheckCircle2 size={16} /> Marquer résolu
           </Button>

@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/data/Skeleton';
 import { useToast } from '@/components/Toast';
 import { getSettings, updateSettings } from '@/lib/api/settings';
 import type { PlatformSettings } from '@/lib/types';
+import { useAdmin } from '@/lib/permissions';
 
 /**
  * Every numeric field is edited as a free-typed local string, not a value
@@ -59,6 +60,7 @@ function toPatch(f: FieldState, doublePointsActive: boolean): PlatformSettings {
 
 export default function SettingsPage() {
   const toast = useToast();
+  const { can } = useAdmin();
   const [loaded, setLoaded] = useState(false);
   const [fields, setFields] = useState<FieldState | null>(null);
   const [doublePointsActive, setDoublePointsActive] = useState(false);
@@ -109,9 +111,15 @@ export default function SettingsPage() {
             Monétisation et règles du programme de fidélité.
           </Text>
         </div>
-        <Button variant="primary" onClick={handleSave} disabled={saving}>
-          <Save size={16} /> {saving ? 'Enregistrement…' : 'Enregistrer'}
-        </Button>
+        {can('settings.manage') ? (
+          <Button variant="primary" onClick={handleSave} disabled={saving}>
+            <Save size={16} /> {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </Button>
+        ) : (
+          <Text variant="caption" tone="muted">
+            Lecture seule — votre rôle ne permet pas de modifier les paramètres.
+          </Text>
+        )}
       </div>
 
       <Card className="p-6">

@@ -13,7 +13,8 @@ export type AuditSubject =
   | 'support'
   | 'review'
   | 'coupon'
-  | 'product';
+  | 'product'
+  | 'admin_role';
 
 /** One line of `GET /admin/audit-log`, newest first. Written by the database, never edited. */
 export interface AuditEntry {
@@ -35,6 +36,8 @@ export interface AuditEntry {
 export interface AuditFilters {
   subjectType?: AuditSubject;
   subjectId?: string;
+  /** Only what this administrator did. */
+  actorId?: string;
 }
 
 /** One page of the log. The API caps `limit`; "load more" asks for the next `offset`. */

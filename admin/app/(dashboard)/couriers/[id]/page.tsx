@@ -14,9 +14,11 @@ import { getCourier, approveCourier, rejectCourier, suspendCourier } from '@/lib
 import { courierStatusMeta, VEHICLE_LABELS } from '@/lib/statusMeta';
 import { formatDate } from '@/lib/format';
 import type { AdminCourierDetail } from '@/lib/types';
+import { useAdmin } from '@/lib/permissions';
 
 export default function CourierDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { can } = useAdmin();
   const toast = useToast();
 
   const [courier, setCourier] = useState<AdminCourierDetail | null | undefined>(undefined);
@@ -99,6 +101,7 @@ export default function CourierDetailPage() {
             {VEHICLE_LABELS[courier.vehicle]} · {courier.city}
           </Text>
         </div>
+        {can('couriers.decide') && (
         <div className="flex gap-2.5">
           {courier.status !== 'approved' && courier.status !== 'rejected' && (
             <Button variant="primary" onClick={handleApprove} disabled={busy}>
@@ -116,6 +119,7 @@ export default function CourierDetailPage() {
             </Button>
           )}
         </div>
+        )}
       </div>
 
       {courier.statusReason && (

@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { permissionForPath, useAdmin } from '@/lib/permissions';
 import { Text } from '../ui/Text';
 
 export interface SidebarCounts {
@@ -63,11 +64,18 @@ function Brand() {
 }
 
 function NavList({ counts, onNavigate }: { counts: SidebarCounts; onNavigate?: () => void }) {
+  const { can } = useAdmin();
   const pathname = usePathname();
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-4">
       <ul className="flex flex-col gap-0.5">
-        {NAV(counts).map((item) => {
+        {/* Only what this administrator's role can open — see `lib/permissions`. */}
+        {NAV(counts)
+          .filter((item) => {
+            const needed = permissionForPath(item.href);
+            return needed === null || can(needed);
+          })
+          .map((item) => {
           const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
           const Icon = item.icon;
           return (

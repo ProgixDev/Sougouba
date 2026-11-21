@@ -129,6 +129,7 @@ async function request<T>(
 export const apiGet = <T>(path: string, params?: QueryParams) => request<T>('GET', path, { params });
 export const apiPost = <T>(path: string, body?: unknown) => request<T>('POST', path, { body });
 export const apiPatch = <T>(path: string, body?: unknown) => request<T>('PATCH', path, { body });
+export const apiDelete = <T>(path: string) => request<T>('DELETE', path);
 
 /** The merchant portal's calls — the shop owner's own token, never the admin's. */
 export const merchantApiGet = <T>(path: string, params?: QueryParams) =>

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -21,10 +22,12 @@ import { SettingsService } from '../loyalty/settings.service.js';
 import { AdminService } from './admin.service.js';
 import { ApprovalsService } from './approvals.service.js';
 import { AuditService } from './audit.service.js';
+import { ANY_ADMIN, RequirePermission } from './permissions.js';
 import {
   adminCouponQuerySchema,
   adminProductQuerySchema,
   adminReviewQuerySchema,
+  adminRoleSchema,
   adminSearchQuerySchema,
   auditQuerySchema,
   courierIssueQuerySchema,
@@ -39,6 +42,7 @@ import {
   resolveDisputeSchema,
   reviewDecisionSchema,
   reviewQuerySchema,
+  setAdminRoleSchema,
   supportQuerySchema,
   supportReplySchema,
   updateSettingsSchema,
@@ -47,6 +51,7 @@ import {
   type AdminCouponQuery,
   type AdminProductQuery,
   type AdminReviewQuery,
+  type AdminRoleInput,
   type AdminSearchQuery,
   type AuditQuery,
   type CourierIssueQuery,
@@ -61,6 +66,7 @@ import {
   type ResolveDisputeInput,
   type ReviewDecisionInput,
   type ReviewQuery,
+  type SetAdminRoleInput,
   type SupportQuery,
   type SupportReplyInput,
   type UpdateSettingsInput,
@@ -111,6 +117,7 @@ export class AdminController {
     private readonly adminAccounts: AdminAccountsService
   ) {}
 
+  @RequirePermission('dashboard.view')
   @Get('stats')
   stats() {
     return this.admin.stats();
@@ -121,16 +128,19 @@ export class AdminController {
    * resolves the static segment `overview` before any parameter, so the two
    * cannot shadow each other regardless of declaration order.
    */
+  @RequirePermission('dashboard.view')
   @Get('stats/overview')
   overview(@Query(new ZodValidationPipe(overviewQuerySchema)) query: OverviewQuery) {
     return this.admin.overview(query.range);
   }
 
+  @RequirePermission('orders.view')
   @Get('orders')
   orders(@Query(new ZodValidationPipe(orderListQuerySchema)) query: OrderListQuery) {
     return this.admin.listOrders(query);
   }
 
+  @RequirePermission('orders.view')
   @Get('orders/:id')
   order(@Param('id', ParseUUIDPipe) id: string) {
     return this.admin.orderDetail(id);
@@ -141,6 +151,7 @@ export class AdminController {
    * prefers a static segment, but keeping the order explicit means a future
    * parameterised route cannot quietly shadow it.
    */
+  @RequirePermission('dashboard.view')
   @Get('search')
   search(@Query(new ZodValidationPipe(adminSearchQuerySchema)) query: AdminSearchQuery) {
     return this.admin.search(query);
@@ -148,16 +159,19 @@ export class AdminController {
 
   // ── disputes ──────────────────────────────────────────────────────────────
 
+  @RequirePermission('disputes.view')
   @Get('disputes')
   disputes(@Query(new ZodValidationPipe(disputeQuerySchema)) query: DisputeQuery) {
     return this.admin.listDisputes(query);
   }
 
+  @RequirePermission('disputes.view')
   @Get('disputes/:orderId')
   dispute(@Param('orderId', ParseUUIDPipe) orderId: string) {
     return this.admin.disputeDetail(orderId);
   }
 
+  @RequirePermission('disputes.resolve')
   @Patch('disputes/:orderId/resolve')
   resolveDispute(
     @CurrentUser() adminId: string,
@@ -169,16 +183,19 @@ export class AdminController {
 
   // ── courier issues ────────────────────────────────────────────────────────
 
+  @RequirePermission('courier_issues.view')
   @Get('courier-issues')
   courierIssues(@Query(new ZodValidationPipe(courierIssueQuerySchema)) query: CourierIssueQuery) {
     return this.admin.listCourierIssues(query);
   }
 
+  @RequirePermission('courier_issues.view')
   @Get('courier-issues/:orderId')
   courierIssue(@Param('orderId', ParseUUIDPipe) orderId: string) {
     return this.admin.courierIssueDetail(orderId);
   }
 
+  @RequirePermission('courier_issues.resolve')
   @Patch('courier-issues/:orderId/resolve')
   resolveCourierIssue(
     @CurrentUser() adminId: string,
@@ -190,16 +207,19 @@ export class AdminController {
 
   // ── approval queues ───────────────────────────────────────────────────────
 
+  @RequirePermission('vendors.view')
   @Get('vendors')
   vendors(@Query(new ZodValidationPipe(reviewQuerySchema)) query: ReviewQuery) {
     return this.approvals.listVendors(query);
   }
 
+  @RequirePermission('vendors.view')
   @Get('vendors/:id')
   vendor(@Param('id', ParseUUIDPipe) id: string) {
     return this.approvals.vendorDetail(id);
   }
 
+  @RequirePermission('vendors.decide')
   @Post('vendors/:id/approve')
   approveVendor(
     @CurrentUser() adminId: string,
@@ -209,6 +229,7 @@ export class AdminController {
     return this.approvals.decideVendor(adminId, id, 'approved', body);
   }
 
+  @RequirePermission('vendors.decide')
   @Post('vendors/:id/reject')
   rejectVendor(
     @CurrentUser() adminId: string,
@@ -218,6 +239,7 @@ export class AdminController {
     return this.approvals.decideVendor(adminId, id, 'rejected', requireReason(body));
   }
 
+  @RequirePermission('vendors.decide')
   @Post('vendors/:id/suspend')
   suspendVendor(
     @CurrentUser() adminId: string,
@@ -227,16 +249,19 @@ export class AdminController {
     return this.approvals.decideVendor(adminId, id, 'suspended', requireReason(body));
   }
 
+  @RequirePermission('couriers.view')
   @Get('couriers')
   couriers(@Query(new ZodValidationPipe(reviewQuerySchema)) query: ReviewQuery) {
     return this.approvals.listCouriers(query);
   }
 
+  @RequirePermission('couriers.view')
   @Get('couriers/:id')
   courier(@Param('id', ParseUUIDPipe) id: string) {
     return this.approvals.courierDetail(id);
   }
 
+  @RequirePermission('couriers.decide')
   @Post('couriers/:id/approve')
   approveCourier(
     @CurrentUser() adminId: string,
@@ -246,6 +271,7 @@ export class AdminController {
     return this.approvals.decideCourier(adminId, id, 'approved', body);
   }
 
+  @RequirePermission('couriers.decide')
   @Post('couriers/:id/reject')
   rejectCourier(
     @CurrentUser() adminId: string,
@@ -255,6 +281,7 @@ export class AdminController {
     return this.approvals.decideCourier(adminId, id, 'rejected', requireReason(body));
   }
 
+  @RequirePermission('couriers.decide')
   @Post('couriers/:id/suspend')
   suspendCourier(
     @CurrentUser() adminId: string,
@@ -264,17 +291,20 @@ export class AdminController {
     return this.approvals.decideCourier(adminId, id, 'suspended', requireReason(body));
   }
 
+  @RequirePermission('users.view')
   @Get('users')
   users(@Query(new ZodValidationPipe(userQuerySchema)) query: UserQuery) {
     return this.approvals.listUsers(query);
   }
 
+  @RequirePermission('users.view')
   @Get('users/:id')
   user(@Param('id', ParseUUIDPipe) id: string) {
     return this.approvals.userDetail(id);
   }
 
   /** Stop an account signing in or buying — a reason is required, and it is audited. */
+  @RequirePermission('users.block')
   @Post('users/:id/block')
   blockUser(
     @CurrentUser() adminId: string,
@@ -284,6 +314,7 @@ export class AdminController {
     return this.approvals.setUserBlocked(adminId, id, true, requireReason(body).reason);
   }
 
+  @RequirePermission('users.block')
   @Post('users/:id/unblock')
   unblockUser(
     @CurrentUser() adminId: string,
@@ -296,17 +327,20 @@ export class AdminController {
   // ── support inbox ─────────────────────────────────────────────────────────
 
   /** Conversations customers handed to the team — waiting ones first, oldest activity on top. */
+  @RequirePermission('support.view')
   @Get('support')
   supportInbox(@Query(new ZodValidationPipe(supportQuerySchema)) query: SupportQuery) {
     return this.supportAdmin.list(query);
   }
 
+  @RequirePermission('support.view')
   @Get('support/:id')
   supportConversation(@Param('id', ParseUUIDPipe) id: string) {
     return this.supportAdmin.detail(id);
   }
 
   /** Answers in the customer's own thread, and pushes them. */
+  @RequirePermission('support.reply')
   @Post('support/:id/reply')
   replySupport(
     @CurrentUser() adminId: string,
@@ -316,6 +350,7 @@ export class AdminController {
     return this.supportAdmin.reply(adminId, id, body.content);
   }
 
+  @RequirePermission('support.reply')
   @Post('support/:id/resolve')
   resolveSupport(@CurrentUser() adminId: string, @Param('id', ParseUUIDPipe) id: string) {
     return this.supportAdmin.resolve(adminId, id);
@@ -323,18 +358,77 @@ export class AdminController {
 
   // ── administrator accounts ────────────────────────────────────────────────
 
+  /** Who is signed in, their role and permissions — what the dashboard draws itself from. */
+  @RequirePermission(ANY_ADMIN)
+  @Get('me')
+  me(@CurrentUser() userId: string) {
+    return this.adminAccounts.me(userId);
+  }
+
+  @RequirePermission('admins.view')
+  @Get('roles')
+  roles() {
+    return this.adminAccounts.listRoles();
+  }
+
+  /** The catalogue of permissions a custom role can hold. */
+  @RequirePermission('admins.view')
+  @Get('permissions')
+  permissionCatalogue() {
+    return this.adminAccounts.permissionCatalogue();
+  }
+
+  @RequirePermission('admins.manage')
+  @Post('roles')
+  createRole(@CurrentUser() actorId: string, @Body(new ZodValidationPipe(adminRoleSchema)) body: AdminRoleInput) {
+    return this.adminAccounts.createRole(actorId, body);
+  }
+
+  /** Custom roles only — the five built-in ones cannot be changed. */
+  @RequirePermission('admins.manage')
+  @Patch('roles/:id')
+  updateRole(
+    @CurrentUser() actorId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(adminRoleSchema)) body: AdminRoleInput
+  ) {
+    return this.adminAccounts.updateRole(actorId, id, body);
+  }
+
+  /** Custom roles nobody holds. */
+  @RequirePermission('admins.manage')
+  @Delete('roles/:id')
+  @HttpCode(204)
+  deleteRole(@CurrentUser() actorId: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.adminAccounts.deleteRole(actorId, id);
+  }
+
+  @RequirePermission('admins.view')
   @Get('admins')
   admins() {
     return this.adminAccounts.list();
   }
 
   /** A fresh account with a one-time password, returned once — see `AdminAccountsService`. */
+  @RequirePermission('admins.manage')
   @Post('admins')
   createAdmin(@CurrentUser() actorId: string, @Body(new ZodValidationPipe(createAdminSchema)) body: CreateAdminInput) {
     return this.adminAccounts.create(actorId, body);
   }
 
-  /** Never yourself, never the last one. */
+  /** Moves an administrator to another role — refused if nobody could manage admins after. */
+  @RequirePermission('admins.manage')
+  @Patch('admins/:id/role')
+  setAdminRole(
+    @CurrentUser() actorId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(setAdminRoleSchema)) body: SetAdminRoleInput
+  ) {
+    return this.adminAccounts.setRole(actorId, id, body.roleId);
+  }
+
+  /** Never yourself, and never the last administrator who can manage admins. */
+  @RequirePermission('admins.manage')
   @Post('admins/:id/revoke')
   @HttpCode(204)
   revokeAdmin(
@@ -347,12 +441,14 @@ export class AdminController {
 
   // ── moderation ────────────────────────────────────────────────────────────
 
+  @RequirePermission('moderation.view')
   @Get('reviews')
   reviews(@Query(new ZodValidationPipe(adminReviewQuerySchema)) query: AdminReviewQuery) {
     return this.moderation.listReviews(query);
   }
 
   /** Hide/show the comment, remove/restore the review. Hiding or removing needs a reason. */
+  @RequirePermission('moderation.act')
   @Post('reviews/:orderId/moderate')
   @HttpCode(204)
   moderateReview(
@@ -363,12 +459,14 @@ export class AdminController {
     return this.moderation.moderateReview(adminId, orderId, body);
   }
 
+  @RequirePermission('moderation.view')
   @Get('coupons')
   coupons(@Query(new ZodValidationPipe(adminCouponQuerySchema)) query: AdminCouponQuery) {
     return this.moderation.listCoupons(query);
   }
 
   /** Ends a merchant's code now. A reason is required. */
+  @RequirePermission('moderation.act')
   @Post('coupons/:id/deactivate')
   @HttpCode(204)
   deactivateCoupon(
@@ -379,12 +477,14 @@ export class AdminController {
     return this.moderation.deactivateCoupon(adminId, id, requireReason(body).reason);
   }
 
+  @RequirePermission('moderation.view')
   @Get('products')
   products(@Query(new ZodValidationPipe(adminProductQuerySchema)) query: AdminProductQuery) {
     return this.moderation.listProducts(query);
   }
 
   /** Out of every shopper read, checkout included; the merchant still sees it, marked. A reason is required. */
+  @RequirePermission('moderation.act')
   @Post('products/:id/hide')
   @HttpCode(204)
   hideProduct(
@@ -395,6 +495,7 @@ export class AdminController {
     return this.moderation.setProductHidden(adminId, id, true, requireReason(body).reason);
   }
 
+  @RequirePermission('moderation.act')
   @Post('products/:id/unhide')
   @HttpCode(204)
   unhideProduct(
@@ -408,11 +509,13 @@ export class AdminController {
   // ── shop specialties ──────────────────────────────────────────────────────
 
   /** Every entry, retired ones included, with how many shops use each. */
+  @RequirePermission('specialties.view')
   @Get('specialties')
   specialties() {
     return this.specialtiesAdmin.list();
   }
 
+  @RequirePermission('specialties.manage')
   @Post('specialties')
   createSpecialty(
     @CurrentUser() adminId: string,
@@ -422,6 +525,7 @@ export class AdminController {
   }
 
   /** Rename, reorder, retire or bring back — a rename reaches the shops that use it. */
+  @RequirePermission('specialties.manage')
   @Patch('specialties/:id')
   updateSpecialty(
     @CurrentUser() adminId: string,
@@ -433,6 +537,7 @@ export class AdminController {
 
   // ── platform settings ─────────────────────────────────────────────────────
 
+  @RequirePermission('settings.view')
   @Get('settings')
   settings() {
     return this.platformSettings.all();
@@ -445,6 +550,7 @@ export class AdminController {
    * hardcoded `false` with a comment saying the button belonged to a back
    * office. This is that button.
    */
+  @RequirePermission('settings.manage')
   @Patch('settings')
   updateSettings(
     @CurrentUser() adminId: string,
@@ -462,6 +568,7 @@ export class AdminController {
    * amend or delete an entry, and a trigger refuses both even for the role the
    * API connects as. See `admin_audit_log` in `db/schema/admin.ts`.
    */
+  @RequirePermission('audit.view')
   @Get('audit-log')
   auditLog(@Query(new ZodValidationPipe(auditQuerySchema)) query: AuditQuery) {
     return this.audit.list(query);
@@ -479,6 +586,7 @@ export class AdminController {
    * with their PaymentIntent id and refunded from the Stripe dashboard; the
    * webhook's reconciliation warning is what surfaces them.
    */
+  @RequirePermission('orders.refund')
   @Post('orders/:orderId/refund')
   refund(
     @CurrentUser() adminId: string,

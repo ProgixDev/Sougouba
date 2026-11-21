@@ -9,11 +9,21 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import type { PostgrestError } from '@supabase/supabase-js';
 
+import { slugify } from '../catalog/slugify.js';
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
+import { one } from '../db/embed.js';
 import { unwrap, unwrapRpc } from '../db/unwrap.js';
-import type { CreateAdminInput } from './dto/admin.dto.js';
+import type { AdminRoleInput, CreateAdminInput } from './dto/admin.dto.js';
+import { PERMISSION_GROUPS } from './permissions.js';
+
+export interface AdminRoleSummary {
+  id: string;
+  slug: string;
+  name: string;
+}
 
 export interface AdminAccount {
   id: string;
@@ -21,25 +31,44 @@ export interface AdminAccount {
   email: string | null;
   lastSignInAt: string | null;
   memberSince: string | null;
+  role: AdminRoleSummary | null;
+}
+
+export interface AdminRole extends AdminRoleSummary {
+  description: string;
+  permissions: string[];
+  isSystem: boolean;
+  /** Administrators who hold it — a role in use cannot be deleted. */
+  adminCount: number;
+}
+
+/** What the dashboard needs to know about whoever is signed in. */
+export interface CurrentAdmin {
+  id: string;
+  fullName: string;
+  role: AdminRoleSummary | null;
+  permissions: string[];
 }
 
 const NOT_FOUND = 'SGB05';
 const REFUSED = 'SGB06';
+const NO_MANAGER_LEFT = 'SGB10';
+const UNIQUE_VIOLATION = '23505';
 
 /**
- * Who can open the back office, managed from the back office.
+ * Who can open the back office, with which role — managed from the back office.
  *
  * **A new administrator always gets a new account.** Turning an existing one
  * into an admin would make a customer's or merchant's login a back-office
  * login, with whatever password habits came with it — and an account has one
  * role. So "add" creates an Auth user with a one-time password, shown once to
- * the administrator who created it, who passes it on; the new admin then sets
- * their own in "Mon compte".
+ * the administrator who created it; the new admin then sets their own in
+ * "Mon compte".
  *
- * The Auth calls cannot share a transaction with the role and the audit line
- * (`admin_grant_admin` / `admin_revoke_admin`), so each side undoes or
- * reinforces the other: a role that could not be granted deletes the account
- * just created; a revoke bans the account after the role is gone.
+ * Roles (`0043`): five built-in ones nobody can edit, plus custom ones. Every
+ * write below goes through one SQL function that applies the change and its
+ * audit line together, and refuses anything that would leave nobody able to
+ * manage administrators (SGB10).
  */
 @Injectable()
 export class AdminAccountsService {
@@ -47,11 +76,40 @@ export class AdminAccountsService {
 
   constructor(@Inject(DB) private readonly db: Db) {}
 
-  async list(): Promise<AdminAccount[]> {
-    const profiles = await unwrap<{ id: string; fullName: string | null; memberSince: string | null }[]>(
+  // ── the signed-in administrator ─────────────────────────────────────────
+
+  async me(userId: string): Promise<CurrentAdmin> {
+    const row = await unwrap<{ id: string; fullName: string | null; adminRole: unknown } | null>(
       this.db
         .from('profiles')
-        .select('id, fullName:full_name, memberSince:member_since')
+        .select('id, fullName:full_name, adminRole:admin_roles(id, slug, name, permissions)')
+        .eq('id', userId)
+        .maybeSingle()
+    );
+    if (!row) throw new NotFoundException('Profile not found');
+    const role = one<AdminRoleSummary & { permissions: string[] }>(row.adminRole as never);
+    return {
+      id: row.id,
+      fullName: row.fullName ?? '',
+      role: role ? { id: role.id, slug: role.slug, name: role.name } : null,
+      permissions: role?.permissions ?? [],
+    };
+  }
+
+  /** The catalogue the role editor draws its checkboxes from. */
+  permissionCatalogue() {
+    return PERMISSION_GROUPS;
+  }
+
+  // ── administrators ──────────────────────────────────────────────────────
+
+  async list(): Promise<AdminAccount[]> {
+    const profiles = await unwrap<
+      { id: string; fullName: string | null; memberSince: string | null; adminRole: unknown }[]
+    >(
+      this.db
+        .from('profiles')
+        .select('id, fullName:full_name, memberSince:member_since, adminRole:admin_roles(id, slug, name)')
         .eq('role', 'admin')
         .order('full_name', { ascending: true })
     );
@@ -66,6 +124,7 @@ export class AdminAccountsService {
       email: byId.get(p.id)?.email ?? null,
       lastSignInAt: byId.get(p.id)?.last_sign_in_at ?? null,
       memberSince: p.memberSince,
+      role: one<AdminRoleSummary>(p.adminRole as never) ?? null,
     }));
   }
 
@@ -90,7 +149,13 @@ export class AdminAccountsService {
 
     try {
       await unwrapRpc<void>(
-        this.db.rpc('admin_grant_admin', { p_actor_id: actorId, p_user_id: userId, p_full_name: input.fullName })
+        this.db.rpc('admin_grant_admin', {
+          p_actor_id: actorId,
+          p_user_id: userId,
+          p_full_name: input.fullName,
+          p_role_id: input.roleId,
+        }),
+        (error) => refusal(error, 'Ce rôle n’existe pas', 'Ce compte a déjà un rôle')
       );
     } catch (error) {
       // No half-made administrator: an Auth account with no role and a
@@ -106,6 +171,16 @@ export class AdminAccountsService {
     return { admin, temporaryPassword };
   }
 
+  async setRole(actorId: string, userId: string, roleId: string): Promise<AdminAccount> {
+    await unwrapRpc<void>(
+      this.db.rpc('admin_set_admin_role', { p_actor_id: actorId, p_user_id: userId, p_role_id: roleId }),
+      (error) => refusal(error, 'Administrateur ou rôle introuvable', 'Changement impossible')
+    );
+    const admin = (await this.list()).find((a) => a.id === userId);
+    if (!admin) throw new NotFoundException('Administrateur introuvable');
+    return admin;
+  }
+
   /**
    * The role goes first — that alone shuts the back office, since `AdminGuard`
    * reads it on every request — then the account is banned, so the login
@@ -115,19 +190,81 @@ export class AdminAccountsService {
   async revoke(actorId: string, userId: string, reason: string | undefined): Promise<void> {
     await unwrapRpc<void>(
       this.db.rpc('admin_revoke_admin', { p_actor_id: actorId, p_user_id: userId, p_reason: reason ?? '' }),
-      (error) => {
-        if (error.code === NOT_FOUND) throw new NotFoundException('Cet administrateur est introuvable');
-        if (error.code === REFUSED) {
-          throw new BadRequestException(
-            actorId === userId
-              ? 'Vous ne pouvez pas retirer votre propre accès.'
-              : 'Le dernier administrateur ne peut pas être retiré.'
-          );
-        }
-        throw new InternalServerErrorException('Database request failed');
-      }
+      (error) => refusal(error, 'Cet administrateur est introuvable', 'Vous ne pouvez pas retirer votre propre accès.')
     );
     const { error } = await this.db.auth.admin.updateUserById(userId, { ban_duration: '876000h' });
     if (error) this.logger.error(`Could not ban former admin ${userId}: ${error.message}`);
   }
+
+  // ── roles ───────────────────────────────────────────────────────────────
+
+  async listRoles(): Promise<AdminRole[]> {
+    const rows = await unwrap<Record<string, unknown>[]>(
+      this.db
+        .from('admin_roles')
+        .select('id, slug, name, description, permissions, isSystem:is_system, profiles(count)')
+        .order('is_system', { ascending: false })
+        .order('name', { ascending: true })
+    );
+    return rows.map(({ profiles, ...role }) => ({
+      ...(role as Omit<AdminRole, 'adminCount'>),
+      adminCount: (profiles as { count: number }[] | undefined)?.[0]?.count ?? 0,
+    }));
+  }
+
+  async createRole(actorId: string, input: AdminRoleInput): Promise<AdminRole> {
+    const saved = await this.saveRole(actorId, null, input);
+    return this.role(saved.id as string);
+  }
+
+  async updateRole(actorId: string, id: string, input: AdminRoleInput): Promise<AdminRole> {
+    await this.saveRole(actorId, id, input);
+    return this.role(id);
+  }
+
+  async deleteRole(actorId: string, id: string): Promise<void> {
+    await unwrapRpc<void>(
+      this.db.rpc('admin_role_delete', { p_actor_id: actorId, p_id: id }),
+      (error) =>
+        refusal(
+          error,
+          'Ce rôle n’existe pas',
+          'Ce rôle ne peut pas être supprimé : il est prédéfini, ou encore attribué à un administrateur.'
+        )
+    );
+  }
+
+  private async saveRole(actorId: string, id: string | null, input: AdminRoleInput) {
+    return unwrapRpc<Record<string, unknown>>(
+      this.db.rpc('admin_role_save', {
+        p_actor_id: actorId,
+        p_id: id as string,
+        p_slug: slugify(input.name),
+        p_name: input.name,
+        p_description: input.description ?? '',
+        p_permissions: [...new Set(input.permissions)],
+      }),
+      (error) => {
+        if (error.code === UNIQUE_VIOLATION) throw new ConflictException('Un rôle porte déjà ce nom.');
+        refusal(error, 'Ce rôle n’existe pas', 'Les rôles prédéfinis ne peuvent pas être modifiés.');
+      }
+    );
+  }
+
+  private async role(id: string): Promise<AdminRole> {
+    const found = (await this.listRoles()).find((r) => r.id === id);
+    if (!found) throw new NotFoundException('Ce rôle n’existe pas');
+    return found;
+  }
+}
+
+function refusal(error: PostgrestError, notFound: string, refused: string): never {
+  if (error.code === NOT_FOUND) throw new NotFoundException(notFound);
+  if (error.code === REFUSED) throw new BadRequestException(refused);
+  if (error.code === NO_MANAGER_LEFT) {
+    throw new BadRequestException(
+      'Au moins un administrateur doit garder le droit de gérer les administrateurs. Donnez-le d’abord à quelqu’un d’autre.'
+    );
+  }
+  throw new InternalServerErrorException('Database request failed');
 }
