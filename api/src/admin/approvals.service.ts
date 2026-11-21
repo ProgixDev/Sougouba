@@ -572,15 +572,18 @@ export class ApprovalsService {
    * field here should weigh whether an administrator genuinely needs it.
    */
   async userDetail(id: string): Promise<AdminUserDetail> {
-    // `profiles` twice — the account, and whoever referred them — named by
-    // foreign key rather than aliased.
+    // `profiles` twice — the account, and whoever referred them. A table that
+    // points at itself must be hinted by the *column*: PostgREST does not
+    // resolve the self-referencing foreign key by its name (PGRST200, which
+    // surfaced as a 500 on every user page), and `!referred_by` also picks the
+    // direction — the one referrer, not the people this account referred.
     const fetched = await unwrap<any>(
       this.db
         .from('profiles')
         .select(
           `id, fullName:full_name, avatarUrl:avatar_url, memberSince:member_since, role,
            vendorId:vendor_id, courierId:courier_id, referredById:referred_by,
-           referrer:profiles!profiles_referred_by_profiles_id_fk(fullName:full_name)`
+           referrer:profiles!referred_by(fullName:full_name)`
         )
         .eq('id', id)
         .maybeSingle()
