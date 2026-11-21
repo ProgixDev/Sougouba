@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, Clock, TriangleAlert } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -12,6 +12,7 @@ import { formatHours, getCourierIssueInsights, type CourierIssueInsights } from 
 import { courierIssueStatusMeta, COURIER_ISSUE_REASON_LABELS } from '@/lib/statusMeta';
 import { timeAgo } from '@/lib/format';
 import type { AdminCourierIssue, CourierIssueStatus } from '@/lib/types';
+import { usePagedList } from '@/lib/usePagedList';
 
 const TABS: { key: CourierIssueStatus | 'all'; label: string }[] = [
   { key: 'open', label: 'Ouverts' },
@@ -21,7 +22,6 @@ const TABS: { key: CourierIssueStatus | 'all'; label: string }[] = [
 
 export default function CourierIssuesPage() {
   const router = useRouter();
-  const [all, setAll] = useState<AdminCourierIssue[] | null>(null);
   const [tab, setTab] = useState<CourierIssueStatus | 'all'>('open');
 
   const [insights, setInsights] = useState<CourierIssueInsights | null>(null);
@@ -32,11 +32,12 @@ export default function CourierIssuesPage() {
       .catch(() => undefined);
   }, []);
 
-  useEffect(() => {
-    listCourierIssues().then(setAll);
-  }, []);
+  // Oldest first by default — a queue is worked from the front. One page at a time from the database.
+  const list = usePagedList<AdminCourierIssue>(
+    ({ offset, limit, sort }) => listCourierIssues(tab === 'all' ? undefined : tab, { offset, limit, dir: sort?.dir }),
+    tab
+  );
 
-  const rows = useMemo(() => (tab === 'all' ? all ?? [] : (all ?? []).filter((i) => i.status === tab)), [all, tab]);
 
   const columns: Column<AdminCourierIssue>[] = [
     { key: 'orderId', header: 'Commande', render: (i) => <Text variant="body" className="font-semibold">#{i.orderId}</Text> },
@@ -47,7 +48,6 @@ export default function CourierIssuesPage() {
       key: 'at',
       header: 'Signalé',
       sortable: true,
-      sortValue: (i) => i.at,
       render: (i) => (
         <Text variant="body" tone="muted">
           {timeAgo(i.at)}
@@ -115,6 +115,7 @@ export default function CourierIssuesPage() {
             }`}
           >
             {t.label}
+            {t.key !== 'all' && insights ? ` (${insights.byStatus[t.key] ?? 0})` : ''}
           </button>
         ))}
       </div>
@@ -122,10 +123,19 @@ export default function CourierIssuesPage() {
       <Card elevated>
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={list.rows ?? []}
           keyField={(i) => i.orderId}
           onRowClick={(i) => router.push(`/courier-issues/${i.orderId}`)}
-          loading={all === null}
+          loading={list.rows === null}
+          server={{
+            page: list.page,
+            pageSize: list.pageSize,
+            total: list.total,
+            onPage: list.setPage,
+            onPageSize: list.setPageSize,
+            sort: list.sort,
+            onSort: list.setSort,
+          }}
           emptyIcon={TriangleAlert}
           emptyTitle="Aucun incident"
           emptyDescription="Aucun incident ne correspond à ce filtre pour le moment."

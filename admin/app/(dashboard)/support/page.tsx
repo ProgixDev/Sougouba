@@ -5,15 +5,13 @@ import { Bot, CheckCircle2, Clock, Headset } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import { DataTable, type Column } from '@/components/data/DataTable';
 import { useToast } from '@/components/Toast';
 import { KpiCard, KpiGrid, PageHeader } from '@/components/insights/Insights';
 import { formatHours, getSupportInsights, type SupportInsights } from '@/lib/api/insights';
 import { listSupport, type SupportInboxItem } from '@/lib/api/support';
+import { usePagedList } from '@/lib/usePagedList';
 import { formatDateTime } from '@/lib/format';
-
-const PAGE_SIZE = 50;
 
 const TABS: { key: 'escalated' | 'closed' | 'all'; label: string }[] = [
   { key: 'escalated', label: 'À traiter' },
@@ -34,9 +32,6 @@ export default function SupportInboxPage() {
   const router = useRouter();
   const toast = useToast();
   const [tab, setTab] = useState<(typeof TABS)[number]['key']>('escalated');
-  const [rows, setRows] = useState<SupportInboxItem[] | null>(null);
-  const [total, setTotal] = useState(0);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [insights, setInsights] = useState<SupportInsights | null>(null);
 
   useEffect(() => {
@@ -45,37 +40,11 @@ export default function SupportInboxPage() {
       .catch(() => undefined);
   }, []);
 
+  // "À traiter" keeps the API's order: longest-waiting customer first.
+  const list = usePagedList<SupportInboxItem>(({ offset, limit }) => listSupport(tab, offset, limit), tab);
   useEffect(() => {
-    let active = true;
-    setRows(null);
-    listSupport(tab)
-      .then((page) => {
-        if (!active) return;
-        setRows(page.items);
-        setTotal(page.total);
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
-        setRows([]);
-        toast('error', error instanceof Error ? error.message : 'Chargement impossible.');
-      });
-    return () => {
-      active = false;
-    };
-  }, [tab, toast]);
-
-  async function loadMore() {
-    if (!rows) return;
-    setLoadingMore(true);
-    try {
-      const page = await listSupport(tab, rows.length, PAGE_SIZE);
-      setRows([...rows, ...page.items]);
-      setTotal(page.total);
-    } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'Chargement impossible.');
-    }
-    setLoadingMore(false);
-  }
+    if (list.error) toast('error', list.error);
+  }, [list.error, toast]);
 
   const columns: Column<SupportInboxItem>[] = [
     {
@@ -188,10 +157,19 @@ export default function SupportInboxPage() {
       <Card elevated>
         <DataTable
           columns={columns}
-          rows={rows ?? []}
+          rows={list.rows ?? []}
           keyField={(c) => c.id}
           onRowClick={(c) => router.push(`/support/${c.id}`)}
-          loading={rows === null}
+          loading={list.rows === null}
+          server={{
+            page: list.page,
+            pageSize: list.pageSize,
+            total: list.total,
+            onPage: list.setPage,
+            onPageSize: list.setPageSize,
+            sort: list.sort,
+            onSort: list.setSort,
+          }}
           emptyIcon={Headset}
           emptyTitle={tab === 'escalated' ? 'Aucune conversation en attente' : 'Aucune conversation'}
           emptyDescription={
@@ -202,16 +180,6 @@ export default function SupportInboxPage() {
         />
       </Card>
 
-      {rows && rows.length < total && (
-        <div className="flex items-center justify-center gap-3">
-          <Text variant="caption" tone="muted">
-            {rows.length} sur {total}
-          </Text>
-          <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
-            {loadingMore ? 'Chargement…' : 'Afficher plus'}
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

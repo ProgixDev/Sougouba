@@ -24,8 +24,8 @@ export default function MerchantOverviewPage() {
   useEffect(() => {
     // The shop comes from the session's token on the server — nothing to pass.
     getVendorOverview(30).then(setStats).catch(() => setFailed(true));
-    listMerchantOrders()
-      .then((orders) => setRecent(orders.slice(0, 6)))
+    listMerchantOrders({}, { offset: 0, limit: 6 })
+      .then((page) => setRecent(page.items))
       .catch(() => setFailed(true));
   }, []);
 

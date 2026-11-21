@@ -1,10 +1,10 @@
-import { apiGet, apiGetOrNull, apiPatch, type Page } from './client';
+import { apiGet, apiGetOrNull, apiPatch, type Page, type PageQuery } from './client';
 import type { AdminCourierIssue, CourierIssueStatus, ID } from '../types';
 
 /** Keyed by order id, like disputes — `courier_issues`' primary key is `order_id`. */
-export async function listCourierIssues(status?: CourierIssueStatus, limit = 100): Promise<AdminCourierIssue[]> {
-  const page = await apiGet<Page<AdminCourierIssue>>('/admin/courier-issues', { status, limit });
-  return page.items;
+/** One page by report date; the API only sorts by date, so `sort` is not sent. */
+export async function listCourierIssues(status: CourierIssueStatus | undefined, page: PageQuery): Promise<Page<AdminCourierIssue>> {
+  return apiGet<Page<AdminCourierIssue>>('/admin/courier-issues', { status, offset: page.offset, limit: page.limit, dir: page.dir });
 }
 
 export async function getCourierIssue(orderId: ID): Promise<AdminCourierIssue | null> {

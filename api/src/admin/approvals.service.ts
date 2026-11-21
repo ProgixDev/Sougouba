@@ -10,6 +10,7 @@ import type { PostgrestError } from '@supabase/supabase-js';
 
 import type { Page } from '../catalog/dto/query.dto.js';
 import { containsPattern } from '../common/sql/like.js';
+import { orIlike } from '../common/sql/postgrest.js';
 import type { Db } from '../db/client.js';
 import { camelize } from '../db/case.js';
 import { DB } from '../db/db.module.js';
@@ -107,10 +108,15 @@ export class ApprovalsService {
         { count: 'exact' }
       );
     if (query.status) q = q.eq('status', query.status);
+    // `containsPattern` escapes `%` and `_`, so a search cannot match the whole table.
+    if (query.search) q = q.or(orIlike(['name', 'city'], containsPattern(query.search)));
 
+    // Oldest application first by default — a queue is worked from the front.
+    // The `id` tiebreak keeps pages stable when two rows share a sort value.
+    const column = query.sort === 'name' ? 'name' : query.sort === 'city' ? 'city' : 'created_at';
     const { data, count, error } = await q
-      // Oldest application first — a queue is worked from the front.
-      .order('created_at', { ascending: true })
+      .order(column, { ascending: (query.dir ?? 'asc') === 'asc' })
+      .order('id', { ascending: true })
       .range(query.offset, query.offset + query.limit - 1);
     if (error) throw unexpectedDbError(error);
 
@@ -362,9 +368,12 @@ export class ApprovalsService {
         { count: 'exact' }
       );
     if (query.status) q = q.eq('status', query.status);
+    if (query.search) q = q.or(orIlike(['full_name', 'city'], containsPattern(query.search)));
 
+    const column = query.sort === 'name' ? 'full_name' : query.sort === 'city' ? 'city' : 'joined_at';
     const { data, count, error } = await q
-      .order('joined_at', { ascending: true })
+      .order(column, { ascending: (query.dir ?? 'asc') === 'asc' })
+      .order('id', { ascending: true })
       .range(query.offset, query.offset + query.limit - 1);
     if (error) throw unexpectedDbError(error);
 
@@ -558,6 +567,8 @@ export class ApprovalsService {
         p_pattern: query.search ? containsPattern(query.search) : undefined,
         p_limit: query.limit,
         p_offset: query.offset,
+        p_sort: query.sort,
+        p_dir: query.dir,
       })
     );
     return { items: page.items, total: page.total, limit: query.limit, offset: query.offset };

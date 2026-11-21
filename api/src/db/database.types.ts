@@ -1938,10 +1938,12 @@ export type Database = {
       admin_insights: { Args: { p_area: string }; Returns: Json }
       admin_list_orders: {
         Args: {
+          p_dir?: string
           p_id_prefix?: string
           p_limit?: number
           p_offset?: number
           p_search?: string
+          p_sort?: string
           p_status?: string
           p_vendor_id?: string
         }
@@ -1949,10 +1951,12 @@ export type Database = {
       }
       admin_list_users: {
         Args: {
+          p_dir?: string
           p_limit?: number
           p_offset?: number
           p_pattern?: string
           p_role?: string
+          p_sort?: string
         }
         Returns: Json
       }

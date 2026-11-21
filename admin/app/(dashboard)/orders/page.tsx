@@ -9,6 +9,7 @@ import { DataTable, type Column } from '@/components/data/DataTable';
 import { Avatar, BarSeries, Breakdown, CHART, KpiCard, KpiGrid, PageHeader, SectionCard } from '@/components/insights/Insights';
 import { getOrderInsights, shortDay, type OrderInsights } from '@/lib/api/insights';
 import { listOrders } from '@/lib/api/orders';
+import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { useToast } from '@/components/Toast';
 import { orderStatusMeta } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
@@ -28,7 +29,6 @@ const STATUS_OPTIONS: { value: OrderStatus | 'all'; label: string }[] = [
 export default function OrdersPage() {
   const router = useRouter();
   const toast = useToast();
-  const [rows, setRows] = useState<AdminOrderListItem[] | null>(null);
   const [status, setStatus] = useState<OrderStatus | 'all'>('all');
   const [search, setSearch] = useState('');
   const [insights, setInsights] = useState<OrderInsights | null>(null);
@@ -39,40 +39,26 @@ export default function OrdersPage() {
       .catch(() => undefined);
   }, []);
 
-  // Debounced, because this now reaches the network on every keystroke and the
+  // Debounced, because this reaches the network on every keystroke and the
   // API allows 120 requests a minute per account.
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 300);
-    return () => clearTimeout(timer);
-  }, [search]);
+  const debouncedSearch = useDebounced(search);
 
+  // Newest first by default; filtered, searched, sorted and cut into pages by the API.
+  const list = usePagedList<AdminOrderListItem>(
+    ({ offset, limit, sort }) =>
+      listOrders(
+        { status: status === 'all' ? undefined : status, search: debouncedSearch },
+        { offset, limit, sort: sort?.key, dir: sort?.dir }
+      ),
+    `${status}|${debouncedSearch}`
+  );
   useEffect(() => {
-    let active = true;
-    // Back to the skeleton while the new filter loads, rather than showing the
-    // previous filter's rows as though they were the answer.
-    setRows(null);
-    listOrders({
-      status: status === 'all' ? undefined : status,
-      search: debouncedSearch,
-      limit: 100,
-    })
-      .then((page) => active && setRows(page.items))
-      .catch((error: unknown) => {
-        if (!active) return;
-        // Without this the skeleton spins forever on any failure — the mock
-        // could not reject, so no call site had a rejection path.
-        setRows([]);
-        toast('error', error instanceof Error ? error.message : 'Chargement impossible.');
-      });
-    return () => {
-      active = false;
-    };
-  }, [status, debouncedSearch, toast]);
+    if (list.error) toast('error', list.error);
+  }, [list.error, toast]);
 
   const columns: Column<AdminOrderListItem>[] = [
     { key: 'id', header: 'Commande', render: (o) => <Text variant="body" className="font-semibold">#{o.id.slice(0, 8)}</Text> },
-    { key: 'customer', header: 'Client', sortable: true, sortValue: (o) => o.customerName ?? '', render: (o) => (
+    { key: 'customer', header: 'Client', sortable: true, render: (o) => (
         <div className="flex items-center gap-2.5">
           <Avatar name={o.customerName ?? '?'} size={30} />
           <Text variant="body">{o.customerName ?? '—'}</Text>
@@ -80,10 +66,9 @@ export default function OrdersPage() {
       ) },
     { key: 'vendor', header: 'Commerce', render: (o) => <Text variant="body">{o.vendorName}</Text> },
     {
-      key: 'createdAt',
+      key: 'created_at',
       header: 'Date',
       sortable: true,
-      sortValue: (o) => o.createdAt,
       render: (o) => (
         <Text variant="body" tone="muted">
           {formatDateTime(o.createdAt)}
@@ -94,7 +79,6 @@ export default function OrdersPage() {
       key: 'total',
       header: 'Total',
       sortable: true,
-      sortValue: (o) => o.totalCad,
       className: 'text-right',
       render: (o) => (
         <Text variant="body" className="tabular text-right font-semibold">
@@ -202,10 +186,19 @@ export default function OrdersPage() {
       <Card elevated>
         <DataTable
           columns={columns}
-          rows={rows ?? []}
+          rows={list.rows ?? []}
           keyField={(o) => o.id}
           onRowClick={(o) => router.push(`/orders/${o.id}`)}
-          loading={rows === null}
+          loading={list.rows === null}
+          server={{
+            page: list.page,
+            pageSize: list.pageSize,
+            total: list.total,
+            onPage: list.setPage,
+            onPageSize: list.setPageSize,
+            sort: list.sort,
+            onSort: list.setSort,
+          }}
           emptyIcon={Package}
           emptyTitle="Aucune commande"
           emptyDescription="Aucune commande ne correspond à ce filtre pour le moment."

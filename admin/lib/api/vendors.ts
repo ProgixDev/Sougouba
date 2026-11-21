@@ -1,4 +1,4 @@
-import { apiGet, apiGetOrNull, apiPost, type Page } from './client';
+import { apiGet, apiGetOrNull, apiPost, type Page, type PageQuery } from './client';
 import type { AdminVendorDetail, AdminVendorListItem, AdminVendorStatus, ID } from '../types';
 
 /**
@@ -15,9 +15,16 @@ import type { AdminVendorDetail, AdminVendorListItem, AdminVendorStatus, ID } fr
  *   and the `sougouba-admin-vendor-notes` localStorage map are gone;
  *   `statusReason` comes back on the row.
  */
-export async function listVendors(status?: AdminVendorStatus, limit = 100): Promise<AdminVendorListItem[]> {
-  const page = await apiGet<Page<AdminVendorListItem>>('/admin/vendors', { status, limit });
-  return page.items;
+/** One page, filtered, searched (name or city) and sorted by the API. */
+export async function listVendors(
+  filters: { status?: AdminVendorStatus; search?: string },
+  page: PageQuery
+): Promise<Page<AdminVendorListItem>> {
+  return apiGet<Page<AdminVendorListItem>>('/admin/vendors', {
+    status: filters.status,
+    search: filters.search?.trim() || undefined,
+    ...page,
+  });
 }
 
 export async function getVendor(id: ID): Promise<AdminVendorDetail | null> {

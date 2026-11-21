@@ -1,5 +1,5 @@
 'use client';
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { EyeOff, Package, Search, ShieldAlert, Star, TicketPercent } from 'lucide-react';
@@ -30,8 +30,10 @@ import { KpiCard, KpiGrid, PageHeader } from '@/components/insights/Insights';
 import { getModerationInsights, type ModerationInsights } from '@/lib/api/insights';
 import { formatCad, formatDate, formatDateTime } from '@/lib/format';
 import { useAdmin } from '@/lib/permissions';
+import type { Page } from '@/lib/api/client';
+import { usePagedList } from '@/lib/usePagedList';
+import { Pagination } from '@/components/data/Pagination';
 
-const PAGE_SIZE = 50;
 
 const TABS = [
   { key: 'reviews', label: 'Avis', icon: Star },
@@ -167,64 +169,27 @@ function Moderation() {
   );
 }
 
-/** A paged list that reloads when its key changes and can load more. */
-function usePaged<T>(key: string, fetchPage: (offset: number) => Promise<{ items: T[]; total: number }>) {
+/** A database-paginated list that goes back to page 1 when its key (the filters) changes. */
+function usePaged<T>(key: string, fetchPage: (offset: number, limit: number) => Promise<Page<T>>) {
   const toast = useToast();
-  const [rows, setRows] = useState<T[] | null>(null);
-  const [total, setTotal] = useState(0);
-  const [loadingMore, setLoadingMore] = useState(false);
-
-  const reload = useCallback(() => {
-    let active = true;
-    setRows(null);
-    fetchPage(0)
-      .then((page) => {
-        if (!active) return;
-        setRows(page.items);
-        setTotal(page.total);
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
-        setRows([]);
-        toast('error', error instanceof Error ? error.message : 'Chargement impossible.');
-      });
-    return () => {
-      active = false;
-    };
-    // `key` stands for everything fetchPage closes over, so it alone decides
-    // when to refetch — fetchPage itself is a new function every render.
-  }, [key, toast]);
-
-  useEffect(reload, [reload]);
-
-  async function loadMore() {
-    if (!rows) return;
-    setLoadingMore(true);
-    try {
-      const page = await fetchPage(rows.length);
-      setRows([...rows, ...page.items]);
-      setTotal(page.total);
-    } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'Chargement impossible.');
-    }
-    setLoadingMore(false);
-  }
-
-  return { rows, total, loadMore, loadingMore, reload };
+  const list = usePagedList<T>(({ offset, limit }) => fetchPage(offset, limit), key);
+  useEffect(() => {
+    if (list.error) toast('error', list.error);
+  }, [list.error, toast]);
+  return list;
 }
 
-function LoadMore({ shown, total, loading, onClick }: { shown: number; total: number; loading: boolean; onClick: () => void }) {
-  if (shown >= total) return null;
-  return (
-    <div className="flex items-center justify-center gap-3">
-      <Text variant="caption" tone="muted">
-        {shown} sur {total}
-      </Text>
-      <Button variant="outline" onClick={onClick} disabled={loading}>
-        {loading ? 'Chargement…' : 'Afficher plus'}
-      </Button>
-    </div>
-  );
+/** The pagination props a `DataTable` takes, from a `usePaged` list. */
+function serverOf<T>(list: ReturnType<typeof usePagedList<T>>) {
+  return {
+    page: list.page,
+    pageSize: list.pageSize,
+    total: list.total,
+    onPage: list.setPage,
+    onPageSize: list.setPageSize,
+    sort: list.sort,
+    onSort: list.setSort,
+  };
 }
 
 function Chips<K extends string>({ value, options, onChange }: { value: K; options: { key: K; label: string }[]; onChange: (k: K) => void }) {
@@ -283,9 +248,10 @@ function ReviewsTab({ ask }: { ask: (a: PendingAction) => void }) {
   const toast = useToast();
   const canAct = useAdmin().can('moderation.act');
   const [filter, setFilter] = useState<ReviewFilter>('all');
-  const { rows, total, loadMore, loadingMore, reload } = usePaged<AdminReview>(filter, (offset) =>
-    listReviews(filter, offset, PAGE_SIZE)
+  const list = usePaged<AdminReview>(filter, (offset, limit) =>
+    listReviews(filter, offset, limit)
   );
+  const { rows, reload } = list;
 
   function act(review: AdminReview, action: ReviewAction) {
     const run = async (reason?: string) => {
@@ -389,7 +355,11 @@ function ReviewsTab({ ask }: { ask: (a: PendingAction) => void }) {
           ))}
         </div>
       )}
-      {rows && <LoadMore shown={rows.length} total={total} loading={loadingMore} onClick={loadMore} />}
+      {rows && rows.length > 0 && (
+        <Card>
+          <Pagination page={list.page} pageSize={list.pageSize} total={list.total} onPage={list.setPage} onPageSize={list.setPageSize} />
+        </Card>
+      )}
     </div>
   );
 }
@@ -408,9 +378,10 @@ function CouponsTab({ ask }: { ask: (a: PendingAction) => void }) {
   const [status, setStatus] = useState<'all' | 'active' | 'ended'>('all');
   const [search, setSearch] = useState('');
   const debounced = useDebounced(search.trim());
-  const { rows, total, loadMore, loadingMore, reload } = usePaged<AdminCoupon>(`${status}|${debounced}`, (offset) =>
-    listCoupons(status, debounced || undefined, offset, PAGE_SIZE)
+  const list = usePaged<AdminCoupon>(`${status}|${debounced}`, (offset, limit) =>
+    listCoupons(status, debounced || undefined, offset, limit)
   );
+  const { rows, reload } = list;
 
   const columns: Column<AdminCoupon>[] = [
     { key: 'code', header: 'Code', render: (c) => <Text variant="body" className="font-semibold tracking-wide">{c.code}</Text> },
@@ -496,6 +467,7 @@ function CouponsTab({ ask }: { ask: (a: PendingAction) => void }) {
         <DataTable
           columns={columns}
           rows={rows ?? []}
+          server={serverOf(list)}
           keyField={(c) => c.id}
           loading={rows === null}
           emptyIcon={TicketPercent}
@@ -503,7 +475,6 @@ function CouponsTab({ ask }: { ask: (a: PendingAction) => void }) {
           emptyDescription="Aucun code ne correspond à ce filtre."
         />
       </Card>
-      {rows && <LoadMore shown={rows.length} total={total} loading={loadingMore} onClick={loadMore} />}
     </div>
   );
 }
@@ -516,9 +487,10 @@ function ProductsTab({ ask }: { ask: (a: PendingAction) => void }) {
   const [hiddenOnly, setHiddenOnly] = useState<'all' | 'only'>('all');
   const [search, setSearch] = useState('');
   const debounced = useDebounced(search.trim());
-  const { rows, total, loadMore, loadingMore, reload } = usePaged<AdminProduct>(`${hiddenOnly}|${debounced}`, (offset) =>
-    listProducts(hiddenOnly, debounced || undefined, offset, PAGE_SIZE)
+  const list = usePaged<AdminProduct>(`${hiddenOnly}|${debounced}`, (offset, limit) =>
+    listProducts(hiddenOnly, debounced || undefined, offset, limit)
   );
+  const { rows, reload } = list;
 
   const columns: Column<AdminProduct>[] = [
     {
@@ -626,6 +598,7 @@ function ProductsTab({ ask }: { ask: (a: PendingAction) => void }) {
         <DataTable
           columns={columns}
           rows={rows ?? []}
+          server={serverOf(list)}
           keyField={(p) => p.id}
           loading={rows === null}
           emptyIcon={Package}
@@ -633,7 +606,6 @@ function ProductsTab({ ask }: { ask: (a: PendingAction) => void }) {
           emptyDescription="Aucun produit ne correspond à cette recherche."
         />
       </Card>
-      {rows && <LoadMore shown={rows.length} total={total} loading={loadingMore} onClick={loadMore} />}
     </div>
   );
 }

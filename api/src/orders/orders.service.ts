@@ -31,6 +31,10 @@ import { LoyaltyService } from '../loyalty/loyalty.service.js';
 import { SettingsService } from '../loyalty/settings.service.js';
 import { NotifyService } from '../notifications/notify.service.js';
 import { isBanned } from '../auth/banned.js';
+import { containsPattern } from '../common/sql/like.js';
+import { orIlike } from '../common/sql/postgrest.js';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @Injectable()
 export class OrdersService {
@@ -387,6 +391,12 @@ export class OrdersService {
     let q = this.db.from('orders').select('*', { count: 'exact' }).eq(ownership.column, ownership.value);
     if (query.status) q = q.eq('status', query.status);
     if (query.activeOnly) q = q.not('status', 'in', '("delivered","cancelled")');
+    if (query.search) {
+      // `containsPattern` escapes `%` and `_`, so a search cannot match every order.
+      q = UUID_RE.test(query.search)
+        ? q.eq('id', query.search.toLowerCase())
+        : q.or(orIlike(['customer_name'], containsPattern(query.search)));
+    }
 
     const { data, count, error } = await q
       // Newest first, matching every list in the app. `id` breaks ties so a

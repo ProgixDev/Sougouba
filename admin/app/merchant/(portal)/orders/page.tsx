@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Package, Search } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -7,6 +7,7 @@ import { Text } from '@/components/ui/Text';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { DataTable, type Column } from '@/components/data/DataTable';
 import { listMerchantOrders } from '@/lib/api/merchantOrders';
+import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { orderStatusMeta } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
 import type { Order, OrderStatus } from '@/lib/types';
@@ -24,33 +25,23 @@ const STATUS_OPTIONS: { value: OrderStatus | 'all'; label: string }[] = [
 
 export default function MerchantOrdersPage() {
   const router = useRouter();
-  const [orders, setOrders] = useState<Order[] | null>(null);
   const [status, setStatus] = useState<OrderStatus | 'all'>('all');
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounced(search);
 
-  useEffect(() => {
-    // An empty list rather than a skeleton forever if the API is unreachable.
-    listMerchantOrders().then(setOrders).catch(() => setOrders([]));
-  }, []);
-
-  const rows = useMemo(() => {
-    let list = orders ?? [];
-    if (status !== 'all') list = list.filter((o) => o.status === status);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((o) => o.id.toLowerCase().includes(q) || (o.customerName ?? '').toLowerCase().includes(q));
-    }
-    return list;
-  }, [orders, status, search]);
+  // Newest first, one page at a time; status and search are applied by the API.
+  const list = usePagedList<Order>(
+    ({ offset, limit }) =>
+      listMerchantOrders({ status: status === 'all' ? undefined : status, search: debouncedSearch }, { offset, limit }),
+    `${status}|${debouncedSearch}`
+  );
 
   const columns: Column<Order>[] = [
     { key: 'id', header: 'Commande', render: (o) => <Text variant="body" className="font-semibold">#{o.id.slice(0, 8)}</Text> },
-    { key: 'customer', header: 'Client', sortable: true, sortValue: (o) => o.customerName ?? '', render: (o) => <Text variant="body">{o.customerName ?? '—'}</Text> },
+    { key: 'customer', header: 'Client', render: (o) => <Text variant="body">{o.customerName ?? '—'}</Text> },
     {
       key: 'createdAt',
       header: 'Date',
-      sortable: true,
-      sortValue: (o) => o.createdAt,
       render: (o) => (
         <Text variant="body" tone="muted">
           {formatDateTime(o.createdAt)}
@@ -60,8 +51,6 @@ export default function MerchantOrdersPage() {
     {
       key: 'total',
       header: 'Total',
-      sortable: true,
-      sortValue: (o) => o.totalCad,
       className: 'text-right',
       render: (o) => (
         <Text variant="body" className="tabular text-right font-semibold">
@@ -107,7 +96,7 @@ export default function MerchantOrdersPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher un numéro ou un client…"
+            placeholder="Rechercher un client…"
             className="w-56 bg-transparent font-sans text-[0.8125rem] text-foreground outline-none placeholder:text-muted-foreground"
           />
         </div>
@@ -116,10 +105,19 @@ export default function MerchantOrdersPage() {
       <Card elevated>
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={list.rows ?? []}
           keyField={(o) => o.id}
           onRowClick={(o) => router.push(`/merchant/orders/${o.id}`)}
-          loading={orders === null}
+          loading={list.rows === null}
+          server={{
+            page: list.page,
+            pageSize: list.pageSize,
+            total: list.total,
+            onPage: list.setPage,
+            onPageSize: list.setPageSize,
+            sort: list.sort,
+            onSort: list.setSort,
+          }}
           emptyIcon={Package}
           emptyTitle="Aucune commande"
           emptyDescription="Aucune commande ne correspond à ce filtre pour le moment."

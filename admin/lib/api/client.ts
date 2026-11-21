@@ -142,6 +142,14 @@ export const anonymousApiPost = <T>(path: string, body?: unknown) =>
   request<T>('POST', path, { body, caller: 'anonymous' });
 
 /** The envelope every paginated admin list returns. */
+/** One slice of a database-paginated list, as `usePagedList` asks for it. */
+export interface PageQuery {
+  offset: number;
+  limit: number;
+  sort?: string;
+  dir?: 'asc' | 'desc';
+}
+
 export interface Page<T> {
   items: T[];
   total: number;

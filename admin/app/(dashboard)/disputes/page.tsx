@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, Clock, MessageCircleWarning, Undo2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -13,6 +13,7 @@ import { formatCad } from '@/lib/format';
 import { disputeStatusMeta, DISPUTE_REASON_LABELS } from '@/lib/statusMeta';
 import { timeAgo } from '@/lib/format';
 import type { AdminDispute, AdminDisputeStatus } from '@/lib/types';
+import { usePagedList } from '@/lib/usePagedList';
 
 const TABS: { key: AdminDisputeStatus | 'all'; label: string }[] = [
   { key: 'open', label: 'Ouverts' },
@@ -24,7 +25,6 @@ const TABS: { key: AdminDisputeStatus | 'all'; label: string }[] = [
 
 export default function DisputesPage() {
   const router = useRouter();
-  const [all, setAll] = useState<AdminDispute[] | null>(null);
   const [tab, setTab] = useState<AdminDisputeStatus | 'all'>('open');
 
   const [insights, setInsights] = useState<DisputeInsights | null>(null);
@@ -35,11 +35,12 @@ export default function DisputesPage() {
       .catch(() => undefined);
   }, []);
 
-  useEffect(() => {
-    listDisputes().then(setAll);
-  }, []);
+  // Oldest first by default — a queue is worked from the front. One page at a time from the database.
+  const list = usePagedList<AdminDispute>(
+    ({ offset, limit, sort }) => listDisputes(tab === 'all' ? undefined : tab, { offset, limit, dir: sort?.dir }),
+    tab
+  );
 
-  const rows = useMemo(() => (tab === 'all' ? all ?? [] : (all ?? []).filter((d) => d.status === tab)), [all, tab]);
 
   const columns: Column<AdminDispute>[] = [
     { key: 'orderId', header: 'Commande', render: (d) => <Text variant="body" className="font-semibold">#{d.orderId.slice(0, 8)}</Text> },
@@ -50,7 +51,6 @@ export default function DisputesPage() {
       key: 'openedAt',
       header: 'Ouvert',
       sortable: true,
-      sortValue: (d) => d.openedAt,
       render: (d) => (
         <Text variant="body" tone="muted">
           {timeAgo(d.openedAt)}
@@ -137,6 +137,7 @@ export default function DisputesPage() {
             }`}
           >
             {t.label}
+            {t.key !== 'all' && insights ? ` (${insights.byStatus[t.key] ?? 0})` : ''}
           </button>
         ))}
       </div>
@@ -144,10 +145,19 @@ export default function DisputesPage() {
       <Card elevated>
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={list.rows ?? []}
           keyField={(d) => d.orderId}
           onRowClick={(d) => router.push(`/disputes/${d.orderId}`)}
-          loading={all === null}
+          loading={list.rows === null}
+          server={{
+            page: list.page,
+            pageSize: list.pageSize,
+            total: list.total,
+            onPage: list.setPage,
+            onPageSize: list.setPageSize,
+            sort: list.sort,
+            onSort: list.setSort,
+          }}
           emptyIcon={MessageCircleWarning}
           emptyTitle="Aucun litige"
           emptyDescription="Aucun litige ne correspond à ce filtre pour le moment."

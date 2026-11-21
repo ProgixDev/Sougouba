@@ -104,7 +104,8 @@ export class AdminService {
     const { data, count, error } = await q
       // Oldest first: a queue is worked from the front, and the dispute that
       // has waited longest is the one whose shopper has waited longest.
-      .order('opened_at', { ascending: true })
+      .order('opened_at', { ascending: (query.dir ?? 'asc') === 'asc' })
+      .order('order_id', { ascending: true })
       .range(query.offset, query.offset + query.limit - 1);
     if (error) throw unexpectedDbError(error);
 
@@ -252,7 +253,8 @@ export class AdminService {
     if (query.orderId) q = q.eq('order_id', query.orderId);
 
     const { data, count, error } = await q
-      .order('at', { ascending: true })
+      .order('at', { ascending: (query.dir ?? 'asc') === 'asc' })
+      .order('order_id', { ascending: true })
       .range(query.offset, query.offset + query.limit - 1);
     if (error) throw unexpectedDbError(error);
 
@@ -389,6 +391,8 @@ export class AdminService {
         p_id_prefix: idPrefix ?? undefined,
         p_limit: query.limit,
         p_offset: query.offset,
+        p_sort: query.sort,
+        p_dir: query.dir,
       })
     );
 

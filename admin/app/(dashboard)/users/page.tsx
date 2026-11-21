@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Ban, Search, ShoppingBag, Store, UserPlus, Users as UsersIcon } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -9,6 +9,8 @@ import { DataTable, type Column } from '@/components/data/DataTable';
 import { Avatar, BarSeries, Breakdown, KpiCard, KpiGrid, PageHeader, SectionCard } from '@/components/insights/Insights';
 import { getUserInsights, shortDay, type UserInsights } from '@/lib/api/insights';
 import { listUsers } from '@/lib/api/users';
+import { formatDate } from '@/lib/format';
+import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { useToast } from '@/components/Toast';
 import type { AdminUserListItem, UserRole } from '@/lib/types';
 
@@ -23,7 +25,6 @@ const ROLE_TABS: { key: UserRole | 'all'; label: string }[] = [
 export default function UsersPage() {
   const router = useRouter();
   const toast = useToast();
-  const [rows, setRows] = useState<AdminUserListItem[] | null>(null);
   const [role, setRole] = useState<UserRole | 'all'>('all');
   const [search, setSearch] = useState('');
   const [insights, setInsights] = useState<UserInsights | null>(null);
@@ -34,37 +35,29 @@ export default function UsersPage() {
       .catch(() => undefined);
   }, []);
 
-  // Debounced — this reaches the network per keystroke now, and the /admin
+  // Debounced — this reaches the network per keystroke, and the /admin
   // budget is 120 requests a minute.
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 300);
-    return () => clearTimeout(timer);
-  }, [search]);
+  const debouncedSearch = useDebounced(search);
 
+  // Role and search filter server-side. Searching by email only works at all
+  // because the API joins `auth.users` — `profiles` does not carry it.
+  const list = usePagedList<AdminUserListItem>(
+    ({ offset, limit, sort }) =>
+      listUsers(
+        { role: role === 'all' ? undefined : role, search: debouncedSearch },
+        { offset, limit, sort: sort?.key, dir: sort?.dir }
+      ),
+    `${role}|${debouncedSearch}`
+  );
   useEffect(() => {
-    let active = true;
-    setRows(null);
-    // Role and search filter server-side. Searching by email only works at all
-    // because the API joins `auth.users` — `profiles` does not carry it.
-    listUsers({ role: role === 'all' ? undefined : role, search: debouncedSearch })
-      .then((items) => active && setRows(items))
-      .catch((error: unknown) => {
-        if (!active) return;
-        setRows([]);
-        toast('error', error instanceof Error ? error.message : 'Chargement impossible.');
-      });
-    return () => {
-      active = false;
-    };
-  }, [role, debouncedSearch, toast]);
+    if (list.error) toast('error', list.error);
+  }, [list.error, toast]);
 
   const columns: Column<AdminUserListItem>[] = [
     {
-      key: 'fullName',
+      key: 'name',
       header: 'Nom',
       sortable: true,
-      sortValue: (u) => u.fullName,
       render: (u) => (
         <div className="flex items-center gap-3">
           <Avatar name={u.fullName || '?'} />
@@ -79,6 +72,26 @@ export default function UsersPage() {
       key: 'role',
       header: 'Rôle',
       render: (u) => <Badge tone={u.role === 'business' ? 'secondary' : u.role === 'courier' ? 'primary' : 'neutral'}>{u.role ? ROLE_LABELS[u.role] : '—'}</Badge>,
+    },
+    {
+      key: 'member_since',
+      header: 'Inscrit',
+      sortable: true,
+      render: (u) => (
+        <Text variant="body" tone="muted">
+          {formatDate(u.memberSince)}
+        </Text>
+      ),
+    },
+    {
+      key: 'last_seen',
+      header: 'Dernière connexion',
+      sortable: true,
+      render: (u) => (
+        <Text variant="body" tone="muted">
+          {u.lastSignInAt ? formatDate(u.lastSignInAt) : '—'}
+        </Text>
+      ),
     },
     {
       key: 'linked',
@@ -176,10 +189,19 @@ export default function UsersPage() {
       <Card elevated>
         <DataTable
           columns={columns}
-          rows={rows ?? []}
+          rows={list.rows ?? []}
           keyField={(u) => u.id}
           onRowClick={(u) => router.push(`/users/${u.id}`)}
-          loading={rows === null}
+          loading={list.rows === null}
+          server={{
+            page: list.page,
+            pageSize: list.pageSize,
+            total: list.total,
+            onPage: list.setPage,
+            onPageSize: list.setPageSize,
+            sort: list.sort,
+            onSort: list.setSort,
+          }}
           emptyIcon={UsersIcon}
           emptyTitle="Aucun utilisateur"
           emptyDescription="Aucun utilisateur ne correspond à ce filtre pour le moment."

@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Clock, Search, Star, Store, TrendingUp } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -9,6 +9,7 @@ import { DataTable, type Column } from '@/components/data/DataTable';
 import { Avatar, BarSeries, Breakdown, KpiCard, KpiGrid, PageHeader, Ranking, SectionCard } from '@/components/insights/Insights';
 import { formatHours, getVendorInsights, shortDay, type VendorInsights } from '@/lib/api/insights';
 import { listVendors } from '@/lib/api/vendors';
+import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { formatCad } from '@/lib/format';
 import { vendorStatusMeta } from '@/lib/statusMeta';
 import { formatDate } from '@/lib/format';
@@ -25,40 +26,32 @@ const TABS: { key: AdminVendorStatus; label: string }[] = [
 
 export default function MerchantsPage() {
   const router = useRouter();
-  const [all, setAll] = useState<AdminVendorListItem[] | null>(null);
   const [tab, setTab] = useState<AdminVendorStatus>('pending');
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounced(search);
 
   const [insights, setInsights] = useState<VendorInsights | null>(null);
 
   useEffect(() => {
-    listVendors().then(setAll);
     getVendorInsights()
       .then(setInsights)
       .catch(() => undefined);
   }, []);
 
-  const counts = useMemo(() => {
-    const base: Record<string, number> = { pending: 0, approved: 0, suspended: 0, rejected: 0 };
-    for (const v of all ?? []) base[v.status] += 1;
-    return base;
-  }, [all]);
-
-  const rows = useMemo(() => {
-    let list = (all ?? []).filter((v) => v.status === tab);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((v) => v.name.toLowerCase().includes(q) || v.city.toLowerCase().includes(q));
-    }
-    return list;
-  }, [all, tab, search]);
+  // One page at a time from the database — filtered, searched and sorted there.
+  const list = usePagedList<AdminVendorListItem>(
+    ({ offset, limit, sort }) =>
+      listVendors({ status: tab, search: debouncedSearch }, { offset, limit, sort: sort?.key, dir: sort?.dir }),
+    `${tab}|${debouncedSearch}`
+  );
+  // Tab counts are whole-table counts, not the current page's.
+  const counts: Record<string, number> = insights?.byStatus ?? {};
 
   const columns: Column<AdminVendorListItem>[] = [
     {
       key: 'name',
       header: 'Commerce',
       sortable: true,
-      sortValue: (v) => v.name,
       render: (v) => (
         <div className="flex items-center gap-3">
           <Avatar name={v.name} />
@@ -78,12 +71,11 @@ export default function MerchantsPage() {
       header: 'Secteur',
       render: (v) => <Text variant="body">{v.vendorType === 'restaurant' ? 'Restaurant' : 'Épicerie'}</Text>,
     },
-    { key: 'city', header: 'Ville', sortable: true, sortValue: (v) => v.city, render: (v) => <Text variant="body">{v.city}</Text> },
+    { key: 'city', header: 'Ville', sortable: true, render: (v) => <Text variant="body">{v.city}</Text> },
     {
-      key: 'submitted',
+      key: 'date',
       header: 'Soumis',
       sortable: true,
-      sortValue: (v) => v.submittedAt ?? '',
       render: (v) => (
         <Text variant="body" tone="muted">
           {v.submittedAt ? formatDate(v.submittedAt) : '—'}
@@ -183,7 +175,7 @@ export default function MerchantsPage() {
                 tab === t.key ? 'bg-forest-600 text-white' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              {t.label} ({counts[t.key]})
+              {t.label} ({counts[t.key] ?? 0})
             </button>
           ))}
         </div>
@@ -201,10 +193,19 @@ export default function MerchantsPage() {
       <Card elevated>
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={list.rows ?? []}
           keyField={(v) => v.id}
           onRowClick={(v) => router.push(`/merchants/${v.id}`)}
-          loading={all === null}
+          loading={list.rows === null}
+          server={{
+            page: list.page,
+            pageSize: list.pageSize,
+            total: list.total,
+            onPage: list.setPage,
+            onPageSize: list.setPageSize,
+            sort: list.sort,
+            onSort: list.setSort,
+          }}
           emptyIcon={Store}
           emptyTitle="Aucun commerce"
           emptyDescription="Aucun commerce ne correspond à ce filtre pour le moment."

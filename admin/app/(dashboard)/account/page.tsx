@@ -14,6 +14,8 @@ import type { AuditEntry } from '@/lib/api/audit';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { useAdmin } from '@/lib/permissions';
 import { supabase } from '@/lib/supabase';
+import { usePagedList } from '@/lib/usePagedList';
+import { Pagination } from '@/components/data/Pagination';
 
 /** Long enough that a one-time password from "Administrateurs" is not kept by default. */
 const MIN_LENGTH = 12;
@@ -185,17 +187,10 @@ function RoleCard() {
 }
 
 function Activity() {
-  const [rows, setRows] = useState<AuditEntry[] | null>(null);
-  const [total, setTotal] = useState(0);
-
-  useEffect(() => {
-    getMyActivity(0, 15)
-      .then((page) => {
-        setRows(page.items);
-        setTotal(page.total);
-      })
-      .catch(() => setRows([]));
-  }, []);
+  // Newest first, a page at a time from the audit log.
+  const list = usePagedList<AuditEntry>(({ offset, limit }) => getMyActivity(offset, limit), 'me', { pageSize: 10 });
+  const rows = list.rows;
+  const total = list.total;
 
   return (
     <Card className="p-5">
@@ -230,10 +225,10 @@ function Activity() {
           ))}
         </ol>
       )}
-      {total > (rows?.length ?? 0) && (
-        <Text variant="caption" tone="muted" className="mt-2 block">
-          Les {rows?.length} plus récentes sont affichées.
-        </Text>
+      {total > list.pageSize && (
+        <div className="-mx-5 -mb-5 mt-3">
+          <Pagination page={list.page} pageSize={list.pageSize} total={total} onPage={list.setPage} />
+        </div>
       )}
     </Card>
   );

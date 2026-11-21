@@ -1,12 +1,10 @@
-import { apiGet, apiGetOrNull, type Page } from './client';
+import { apiGet, apiGetOrNull, type Page, type PageQuery } from './client';
 import type { AdminOrderDetail, AdminOrderListItem, ID, OrderStatus } from '../types';
 
 export interface OrderFilters {
   status?: OrderStatus;
   vendorId?: ID;
   search?: string;
-  limit?: number;
-  offset?: number;
 }
 
 /**
@@ -18,13 +16,12 @@ export interface OrderFilters {
  * With a paginated endpoint it would silently filter one page and present the
  * result as the whole answer, so the filters must be passed down.
  */
-export async function listOrders(filters: OrderFilters = {}): Promise<Page<AdminOrderListItem>> {
+export async function listOrders(filters: OrderFilters, page: PageQuery): Promise<Page<AdminOrderListItem>> {
   return apiGet<Page<AdminOrderListItem>>('/admin/orders', {
     status: filters.status,
     vendorId: filters.vendorId,
     search: filters.search?.trim() || undefined,
-    limit: filters.limit,
-    offset: filters.offset,
+    ...page,
   });
 }
 

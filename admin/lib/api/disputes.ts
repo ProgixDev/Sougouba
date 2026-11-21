@@ -1,4 +1,4 @@
-import { apiGet, apiGetOrNull, apiPatch, type Page } from './client';
+import { apiGet, apiGetOrNull, apiPatch, type Page, type PageQuery } from './client';
 import type { AdminDispute, AdminDisputeStatus, ID } from '../types';
 
 /**
@@ -7,9 +7,9 @@ import type { AdminDispute, AdminDisputeStatus, ID } from '../types';
  * was in the bag once per order. The mock invented a separate `id`; every
  * function here takes the order id instead.
  */
-export async function listDisputes(status?: AdminDisputeStatus, limit = 100): Promise<AdminDispute[]> {
-  const page = await apiGet<Page<AdminDispute>>('/admin/disputes', { status, limit });
-  return page.items;
+/** One page by opening date; the API only sorts by date, so `sort` is not sent. */
+export async function listDisputes(status: AdminDisputeStatus | undefined, page: PageQuery): Promise<Page<AdminDispute>> {
+  return apiGet<Page<AdminDispute>>('/admin/disputes', { status, offset: page.offset, limit: page.limit, dir: page.dir });
 }
 
 export async function getDispute(orderId: ID): Promise<AdminDispute | null> {

@@ -1,4 +1,4 @@
-import { apiGet, apiGetOrNull, apiPost, type Page } from './client';
+import { apiGet, apiGetOrNull, apiPost, type Page, type PageQuery } from './client';
 import type { AdminCourierDetail, AdminCourierListItem, AdminCourierStatus, ID } from '../types';
 
 /**
@@ -7,9 +7,16 @@ import type { AdminCourierDetail, AdminCourierListItem, AdminCourierStatus, ID }
  * `suspended`), and the reason lives on the row as `statusReason` rather than in
  * a separate localStorage notes map.
  */
-export async function listCouriers(status?: AdminCourierStatus, limit = 100): Promise<AdminCourierListItem[]> {
-  const page = await apiGet<Page<AdminCourierListItem>>('/admin/couriers', { status, limit });
-  return page.items;
+/** One page, filtered, searched (name or city) and sorted by the API. */
+export async function listCouriers(
+  filters: { status?: AdminCourierStatus; search?: string },
+  page: PageQuery
+): Promise<Page<AdminCourierListItem>> {
+  return apiGet<Page<AdminCourierListItem>>('/admin/couriers', {
+    status: filters.status,
+    search: filters.search?.trim() || undefined,
+    ...page,
+  });
 }
 
 export async function getCourier(id: ID): Promise<AdminCourierDetail | null> {

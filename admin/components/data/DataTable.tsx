@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowUp, ArrowDown, ChevronsUpDown, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { TableSkeleton } from './Skeleton';
+import { Pagination } from './Pagination';
+import type { SortState } from '@/lib/usePagedList';
 import { EmptyState } from './EmptyState';
 
 export interface Column<T> {
@@ -25,6 +27,20 @@ interface DataTableProps<T> {
   emptyDescription?: string;
   /** Rows per page — a plain few-hundred-row table doesn't need virtualization, just paging. */
   pageSize?: number;
+  /**
+   * Paginated and sorted by the API instead of in the browser: `rows` is one
+   * page, `total` the whole result. Pair with `usePagedList`. A column's
+   * `key` is what is sent as the sort, so it must be one the endpoint accepts.
+   */
+  server?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    onPage: (page: number) => void;
+    onPageSize?: (size: number) => void;
+    sort: SortState;
+    onSort: (sort: SortState) => void;
+  };
 }
 
 export function DataTable<T>({
@@ -37,12 +53,15 @@ export function DataTable<T>({
   emptyTitle,
   emptyDescription,
   pageSize = 20,
+  server,
 }: DataTableProps<T>) {
-  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
+  const [localSort, setLocalSort] = useState<SortState>(null);
   const [page, setPage] = useState(1);
+  const sort = server ? server.sort : localSort;
+  const setSort = (update: (s: SortState) => SortState) => (server ? server.onSort(update(server.sort)) : setLocalSort(update));
 
   const sorted = useMemo(() => {
-    if (!sort) return rows;
+    if (server || !sort) return rows;
     const col = columns.find((c) => c.key === sort.key);
     if (!col?.sortValue) return rows;
     const copy = [...rows];
@@ -53,7 +72,7 @@ export function DataTable<T>({
       return sort.dir === 'asc' ? cmp : -cmp;
     });
     return copy;
-  }, [rows, sort, columns]);
+  }, [rows, sort, columns, server]);
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   // Reset to page 1 whenever the underlying result set changes (a new filter/search/sort
@@ -62,10 +81,11 @@ export function DataTable<T>({
     setPage(1);
   }, [rows, sort]);
   const clampedPage = Math.min(page, pageCount);
-  const pageRows = sorted.slice((clampedPage - 1) * pageSize, clampedPage * pageSize);
+  const pageRows = server ? rows : sorted.slice((clampedPage - 1) * pageSize, clampedPage * pageSize);
 
   if (loading) return <TableSkeleton cols={columns.length} />;
-  if (rows.length === 0) return <EmptyState icon={emptyIcon} title={emptyTitle} description={emptyDescription} />;
+  if (rows.length === 0 && !(server && server.total > 0))
+    return <EmptyState icon={emptyIcon} title={emptyTitle} description={emptyDescription} />;
 
   return (
     <div>
@@ -121,7 +141,11 @@ export function DataTable<T>({
         </table>
       </div>
 
-      {pageCount > 1 && (
+      {server && (
+        <Pagination page={server.page} pageSize={server.pageSize} total={server.total} onPage={server.onPage} onPageSize={server.onPageSize} />
+      )}
+
+      {!server && pageCount > 1 && (
         <div className="flex items-center justify-between border-t border-border px-5 py-3">
           <span className="font-sans text-[0.75rem] text-muted-foreground">
             {sorted.length} résultats · page {clampedPage} sur {pageCount}

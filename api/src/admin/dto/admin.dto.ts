@@ -11,6 +11,13 @@ import { PERMISSIONS, type Permission } from '../permissions.js';
  * fine over 250 seeded rows, and wrong the moment the list is paginated, since
  * the client would then be filtering one page and calling it the result.
  */
+/**
+ * Sort direction for the back-office tables. Every list is paginated in the
+ * database, so the sort has to be applied there too — sorting one page in the
+ * browser would only order the twenty rows on screen.
+ */
+const sortDirSchema = z.enum(['asc', 'desc']).optional();
+
 export const orderListQuerySchema = paginationSchema.extend({
   status: z
     .enum(['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled'])
@@ -18,6 +25,8 @@ export const orderListQuerySchema = paginationSchema.extend({
   vendorId: z.string().uuid().optional(),
   /** Matches an order id prefix, the customer's name, or the shop's name. */
   search: z.string().trim().min(1).max(100).optional(),
+  sort: z.enum(['created_at', 'total', 'customer']).optional(),
+  dir: sortDirSchema,
 });
 
 export type OrderListQuery = z.infer<typeof orderListQuerySchema>;
@@ -44,6 +53,8 @@ export const disputeQuerySchema = paginationSchema.extend({
   orderId: z.string().uuid().optional(),
   /** The triage default: everything still waiting on a human. */
   openOnly: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+  /** By opening date; oldest first unless asked otherwise. */
+  dir: sortDirSchema,
 });
 
 export type DisputeQuery = z.infer<typeof disputeQuerySchema>;
@@ -83,6 +94,8 @@ export const courierIssueQuerySchema = paginationSchema.extend({
   status: z.enum(['open', 'resolved']).optional(),
   /** Internal — `courierIssueDetail` narrows the queue query to one order. */
   orderId: z.string().uuid().optional(),
+  /** By report date; oldest first unless asked otherwise. */
+  dir: sortDirSchema,
 });
 
 export type CourierIssueQuery = z.infer<typeof courierIssueQuerySchema>;
@@ -109,6 +122,11 @@ const applicationStatusSchema = z.enum(['pending', 'approved', 'suspended', 'rej
 
 export const reviewQuerySchema = paginationSchema.extend({
   status: applicationStatusSchema.optional(),
+  /** Matches the shop's (or courier's) name or city. */
+  search: z.string().trim().min(1).max(100).optional(),
+  /** `date` is the application date: submitted for a shop, joined for a courier. */
+  sort: z.enum(['date', 'name', 'city']).optional(),
+  dir: sortDirSchema,
 });
 
 export type ReviewQuery = z.infer<typeof reviewQuerySchema>;
@@ -131,6 +149,8 @@ export const userQuerySchema = paginationSchema.extend({
   role: z.enum(['customer', 'business', 'courier', 'admin']).optional(),
   /** Matches a name or an email address. */
   search: z.string().trim().min(1).max(100).optional(),
+  sort: z.enum(['member_since', 'name', 'last_seen']).optional(),
+  dir: sortDirSchema,
 });
 
 /**

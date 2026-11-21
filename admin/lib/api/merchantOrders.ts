@@ -1,4 +1,4 @@
-import type { ID, Order } from '../types';
+import type { ID, Order, OrderStatus } from '../types';
 import { ApiError, merchantApiGet, type Page } from './client';
 
 /**
@@ -10,13 +10,20 @@ import { ApiError, merchantApiGet, type Page } from './client';
  * filtered by `vendorId` in the browser.)
  */
 
-/** The API's own page ceiling. A shop with more orders than this needs paging, not a bigger number. */
-const ALL = 100;
-
-/** Newest first, as the API returns them. */
-export async function listMerchantOrders(): Promise<Order[]> {
-  const page = await merchantApiGet<Page<Order>>('/vendors/me/orders', { limit: ALL });
-  return page.items;
+/**
+ * One page of the shop's orders, newest first, filtered by the API. The search
+ * matches the customer's name, or a whole order id.
+ */
+export async function listMerchantOrders(
+  filters: { status?: OrderStatus; search?: string },
+  page: { offset: number; limit: number }
+): Promise<Page<Order>> {
+  return merchantApiGet<Page<Order>>('/vendors/me/orders', {
+    status: filters.status,
+    search: filters.search?.trim() || undefined,
+    offset: page.offset,
+    limit: page.limit,
+  });
 }
 
 /** `undefined` for an order that is not this shop's — or not there at all; the API answers both alike. */

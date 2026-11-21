@@ -5,14 +5,12 @@ import { ScrollText } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Badge, type Tone } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import { DataTable, type Column } from '@/components/data/DataTable';
 import { useToast } from '@/components/Toast';
 import { listAudit, type AuditEntry, type AuditSubject } from '@/lib/api/audit';
+import { usePagedList } from '@/lib/usePagedList';
 import { formatDateTime } from '@/lib/format';
 import { PageHeader } from '@/components/insights/Insights';
-
-const PAGE_SIZE = 50;
 
 const SUBJECT_TABS: { key: AuditSubject | 'all'; label: string }[] = [
   { key: 'all', label: 'Tout' },
@@ -111,41 +109,15 @@ export default function AuditLogPage() {
   const router = useRouter();
   const toast = useToast();
   const [subject, setSubject] = useState<AuditSubject | 'all'>('all');
-  const [rows, setRows] = useState<AuditEntry[] | null>(null);
-  const [total, setTotal] = useState(0);
-  const [loadingMore, setLoadingMore] = useState(false);
-
+  // Newest first, one page at a time from the database.
+  const list = usePagedList<AuditEntry>(
+    ({ offset, limit }) => listAudit({ subjectType: subject === 'all' ? undefined : subject }, offset, limit),
+    subject
+  );
+  const total = list.total;
   useEffect(() => {
-    let active = true;
-    setRows(null);
-    listAudit({ subjectType: subject === 'all' ? undefined : subject })
-      .then((page) => {
-        if (!active) return;
-        setRows(page.items);
-        setTotal(page.total);
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
-        setRows([]);
-        toast('error', error instanceof Error ? error.message : 'Chargement impossible.');
-      });
-    return () => {
-      active = false;
-    };
-  }, [subject, toast]);
-
-  async function loadMore() {
-    if (!rows) return;
-    setLoadingMore(true);
-    try {
-      const page = await listAudit({ subjectType: subject === 'all' ? undefined : subject }, rows.length, PAGE_SIZE);
-      setRows([...rows, ...page.items]);
-      setTotal(page.total);
-    } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'Chargement impossible.');
-    }
-    setLoadingMore(false);
-  }
+    if (list.error) toast('error', list.error);
+  }, [list.error, toast]);
 
   const columns: Column<AuditEntry>[] = [
     {
@@ -241,29 +213,28 @@ export default function AuditLogPage() {
       <Card elevated>
         <DataTable
           columns={columns}
-          rows={rows ?? []}
+          rows={list.rows ?? []}
           keyField={(e) => e.id}
           onRowClick={(e) => {
             const href = subjectHref(e);
             if (href) router.push(href);
           }}
-          loading={rows === null}
+          loading={list.rows === null}
+          server={{
+            page: list.page,
+            pageSize: list.pageSize,
+            total: list.total,
+            onPage: list.setPage,
+            onPageSize: list.setPageSize,
+            sort: list.sort,
+            onSort: list.setSort,
+          }}
           emptyIcon={ScrollText}
           emptyTitle="Aucune entrée"
           emptyDescription="Aucune décision n’a encore été enregistrée pour ce filtre."
         />
       </Card>
 
-      {rows && rows.length < total && (
-        <div className="flex items-center justify-center gap-3">
-          <Text variant="caption" tone="muted">
-            {rows.length} sur {total}
-          </Text>
-          <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
-            {loadingMore ? 'Chargement…' : 'Afficher plus'}
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

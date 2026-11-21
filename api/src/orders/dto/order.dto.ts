@@ -58,6 +58,11 @@ export const orderQuerySchema = paginationSchema.extend({
   status: z.enum(ORDER_STATUSES).optional(),
   /** Merchant queue view: everything not yet delivered or cancelled. */
   activeOnly: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+  /**
+   * Customer name, or a whole order id pasted in. A uuid column cannot be
+   * prefix-matched through PostgREST, so a truncated id only matches by name.
+   */
+  search: z.string().trim().min(1).max(100).optional(),
 });
 
 export type OrderQuery = z.infer<typeof orderQuerySchema>;

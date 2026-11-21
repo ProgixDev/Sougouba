@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bike, Radio, Search, Star, Timer } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/data/StatusBadge';
 import { DataTable, type Column } from '@/components/data/DataTable';
 import { Avatar, BarSeries, Breakdown, KpiCard, KpiGrid, PageHeader, Ranking, SectionCard } from '@/components/insights/Insights';
 import { listCouriers } from '@/lib/api/couriers';
+import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { getCourierInsights, shortDay, type CourierInsights } from '@/lib/api/insights';
 import { courierStatusMeta, VEHICLE_LABELS } from '@/lib/statusMeta';
 import { formatCad, formatDate } from '@/lib/format';
@@ -24,40 +25,32 @@ const TABS: { key: AdminCourierStatus; label: string }[] = [
 
 export default function CouriersPage() {
   const router = useRouter();
-  const [all, setAll] = useState<AdminCourierListItem[] | null>(null);
   const [tab, setTab] = useState<AdminCourierStatus>('pending');
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounced(search);
 
   const [insights, setInsights] = useState<CourierInsights | null>(null);
 
   useEffect(() => {
-    listCouriers().then(setAll);
     getCourierInsights()
       .then(setInsights)
       .catch(() => undefined);
   }, []);
 
-  const counts = useMemo(() => {
-    const base: Record<string, number> = { pending: 0, approved: 0, suspended: 0, rejected: 0 };
-    for (const c of all ?? []) base[c.status] += 1;
-    return base;
-  }, [all]);
-
-  const rows = useMemo(() => {
-    let list = (all ?? []).filter((c) => c.status === tab);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((c) => c.fullName.toLowerCase().includes(q) || c.city.toLowerCase().includes(q));
-    }
-    return list;
-  }, [all, tab, search]);
+  // One page at a time from the database — filtered, searched and sorted there.
+  const list = usePagedList<AdminCourierListItem>(
+    ({ offset, limit, sort }) =>
+      listCouriers({ status: tab, search: debouncedSearch }, { offset, limit, sort: sort?.key, dir: sort?.dir }),
+    `${tab}|${debouncedSearch}`
+  );
+  // Tab counts are whole-table counts, not the current page's.
+  const counts: Record<string, number> = insights?.byStatus ?? {};
 
   const columns: Column<AdminCourierListItem>[] = [
     {
-      key: 'fullName',
+      key: 'name',
       header: 'Livreur',
       sortable: true,
-      sortValue: (c) => c.fullName,
       render: (c) => (
         <div className="flex items-center gap-3">
           <Avatar name={c.fullName} />
@@ -68,12 +61,11 @@ export default function CouriersPage() {
       ),
     },
     { key: 'vehicle', header: 'Véhicule', render: (c) => <Text variant="body">{VEHICLE_LABELS[c.vehicle]}</Text> },
-    { key: 'city', header: 'Ville', sortable: true, sortValue: (c) => c.city, render: (c) => <Text variant="body">{c.city}</Text> },
+    { key: 'city', header: 'Ville', sortable: true, render: (c) => <Text variant="body">{c.city}</Text> },
     {
-      key: 'joinedAt',
+      key: 'date',
       header: 'Inscrit',
       sortable: true,
-      sortValue: (c) => c.joinedAt,
       render: (c) => (
         <Text variant="body" tone="muted">
           {formatDate(c.joinedAt)}
@@ -166,7 +158,7 @@ export default function CouriersPage() {
                 tab === t.key ? 'bg-forest-600 text-white' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              {t.label} ({counts[t.key]})
+              {t.label} ({counts[t.key] ?? 0})
             </button>
           ))}
         </div>
@@ -184,10 +176,19 @@ export default function CouriersPage() {
       <Card elevated>
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={list.rows ?? []}
           keyField={(c) => c.id}
           onRowClick={(c) => router.push(`/couriers/${c.id}`)}
-          loading={all === null}
+          loading={list.rows === null}
+          server={{
+            page: list.page,
+            pageSize: list.pageSize,
+            total: list.total,
+            onPage: list.setPage,
+            onPageSize: list.setPageSize,
+            sort: list.sort,
+            onSort: list.setSort,
+          }}
           emptyIcon={Bike}
           emptyTitle="Aucun livreur"
           emptyDescription="Aucun livreur ne correspond à ce filtre pour le moment."
