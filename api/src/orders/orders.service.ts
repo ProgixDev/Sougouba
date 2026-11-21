@@ -30,6 +30,7 @@ import { CouponsService } from '../loyalty/coupons.service.js';
 import { LoyaltyService } from '../loyalty/loyalty.service.js';
 import { SettingsService } from '../loyalty/settings.service.js';
 import { NotifyService } from '../notifications/notify.service.js';
+import { isBanned } from '../auth/banned.js';
 
 @Injectable()
 export class OrdersService {
@@ -151,6 +152,13 @@ export class OrdersService {
    * the merchant's queue.
    */
   async createPaymentIntent(customerId: string, cart: CartInput) {
+    // A blocked account keeps a valid access token for up to an hour after the
+    // ban; this is the step that takes money, so it asks Auth directly.
+    const { data: account } = await this.db.auth.admin.getUserById(customerId);
+    if (isBanned(account.user?.banned_until)) {
+      throw new ForbiddenException('Ce compte a été bloqué. Contactez le support Sougouba.');
+    }
+
     const { priced } = await this.quote(customerId, cart);
 
     // Phase 7's split. The commission is taken on the **subtotal**, not the

@@ -236,6 +236,25 @@ export class AdminController {
     return this.approvals.userDetail(id);
   }
 
+  /** Stop an account signing in or buying — a reason is required, and it is audited. */
+  @Post('users/:id/block')
+  blockUser(
+    @CurrentUser() adminId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(reviewDecisionSchema)) body: ReviewDecisionInput
+  ) {
+    return this.approvals.setUserBlocked(adminId, id, true, requireReason(body).reason);
+  }
+
+  @Post('users/:id/unblock')
+  unblockUser(
+    @CurrentUser() adminId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(reviewDecisionSchema)) body: ReviewDecisionInput
+  ) {
+    return this.approvals.setUserBlocked(adminId, id, false, body.reason);
+  }
+
   // ── platform settings ─────────────────────────────────────────────────────
 
   @Get('settings')

@@ -666,6 +666,58 @@ export class ApprovalsService {
       },
     } as AdminUserDetail;
   }
+
+  /**
+   * Block an account, or lift the block — any role but an administrator.
+   *
+   * The block is Supabase Auth's own ban: a far-future `ban_duration` refuses
+   * every new sign-in (email code, Google, Apple) and every token refresh, so
+   * the account is out within one access-token lifetime (an hour at most), and
+   * the API's checkout refuses it at once. Nothing is deleted: orders, reviews
+   * and the account stay as they were, and unblocking restores access.
+   *
+   * Ban first, audit second, because they cannot share a transaction (the ban
+   * is an HTTP call to Auth). If the audit write fails, the ban is put back as
+   * it was — an unlogged block is the one outcome this must not leave behind.
+   */
+  async setUserBlocked(adminId: string, userId: string, blocked: boolean, reason: string | undefined) {
+    if (userId === adminId) throw new BadRequestException('Vous ne pouvez pas bloquer votre propre compte');
+    const profile = await unwrap<{ fullName: string | null; role: string | null } | null>(
+      this.db.from('profiles').select('fullName:full_name, role').eq('id', userId).maybeSingle()
+    );
+    if (!profile) throw new NotFoundException('User not found');
+    if (profile.role === 'admin') {
+      throw new BadRequestException('Un compte administrateur ne peut pas être bloqué depuis le tableau de bord');
+    }
+
+    await this.setBan(userId, blocked);
+    try {
+      await unwrapRpc<void>(
+        this.db.rpc('admin_record_user_block', {
+          p_admin_id: adminId,
+          p_user_id: userId,
+          p_blocked: blocked,
+          p_reason: reason ?? '',
+          p_label: profile.fullName ?? userId,
+        })
+      );
+    } catch (error) {
+      await this.setBan(userId, !blocked).catch((revert: unknown) =>
+        this.logger.error(`Could not revert the ban on ${userId} after a failed audit write: ${String(revert)}`)
+      );
+      throw error;
+    }
+    return this.userDetail(userId);
+  }
+
+  /** ~100 years — Auth has no "forever", and a date nobody alive will reach is the same thing. */
+  private async setBan(userId: string, blocked: boolean): Promise<void> {
+    const { error } = await this.db.auth.admin.updateUserById(userId, { ban_duration: blocked ? '876000h' : 'none' });
+    if (error) {
+      this.logger.error(`Auth ban update failed for ${userId}: ${error.message}`);
+      throw new InternalServerErrorException('Impossible de modifier le blocage de ce compte');
+    }
+  }
 }
 
 /** `admin_decide_vendor` / `admin_decide_courier` raise this when the status moved under the reviewer. */

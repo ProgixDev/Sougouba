@@ -2,6 +2,7 @@ import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 
 import {
   BadRequestException,
+  ForbiddenException,
   GoneException,
   HttpException,
   HttpStatus,
@@ -13,6 +14,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
+import { isBanned } from '../auth/banned.js';
 import type { Env } from '../config/env.js';
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
@@ -156,6 +158,12 @@ export class SignupService {
     if (link.error || !tokenHash) {
       this.logger.error(`generateLink failed: ${link.error?.code} ${link.error?.message}`);
       throw new InternalServerErrorException('Impossible de vous connecter.');
+    }
+
+    // A blocked account (an administrator's ban, `setUserBlocked`) would fail
+    // the exchange below with a generic error; say what actually happened.
+    if (isBanned(link.data.user?.banned_until)) {
+      throw new ForbiddenException('Ce compte a été bloqué. Contactez le support Sougouba.');
     }
 
     const { data, error } = await this.exchanger.auth.verifyOtp({ type: 'magiclink', token_hash: tokenHash });

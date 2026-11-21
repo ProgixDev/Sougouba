@@ -1,4 +1,4 @@
-import { apiGet, apiGetOrNull, type Page } from './client';
+import { apiGet, apiGetOrNull, apiPost, type Page } from './client';
 import type { AdminUserDetail, AdminUserListItem, ID, UserRole } from '../types';
 
 export interface UserFilters {
@@ -24,4 +24,16 @@ export async function listUsers(filters: UserFilters = {}, limit = 100): Promise
 
 export async function getUser(id: ID): Promise<AdminUserDetail | null> {
   return apiGetOrNull<AdminUserDetail>(`/admin/users/${id}`);
+}
+
+/**
+ * Block an account: no new sign-in or token refresh, and checkout refused at
+ * once. Nothing is deleted. The reason is required and lands in the audit log.
+ */
+export async function blockUser(id: ID, reason: string): Promise<AdminUserDetail> {
+  return apiPost<AdminUserDetail>(`/admin/users/${id}/block`, { reason });
+}
+
+export async function unblockUser(id: ID, reason?: string): Promise<AdminUserDetail> {
+  return apiPost<AdminUserDetail>(`/admin/users/${id}/unblock`, reason ? { reason } : {});
 }

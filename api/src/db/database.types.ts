@@ -1845,6 +1845,16 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_record_user_block: {
+        Args: {
+          p_admin_id: string
+          p_blocked: boolean
+          p_label: string
+          p_reason: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       admin_resolve_courier_issue: {
         Args: { p_admin_id: string; p_note: string; p_order_id: string }
         Returns: {
@@ -2174,6 +2184,7 @@ export type Database = {
         | "dispute"
         | "courier_issue"
         | "settings"
+        | "user"
       coupon_discount_type: "percentage" | "fixed"
       courier_issue_reason:
         | "customer_absent"
@@ -2348,6 +2359,7 @@ export const Constants = {
         "dispute",
         "courier_issue",
         "settings",
+        "user",
       ],
       coupon_discount_type: ["percentage", "fixed"],
       courier_issue_reason: [
