@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -1670,6 +1670,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "vendors_specialty_id_fkey"
+            columns: ["specialty_id"]
+            isOneToOne: false
+            referencedRelation: "specialties"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
@@ -1795,6 +1802,7 @@ export type Database = {
           reviewed_by: string | null
           slug: string
           specialty_fr: string
+          specialty_id: string | null
           status: Database["public"]["Enums"]["vendor_status"]
           status_reason: string | null
           updated_at: string
@@ -2083,6 +2091,7 @@ export type Database = {
         }[]
       }
       retention_purge_locations: { Args: { p_days: number }; Returns: number }
+      seed_reset: { Args: { p_prefix: string }; Returns: Json }
       settings_update: {
         Args: { p_admin_id: string; p_changes: Json; p_patch: Json }
         Returns: {

@@ -27,6 +27,13 @@ local Postgres with stand-in tables (averages, refusals, grants).
 
 ## 1. Apply the ratings migration
 
+**Done 2026-11-20** via `supabase db query --linked` in one transaction. Checked
+in the catalog: RLS on, 4 indexes, `anon`/`authenticated` have no table
+privilege and no EXECUTE on the function, `service_role` has both. Advisors
+flag nothing on `order_reviews`. Types regenerated (the hand edits matched).
+Still open: the HTTP check as `anon` below, and removing the missing-table
+tolerance.
+
 - [ ] Apply `api/drizzle/0036_order_reviews.sql` to the project (Supabase SQL
       editor or MCP `apply_migration`). Remove the `--> statement-breakpoint`
       markers if the tool rejects them.
