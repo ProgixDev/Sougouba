@@ -14,7 +14,8 @@ export type AuditSubject =
   | 'review'
   | 'coupon'
   | 'product'
-  | 'admin_role';
+  | 'admin_role'
+  | 'payout';
 
 /** One line of `GET /admin/audit-log`, newest first. Written by the database, never edited. */
 export interface AuditEntry {

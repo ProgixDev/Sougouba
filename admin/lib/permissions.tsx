@@ -20,6 +20,7 @@ export const SECTION_PERMISSIONS: { prefix: string; permission: string }[] = [
   { prefix: '/moderation', permission: 'moderation.view' },
   { prefix: '/users', permission: 'users.view' },
   { prefix: '/specialties', permission: 'specialties.view' },
+  { prefix: '/payouts', permission: 'payouts.view' },
   { prefix: '/audit', permission: 'audit.view' },
   { prefix: '/admins', permission: 'admins.view' },
   { prefix: '/settings', permission: 'settings.view' },

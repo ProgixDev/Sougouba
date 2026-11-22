@@ -2,6 +2,7 @@ import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants.js';
 import { RequestMethod } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
 
+import { AdminPayoutsController } from '../billing/billing.controller.js';
 import { AdminController } from './admin.controller.js';
 import { AUDIT_ACTION_FOR } from './approvals.service.js';
 import { ADMIN_ACTIONS, diffSettings, type AdminAction } from './audit.service.js';
@@ -76,7 +77,8 @@ describe('ADMIN_ACTIONS', () => {
    * or an action was added that no route reaches and should go.
    */
   it('has exactly one action per mutating admin route', () => {
-    const mutating = mutatingRoutesOf(AdminController);
+    // The payouts controller lives in `billing/` but is back office all the same.
+    const mutating = [...mutatingRoutesOf(AdminController), ...mutatingRoutesOf(AdminPayoutsController)];
 
     expect(
       ADMIN_ACTIONS.length,

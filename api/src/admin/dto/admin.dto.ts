@@ -243,7 +243,7 @@ export type RefundOrderInput = z.infer<typeof refundOrderSchema>;
  */
 export const auditQuerySchema = paginationSchema.extend({
   action: z.string().trim().min(1).max(60).optional(),
-  subjectType: z.enum(['vendor', 'courier', 'order', 'dispute', 'courier_issue', 'settings', 'user', 'specialty', 'support', 'review', 'coupon', 'product', 'admin_role']).optional(),
+  subjectType: z.enum(['vendor', 'courier', 'order', 'dispute', 'courier_issue', 'settings', 'user', 'specialty', 'support', 'review', 'coupon', 'product', 'admin_role', 'payout']).optional(),
   subjectId: z.string().uuid().optional(),
   actorId: z.string().uuid().optional(),
   since: z.coerce.date().optional(),

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
+  Banknote,
   Headset,
   LayoutDashboard,
   LogOut,
@@ -63,6 +64,7 @@ export const NAV_GROUPS = (counts: SidebarCounts): { title: string; boxed: boole
       { href: '/merchants', label: 'Commerçants', icon: Store, count: counts.pendingMerchants },
       { href: '/couriers', label: 'Livreurs', icon: Bike, count: counts.pendingCouriers },
       { href: '/users', label: 'Utilisateurs', icon: Users, count: 0 },
+      { href: '/payouts', label: 'Virements', icon: Banknote, count: 0 },
     ],
   },
   {

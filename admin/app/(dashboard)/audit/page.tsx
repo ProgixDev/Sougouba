@@ -26,6 +26,7 @@ const SUBJECT_TABS: { key: AuditSubject | 'all'; label: string }[] = [
   { key: 'product', label: 'Produits' },
   { key: 'admin_role', label: 'Rôles' },
   { key: 'specialty', label: 'Spécialités' },
+  { key: 'payout', label: 'Virements' },
   { key: 'settings', label: 'Paramètres' },
 ];
 
@@ -57,6 +58,7 @@ const ACTION_LABELS: Record<string, { label: string; tone: Tone }> = {
   'role.create': { label: 'Rôle créé', tone: 'primary' },
   'role.update': { label: 'Rôle modifié', tone: 'warning' },
   'role.delete': { label: 'Rôle supprimé', tone: 'destructive' },
+  'payout.run': { label: 'Virements lancés', tone: 'warning' },
 };
 
 /** Where each kind of subject lives in this dashboard. Disputes and courier issues are keyed by their order. */
@@ -69,10 +71,11 @@ function subjectHref(entry: AuditEntry): string | null {
   if (entry.subjectType === 'coupon') return '/moderation?tab=coupons';
   if (entry.subjectType === 'product') return '/moderation?tab=products';
   if (entry.subjectType === 'admin_role') return '/admins?tab=roles';
+  if (entry.subjectType === 'payout') return '/payouts?tab=history';
   // Admin-access lines open the administrator, not the plain user page.
   if (entry.subjectType === 'user' && entry.action.startsWith('admin.') && entry.subjectId) return `/admins/${entry.subjectId}`;
   if (!entry.subjectId) return null;
-  const base: Record<Exclude<AuditSubject, 'settings' | 'specialty' | 'review' | 'coupon' | 'product' | 'admin_role'>, string> = {
+  const base: Record<Exclude<AuditSubject, 'settings' | 'specialty' | 'review' | 'coupon' | 'product' | 'admin_role' | 'payout'>, string> = {
     vendor: '/merchants',
     courier: '/couriers',
     user: '/users',

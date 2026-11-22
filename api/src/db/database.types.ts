@@ -1133,6 +1133,110 @@ export type Database = {
           },
         ]
       }
+      payout_attempts: {
+        Row: {
+          amount_cad: number
+          courier_id: string
+          created_at: string
+          error: string | null
+          id: string
+          reason: string | null
+          run_count: number
+          run_id: string
+          status: string
+          stripe_transfer_id: string | null
+        }
+        Insert: {
+          amount_cad: number
+          courier_id: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          reason?: string | null
+          run_count: number
+          run_id: string
+          status: string
+          stripe_transfer_id?: string | null
+        }
+        Update: {
+          amount_cad?: number
+          courier_id?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          reason?: string | null
+          run_count?: number
+          run_id?: string
+          status?: string
+          stripe_transfer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_attempts_courier_id_fkey"
+            columns: ["courier_id"]
+            isOneToOne: false
+            referencedRelation: "couriers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payout_attempts_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "payout_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payout_runs: {
+        Row: {
+          actor_id: string | null
+          error: string | null
+          failed_count: number
+          finished_at: string | null
+          id: string
+          paid_cad: number
+          paid_count: number
+          skipped_count: number
+          started_at: string
+          status: string
+          trigger: string
+        }
+        Insert: {
+          actor_id?: string | null
+          error?: string | null
+          failed_count?: number
+          finished_at?: string | null
+          id?: string
+          paid_cad?: number
+          paid_count?: number
+          skipped_count?: number
+          started_at?: string
+          status?: string
+          trigger: string
+        }
+        Update: {
+          actor_id?: string | null
+          error?: string | null
+          failed_count?: number
+          finished_at?: string | null
+          id?: string
+          paid_cad?: number
+          paid_count?: number
+          skipped_count?: number
+          started_at?: string
+          status?: string
+          trigger?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_runs_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_settings: {
         Row: {
           commission_rate: number
@@ -1970,6 +2074,32 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_payout_attempts: {
+        Args: {
+          p_courier_id?: string
+          p_limit?: number
+          p_offset?: number
+          p_run_id?: string
+          p_status?: string
+        }
+        Returns: Json
+      }
+      admin_payout_insights: { Args: never; Returns: Json }
+      admin_payout_runs: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: Json
+      }
+      admin_payouts_owed: {
+        Args: {
+          p_dir?: string
+          p_filter?: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_sort?: string
+        }
+        Returns: Json
+      }
       admin_product_set_hidden: {
         Args: {
           p_admin_id: string
@@ -2287,12 +2417,17 @@ export type Database = {
         }
         Returns: undefined
       }
+      payout_run_start: {
+        Args: { p_actor_id?: string; p_trigger: string }
+        Returns: string
+      }
       payouts_owed: {
         Args: never
         Returns: {
           account_id: string
           courier_id: string
           pending_cad: number
+          run_count: number
         }[]
       }
       product_best_sellers: {
@@ -2429,6 +2564,7 @@ export type Database = {
         | "coupon"
         | "product"
         | "admin_role"
+        | "payout"
       coupon_discount_type: "percentage" | "fixed"
       courier_issue_reason:
         | "customer_absent"
@@ -2610,6 +2746,7 @@ export const Constants = {
         "coupon",
         "product",
         "admin_role",
+        "payout",
       ],
       coupon_discount_type: ["percentage", "fixed"],
       courier_issue_reason: [

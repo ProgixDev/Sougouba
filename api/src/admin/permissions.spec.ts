@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { ForbiddenException } from '@nestjs/common';
@@ -47,6 +47,14 @@ describe('the built-in Propriétaire role', () => {
     const owner = sql.match(/\('owner',[\s\S]*?array\[([\s\S]*?)\]\)/);
     expect(owner).not.toBeNull();
     const granted = [...owner![1].matchAll(/'([a-z_]+\.[a-z]+)'/g)].map((m) => m[1]);
+    // Permissions added after 0043 are granted by `array_append` in their own migration.
+    const drizzle = fileURLToPath(new URL('../../drizzle/', import.meta.url));
+    for (const file of readdirSync(drizzle).filter((f) => f.endsWith('.sql') && f > '0043')) {
+      const later = readFileSync(`${drizzle}${file}`, 'utf8');
+      for (const m of later.matchAll(/array_append\(permissions, '([a-z_]+\.[a-z]+)'\)[\s\S]*?slug in \(([^)]*)\)/g)) {
+        if (m[2].includes("'owner'")) granted.push(m[1]);
+      }
+    }
     expect(new Set(granted)).toEqual(new Set(PERMISSIONS));
   });
 });

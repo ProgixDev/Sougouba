@@ -80,7 +80,13 @@ export const PERMISSION_GROUPS = [
       { key: 'settings.manage', label: 'Modifier commission, abonnement, points' },
     ],
   },
-  { area: 'Virements', permissions: [{ key: 'payouts.run', label: 'Relancer les virements des livreurs' }] },
+  {
+    area: 'Virements',
+    permissions: [
+      { key: 'payouts.view', label: 'Voir les montants dus et l’historique des virements' },
+      { key: 'payouts.run', label: 'Relancer les virements des livreurs' },
+    ],
+  },
   { area: 'Journal d’audit', permissions: [{ key: 'audit.view', label: 'Consulter le journal' }] },
   {
     area: 'Administrateurs',

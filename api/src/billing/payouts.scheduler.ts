@@ -71,7 +71,7 @@ export class PayoutsScheduler {
     this.running = true;
 
     try {
-      const result = await this.payouts.runBatch();
+      const result = await this.payouts.runBatch({ trigger: 'schedule' });
       this.logger.log(`Weekly payout complete: ${JSON.stringify(result)}`);
     } catch (error) {
       // Never let this kill the cron — a thrown error here would stop every

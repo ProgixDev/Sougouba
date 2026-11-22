@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Redirect, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Redirect, ServiceUnavailableException, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiExcludeController, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 
@@ -7,10 +7,18 @@ import { AdminGuard } from '../auth/admin.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { SupabaseAuthGuard } from '../auth/supabase-auth.guard.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
+import { paginationSchema, type Pagination } from '../catalog/dto/query.dto.js';
 import { CouriersService } from '../courier/couriers.service.js';
+import { PaymentsService } from '../orders/payments.service.js';
 import { AnalyticsService } from './analytics.service.js';
 import { ConnectService } from './connect.service.js';
-import { PayoutsService } from './payouts.service.js';
+import {
+  payoutAttemptQuerySchema,
+  payoutOwedQuerySchema,
+  PayoutsService,
+  type PayoutAttemptQuery,
+  type PayoutOwedQuery,
+} from './payouts.service.js';
 
 const analyticsQuerySchema = z.object({
   days: z.coerce.number().int().min(1).max(90).default(7),
@@ -104,7 +112,37 @@ export class CourierBillingController {
 @UseGuards(SupabaseAuthGuard, AdminGuard)
 @Controller('admin/payouts')
 export class AdminPayoutsController {
-  constructor(private readonly payouts: PayoutsService) {}
+  constructor(
+    private readonly payouts: PayoutsService,
+    private readonly payments: PaymentsService
+  ) {}
+
+  /** Owed, paid over 30 days, failures, the last run. */
+  @RequirePermission('payouts.view')
+  @Get('insights')
+  insights() {
+    return this.payouts.insights();
+  }
+
+  /** Who is owed, one row per courier. */
+  @RequirePermission('payouts.view')
+  @Get('owed')
+  owed(@Query(new ZodValidationPipe(payoutOwedQuerySchema)) query: PayoutOwedQuery) {
+    return this.payouts.owed(query);
+  }
+
+  /** Every courier line of every run — the history, and the failures with `status=failed`. */
+  @RequirePermission('payouts.view')
+  @Get('attempts')
+  attempts(@Query(new ZodValidationPipe(payoutAttemptQuerySchema)) query: PayoutAttemptQuery) {
+    return this.payouts.attempts(query);
+  }
+
+  @RequirePermission('payouts.view')
+  @Get('runs')
+  runs(@Query(new ZodValidationPipe(paginationSchema)) query: Pagination) {
+    return this.payouts.runs(query);
+  }
 
   /**
    * Run the weekly batch by hand.
@@ -113,12 +151,15 @@ export class AdminPayoutsController {
    * failed halfway — one courier's transfer erroring after three succeeded —
    * needs a way to be finished without waiting a week. Safe to re-run: the
    * per-courier idempotency key makes a repeat within the same day a no-op at
-   * Stripe rather than a second payment.
+   * Stripe rather than a second payment. Written to the audit log.
    */
   @RequirePermission('payouts.run')
   @Post('run')
-  run() {
-    return this.payouts.runBatch();
+  run(@CurrentUser() actorId: string) {
+    if (!this.payments.isConfigured) {
+      throw new ServiceUnavailableException('Stripe n’est pas configuré sur ce serveur : aucun virement possible');
+    }
+    return this.payouts.runBatch({ trigger: 'admin', actorId });
   }
 }
 
