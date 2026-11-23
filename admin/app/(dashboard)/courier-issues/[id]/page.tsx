@@ -70,7 +70,7 @@ export default function CourierIssueDetailPage() {
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <Text as="h1" variant="display">
               Incident — {COURIER_ISSUE_REASON_LABELS[issue.reason]}
             </Text>

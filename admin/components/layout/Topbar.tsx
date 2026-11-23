@@ -62,7 +62,7 @@ function QueueBell({ counts }: { counts: SidebarCounts }) {
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-[calc(100%+8px)] z-30 w-72 overflow-hidden rounded-card border border-border bg-card shadow-floating">
+        <div className="absolute right-0 top-[calc(100%+8px)] z-30 w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-card border border-border bg-card shadow-floating">
           <div className="border-b border-border px-4 py-3">
             <p className="font-sans text-[0.875rem] font-semibold">En attente</p>
             <p className="font-sans text-[0.75rem] text-muted-foreground">
@@ -105,7 +105,7 @@ export function Topbar({
   const section = useSection(counts);
 
   return (
-    <header className="flex h-[76px] shrink-0 items-center gap-4 px-4 sm:px-5 md:px-8">
+    <header className="flex h-16 shrink-0 items-center gap-3 px-4 sm:h-[76px] sm:gap-4 sm:px-5 md:px-8">
       <button
         type="button"
         aria-label="Ouvrir la navigation"
@@ -123,7 +123,7 @@ export function Topbar({
         </p>
       )}
 
-      <div className="ml-auto flex items-center gap-2.5">
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-2.5 sm:ml-auto sm:flex-none">
         <GlobalSearch />
         <QueueBell counts={counts} />
       </div>

@@ -116,7 +116,7 @@ function Admins() {
         />
       </KpiGrid>
 
-      <div className="flex gap-1.5 self-start rounded-full border border-border bg-card p-1">
+      <div className="flex max-w-full gap-1.5 self-start overflow-x-auto rounded-full border border-border bg-card p-1 [scrollbar-width:none]">
         {[
           { key: 'members', label: `Membres${admins ? ` · ${admins.length}` : ''}`, icon: Users },
           { key: 'roles', label: `Rôles${roles ? ` · ${roles.length}` : ''}`, icon: ShieldCheck },
@@ -124,7 +124,7 @@ function Admins() {
           <button
             key={t.key}
             onClick={() => router.replace(`${pathname}?tab=${t.key}`)}
-            className={`flex cursor-pointer items-center gap-1.5 rounded-full px-4 py-1.5 font-sans text-[0.8125rem] font-semibold transition-colors ${
+            className={`flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-1.5 font-sans text-[0.8125rem] font-semibold transition-colors ${
               tab === t.key ? 'bg-forest-600 text-white' : 'text-muted-foreground hover:text-foreground'
             }`}
           >

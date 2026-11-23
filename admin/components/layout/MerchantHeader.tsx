@@ -18,7 +18,7 @@ export function MerchantHeader({ session }: { session: MerchantSession }) {
 
   return (
     <header className="border-b border-border bg-card">
-      <div className="mx-auto flex h-16 max-w-content items-center gap-6 px-4 sm:px-6 md:px-8">
+      <div className="mx-auto flex h-16 max-w-content items-center gap-3 px-4 sm:gap-6 sm:px-6 md:px-8">
         <div className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-terracotta-600 font-display text-[1.05rem] font-bold text-white">
             {session.vendorName.slice(0, 1)}

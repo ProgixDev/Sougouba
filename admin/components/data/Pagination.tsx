@@ -42,7 +42,7 @@ export function Pagination({
   const last = Math.min(total, page * pageSize);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 md:px-5">
       <div className="flex items-center gap-4">
         <span className="font-sans text-[0.8125rem] tabular text-muted-foreground">
           {first}–{last} sur {total.toLocaleString('fr-CA')}
@@ -70,9 +70,13 @@ export function Pagination({
           <button type="button" aria-label="Page précédente" disabled={page <= 1} onClick={() => onPage(page - 1)} className={cn(BUTTON, 'hover:bg-muted')}>
             <ChevronLeft size={16} />
           </button>
+          {/* A phone gets "3 / 12" rather than a row of numbers it has no room for. */}
+          <span className="px-2 font-sans text-[0.8125rem] tabular text-muted-foreground sm:hidden">
+            {page} / {pageCount}
+          </span>
           {pageItems(page, pageCount).map((item, i) =>
             item === 'gap' ? (
-              <span key={`gap-${i}`} className="px-1 font-sans text-[0.8125rem] text-muted-foreground">
+              <span key={`gap-${i}`} className="hidden px-1 font-sans text-[0.8125rem] text-muted-foreground sm:inline">
                 …
               </span>
             ) : (
@@ -81,7 +85,7 @@ export function Pagination({
                 type="button"
                 aria-current={item === page ? 'page' : undefined}
                 onClick={() => onPage(item)}
-                className={cn(BUTTON, item === page ? 'bg-forest-600 font-semibold text-white' : 'text-foreground hover:bg-muted')}
+                className={cn(BUTTON, 'hidden sm:inline-flex', item === page ? 'bg-forest-600 font-semibold text-white' : 'text-foreground hover:bg-muted')}
               >
                 {item}
               </button>

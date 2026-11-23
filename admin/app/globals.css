@@ -97,6 +97,18 @@ select:not([multiple]) {
   }
 }
 
+/*
+ * Phones: Safari zooms the whole page into any field set below 16px and does
+ * not zoom back out. The admin's compact 13px fields stay on larger screens.
+ */
+@media (max-width: 639px) {
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

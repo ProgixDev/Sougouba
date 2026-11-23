@@ -14,6 +14,12 @@ export interface Column<T> {
   sortValue?: (row: T) => string | number;
   render: (row: T) => ReactNode;
   className?: string;
+  /**
+   * On a phone the table becomes a list of cards: the first column is the
+   * card's title, every other column a "header — value" line. `hide` leaves a
+   * column out of the card (a detail the list does not need on a small screen).
+   */
+  mobile?: 'hide';
 }
 
 interface DataTableProps<T> {
@@ -87,9 +93,60 @@ export function DataTable<T>({
   if (rows.length === 0 && !(server && server.total > 0))
     return <EmptyState icon={emptyIcon} title={emptyTitle} description={emptyDescription} />;
 
+  const [titleCol, ...detailCols] = columns;
+  const sortable = columns.filter((c) => c.sortable);
+
   return (
     <div>
-      <div className="overflow-x-auto">
+      {/* Phones: one card per row. A table this wide only ever scrolled sideways there. */}
+      <div className="md:hidden">
+        {sortable.length > 0 && (
+          <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
+            <label className="flex flex-1 items-center gap-2 font-sans text-[0.8125rem] text-muted-foreground">
+              Trier par
+              <select
+                value={sort ? `${sort.key}:${sort.dir}` : ''}
+                onChange={(e) => {
+                  const [key, dir] = e.target.value.split(':');
+                  setSort(() => (key ? { key, dir: dir as 'asc' | 'desc' } : null));
+                }}
+                className="min-w-0 flex-1 cursor-pointer rounded-lg border border-border bg-card px-2 py-1.5 text-foreground outline-none"
+              >
+                <option value="">Par défaut</option>
+                {sortable.flatMap((c) => [
+                  <option key={`${c.key}:asc`} value={`${c.key}:asc`}>
+                    {c.header} (croissant)
+                  </option>,
+                  <option key={`${c.key}:desc`} value={`${c.key}:desc`}>
+                    {c.header} (décroissant)
+                  </option>,
+                ])}
+              </select>
+            </label>
+          </div>
+        )}
+        <ul>
+          {pageRows.map((row) => (
+            <li
+              key={keyField(row)}
+              onClick={() => onRowClick?.(row)}
+              className={cn('flex flex-col gap-2 border-b border-border px-4 py-3.5 last:border-0', onRowClick && 'cursor-pointer active:bg-muted')}
+            >
+              <div className="min-w-0 font-sans text-[0.875rem]">{titleCol.render(row)}</div>
+              {detailCols
+                .filter((c) => c.mobile !== 'hide')
+                .map((col) => (
+                  <div key={col.key} className="flex min-w-0 items-center justify-between gap-3 font-sans text-[0.8125rem]">
+                    {col.header && <span className="shrink-0 text-muted-foreground">{col.header}</span>}
+                    <div className={cn('min-w-0 text-right', !col.header && 'ml-auto')}>{col.render(row)}</div>
+                  </div>
+                ))}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[640px] border-collapse font-sans text-[0.8125rem]">
           <thead>
             <tr className="border-b border-border">
@@ -146,7 +203,7 @@ export function DataTable<T>({
       )}
 
       {!server && pageCount > 1 && (
-        <div className="flex items-center justify-between border-t border-border px-5 py-3">
+        <div className="flex items-center justify-between border-t border-border px-4 py-3 md:px-5">
           <span className="font-sans text-[0.75rem] text-muted-foreground">
             {sorted.length} résultats · page {clampedPage} sur {pageCount}
           </span>

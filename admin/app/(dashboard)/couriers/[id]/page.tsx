@@ -91,7 +91,7 @@ export default function CourierDetailPage() {
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <Text as="h1" variant="display">
               {courier.fullName}
             </Text>
@@ -102,7 +102,7 @@ export default function CourierDetailPage() {
           </Text>
         </div>
         {can('couriers.decide') && (
-        <div className="flex gap-2.5">
+        <div className="flex flex-wrap gap-2.5">
           {courier.status !== 'approved' && courier.status !== 'rejected' && (
             <Button variant="primary" onClick={handleApprove} disabled={busy}>
               <CheckCircle2 size={16} /> Approuver
@@ -191,7 +191,7 @@ export default function CourierDetailPage() {
 
 function Field({ label, value, icon: Icon }: { label: string; value: string; icon: typeof Phone }) {
   return (
-    <div className="flex gap-2.5">
+    <div className="flex flex-wrap gap-2.5">
       <Icon size={15} className="mt-0.5 shrink-0 text-muted-foreground" />
       <div>
         <Text variant="caption" tone="muted">

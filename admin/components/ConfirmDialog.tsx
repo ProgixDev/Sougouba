@@ -50,9 +50,10 @@ export function ConfirmDialog({
   const disabled = busy || (requireReason && reason.trim().length === 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby={id}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby={id}>
       <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
-      <div className="relative w-full max-w-md rounded-card bg-card p-6 shadow-floating">
+      {/* A bottom sheet on a phone, where the thumb is; a centred card above that. */}
+      <div className="relative max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-card bg-card p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-floating sm:rounded-card sm:p-6">
         <button
           type="button"
           aria-label="Fermer"
@@ -84,12 +85,13 @@ export function ConfirmDialog({
             />
           </div>
         )}
-        <div className="mt-6 flex justify-end gap-3">
-          <Button variant="ghost" onClick={onCancel} disabled={busy}>
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+          <Button variant="ghost" onClick={onCancel} disabled={busy} className="w-full sm:w-auto">
             Annuler
           </Button>
           <Button
             variant={tone === 'destructive' ? 'destructive' : 'primary'}
+            className="w-full sm:w-auto"
             onClick={() => onConfirm(requireReason ? reason.trim() : undefined)}
             disabled={disabled}
           >

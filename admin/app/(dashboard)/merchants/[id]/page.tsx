@@ -99,7 +99,7 @@ export default function MerchantDetailPage() {
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <Text as="h1" variant="display">
               {vendor.name}
             </Text>
@@ -113,7 +113,7 @@ export default function MerchantDetailPage() {
           </Text>
         </div>
         {can('vendors.decide') && (
-        <div className="flex gap-2.5">
+        <div className="flex flex-wrap gap-2.5">
           {vendor.status !== 'approved' && vendor.status !== 'rejected' && (
             <Button variant="primary" onClick={handleApprove} disabled={busy}>
               <CheckCircle2 size={16} /> Approuver
@@ -267,7 +267,7 @@ const DOCUMENT_LABELS: Record<'id' | 'business_number' | 'mapaq' | 'bank', strin
 
 function Field({ label, value, icon: Icon }: { label: string; value: string; icon: typeof FileText }) {
   return (
-    <div className="flex gap-2.5">
+    <div className="flex flex-wrap gap-2.5">
       <Icon size={15} className="mt-0.5 shrink-0 text-muted-foreground" />
       <div>
         <Text variant="caption" tone="muted">

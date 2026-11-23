@@ -49,12 +49,12 @@ export function PageHeader({
 }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
-      <div className="flex items-center gap-4">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-forest-500 to-forest-700 text-white shadow-card">
-          <Icon size={22} strokeWidth={2} />
+      <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-forest-500 to-forest-700 text-white shadow-card sm:h-12 sm:w-12 sm:rounded-2xl">
+          <Icon size={20} strokeWidth={2} />
         </div>
-        <div>
-          <Text as="h1" variant="display" className="leading-tight">
+        <div className="min-w-0">
+          <Text as="h1" variant="display" className="leading-tight [overflow-wrap:anywhere]">
             {title}
           </Text>
           <Text variant="body" tone="muted" className="mt-0.5">
@@ -62,14 +62,14 @@ export function PageHeader({
           </Text>
         </div>
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{actions}</div>}
     </div>
   );
 }
 
-/** A row of KPI cards — four on a wide screen, two on a tablet, one on a phone. */
+/** A row of KPI cards — four on a wide screen, two on a tablet or a phone. */
 export function KpiGrid({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">{children}</div>;
+  return <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">{children}</div>;
 }
 
 export function KpiCard({
@@ -89,18 +89,19 @@ export function KpiCard({
 }) {
   if (loading) return <Skeleton className="h-[132px] rounded-card" />;
   return (
-    <Card className="flex flex-col gap-2 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <Text variant="label" tone="muted">
+    <Card className="flex min-w-0 flex-col gap-2 p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-2 sm:gap-3">
+        <Text variant="label" tone="muted" className="min-w-0">
           {label}
         </Text>
-        <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', TONE_CLASSES[tone])}>
+        <div className={cn('hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:flex', TONE_CLASSES[tone])}>
           <Icon size={17} strokeWidth={2} />
         </div>
       </div>
-      <Text as="p" variant="display" className="tabular leading-none">
+      {/* Two to a row on a phone: a long amount wraps rather than overflowing its card. */}
+      <p className="font-display text-[1.375rem] font-extrabold leading-none tracking-[-0.02em] tabular [overflow-wrap:anywhere] sm:text-[clamp(1.75rem,3vw,2.25rem)]">
         {value}
-      </Text>
+      </p>
       {hint && (
         <Text variant="caption" tone="muted">
           {hint}

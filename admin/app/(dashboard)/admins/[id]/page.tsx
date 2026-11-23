@@ -203,7 +203,7 @@ function Timeline({ title, entries, empty }: { title: string; entries: AuditEntr
 
 function Field({ icon: Icon, label, value }: { icon: typeof Mail; label: string; value: string }) {
   return (
-    <div className="flex gap-2.5">
+    <div className="flex flex-wrap gap-2.5">
       <Icon size={15} className="mt-0.5 shrink-0 text-muted-foreground" />
       <div>
         <Text variant="caption" tone="muted">
