@@ -326,6 +326,22 @@ export default function OrderDetailScreen() {
                   <Text variant="caption" tone="muted">
                     {order.deliveryAddress.city}, {order.deliveryAddress.postalCode}
                   </Text>
+                  {order.deliveryInstructions ? (
+                    <Text variant="caption" tone="muted" className="mt-1.5 text-[12px] leading-[17px]">
+                      {[
+                        order.deliveryInstructions.dropoff === 'door'
+                          ? t('common.deliveryInstructions.leaveAtDoor')
+                          : t('common.deliveryInstructions.handToCustomer'),
+                        order.deliveryInstructions.unit,
+                        order.deliveryInstructions.doorCode
+                          ? `${t('common.deliveryInstructions.doorCodeLabel')} ${order.deliveryInstructions.doorCode}`
+                          : null,
+                        order.deliveryInstructions.notes,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
             </Section>

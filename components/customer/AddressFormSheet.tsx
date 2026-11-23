@@ -1,16 +1,19 @@
 import { Check } from 'lucide-react-native';
 import { MotiView } from 'moti';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, CitySelect, Input, Text } from '@/components/ui';
 import { cityForPostalCode } from '@/data/cities';
+import type { DeliveryDetails } from '@/data/api/addresses';
 import type { Address } from '@/data/types';
 import { useT } from '@/lib/i18n/useT';
 import { i18nResolver } from '@/lib/validation/resolver';
 import { type AddressInput, type AddressValues, addressSchema } from '@/lib/validation/profile';
+
+import { DeliveryInstructionsForm, instructionsFrom } from './DeliveryInstructionsForm';
 
 /**
  * The bottom-sheet chrome both address sheets share: a dimmed backdrop that
@@ -67,7 +70,7 @@ export interface AddressFormProps {
   initial?: Partial<AddressInput>;
   saving: boolean;
   onCancel: () => void;
-  onSave: (values: AddressValues, existing: Address | null) => void;
+  onSave: (values: AddressValues & DeliveryDetails, existing: Address | null) => void;
 }
 
 /**
@@ -99,6 +102,8 @@ export function AddressForm({ address, initial, saving, onCancel, onSave }: Addr
       postalCode: address?.postalCode ?? initial?.postalCode ?? '',
     },
   });
+  // Outside the validated form: every field is optional, and the API bounds them.
+  const [details, setDetails] = useState(() => instructionsFrom(address));
 
   return (
     <>
@@ -169,6 +174,13 @@ export function AddressForm({ address, initial, saving, onCancel, onSave }: Addr
             <CitySelect value={value} onChange={onChange} error={errors.city?.message} />
           )}
         />
+
+        <View className="gap-3 pt-2">
+          <Text variant="label" tone="muted">
+            {t('common.deliveryInstructions.title')}
+          </Text>
+          <DeliveryInstructionsForm value={details} onChange={setDetails} />
+        </View>
       </ScrollView>
 
       <View className="px-5 pt-4 gap-2" style={{ paddingBottom: insets.bottom + 12 }}>
@@ -179,7 +191,7 @@ export function AddressForm({ address, initial, saving, onCancel, onSave }: Addr
           fullWidth
           loading={saving}
           icon={<Check size={18} color="#fff" strokeWidth={2.4} />}
-          onPress={handleSubmit((values) => onSave(values, address))}
+          onPress={handleSubmit((values) => onSave({ ...values, ...details }, address))}
         />
         <Button label={t('common.cancel')} variant="ghost" size="lg" fullWidth onPress={onCancel} />
       </View>

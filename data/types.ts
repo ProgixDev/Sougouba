@@ -63,6 +63,25 @@ export interface Address {
   lat: number;
   lng: number;
   isDefault: boolean;
+  /** How to reach the door, reused on every order to this address. */
+  unit?: string | null;
+  doorCode?: string | null;
+  deliveryNotes?: string | null;
+  dropoff?: DropoffOption;
+}
+
+/** `hand`: given to the shopper in person. `door`: left at the door, proved with a photo. */
+export type DropoffOption = 'hand' | 'door';
+
+/**
+ * How to reach the door, copied onto the order at checkout. `doorCode` is only
+ * sent to the shopper and to the courier carrying the run — never the shop.
+ */
+export interface DeliveryInstructions {
+  unit: string | null;
+  doorCode?: string | null;
+  notes: string | null;
+  dropoff: DropoffOption;
 }
 
 export interface VendorHours {
@@ -317,6 +336,8 @@ export interface Order {
   couponDiscountCad?: number | null;
   totalCad: number;
   deliveryAddress: Address;
+  /** Absent on an order read from before the field existed. */
+  deliveryInstructions?: DeliveryInstructions;
   createdAt: string;
   statusHistory: OrderStatusEvent[];
   /** Absent unless the shopper reported a problem. */

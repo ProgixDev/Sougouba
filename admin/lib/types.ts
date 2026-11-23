@@ -174,6 +174,8 @@ export interface AdminOrderDetail {
   };
   refund: { refundedAt: string; refundAmountCad: number | null; stripeRefundId: string | null; refundReason: string | null } | null;
   deliveryAddress: { label: string; street: string; city: string; postalCode: string; lat: number; lng: number };
+  /** Copied from the address at checkout; absent from an API older than migration 0050. */
+  deliveryInstructions?: { unit: string | null; doorCode: string | null; notes: string | null; dropoff: 'hand' | 'door' };
   statusHistory: { status: OrderStatus; at: string }[];
   delivery: {
     courier: { id: ID; fullName: string; phone: string; vehicle: VehicleType } | null;

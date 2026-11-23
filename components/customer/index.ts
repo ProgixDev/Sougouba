@@ -21,3 +21,4 @@ export { SearchField } from './SearchField';
 export { VendorCard } from './VendorCard';
 export { VerticalCard } from './VerticalCard';
 export { VendorSwitchDialog } from './VendorSwitchDialog';
+export { DeliveryInstructionsForm, EMPTY_INSTRUCTIONS, instructionsFrom, type DeliveryInstructionsValue } from './DeliveryInstructionsForm';

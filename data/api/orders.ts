@@ -4,6 +4,7 @@ import { fetch } from 'expo/fetch';
 import type { DeliveryOffer } from '../../lib/dispatch';
 import { useSessionStore } from '../../store/useSessionStore';
 import { api, ApiError, type Page } from '../http';
+import type { DeliveryDetails } from './addresses';
 import type {
   Address,
   Courier,
@@ -134,7 +135,13 @@ export async function createPaymentIntent(cart: Cart): Promise<{
 }
 
 /** Step 3, after Stripe confirms: the order is written, or refused if the price moved. */
-export async function placeOrder(cart: Cart & { paymentIntentId: string }): Promise<Order> {
+export async function placeOrder(
+  cart: Cart & {
+    paymentIntentId: string;
+    /** As confirmed at checkout; the API copies it onto the order and remembers it on the address. */
+    delivery?: DeliveryDetails;
+  }
+): Promise<Order> {
   return api<Order>('/orders', { method: 'POST', body: cart });
 }
 

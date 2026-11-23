@@ -1,10 +1,11 @@
 import { useFocusEffect, router } from 'expo-router';
 import { useStripe } from '@stripe/stripe-react-native';
 import { ChevronRight, Lock, MapPin, Sparkles, Store, Tag } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DeliveryInstructionsForm, instructionsFrom, type DeliveryInstructionsValue } from '@/components/customer';
 import { BackHeader, Button, Input, PriceSummary, Text } from '@/components/ui';
 import { useT } from '@/lib/i18n/useT';
 import { useThemeColors } from '@/hooks/useColorScheme';
@@ -46,6 +47,16 @@ export default function CheckoutScreen() {
   // because it prices the delivery from the geocoded point it stored. An account
   // with none is sent to add one rather than paying for a delivery to nowhere.
   const address = user?.addresses.find((a) => a.isDefault) ?? user?.addresses[0] ?? null;
+
+  // Door code, apartment, note and hand-over, prefilled from the address and
+  // re-read when the shopper switches address. Sent with the order, which the
+  // API copies and remembers on the address for next time.
+  const [instructions, setInstructions] = useState<DeliveryInstructionsValue>(() => instructionsFrom(address));
+  useEffect(() => {
+    setInstructions(instructionsFrom(address));
+    // Keyed on the id: re-prefilling on every render would wipe what is being typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address?.id]);
 
   // Points Sougouba. `redeemablePoints` is a preview only — the same 20 % cap
   // (`maxRedeemablePoints`) is recomputed and enforced for real inside
@@ -160,8 +171,26 @@ export default function CheckoutScreen() {
       }
 
       // 3. Paid: the order is written. If that fails the API refunds in full.
-      const order = await ordersApi.placeOrder({ ...cart, paymentIntentId });
+      const order = await ordersApi.placeOrder({ ...cart, paymentIntentId, delivery: instructions });
       clearCart();
+      // The API saved these on the address; keep the session's copy in step so
+      // the next checkout prefills them without a reload.
+      const saved = useSessionStore.getState().user;
+      if (saved) {
+        useSessionStore.getState().updateUser({
+          addresses: saved.addresses.map((a) =>
+            a.id === address.id
+              ? {
+                  ...a,
+                  unit: instructions.unit.trim() || null,
+                  doorCode: instructions.doorCode.trim() || null,
+                  deliveryNotes: instructions.deliveryNotes.trim() || null,
+                  dropoff: instructions.dropoff,
+                }
+              : a
+          ),
+        });
+      }
       // `replace`, not `push`: backing into a checkout for an order that has
       // already been placed would let it be submitted twice.
       router.replace({ pathname: dynamicRoutes.orderConfirmed, params: { id: order.id } });
@@ -209,6 +238,12 @@ export default function CheckoutScreen() {
               </View>
             </View>
           </Section>
+
+          {address ? (
+            <Section title={t('common.deliveryInstructions.title')}>
+              <DeliveryInstructionsForm value={instructions} onChange={setInstructions} />
+            </Section>
+          ) : null}
 
           {vendor ? (
             <Section title={t('customer.checkout.shop')}>

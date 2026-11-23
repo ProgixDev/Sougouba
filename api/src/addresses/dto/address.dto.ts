@@ -2,6 +2,29 @@ import { z } from 'zod';
 
 import { citySchema, postalCodeSchema, refinePostalCodeCity } from '../../geo/address-validation.js';
 
+/**
+ * How to reach the door — kept on the address, copied onto each order. An
+ * empty string clears a field (null in the table); the bounds are the
+ * columns' check constraints (`drizzle/0050_delivery_instructions.sql`).
+ */
+const optionalText = (max: number, message: string) =>
+  z
+    .string()
+    .trim()
+    .max(max, message)
+    .transform((v) => (v === '' ? null : v))
+    .nullable()
+    .optional();
+
+export const deliveryDetailsSchema = z.object({
+  unit: optionalText(60, 'Appartement ou étage : 60 caractères au plus'),
+  doorCode: optionalText(30, 'Code de porte : 30 caractères au plus'),
+  deliveryNotes: optionalText(300, 'Instructions : 300 caractères au plus'),
+  dropoff: z.enum(['hand', 'door'], { message: 'Choix de remise invalide' }).optional(),
+});
+
+export type DeliveryDetailsInput = z.infer<typeof deliveryDetailsSchema>;
+
 /** Direct port of `addressSchema` in the mobile repo's `lib/validation/profile.ts`. */
 export const createAddressSchema = z
   .object({
@@ -10,6 +33,7 @@ export const createAddressSchema = z
     city: citySchema,
     postalCode: postalCodeSchema,
   })
+  .extend(deliveryDetailsSchema.shape)
   .superRefine(refinePostalCodeCity);
 
 export type CreateAddressInput = z.infer<typeof createAddressSchema>;
@@ -28,6 +52,7 @@ export const updateAddressSchema = z
     postalCode: postalCodeSchema.optional(),
     isDefault: z.boolean().optional(),
   })
+  .extend(deliveryDetailsSchema.shape)
   .superRefine((values, ctx) => {
     if (values.city !== undefined && values.postalCode !== undefined) {
       refinePostalCodeCity({ city: values.city, postalCode: values.postalCode }, ctx);

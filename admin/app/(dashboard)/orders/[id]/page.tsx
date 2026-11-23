@@ -109,6 +109,32 @@ export default function OrderDetailPage() {
                 {order.deliveryAddress.street}, {order.deliveryAddress.city}
               </Text>
             </div>
+            {order.deliveryInstructions && (
+              <dl className="mt-3 flex flex-col gap-1.5 border-t border-border pt-3 font-sans text-[0.8125rem]">
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Remise</dt>
+                  <dd className="font-semibold">{order.deliveryInstructions.dropoff === 'door' ? 'Laisser à la porte' : 'En main propre'}</dd>
+                </div>
+                {order.deliveryInstructions.unit && (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Appartement</dt>
+                    <dd className="text-right">{order.deliveryInstructions.unit}</dd>
+                  </div>
+                )}
+                {order.deliveryInstructions.doorCode && (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Code de porte</dt>
+                    <dd className="font-semibold tabular">{order.deliveryInstructions.doorCode}</dd>
+                  </div>
+                )}
+                {order.deliveryInstructions.notes && (
+                  <div className="flex flex-col gap-0.5">
+                    <dt className="text-muted-foreground">Instructions</dt>
+                    <dd className="whitespace-pre-wrap">{order.deliveryInstructions.notes}</dd>
+                  </div>
+                )}
+              </dl>
+            )}
           </Card>
 
           <Card className="p-5">

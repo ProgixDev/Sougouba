@@ -88,7 +88,8 @@ export class DeliveryService {
     // The one exception: a courier carrying their *own* order — a demonstration
     // run (`DemoRunService`) — is the shopper too, and the shopper reads the code.
     const ownOrder = row.customer_id === courier.user_id;
-    const [order] = await hydrateOrders(this.db, [row], { revealPin: ownOrder, courierCard: false });
+    // The door code, unlike the PIN: getting into the building is the courier's job.
+    const [order] = await hydrateOrders(this.db, [row], { revealPin: ownOrder, courierCard: false, revealDoorCode: true });
     return order;
   }
 

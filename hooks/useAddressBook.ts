@@ -5,6 +5,7 @@ import { addressesApi } from '@/data/api';
 import { ApiError } from '@/data/http';
 import type { Address } from '@/data/types';
 import { useT } from '@/lib/i18n/useT';
+import type { DeliveryDetails } from '@/data/api/addresses';
 import type { AddressValues } from '@/lib/validation/profile';
 import { useSessionStore } from '@/store/useSessionStore';
 
@@ -41,7 +42,7 @@ export function useAddressBook() {
    * shopper just said they are, so it becomes the one distances and checkout use.
    */
   async function save(
-    values: AddressValues,
+    values: AddressValues & DeliveryDetails,
     existing: Address | null,
     { asDefault = false }: { asDefault?: boolean } = {}
   ): Promise<boolean> {

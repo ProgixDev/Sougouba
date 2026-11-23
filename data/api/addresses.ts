@@ -13,7 +13,15 @@ import type { Address, ID } from '../types';
  * anything that is not a saved address's UUID. An address that only ever lived
  * on the phone could not be ordered to.
  */
-export type AddressInput = Pick<Address, 'label' | 'street' | 'city' | 'postalCode'>;
+export type AddressInput = Pick<Address, 'label' | 'street' | 'city' | 'postalCode'> & DeliveryDetails;
+
+/** Door code, apartment, note and handover. An empty string clears a field. */
+export type DeliveryDetails = {
+  unit?: string;
+  doorCode?: string;
+  deliveryNotes?: string;
+  dropoff?: Address['dropoff'];
+};
 
 export async function list(): Promise<Address[]> {
   return api<Address[]>('/me/addresses');

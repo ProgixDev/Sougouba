@@ -20,6 +20,8 @@ export interface ProofCaptureProps {
    * it, or it would prove nothing.
    */
   onSubmit: (proof: Omit<DeliveryProof, 'at'>) => Promise<string | void>;
+  /** Which tab opens first — `photo` for an order left at the door. */
+  initialMethod?: ProofMethod;
   busy?: boolean;
 }
 
@@ -45,11 +47,11 @@ const METHODS: { key: ProofMethod; label: string; icon: typeof Camera }[] = [
  * only the shopper is shown. A photo or a signature is stored as an image the
  * back office can open if the delivery is disputed.
  */
-export function ProofCapture({ onSubmit, busy = false }: ProofCaptureProps) {
+export function ProofCapture({ onSubmit, busy = false, initialMethod = 'pin' }: ProofCaptureProps) {
   const t = useT();
   const colors = useThemeColors();
   const imagePicker = useImagePicker();
-  const [method, setMethod] = useState<ProofMethod>('pin');
+  const [method, setMethod] = useState<ProofMethod>(initialMethod);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
   const [photo, setPhoto] = useState<{ uri: string; mimeType: string } | null>(null);

@@ -1,5 +1,5 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { MapPin, MessageSquare, Navigation, Store, TriangleAlert } from 'lucide-react-native';
+import { DoorOpen, Hand, KeyRound, MapPin, MessageSquare, Navigation, NotebookPen, Store, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { DeliveryMap } from '@/components/map';
 import { BackHeader, Button, EmptyState, Skeleton, Text } from '@/components/ui';
 import { couriersApi, ordersApi, vendorsApi } from '@/data/api';
-import type { Courier, Order, Vendor } from '@/data/types';
+import type { Courier, DeliveryInstructions, Order, Vendor } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useDeliveryProgress } from '@/hooks/useDeliveryProgress';
 import { useOrderChatUnread } from '@/hooks/useOrderChatUnread';
@@ -172,6 +172,8 @@ export default function CourierDeliveryScreen() {
                   )
                 }
               />
+
+              {order.deliveryInstructions ? <InstructionsCard instructions={order.deliveryInstructions} /> : null}
 
               <View className="rounded-[20px] bg-card p-4 gap-3">
                 <Text variant="label" tone="muted" className="text-[10px]">
@@ -339,6 +341,66 @@ function Stop({
           <Navigation size={16} color={tint} strokeWidth={2.2} />
         </Pressable>
       ) : null}
+    </View>
+  );
+}
+
+/**
+ * How to get to the door, as the shopper wrote it at checkout. The hand-over
+ * mode leads, in colour: leaving an order at a door is the one instruction a
+ * courier must not miss, because it changes how the run is closed.
+ */
+function InstructionsCard({ instructions }: { instructions: DeliveryInstructions }) {
+  const t = useT();
+  const colors = useThemeColors();
+  const atDoor = instructions.dropoff === 'door';
+  const rows = [
+    { icon: MapPin, label: t('common.deliveryInstructions.unitLabel'), value: instructions.unit },
+    { icon: KeyRound, label: t('common.deliveryInstructions.doorCodeLabel'), value: instructions.doorCode, strong: true },
+    { icon: NotebookPen, label: t('common.deliveryInstructions.notes'), value: instructions.notes },
+  ].filter((r) => r.value);
+
+  return (
+    <View className="rounded-[20px] bg-card p-4 gap-3">
+      <Text variant="label" tone="muted" className="text-[10px]">
+        {t('common.deliveryInstructions.title')}
+      </Text>
+      <View
+        className={`flex-row items-center gap-2.5 self-start rounded-full px-3.5 py-2 ${atDoor ? 'bg-secondary/15' : 'bg-primary/10'}`}
+      >
+        {atDoor ? (
+          <DoorOpen size={16} color={colors.secondary} strokeWidth={2.2} />
+        ) : (
+          <Hand size={16} color={colors.primary} strokeWidth={2.2} />
+        )}
+        <Text variant="caption" weight="bold" tone={atDoor ? 'secondary' : 'primary'} className="text-[13px]">
+          {atDoor ? t('common.deliveryInstructions.leaveAtDoor') : t('common.deliveryInstructions.handToCustomer')}
+        </Text>
+      </View>
+      {rows.length === 0 ? (
+        <Text variant="caption" tone="muted" className="text-[13px]">
+          {t('common.deliveryInstructions.none')}
+        </Text>
+      ) : (
+        rows.map((row) => (
+          <View key={row.label} className="flex-row items-start gap-3">
+            <row.icon size={15} color={colors.mutedForeground} strokeWidth={2} style={{ marginTop: 2 }} />
+            <View className="flex-1 gap-0.5">
+              <Text variant="caption" tone="muted" className="text-[11px]">
+                {row.label}
+              </Text>
+              <Text
+                variant="caption"
+                weight={row.strong ? 'bold' : 'semibold'}
+                className={row.strong ? 'text-[17px] tracking-[2px]' : 'text-[14px] leading-[20px]'}
+                selectable
+              >
+                {row.value}
+              </Text>
+            </View>
+          </View>
+        ))
+      )}
     </View>
   );
 }

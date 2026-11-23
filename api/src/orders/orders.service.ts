@@ -78,7 +78,7 @@ export class OrdersService {
     const address = await unwrap<AddressRow | null>(
       this.db
         .from('addresses')
-        .select('label, street, city, postalCode:postal_code, lat, lng')
+        .select('label, street, city, postalCode:postal_code, lat, lng, unit, doorCode:door_code, deliveryNotes:delivery_notes, dropoff')
         .eq('id', cart.addressId)
         .eq('profile_id', customerId)
         .maybeSingle()
@@ -262,6 +262,13 @@ export class OrdersService {
     // Pricing deliberately stays out of SQL — `priceOrder` remains the single
     // authority on what an order is worth and hands the result in, so the tax
     // and delivery formulas have no second copy to drift from.
+    const delivery = {
+      unit: input.delivery?.unit !== undefined ? input.delivery.unit : address.unit,
+      doorCode: input.delivery?.doorCode !== undefined ? input.delivery.doorCode : address.doorCode,
+      deliveryNotes: input.delivery?.deliveryNotes !== undefined ? input.delivery.deliveryNotes : address.deliveryNotes,
+      dropoff: input.delivery?.dropoff ?? address.dropoff,
+    };
+
     const orderId = await unwrapRpc<string>(
       this.db.rpc('order_place', {
         p_customer_id: customerId,
@@ -286,6 +293,12 @@ export class OrdersService {
         p_addr_postal_code: address.postalCode,
         p_addr_lat: address.lat,
         p_addr_lng: address.lng,
+        // How to reach the door: what the shopper confirmed at checkout, the
+        // saved address's details for anything they did not touch.
+        p_delivery_unit: (delivery.unit ?? null) as string,
+        p_delivery_door_code: (delivery.doorCode ?? null) as string,
+        p_delivery_notes: (delivery.deliveryNotes ?? null) as string,
+        p_delivery_dropoff: delivery.dropoff,
         // Name and price snapshot: the catalogue is mutable, an order is not.
         p_items: priced.items.map((line) => ({
           productId: line.productId,
@@ -317,8 +330,28 @@ export class OrdersService {
     const [order] = await Promise.all([
       this.byId(customerId, orderId, 'customer'),
       this.notify.orderPlaced(orderId),
+      this.rememberDelivery(customerId, input),
     ]);
     return order;
+  }
+
+  /**
+   * What the shopper confirmed at checkout becomes the address's default for
+   * next time — the door code does not change between orders. Best effort:
+   * the order is already placed, and a failure here costs only the prefill.
+   */
+  private async rememberDelivery(customerId: string, input: PlaceOrderInput): Promise<void> {
+    const d = input.delivery;
+    if (!d) return;
+    const columns = {
+      ...(d.unit !== undefined && { unit: d.unit }),
+      ...(d.doorCode !== undefined && { door_code: d.doorCode }),
+      ...(d.deliveryNotes !== undefined && { delivery_notes: d.deliveryNotes }),
+      ...(d.dropoff !== undefined && { dropoff: d.dropoff }),
+    };
+    if (Object.keys(columns).length === 0) return;
+    const { error } = await this.db.from('addresses').update(columns).eq('id', input.addressId).eq('profile_id', customerId);
+    if (error) this.logger.warn(`Delivery details not saved on address ${input.addressId}: ${error.message}`);
   }
 
   // ── reads ─────────────────────────────────────────────────────────────────
@@ -622,7 +655,18 @@ function unexpectedDbError(error: PostgrestError): Error {
 }
 
 type VendorRow = { id: string; name: string; status: string; lat: number; lng: number };
-type AddressRow = { label: string; street: string; city: string; postalCode: string; lat: number; lng: number };
+type AddressRow = {
+  label: string;
+  street: string;
+  city: string;
+  postalCode: string;
+  lat: number;
+  lng: number;
+  unit: string | null;
+  doorCode: string | null;
+  deliveryNotes: string | null;
+  dropoff: 'hand' | 'door';
+};
 type ProductRow = {
   id: string;
   vendorId: string;

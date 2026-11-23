@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { deliveryDetailsSchema } from '../../addresses/dto/address.dto.js';
 import { paginationSchema } from '../../catalog/dto/query.dto.js';
 import { ORDER_STATUSES } from '../order-status.js';
 
@@ -50,6 +51,11 @@ export type CartInput = z.infer<typeof cartSchema>;
  */
 export const placeOrderSchema = cartSchema.extend({
   paymentIntentId: z.string().trim().min(1, 'Paiement requis'),
+  /**
+   * Door code, apartment, note and handover as confirmed at checkout. Omitted
+   * fields fall back to the saved address's; an empty string clears one.
+   */
+  delivery: deliveryDetailsSchema.optional(),
 });
 
 export type PlaceOrderInput = z.infer<typeof placeOrderSchema>;

@@ -132,6 +132,9 @@ export default function CourierProofScreen() {
           ) : null}
 
           <ProofCapture
+            // Left at the door: nobody is there to read out the code, so the
+            // photo is the proof — the other methods stay one tap away.
+            initialMethod={order.deliveryInstructions?.dropoff === 'door' ? 'photo' : 'pin'}
             onSubmit={complete}
             busy={busy}
           />

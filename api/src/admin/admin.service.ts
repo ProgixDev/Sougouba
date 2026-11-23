@@ -611,6 +611,15 @@ export class AdminService {
         lng: row.deliveryAddressLng,
       },
 
+      // The back office sees all of it, door code included: it is what a
+      // courier stuck outside a building calls support about.
+      deliveryInstructions: {
+        unit: row.deliveryUnit ?? null,
+        doorCode: row.deliveryDoorCode ?? null,
+        notes: row.deliveryNotes ?? null,
+        dropoff: row.deliveryDropoff ?? 'hand',
+      },
+
       statusHistory: (row.statusHistory ?? []).map((h: any) => ({ status: h.status, at: h.at })),
 
       delivery: delivery

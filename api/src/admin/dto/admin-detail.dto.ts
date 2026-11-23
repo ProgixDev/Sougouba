@@ -113,6 +113,14 @@ export interface AdminOrderDetail {
     lng: number;
   };
 
+  /** Copied from the address at checkout (`drizzle/0050_delivery_instructions.sql`). */
+  deliveryInstructions: {
+    unit: string | null;
+    doorCode: string | null;
+    notes: string | null;
+    dropoff: 'hand' | 'door';
+  };
+
   statusHistory: { status: string; at: Date }[];
 
   delivery: {

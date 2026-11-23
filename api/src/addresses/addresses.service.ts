@@ -5,7 +5,7 @@ import { camelize } from '../db/case.js';
 import { DB } from '../db/db.module.js';
 import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import { GeoService } from '../geo/geo.service.js';
-import type { CreateAddressInput, UpdateAddressInput } from './dto/address.dto.js';
+import type { CreateAddressInput, DeliveryDetailsInput, UpdateAddressInput } from './dto/address.dto.js';
 
 /** The camelCase shape this service has always returned, now derived from the generated row type. */
 type Address = {
@@ -19,7 +19,21 @@ type Address = {
   lng: number;
   isDefault: boolean;
   createdAt: string;
+  unit: string | null;
+  doorCode: string | null;
+  deliveryNotes: string | null;
+  dropoff: 'hand' | 'door';
 };
+
+/** The delivery details in a create or patch body, as columns — only the keys the client sent. */
+function detailColumns(input: DeliveryDetailsInput) {
+  const columns: Partial<Pick<Tables<'addresses'>, 'unit' | 'door_code' | 'delivery_notes' | 'dropoff'>> = {};
+  if (input.unit !== undefined) columns.unit = input.unit;
+  if (input.doorCode !== undefined) columns.door_code = input.doorCode;
+  if (input.deliveryNotes !== undefined) columns.delivery_notes = input.deliveryNotes;
+  if (input.dropoff !== undefined) columns.dropoff = input.dropoff;
+  return columns;
+}
 
 @Injectable()
 export class AddressesService {
@@ -62,6 +76,7 @@ export class AddressesService {
           lat,
           lng,
           is_default: isDefault,
+          ...detailColumns(input),
         })
         .select('*')
         .single()
@@ -71,6 +86,15 @@ export class AddressesService {
 
   async update(profileId: string, id: string, patch: UpdateAddressInput): Promise<Address> {
     const current = await this.findOwned(profileId, id);
+
+    // The delivery details are a plain update: `address_update` reads NULL as
+    // "not provided", which would make a door code impossible to erase.
+    const details = detailColumns(patch);
+    const coreChanged = (['label', 'street', 'city', 'postalCode', 'isDefault'] as const).some((k) => patch[k] !== undefined);
+    if (Object.keys(details).length > 0) {
+      await unwrap(this.db.from('addresses').update(details).eq('id', id).eq('profile_id', profileId));
+    }
+    if (!coreChanged) return this.findOwned(profileId, id);
 
     const nextCity = patch.city ?? current.city;
     const nextPostalCode = patch.postalCode ?? current.postalCode;

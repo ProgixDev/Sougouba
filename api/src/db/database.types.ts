@@ -18,6 +18,9 @@ export type Database = {
         Row: {
           city: string
           created_at: string
+          delivery_notes: string | null
+          door_code: string | null
+          dropoff: string
           id: string
           is_default: boolean
           label: string
@@ -26,10 +29,14 @@ export type Database = {
           postal_code: string
           profile_id: string
           street: string
+          unit: string | null
         }
         Insert: {
           city: string
           created_at?: string
+          delivery_notes?: string | null
+          door_code?: string | null
+          dropoff?: string
           id?: string
           is_default?: boolean
           label: string
@@ -38,10 +45,14 @@ export type Database = {
           postal_code: string
           profile_id: string
           street: string
+          unit?: string | null
         }
         Update: {
           city?: string
           created_at?: string
+          delivery_notes?: string | null
+          door_code?: string | null
+          dropoff?: string
           id?: string
           is_default?: boolean
           label?: string
@@ -50,6 +61,7 @@ export type Database = {
           postal_code?: string
           profile_id?: string
           street?: string
+          unit?: string | null
         }
         Relationships: [
           {
@@ -1079,7 +1091,11 @@ export type Database = {
           delivery_address_lng: number
           delivery_address_postal_code: string
           delivery_address_street: string
+          delivery_door_code: string | null
+          delivery_dropoff: string
           delivery_fee_cad: number
+          delivery_notes: string | null
+          delivery_unit: string | null
           gst_cad: number
           id: string
           points_discount_cad: number | null
@@ -1107,7 +1123,11 @@ export type Database = {
           delivery_address_lng: number
           delivery_address_postal_code: string
           delivery_address_street: string
+          delivery_door_code?: string | null
+          delivery_dropoff?: string
           delivery_fee_cad: number
+          delivery_notes?: string | null
+          delivery_unit?: string | null
           gst_cad: number
           id?: string
           points_discount_cad?: number | null
@@ -1135,7 +1155,11 @@ export type Database = {
           delivery_address_lng?: number
           delivery_address_postal_code?: string
           delivery_address_street?: string
+          delivery_door_code?: string | null
+          delivery_dropoff?: string
           delivery_fee_cad?: number
+          delivery_notes?: string | null
+          delivery_unit?: string | null
           gst_cad?: number
           id?: string
           points_discount_cad?: number | null
@@ -1949,6 +1973,9 @@ export type Database = {
         Returns: {
           city: string
           created_at: string
+          delivery_notes: string | null
+          door_code: string | null
+          dropoff: string
           id: string
           is_default: boolean
           label: string
@@ -1957,6 +1984,7 @@ export type Database = {
           postal_code: string
           profile_id: string
           street: string
+          unit: string | null
         }
         SetofOptions: {
           from: "*"
@@ -2418,7 +2446,11 @@ export type Database = {
           p_coupon_discount_cad?: number
           p_customer_id: string
           p_customer_name: string
+          p_delivery_door_code?: string
+          p_delivery_dropoff?: string
           p_delivery_fee_cad: number
+          p_delivery_notes?: string
+          p_delivery_unit?: string
           p_gst_cad: number
           p_items: Json
           p_payment_intent_id?: string

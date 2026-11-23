@@ -92,7 +92,18 @@ type Parts = {
 export async function hydrateOrders(
   db: Db,
   rawRows: Record<string, unknown>[],
-  opts: { revealPin: boolean; courierCard: boolean; review?: ReviewAudience }
+  opts: {
+    revealPin: boolean;
+    courierCard: boolean;
+    review?: ReviewAudience;
+    /**
+     * The building's door code. Defaults to `revealPin`: the shopper typed it.
+     * The courier carrying the run gets it too (`DeliveryService.run`); the
+     * shop never does — it has no reason to know how to get into someone's
+     * building.
+     */
+    revealDoorCode?: boolean;
+  }
 ): Promise<OrderView[]> {
   if (rawRows.length === 0) return [];
   const rows = camelize<(Record<string, unknown> & { id: string })[]>(rawRows);
@@ -193,11 +204,21 @@ export async function hydrateOrders(
   // PostgREST never hands back a Date.
   for (const p of parts.values()) p.statusHistory.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 
-  return rows.map((row) => {
+  const revealDoorCode = opts.revealDoorCode ?? opts.revealPin;
+
+  return rows.map((rawRow) => {
+    // Out of the flat spread below, or the shop would read it off the row.
+    const { deliveryDoorCode, ...row } = rawRow;
     const p = parts.get(row.id)!;
     const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
     return {
       ...row,
+      deliveryInstructions: {
+        unit: row.deliveryUnit ?? null,
+        notes: row.deliveryNotes ?? null,
+        dropoff: row.deliveryDropoff ?? 'hand',
+        ...(revealDoorCode ? { doorCode: deliveryDoorCode ?? null } : {}),
+      },
       subtotalCad: Number(row.subtotalCad),
       gstCad: Number(row.gstCad),
       qstCad: Number(row.qstCad),

@@ -124,6 +124,26 @@ export const common = {
     confirmAction: 'Supprimer',
     failedTitle: 'Suppression impossible',
   },
+  /** How to reach the door: checkout, the address form, the courier's run and the order. */
+  deliveryInstructions: {
+    title: 'Instructions de livraison',
+    hand: 'En main propre',
+    door: 'Laisser à la porte',
+    handHint: 'Le livreur vous remet la commande et vous lui donnez le code de livraison.',
+    doorHint: 'Le livreur dépose la commande devant votre porte et la prend en photo.',
+    unit: 'Appartement, étage',
+    unitPlaceholder: 'Ex. App. 4, 2e étage',
+    doorCode: 'Code de la porte',
+    doorCodePlaceholder: 'Ex. 4821#',
+    notes: 'Instructions pour le livreur',
+    notesPlaceholder: 'Ex. Sonnez à l’interphone, porte de côté…',
+    remembered: 'Enregistré pour vos prochaines commandes à cette adresse.',
+    leaveAtDoor: 'À laisser à la porte',
+    handToCustomer: 'À remettre en main propre',
+    doorCodeLabel: 'Code de porte',
+    unitLabel: 'Appartement',
+    none: 'Aucune instruction',
+  },
   /** The chat between a shopper and the courier carrying their order. Same screen on both sides. */
   orderChat: {
     title: 'Messages',
