@@ -34,17 +34,11 @@ Sougouba is a multi-vendor local delivery marketplace with three roles in one mo
 - **OTA updates** via EAS Update (`npm run update:prod`, iOS only for now).
 - **TestFlight** build 1.0.0 (6) was submitted 2026-10-16; later builds/OTAs went out after that.
 
-### Test-phase shortcuts that are ON in production — must be removed before real users
-| Flag (Vercel env) | What it does | Risk |
-|---|---|---|
-| `ALLOW_FIXED_TEST_OTP=1` | Code `000000` signs in as **any** account, including the admin | 🔴 Critical |
-| `ALLOW_DEMO_SELF_APPROVAL=1` | Couriers/merchants approve their own application; merchants can adopt a seeded demo shop | 🔴 High |
-| `ALLOW_DEMO_RUNS` (check) | Couriers can create fake 0 $ delivery runs | 🟠 Medium |
-
-`000000` exists only because **no SMTP provider is configured** — set `SMTP_HOST/PORT/USER/PASS` + `MAIL_FROM` and then unset the flags.
+### Test-phase shortcuts — removed from the code
+`ALLOW_FIXED_TEST_OTP`, `ALLOW_DEMO_SELF_APPROVAL` and `ALLOW_DEMO_RUNS` no longer exist, nor do the demo routes (`/couriers/me/demo-approve`, `/couriers/me/demo-run`, `/vendors/me/demo-approve`, `/vendors/me/demo-adopt`) and the app buttons that called them. In production the API **refuses to boot without SMTP**; the fixed code `000000` only exists in local development when `SMTP_HOST` is empty. Delete the three variables from the host's environment.
 
 ### Not finished
-- **SMTP / real emails** — not configured (codes are logged to the API console).
+- **Email**: Resend SMTP (`smtp.resend.com`, domain `sougouba.ca` verified). From Render use `SMTP_PORT=2587` — sends on 587 hung for 60 s+.
 - **Coupons**: the checkout field works, but **nothing can create a coupon** (no admin endpoint/UI; rows only via SQL). Coupon rules in `CouponsService` are assumptions not yet confirmed by the client.
 - **Merchant portal** (`admin/` → `/merchant`) still runs on the localStorage mock (`admin/lib/api/storage.ts`, `merchantOrders.ts`), and its login is a demo login.
 - **Stripe Connect payouts**: accounts are created on Accounts v2 and onboarding works; the full chain (paid order → 12 % application fee → weekly courier transfer → refund) has not been walked end-to-end in Stripe.
@@ -144,8 +138,7 @@ After the transfer, check:
 
 ## 7. Before going live — checklist
 
-- [ ] Configure SMTP, then **unset `ALLOW_FIXED_TEST_OTP`, `ALLOW_DEMO_SELF_APPROVAL`, `ALLOW_DEMO_RUNS`** in Vercel
-- [ ] Remove/disable demo buttons ("Simuler l'approbation", "Ouvrir une boutique de démonstration", "Simuler une course") — they 404 when the flags are off
+- [x] Test-phase switches and demo buttons removed from the code — delete the leftover env vars on the host
 - [ ] Stripe: switch to live keys, live webhook + new `whsec_`, finish Connect live verification
 - [ ] Apple Pay merchant ID (and Google Pay if wanted)
 - [ ] Coupon creation in the admin + confirm coupon rules with the client

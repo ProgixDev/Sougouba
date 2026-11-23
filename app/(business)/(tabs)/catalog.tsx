@@ -122,7 +122,7 @@ export default function BusinessCatalogScreen() {
   // A shop that is filed but not cleared is as unusable as no shop at all,
   // and for the merchant it is a different sentence — see `PendingApproval`.
   if (missing || pending) {
-    return <PendingApproval state={missing ? 'missing' : 'pending'} onApproved={reload} />;
+    return <PendingApproval state={missing ? 'missing' : 'pending'} />;
   }
 
   return (

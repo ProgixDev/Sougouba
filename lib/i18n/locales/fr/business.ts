@@ -197,14 +197,6 @@ export const business = {
   },
   pending: {
     body: 'La validation prend généralement un jour ouvrable. Vous serez averti dès que votre boutique est en ligne.',
-    demoLabel: 'Démonstration',
-    approve: 'Simuler l’approbation',
-    approveBody:
-      'Met votre boutique en ligne, comme le ferait un administrateur. Elle démarre sans catalogue ni historique.',
-    openDemo: 'Ouvrir une boutique de démonstration',
-    openDemoBody:
-      'Rattache ce compte à une boutique déjà garnie, avec son catalogue et son historique de commandes.',
-    demoDisabled: 'Les raccourcis de démonstration sont désactivés sur ce serveur. Un administrateur doit valider votre boutique.',
   },
   productForm: {
     name: 'Nom du produit',

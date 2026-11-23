@@ -212,24 +212,6 @@ export async function uploadShopCover(image: PickedImage, contentType: MediaImag
   return uploadMediaImage('/vendors/me/media-upload', image, contentType);
 }
 
-// ── test phase ──────────────────────────────────────────────────────────────
-
-/**
- * Test phase only: the merchant approves their own pending shop. The API
- * answers 404 unless `ALLOW_DEMO_SELF_APPROVAL` is set on the deploy.
- */
-export async function demoApproveMine(): Promise<void> {
-  await api('/vendors/me/demo-approve', { method: 'POST', body: {} });
-}
-
-/**
- * Test phase only: attach this account to a seeded shop — catalogue, hours and
- * order history included. Same flag, same 404 when it is off.
- */
-export async function adoptDemoShop(): Promise<{ id: ID; name: string }> {
-  return api('/vendors/me/demo-adopt', { method: 'POST', body: {} });
-}
-
 export interface VendorPageFilters {
   type?: VendorType;
   halal?: boolean;

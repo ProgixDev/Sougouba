@@ -31,7 +31,7 @@ const RANGES = [7, 30] as const;
 export default function BusinessAnalyticsScreen() {
   const t = useT();
   const tabBarInset = useTabBarInset();
-  const { vendor, loading: vendorLoading, missing, pending, reload } = useOwnerVendor();
+  const { vendor, loading: vendorLoading, missing, pending } = useOwnerVendor();
   const plan = usePlatformPlan();
   const { width } = useWindowDimensions();
   const colors = useThemeColors();
@@ -97,7 +97,7 @@ export default function BusinessAnalyticsScreen() {
   // A shop that is filed but not cleared is as unusable as no shop at all,
   // and for the merchant it is a different sentence — see `PendingApproval`.
   if (missing || pending) {
-    return <PendingApproval state={missing ? 'missing' : 'pending'} onApproved={reload} />;
+    return <PendingApproval state={missing ? 'missing' : 'pending'} />;
   }
 
   return (

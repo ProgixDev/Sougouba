@@ -112,14 +112,6 @@ export async function submitApplication(input: CourierApplication): Promise<Cour
   }));
 }
 
-/**
- * Test phase only: the courier clears their own pending file. The API answers
- * 404 unless `ALLOW_DEMO_SELF_APPROVAL` is set on the deploy — the real
- * decision is `POST /admin/couriers/:id/approve`, in the back office.
- */
-export async function demoApproveMine(): Promise<Courier> {
-  return toCourier(await api<Courier>('/couriers/me/demo-approve', { method: 'POST' }));
-}
 
 /**
  * ⚠️ **Removed.** This wrote a fabricated delivery count and rating onto a
@@ -238,11 +230,3 @@ export async function startPayoutOnboarding(): Promise<string> {
 
 // ── test phase ──────────────────────────────────────────────────────────────
 
-/**
- * Test phase only: a demonstration run — a real `ready` order at the nearest
- * shop, offered to this courier straight away. The API answers 404 unless
- * `ALLOW_DEMO_RUNS` is set on the deploy.
- */
-export async function startDemoRun(): Promise<{ orderId: ID; offerId: ID }> {
-  return api('/couriers/me/demo-run', { method: 'POST', body: {} });
-}

@@ -91,18 +91,10 @@ export class SignupService {
       }
     }
 
-    // While mail is simulated the code is always 000000, so anyone testing can
-    // get in without reading the server console. The moment SMTP is configured
-    // codes are random again, and the two cannot drift apart because both read
-    // the same `mail.simulated`.
-    //
-    // ⚠️ This used to be safe by construction: simulated mail could not exist
-    // in production, because `MailService` refused to boot there without SMTP.
-    // `ALLOW_FIXED_TEST_OTP` is now a deliberate exception for the test-phase
-    // deploy, which means **a production deploy carrying that flag accepts six
-    // zeros as the password to every account** — merchant and administrator
-    // included. The flag is what must be audited before delivery; this line is
-    // no longer a guarantee of anything.
+    // While mail is simulated (local development — production refuses to boot
+    // without SMTP) the code is always 000000, so anyone testing can get in
+    // without reading the server console. Both read the same `mail.simulated`,
+    // so a deploy that mails codes can never accept six zeros.
     const code = this.mail.simulated ? SIMULATED_CODE : randomInt(0, 1_000_000).toString().padStart(6, '0');
     await unwrapVoid(
       this.db.from('email_verification_codes').upsert({

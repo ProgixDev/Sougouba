@@ -88,50 +88,6 @@ const envSchema = z.object({
   OPENAI_MODEL: z.string().optional(),
 
   /**
-   * Accept the fixed code `000000` for every sign-in, and send no email.
-   *
-   * The test-phase switch for a deploy with no mail provider: testers get into
-   * any account with 000000 instead of waiting for a code that cannot arrive.
-   * Without it, `MailService` refuses to boot in production rather than let
-   * sign-up codes vanish into a server log.
-   *
-   * ⚠️ **This is an authentication bypass.** Anyone who knows an address — a
-   * tester, a merchant, an administrator — can sign in as them with six zeros.
-   * It must be unset before the app is delivered or handed to anyone outside
-   * the test group, and it is a separate variable from `NODE_ENV` precisely so
-   * that turning it off is one deliberate deletion rather than a side effect of
-   * some other setting. The API logs a warning naming it on every boot.
-   */
-  ALLOW_FIXED_TEST_OTP: z.string().optional(),
-
-  /**
-   * Test phase only: lets a pending courier approve their own file with
-   * `POST /couriers/me/demo-approve`, so the "Simuler l'approbation" button on
-   * the courier gate opens the driver screens without a trip to the back office.
-   *
-   * ⚠️ **This skips the human review the CDC puts in front of every courier.**
-   * Unset, the route answers 404 as if it did not exist. Unset it with
-   * `ALLOW_FIXED_TEST_OTP`, before delivery. The API logs an error naming it on
-   * every boot while it is on.
-   *
-   * It also gates the merchant's two shortcuts (`POST /vendors/me/demo-approve`
-   * and `/vendors/me/demo-adopt`, see `VendorDemoService`).
-   */
-  ALLOW_DEMO_SELF_APPROVAL: z.string().optional(),
-
-  /**
-   * Test phase only: lets an approved courier ask for a demonstration run with
-   * `POST /couriers/me/demo-run` — a real `ready` order at the nearest shop,
-   * offered straight to them, so the driver flow can be tried without a
-   * shopper and a merchant. Unset, the route answers 404.
-   *
-   * ⚠️ The run is real to the rest of the system: it lands in the shop's order
-   * list (at 0 $) and its fare counts toward the courier's payout. Unset it
-   * before delivery, with the two flags above.
-   */
-  ALLOW_DEMO_RUNS: z.string().optional(),
-
-  /**
    * Outgoing mail (sign-up codes), sent with Nodemailer.
    *
    * Optional, and empty is a deliberate state: with no `SMTP_HOST` the

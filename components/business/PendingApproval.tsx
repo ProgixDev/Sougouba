@@ -5,7 +5,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
-import { useDemoShopApproval } from '@/hooks/useDemoShopApproval';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { MERCHANT_SIGNUP_STEPS } from '@/lib/merchantOnboarding';
 import { useT } from '@/lib/i18n/useT';
@@ -14,8 +13,6 @@ import { routes } from '@/lib/routes';
 export interface PendingApprovalProps {
   /** `missing` has never filed anything; `pending` is waiting on a human. */
   state: 'missing' | 'pending';
-  /** Re-read the shop after the demo approval, so the tabs leave this screen. */
-  onApproved?: () => Promise<void> | void;
 }
 
 /**
@@ -34,11 +31,10 @@ export interface PendingApprovalProps {
  * Rendered by all five business tabs rather than each writing its own version —
  * they are all the same account in the same state.
  */
-export function PendingApproval({ state, onApproved }: PendingApprovalProps) {
+export function PendingApproval({ state }: PendingApprovalProps) {
   const t = useT();
   const colors = useThemeColors();
   const tabBarInset = useTabBarInset();
-  const { approve, approving, adoptDemoShop, adopting, error } = useDemoShopApproval(onApproved);
 
   const applied = state === 'pending';
 
@@ -111,54 +107,6 @@ export function PendingApproval({ state, onApproved }: PendingApprovalProps) {
             onPress={() => router.push(routes.businessSignup)}
           />
         )}
-
-        {/* Says what it is. Without the back-office there is no other way to
-            reach the merchant screens from an account created in the app, and a
-            demo that cannot show them is worse than one honest button. */}
-        <View className="gap-2 pt-2 border-t border-border">
-          <Text variant="label" tone="muted" className="text-[10px]">
-            {t('business.pending.demoLabel')}
-          </Text>
-          {applied ? (
-            <>
-              <Button
-                label={t('business.pending.approve')}
-                variant="outline"
-                size="md"
-                fullWidth
-                loading={approving}
-                onPress={approve}
-              />
-              <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
-                {t('business.pending.approveBody')}
-              </Text>
-            </>
-          ) : (
-            <>
-              {/* The shop a merchant files is empty by definition, so the
-                  dashboard, the analytics and the order queue have nothing to
-                  draw. This borrows a seeded shop so those screens can be shown
-                  without filling a form first — a different thing from approving
-                  a real application, and labelled as such. */}
-              <Button
-                label={t('business.pending.openDemo')}
-                variant="outline"
-                size="md"
-                fullWidth
-                loading={adopting}
-                onPress={adoptDemoShop}
-              />
-              <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
-                {t('business.pending.openDemoBody')}
-              </Text>
-            </>
-          )}
-          {error ? (
-            <Text variant="caption" tone="destructive" className="text-[12px] leading-[18px]">
-              {error}
-            </Text>
-          ) : null}
-        </View>
       </ScrollView>
     </SafeAreaView>
   );

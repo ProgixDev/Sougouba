@@ -29,7 +29,7 @@ export default function BusinessDashboardScreen() {
   const t = useT();
   const tabBarInset = useTabBarInset();
   const colors = useThemeColors();
-  const { vendor, loading: vendorLoading, missing, pending, reload } = useOwnerVendor();
+  const { vendor, loading: vendorLoading, missing, pending } = useOwnerVendor();
   const plan = usePlatformPlan();
 
   // Two weeks of orders: this week and the one before, for the comparison.
@@ -121,7 +121,7 @@ export default function BusinessDashboardScreen() {
   // A shop that is filed but not cleared is as unusable as no shop at all,
   // and for the merchant it is a different sentence — see `PendingApproval`.
   if (missing || pending) {
-    return <PendingApproval state={missing ? 'missing' : 'pending'} onApproved={reload} />;
+    return <PendingApproval state={missing ? 'missing' : 'pending'} />;
   }
 
   return (

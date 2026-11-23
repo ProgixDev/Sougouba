@@ -5,7 +5,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Text } from '@/components/ui';
 import { useThemeColors } from '@/hooks/useColorScheme';
-import { useDemoCourierApproval } from '@/hooks/useDemoCourierApproval';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { COURIER_SIGNUP_STEPS } from '@/lib/courierOnboarding';
 import { useT } from '@/lib/i18n/useT';
@@ -14,8 +13,6 @@ import { routes } from '@/lib/routes';
 export interface CourierGateProps {
   /** `missing` has never filled the form; `pending` is waiting on a human. */
   state: 'missing' | 'pending';
-  /** Re-read the file after the demo approval, so the tabs leave this screen. */
-  onApproved?: () => Promise<void> | void;
 }
 
 /**
@@ -30,11 +27,10 @@ export interface CourierGateProps {
  * Rendered by all four courier tabs rather than each writing its own version:
  * they are the same account in the same state.
  */
-export function CourierGate({ state, onApproved }: CourierGateProps) {
+export function CourierGate({ state }: CourierGateProps) {
   const t = useT();
   const colors = useThemeColors();
   const tabBarInset = useTabBarInset();
-  const { approve, approving, error } = useDemoCourierApproval(onApproved);
 
   const applied = state === 'pending';
 
@@ -107,33 +103,6 @@ export function CourierGate({ state, onApproved }: CourierGateProps) {
             onPress={() => router.push(routes.courierSignup)}
           />
         )}
-
-        {/* Says what it is. Without the back-office there is no other way to
-            reach the courier screens from an account created in the app, and a
-            demo that cannot show them is worse than one honest button. */}
-        {applied ? (
-          <View className="gap-2 pt-2 border-t border-border">
-            <Text variant="label" tone="muted" className="text-[10px]">
-              {t('courier.gate.demoLabel')}
-            </Text>
-            <Button
-              label={t('courier.gate.approve')}
-              variant="outline"
-              size="md"
-              fullWidth
-              loading={approving}
-              onPress={approve}
-            />
-            <Text variant="caption" tone="muted" className="text-[12px] leading-[18px]">
-              {t('courier.gate.approveBody')}
-            </Text>
-            {error ? (
-              <Text variant="caption" tone="destructive" className="text-[12px] leading-[18px]">
-                {error}
-              </Text>
-            ) : null}
-          </View>
-        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

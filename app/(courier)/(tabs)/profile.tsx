@@ -85,7 +85,7 @@ export default function CourierProfileScreen() {
 
   if (loading) return null;
   if (missing || pending) {
-    return <CourierGate state={missing ? 'missing' : 'pending'} onApproved={reload} />;
+    return <CourierGate state={missing ? 'missing' : 'pending'} />;
   }
   if (!courier) return null;
 

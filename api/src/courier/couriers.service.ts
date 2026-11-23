@@ -3,13 +3,10 @@ import {
   Inject,
   Injectable,
   InternalServerErrorException,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type { PostgrestError } from '@supabase/supabase-js';
 
-import type { Env } from '../config/env.js';
 
 import type { Db } from '../db/client.js';
 import { camelize, snakeize } from '../db/case.js';
@@ -31,30 +28,12 @@ function isUniqueViolation(error: PostgrestError | null, constraint: string): bo
   return `${error.message} ${error.details ?? ''}`.includes(constraint);
 }
 
-/** Same reading as `config/runtime.ts`: '0', 'false' and empty all mean off. */
-function truthy(value: string | undefined): boolean {
-  if (value === undefined) return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized !== '' && normalized !== '0' && normalized !== 'false';
-}
-
 @Injectable()
 export class CouriersService {
-  private readonly logger = new Logger(CouriersService.name);
-  private readonly demoSelfApproval: boolean;
-
   constructor(
     @Inject(DB) private readonly db: Db,
-    private readonly geo: GeoService,
-    config: ConfigService<Env, true>
-  ) {
-    this.demoSelfApproval = truthy(config.get('ALLOW_DEMO_SELF_APPROVAL', { infer: true }));
-    if (this.demoSelfApproval) {
-      this.logger.error(
-        'ALLOW_DEMO_SELF_APPROVAL is set: any pending courier can approve their own file. Unset it before delivery.'
-      );
-    }
-  }
+    private readonly geo: GeoService
+  ) {}
 
   /**
    * A courier registers.
@@ -106,29 +85,6 @@ export class CouriersService {
       }
     );
 
-    return this.byId(courierId);
-  }
-
-  /**
-   * Test phase only: a pending courier clears their own file, so the gate's
-   * "Simuler l'approbation" button can open the driver screens.
-   *
-   * Off unless `ALLOW_DEMO_SELF_APPROVAL` is set, and then a 404 — the route
-   * should look absent, not forbidden. Only `pending` moves: a rejected or
-   * suspended file stays where an administrator put it. No audit row and no
-   * push, because no administrator decided anything.
-   */
-  async demoApprove(userId: string) {
-    if (!this.demoSelfApproval) throw new NotFoundException();
-    const courierId = await this.courierIdFor(userId);
-    await unwrap(
-      this.db
-        .from('couriers')
-        .update({ status: 'approved', status_reason: null, reviewed_at: new Date().toISOString() })
-        .eq('id', courierId)
-        .eq('status', 'pending')
-    );
-    this.logger.warn(`Courier ${courierId} approved their own file (ALLOW_DEMO_SELF_APPROVAL)`);
     return this.byId(courierId);
   }
 

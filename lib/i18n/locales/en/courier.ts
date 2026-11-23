@@ -70,11 +70,6 @@ export const courier: Widen<typeof reference> = {
     note: 'Your report goes to Sougouba. The run stays open — you still have the order.',
   },
   gate: {
-    approve: 'Simulate approval',
-    approveBody: 'Approves your file, as an administrator would.',
-    approveFailed: 'Approval failed. Please try again.',
-    approveDisabled: 'Demo approval is turned off on this server. An administrator must approve your file.',
-    demoLabel: 'Demonstration',
     pendingBody:
       'Review usually takes one business day. You will get a notification as soon as your file is approved.',
   },
@@ -150,9 +145,6 @@ export const courier: Widen<typeof reference> = {
     offline: 'You are offline',
     waitingBody: 'We will offer you the next order ready near you.',
     offlineBody: 'Go online to start receiving run offers.',
-    simulate: 'Simulate a run',
-    simulateHint: 'A real test order at the nearest shop, offered to you alone.',
-    simulateDisabled: 'Run simulation is turned off on this server.',
     demoCode: 'Demonstration run — customer code: %{code}',
   },
   gateCopy: {

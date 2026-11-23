@@ -40,7 +40,6 @@ import {
 import { mediaImageUploadSchema, type MediaImageUploadInput } from './media-paths.js';
 import { ProductsService } from './products.service.js';
 import { VendorsService } from './vendors.service.js';
-import { VendorDemoService } from './vendor-demo.service.js';
 
 /**
  * A merchant managing their own shop. Every route is scoped to the vendor owned
@@ -55,21 +54,8 @@ import { VendorDemoService } from './vendor-demo.service.js';
 export class VendorMeController {
   constructor(
     private readonly vendors: VendorsService,
-    private readonly products: ProductsService,
-    private readonly demo: VendorDemoService
+    private readonly products: ProductsService
   ) {}
-
-  /** Test phase only — the merchant approves their own pending shop. A 404 unless `ALLOW_DEMO_SELF_APPROVAL` is set. */
-  @Post('me/demo-approve')
-  demoApprove(@CurrentUser() userId: string) {
-    return this.demo.approve(userId);
-  }
-
-  /** Test phase only — take over a seeded shop, catalogue and history included. Same flag. */
-  @Post('me/demo-adopt')
-  demoAdopt(@CurrentUser() userId: string) {
-    return this.demo.adopt(userId);
-  }
 
   /** Registration. Declared before `me` is irrelevant (different verb), but kept first as the lifecycle's start. */
   @Post('apply')

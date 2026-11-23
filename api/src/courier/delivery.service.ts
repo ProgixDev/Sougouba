@@ -85,8 +85,8 @@ export class DeliveryService {
       unwrap<Record<string, unknown>>(this.db.from('orders').select('*').eq('id', orderId).single()),
       unwrap<{ user_id: string }>(this.db.from('couriers').select('user_id').eq('id', courierId).single()),
     ]);
-    // The one exception: a courier carrying their *own* order — a demonstration
-    // run (`DemoRunService`) — is the shopper too, and the shopper reads the code.
+    // The one exception: a courier carrying their *own* order is the shopper
+    // too, and the shopper reads the code.
     const ownOrder = row.customer_id === courier.user_id;
     // The door code, unlike the PIN: getting into the building is the courier's job.
     const [order] = await hydrateOrders(this.db, [row], { revealPin: ownOrder, courierCard: false, revealDoorCode: true });

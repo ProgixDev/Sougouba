@@ -69,11 +69,6 @@ export const courier = {
     note: 'Votre signalement est transmis à Sougouba. La course reste ouverte — vous avez toujours la commande.',
   },
   gate: {
-    approve: 'Simuler l’approbation',
-    approveBody: 'Approuve votre dossier, comme le ferait un administrateur.',
-    approveFailed: 'L’approbation a échoué. Veuillez réessayer.',
-    approveDisabled: 'L’approbation de démonstration est désactivée sur ce serveur. Un administrateur doit approuver votre dossier.',
-    demoLabel: 'Démonstration',
     pendingBody:
       'La validation prend généralement un jour ouvrable. Vous recevrez une notification dès que votre dossier est approuvé.',
   },
@@ -151,9 +146,6 @@ export const courier = {
     offline: 'Vous êtes hors ligne',
     waitingBody: 'Nous vous proposons la prochaine commande prête près de vous.',
     offlineBody: 'Passez en ligne pour recevoir des propositions de course.',
-    simulate: 'Simuler une course',
-    simulateHint: 'Une vraie commande de test, à la boutique la plus proche, proposée à vous seul.',
-    simulateDisabled: 'La simulation de course est désactivée sur ce serveur.',
     demoCode: 'Course de démonstration — code du client : %{code}',
   },
   gateCopy: {
