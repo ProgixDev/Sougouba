@@ -89,7 +89,14 @@ const normalise = (email: string) => email.trim().toLowerCase();
  */
 export async function startEmail(email: string): Promise<void> {
   try {
-    await api('/auth/email/start', { method: 'POST', anonymous: true, body: { email: normalise(email) } });
+    // The API replies only once the mail is handed to SMTP, which can take
+    // well over the default timeout — and giving up early still sends a code.
+    await api('/auth/email/start', {
+      method: 'POST',
+      anonymous: true,
+      body: { email: normalise(email) },
+      timeoutMs: 45_000,
+    });
   } catch (error) {
     if (error instanceof ApiError && error.status === 429) throw new AuthError('code_cooldown');
     throw error;

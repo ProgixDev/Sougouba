@@ -50,10 +50,12 @@ type Options = {
   /** Skip the Authorization header for a genuinely public read, saving a session lookup. */
   anonymous?: boolean;
   query?: Record<string, string | number | boolean | undefined | null>;
+  /** Override `TIMEOUT_MS` for a call whose server side is known to be slow (e.g. one that sends mail). */
+  timeoutMs?: number;
 };
 
 export async function api<T>(path: string, options: Options = {}): Promise<T> {
-  const { method = 'GET', body, anonymous = false, query } = options;
+  const { method = 'GET', body, anonymous = false, query, timeoutMs = TIMEOUT_MS } = options;
 
   const url = new URL(`${BASE_URL}${path}`);
   if (query) {
@@ -75,7 +77,7 @@ export async function api<T>(path: string, options: Options = {}): Promise<T> {
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   let response: Response;
   try {
@@ -88,7 +90,9 @@ export async function api<T>(path: string, options: Options = {}): Promise<T> {
   } catch (error) {
     // Aborts and DNS/offline failures land here alike, and read alike to a
     // user: the request did not happen.
-    const aborted = error instanceof Error && error.name === 'AbortError';
+    // Read the signal, not the error: expo/fetch rejects an abort with
+    // FetchRequestCanceledException, not a DOMException named `AbortError`.
+    const aborted = controller.signal.aborted;
     throw new ApiError(
       0,
       aborted
