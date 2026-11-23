@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -95,12 +96,51 @@ export function isActivePath(href: string, pathname: string): boolean {
 
 const COLLAPSED_KEY = 'sougouba-admin-sidebar-collapsed';
 
-/** The label beside an icon when the column is collapsed. */
+/**
+ * The label beside an icon when the column is collapsed.
+ *
+ * Fixed to the viewport and portalled to `body` rather than hung off the
+ * column: the nav has to scroll when the window is short, and a scrolling
+ * container clips anything that pokes out of it.
+ */
 function Tip({ label, show }: { label: string; show: boolean }) {
+  const marker = useRef<HTMLSpanElement>(null);
+  const [at, setAt] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    const host = marker.current?.parentElement;
+    if (!show || !host) return;
+    const enter = () => {
+      const r = host.getBoundingClientRect();
+      setAt({ top: r.top + r.height / 2, left: r.right + 14 });
+    };
+    const leave = () => setAt(null);
+    host.addEventListener('mouseenter', enter);
+    host.addEventListener('mouseleave', leave);
+    host.addEventListener('focusin', enter);
+    host.addEventListener('focusout', leave);
+    return () => {
+      host.removeEventListener('mouseenter', enter);
+      host.removeEventListener('mouseleave', leave);
+      host.removeEventListener('focusin', enter);
+      host.removeEventListener('focusout', leave);
+      setAt(null);
+    };
+  }, [show]);
+
   if (!show) return null;
   return (
-    <span className="pointer-events-none absolute left-[calc(100%+14px)] top-1/2 z-50 -translate-y-1/2 whitespace-nowrap rounded-xl bg-[#1F2D27] px-3.5 py-2 font-sans text-[0.8125rem] font-semibold text-white opacity-0 shadow-floating transition-opacity group-hover:opacity-100">
-      {label}
+    <span ref={marker} hidden>
+      {at &&
+        createPortal(
+          <span
+            style={{ top: at.top, left: at.left }}
+            className="pointer-events-none fixed z-50 -translate-y-1/2 whitespace-nowrap rounded-xl bg-[#1F2D27] px-3.5 py-2 font-sans text-[0.8125rem] font-semibold text-white shadow-floating"
+          >
+            {label}
+          </span>,
+          document.body
+        )}
     </span>
   );
 }
@@ -184,8 +224,9 @@ function NavList({
     .filter((g) => g.items.length > 0);
 
   return (
-    // Collapsed, the hover labels hang outside the column, so nothing may clip them.
-    <nav className={cn('flex flex-1 flex-col gap-3 px-4 py-2', collapsed ? 'overflow-visible' : 'overflow-y-auto [scrollbar-width:none]')}>
+    // Scrolls in both states so a short window never pushes the footer out of
+    // the panel; the collapsed hover labels are portalled, so nothing clips them.
+    <nav className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-2 [scrollbar-width:none]">
       {groups.map((group) => (
         <ul
           key={group.title}
