@@ -169,7 +169,7 @@ export const threeApps = {
 
 export const merchant = {
   eyebrow: 'Devenir partenaire',
-  title: 'Vendez à tout le Grand Montréal',
+  title: 'Vendez partout dans le Grand Montréal',
   body: "Catalogue, commandes, ventes et versements, dans un seul tableau de bord. Vous êtes payé automatiquement par Stripe Connect.",
   terms: [
     { value: '12 %', label: 'de commission sur chaque vente' },
@@ -194,11 +194,6 @@ export const courier = {
   eyebrow: 'Devenir livreur',
   title: 'Livrez pour les commerces de votre quartier',
   body: "Vous choisissez quand vous êtes en ligne. Une offre à la fois, trente secondes pour décider.",
-  pay: [
-    { value: '3,50 $', label: 'de prise en charge par course' },
-    { value: '0,90 $', label: 'par kilomètre jusqu’au client' },
-    { value: '100 %', label: 'des pourboires — Sougouba ne prélève rien dessus' },
-  ],
   payNote: 'Vélo, moto ou voiture.',
   steps: [
     { title: 'Vous et votre véhicule', body: "Vos coordonnées, votre ville et le moyen avec lequel vous livrez — vélo, moto ou voiture." },
@@ -217,7 +212,6 @@ export const courier = {
 export const receipt = {
   eyebrow: 'La note',
   title: 'Ligne par ligne',
-  body: "Les taxes s'appliquent aux produits seulement, jamais aux frais de livraison.",
   lines: [
     { label: 'Ras el hanout', sub: 'Épicerie Atlas', amount: 5.5 },
     { label: 'Banane plantain', sub: 'Épicerie Atlas', amount: 3.25 },
@@ -230,8 +224,6 @@ export const receipt = {
   qstLabel: `Taxe provinciale (TVQ${NNBSP}9,975${NNBSP}%)`,
   deliveryLabel: 'Livraison (3,4 km)',
   totalLabel: 'Total',
-  footnote:
-    "Les frais de livraison dépendent de la distance : 2,99 $ jusqu'à 2 km, 3,99 $ jusqu'à 5 km, et 8,99 $ au-delà de 12 km. Ils sont fixés par Sougouba, pas par le commerce.",
 };
 
 export const finalCta = {

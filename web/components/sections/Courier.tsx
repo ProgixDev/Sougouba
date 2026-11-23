@@ -31,17 +31,6 @@ export function Courier() {
               {courier.body}
             </p>
 
-            <ul className="mt-9 space-y-4">
-              {courier.pay.map((p) => (
-                <li key={p.value} className="flex items-baseline gap-4">
-                  <span className="tabular w-[5.5ch] shrink-0 text-right font-display text-[1.5rem] font-extrabold leading-none opsz-32 text-mustard-300">
-                    {p.value}
-                  </span>
-                  <span className="font-sans text-[0.9375rem] text-neutral-300">{p.label}</span>
-                </li>
-              ))}
-            </ul>
-
             <p className="mt-7 flex items-center gap-3 font-sans text-[0.875rem] text-neutral-300">
               <Bike size={16} strokeWidth={2} className="text-mustard-300" aria-hidden />
               <Car size={16} strokeWidth={2} className="text-mustard-300" aria-hidden />

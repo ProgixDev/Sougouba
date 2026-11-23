@@ -32,12 +32,6 @@ export function Receipt() {
         <Reveal>
           <Text variant="label" tone="muted" as="p">{receipt.eyebrow}</Text>
           <Text variant="title" as="h2" className="mt-3 max-w-[12ch]">{receipt.title}</Text>
-          <p className="mt-5 max-w-[42ch] font-sans text-[1.0625rem] leading-[1.65] text-muted-foreground">
-            {receipt.body}
-          </p>
-          <p className="mt-6 max-w-[46ch] font-sans text-[0.8125rem] leading-relaxed text-muted-foreground">
-            {receipt.footnote}
-          </p>
         </Reveal>
 
         <Reveal index={1}>
