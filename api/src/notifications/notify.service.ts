@@ -6,6 +6,7 @@ import { unwrap } from '../db/unwrap.js';
 import type { OrderStatus } from '../orders/order-status.js';
 import {
   applicationCopy,
+  chatCopy,
   courierCopy,
   customerCopy,
   merchantCopy,
@@ -136,6 +137,29 @@ export class NotifyService {
       await this.push.send([customerId], {
         content: (l) => customerCopy.supportReplied({}, l),
         url: '/(customer)/account/support',
+        channel: 'orders',
+      });
+    });
+  }
+
+  /**
+   * A chat message about an order, for the other side. No category for the
+   * shopper: it is someone at their door asking something, not a notification
+   * type to switch off. The courier's taps open the run's chat, the shopper's
+   * open theirs.
+   */
+  async orderMessage(message: {
+    orderId: string;
+    to: 'customer' | 'courier';
+    recipient: string;
+    senderName: string;
+    body: string;
+  }): Promise<void> {
+    await this.guard('orderMessage', async () => {
+      const params = { name: message.senderName, text: message.body };
+      await this.push.send([message.recipient], {
+        content: (l) => chatCopy.newMessage(params, l),
+        url: message.to === 'customer' ? `/(customer)/chat/${message.orderId}` : `/(courier)/chat/${message.orderId}`,
         channel: 'orders',
       });
     });

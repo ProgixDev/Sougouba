@@ -53,6 +53,7 @@ export const courier = {
     distance: 'Distance de livraison',
     yourEarnings: 'Votre gain',
     reportProblem: 'Signaler un problème avec cette course',
+    messageCustomer: 'Écrire au client',
     reported: 'Signalé',
   },
   proof: {

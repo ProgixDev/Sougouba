@@ -208,7 +208,7 @@ export const customer: Widen<typeof reference> = {
     deliveryCode: 'Delivery code',
     codeHint: 'Give this code to %{name} when they hand over your order.',
     callCourier: 'Call',
-    messageCourier: 'Text',
+    messageCourier: 'Message',
     pointsEarned: plural({
       one: 'You earned %{count} Sougouba point.',
       other: 'You earned %{count} Sougouba points.',

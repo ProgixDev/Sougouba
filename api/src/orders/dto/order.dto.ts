@@ -113,3 +113,10 @@ export const submitReviewSchema = z.object({
 });
 
 export type SubmitReviewInput = z.infer<typeof submitReviewSchema>;
+
+/** One chat message. Same bounds as `order_messages.body` (`drizzle/0049_order_messages.sql`). */
+export const sendOrderMessageSchema = z.object({
+  body: z.string().trim().min(1, 'Message vide').max(1000, 'Message trop long (1000 caractères au plus)'),
+});
+
+export type SendOrderMessageInput = z.infer<typeof sendOrderMessageSchema>;

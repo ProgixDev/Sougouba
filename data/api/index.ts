@@ -12,3 +12,4 @@ export * as couponsApi from './coupons';
 export * as favoritesApi from './favorites';
 export * as pushApi from './push';
 export * as supportApi from './support';
+export * as orderChatApi from './orderChat';

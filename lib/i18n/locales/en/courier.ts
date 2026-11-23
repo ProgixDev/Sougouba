@@ -54,6 +54,7 @@ export const courier: Widen<typeof reference> = {
     distance: 'Delivery distance',
     yourEarnings: 'Your earnings',
     reportProblem: 'Report a problem with this run',
+    messageCustomer: 'Message the customer',
     reported: 'Reported',
   },
   proof: {

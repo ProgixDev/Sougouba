@@ -16,6 +16,10 @@ export interface CourierTrackingCardProps {
   etaMin: number | null;
   /** The code the shopper reads out at the door. */
   pin: string;
+  /** Opens the order's chat with the courier. */
+  onMessage: () => void;
+  /** Messages from the courier not yet read. */
+  unread?: number;
 }
 
 const VEHICLE_ICONS: Record<VehicleType, typeof Bike> = {
@@ -36,7 +40,7 @@ const VEHICLE_ICONS: Record<VehicleType, typeof Bike> = {
  * needed at exactly the moment this card is on screen, and hunting for it while
  * someone waits outside is the failure this whole surface exists to prevent.
  */
-export function CourierTrackingCard({ courier, phase, etaMin, pin }: CourierTrackingCardProps) {
+export function CourierTrackingCard({ courier, phase, etaMin, pin, onMessage, unread = 0 }: CourierTrackingCardProps) {
   const t = useT();
   const colors = useThemeColors();
   const VehicleIcon = VEHICLE_ICONS[courier.vehicle];
@@ -89,10 +93,12 @@ export function CourierTrackingCard({ courier, phase, etaMin, pin }: CourierTrac
             label={t('customer.orderDetail.callCourier')}
             onPress={() => Linking.openURL(`tel:${courier.phone.replace(/\s/g, '')}`)}
           />
+          {/* In-app, not `sms:` — the chat keeps both numbers private and ends with the order. */}
           <ContactButton
             icon={MessageSquare}
             label={t('customer.orderDetail.messageCourier')}
-            onPress={() => Linking.openURL(`sms:${courier.phone.replace(/\s/g, '')}`)}
+            onPress={onMessage}
+            badge={unread}
           />
         </View>
       ) : null}
@@ -120,16 +126,20 @@ function ContactButton({
   icon: Icon,
   label,
   onPress,
+  badge = 0,
 }: {
   icon: typeof Phone;
   label: string;
   onPress: () => void;
+  /** An unread count, drawn as a dot with the number. */
+  badge?: number;
 }) {
+  const t = useT();
   const colors = useThemeColors();
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={badge > 0 ? `${label}, ${t('common.orderChat.unreadA11y', { count: badge })}` : label}
       onPress={onPress}
       className="flex-1 h-11 rounded-full border border-border flex-row items-center justify-center gap-2 active:bg-muted"
     >
@@ -137,6 +147,13 @@ function ContactButton({
       <Text variant="caption" weight="bold" className="text-[13px]">
         {label}
       </Text>
+      {badge > 0 ? (
+        <View className="min-w-[20px] h-5 px-1.5 rounded-full bg-secondary items-center justify-center">
+          <Text weight="bold" tone="inverted" className="text-[11px]">
+            {badge > 9 ? '9+' : badge}
+          </Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }

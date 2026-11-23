@@ -9,6 +9,7 @@ import type { ReviewInput } from '@/components/customer';
 import { DeliveryMap } from '@/components/map';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useDeliveryProgress } from '@/hooks/useDeliveryProgress';
+import { useOrderChatUnread } from '@/hooks/useOrderChatUnread';
 import { Badge, BackHeader, Button, EmptyState, PriceSummary, Reveal, Skeleton, StarRating, Text } from '@/components/ui';
 import { loyaltyApi, ordersApi, vendorsApi } from '@/data/api';
 import type { Courier, DisputeReason, Order, Vendor } from '@/data/types';
@@ -16,7 +17,7 @@ import { formatCad, formatDate, formatTime } from '@/lib/format';
 import { canOpenDispute, canReview, disputeReasonKey } from '@/lib/disputes';
 import { useT } from '@/lib/i18n/useT';
 import { isActiveStatus, orderStatusKey, orderStatusTone } from '@/lib/orderStatus';
-import { routes } from '@/lib/routes';
+import { dynamicRoutes, routes } from '@/lib/routes';
 import { orderReference } from '@/lib/orderRef';
 import { shadows } from '@/theme/shadows';
 
@@ -78,6 +79,7 @@ export default function OrderDetailScreen() {
   // tracking screen that only updates when you leave and come back is not a
   // tracking screen. Stops the moment the order is finished.
   const polling = Boolean(order && isActiveStatus(order.status));
+  const chatUnread = useOrderChatUnread('customer', order?.id, polling && Boolean(order?.delivery));
   useFocusEffect(
     useCallback(() => {
       if (!polling) return;
@@ -210,6 +212,8 @@ export default function OrderDetailScreen() {
                     etaMin={progress.etaMin}
                     // Always present in the shopper's view; the fallback only satisfies the type.
                     pin={order.delivery!.pin ?? '····'}
+                    onMessage={() => router.push({ pathname: dynamicRoutes.customerChat, params: { id: order.id } })}
+                    unread={chatUnread}
                   />
                 </View>
               </Section>

@@ -124,4 +124,33 @@ export const common = {
     confirmAction: 'Supprimer',
     failedTitle: 'Suppression impossible',
   },
+  /** The chat between a shopper and the courier carrying their order. Same screen on both sides. */
+  orderChat: {
+    title: 'Messages',
+    withName: 'Discussion avec %{name}',
+    courierFallback: 'Votre livreur',
+    customerFallback: 'Le client',
+    placeholder: 'Écrire un message…',
+    send: 'Envoyer',
+    empty: 'Aucun message pour l’instant. Les messages restent liés à cette commande.',
+    closed: 'Cette commande est terminée : la conversation est en lecture seule.',
+    notYet: 'La discussion s’ouvre dès qu’un livreur accepte votre commande.',
+    loadFailed: 'Impossible de charger la conversation.',
+    failed: 'Non envoyé.',
+    read: 'Lu',
+    privacy: 'Votre numéro de téléphone n’est pas partagé.',
+    unreadA11y: 'Messages non lus : %{count}',
+    quickCustomer: {
+      comingDown: 'Je descends',
+      leaveAtDoor: 'Laissez-la devant la porte',
+      twoMinutes: 'J’arrive dans 2 minutes',
+      thanks: 'Merci !',
+    },
+    quickCourier: {
+      arrived: 'Je suis arrivé',
+      downstairs: 'Je suis en bas',
+      cantFind: 'Je ne trouve pas l’adresse',
+      onMyWay: 'Je suis en route',
+    },
+  },
 };

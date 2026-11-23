@@ -9,7 +9,7 @@ import type { Order } from '@/data/types';
  * hex characters gives a stable, pronounceable reference that stays the same for
  * the life of the order and does not leak how many orders the system has.
  */
-export function orderReference(order: Order): string {
+export function orderReference(order: Pick<Order, 'id'>): string {
   return `#${hash(order.id).toString(16).toUpperCase().padStart(4, '0').slice(-4)}`;
 }
 

@@ -74,6 +74,9 @@ export const dynamicRoutes = {
   /** Proof of delivery capture — photo, signature or PIN. */
   courierProof: '/(courier)/proof/[id]',
   courierReport: '/(courier)/report/[id]',
+  /** The order's chat, from either end. Push notifications open these same paths. */
+  customerChat: '/(customer)/chat/[id]',
+  courierChat: '/(courier)/chat/[id]',
 } as const;
 
 /**

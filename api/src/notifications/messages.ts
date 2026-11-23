@@ -197,3 +197,15 @@ export const courierCopy = {
       },
     )) as Copy<{ vendor: string; km: number; earningsCad: number }>,
 };
+
+/** Either side of an order's chat: who wrote, and the start of what they wrote. */
+export const chatCopy = {
+  newMessage: (({ name, text }, l) => {
+    const body = text.length > 140 ? `${text.slice(0, 139)}…` : text;
+    return pick(
+      l,
+      { title: name ? `Message de ${name}` : 'Nouveau message', body },
+      { title: name ? `Message from ${name}` : 'New message', body },
+    );
+  }) as Copy<{ name: string; text: string }>,
+};

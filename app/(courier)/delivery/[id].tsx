@@ -1,5 +1,5 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { MapPin, Navigation, Phone, Store, TriangleAlert } from 'lucide-react-native';
+import { MapPin, MessageSquare, Navigation, Store, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import { couriersApi, ordersApi, vendorsApi } from '@/data/api';
 import type { Courier, Order, Vendor } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useDeliveryProgress } from '@/hooks/useDeliveryProgress';
+import { useOrderChatUnread } from '@/hooks/useOrderChatUnread';
 import { useOwnPosition } from '@/hooks/useOwnPosition';
 import { formatCad } from '@/lib/format';
 import { useT } from '@/lib/i18n/useT';
@@ -43,6 +44,8 @@ export default function CourierDeliveryScreen() {
 
   const own = useOwnPosition(Boolean(order?.delivery) && order?.status !== 'delivered' && order?.status !== 'cancelled');
   const progress = useDeliveryProgress(order, vendor, courier, own);
+  const running = Boolean(order?.delivery) && order?.status !== 'delivered' && order?.status !== 'cancelled';
+  const chatUnread = useOrderChatUnread('courier', order?.id, running);
 
   const load = useCallback(async () => {
     const found = await ordersApi.getOrderById(id);
@@ -213,6 +216,31 @@ export default function CourierDeliveryScreen() {
                   </Text>
                 </View>
               </View>
+
+              {running ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    chatUnread > 0
+                      ? `${t('courier.delivery.messageCustomer')}, ${t('common.orderChat.unreadA11y', { count: chatUnread })}`
+                      : t('courier.delivery.messageCustomer')
+                  }
+                  onPress={() => router.push({ pathname: dynamicRoutes.courierChat, params: { id: order.id } })}
+                  className="flex-row items-center gap-2.5 rounded-2xl bg-card p-4 active:opacity-80"
+                >
+                  <MessageSquare size={16} color={colors.primary} strokeWidth={2} />
+                  <Text variant="caption" weight="semibold" className="flex-1 text-[14px]">
+                    {t('courier.delivery.messageCustomer')}
+                  </Text>
+                  {chatUnread > 0 ? (
+                    <View className="min-w-[20px] h-5 px-1.5 rounded-full bg-secondary items-center justify-center">
+                      <Text weight="bold" tone="inverted" className="text-[11px]">
+                        {chatUnread > 9 ? '9+' : chatUnread}
+                      </Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+              ) : null}
 
               <Pressable
                 accessibilityRole="button"

@@ -921,6 +921,41 @@ export type Database = {
           },
         ]
       }
+      order_messages: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          order_id: string
+          read_at: string | null
+          sender_role: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          order_id: string
+          read_at?: string | null
+          sender_role: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          order_id?: string
+          read_at?: string | null
+          sender_role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_messages_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_reviews: {
         Row: {
           comment: string | null
