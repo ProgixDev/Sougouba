@@ -20,6 +20,7 @@ import {
   runPayouts,
   type OwedCourier,
   type PayoutAttempt,
+  type PayoutAttemptStatus,
   type PayoutInsights,
   type PayoutOwedFilter,
   type PayoutRun,
@@ -27,6 +28,52 @@ import {
 import { formatCad, formatDate, formatDateTime, timeAgo } from '@/lib/format';
 import { useAdmin } from '@/lib/permissions';
 import { useDebounced, usePagedList } from '@/lib/usePagedList';
+import { ExportButton } from '@/components/data/ExportButton';
+import { csvDate, type CsvColumn } from '@/lib/csv';
+
+const ATTEMPT_STATUS_LABELS: Record<PayoutAttemptStatus, string> = { paid: 'Payé', skipped: 'Ignoré', failed: 'Échec' };
+
+/** Who is owed — the "À payer" tab, as filtered. */
+const OWED_CSV: CsvColumn<OwedCourier>[] = [
+  { header: 'Livreur', value: (c) => c.courierName },
+  { header: 'Identifiant livreur', value: (c) => c.courierId },
+  { header: 'Montant dû ($)', value: (c) => c.pendingCad },
+  { header: 'Courses', value: (c) => c.runCount },
+  { header: 'Plus ancienne course', value: (c) => csvDate(c.oldestAt) },
+  { header: 'Compte Stripe', value: (c) => c.accountId ?? 'Aucun' },
+  { header: 'Dernière tentative', value: (c) => (c.lastAttempt ? ATTEMPT_STATUS_LABELS[c.lastAttempt.status] : '') },
+  { header: 'Motif', value: (c) => (c.lastAttempt?.reason ? FAILURE_REASON_LABELS[c.lastAttempt.reason] : '') },
+  { header: 'Date de la tentative', value: (c) => csvDate(c.lastAttempt?.at) },
+];
+
+/** One courier line of one run — the "Échecs" and "Payés" tabs. */
+const ATTEMPT_CSV: CsvColumn<PayoutAttempt>[] = [
+  { header: 'Date', value: (a) => csvDate(a.createdAt) },
+  { header: 'Livreur', value: (a) => a.courierName },
+  { header: 'Identifiant livreur', value: (a) => a.courierId },
+  { header: 'Montant ($)', value: (a) => a.amountCad },
+  { header: 'Courses', value: (a) => a.runCount },
+  { header: 'Résultat', value: (a) => ATTEMPT_STATUS_LABELS[a.status] },
+  { header: 'Motif', value: (a) => (a.reason ? FAILURE_REASON_LABELS[a.reason] : '') },
+  { header: 'Erreur', value: (a) => a.error },
+  { header: 'Virement Stripe', value: (a) => a.stripeTransferId },
+  { header: 'Lancé par', value: (a) => (a.trigger === 'admin' ? 'Administrateur' : 'Planification') },
+  { header: 'Lot', value: (a) => a.runId },
+];
+
+/** Every run — the "Historique" tab. */
+const RUN_CSV: CsvColumn<PayoutRun>[] = [
+  { header: 'Début', value: (r) => csvDate(r.startedAt) },
+  { header: 'Fin', value: (r) => csvDate(r.finishedAt) },
+  { header: 'Lancé par', value: (r) => (r.trigger === 'admin' ? r.actorName ?? 'Administrateur' : 'Planification') },
+  { header: 'État', value: (r) => (r.status === 'done' ? 'Terminé' : r.status === 'failed' ? 'Échec' : 'En cours') },
+  { header: 'Payés', value: (r) => r.paidCount },
+  { header: 'Ignorés', value: (r) => r.skippedCount },
+  { header: 'Échecs', value: (r) => r.failedCount },
+  { header: 'Montant payé ($)', value: (r) => r.paidCad },
+  { header: 'Erreur', value: (r) => r.error },
+  { header: 'Lot', value: (r) => r.id },
+];
 
 const TABS = [
   { key: 'owed', label: 'À payer' },
@@ -333,12 +380,30 @@ function Payouts() {
         title="Virements"
         description="Ce que la plateforme doit aux livreurs, et l’historique des virements."
         actions={
-          can('payouts.run') ? (
-            <Button onClick={() => setConfirming(true)} disabled={!insights || payableCouriers === 0 || running}>
-              <Send size={15} />
-              Lancer les virements
-            </Button>
-          ) : undefined
+          <>
+            {tab === 'owed' ? (
+              <ExportButton
+                name="virements-a-payer"
+                columns={OWED_CSV}
+                sort={owed.sort ? { sort: owed.sort.key, dir: owed.sort.dir } : undefined}
+                fetchPage={(page) => listOwed(filter, debouncedSearch, page)}
+              />
+            ) : tab === 'history' ? (
+              <ExportButton name="virements-historique" columns={RUN_CSV} fetchPage={(page) => listPayoutRuns(page)} />
+            ) : (
+              <ExportButton
+                name={tab === 'failures' ? 'virements-echecs' : 'virements-payes'}
+                columns={ATTEMPT_CSV}
+                fetchPage={(page) => listPayoutAttempts(tab === 'failures' ? 'failed' : 'paid', page)}
+              />
+            )}
+            {can('payouts.run') && (
+              <Button onClick={() => setConfirming(true)} disabled={!insights || payableCouriers === 0 || running}>
+                <Send size={15} />
+                Lancer les virements
+              </Button>
+            )}
+          </>
         }
       />
 

@@ -11,6 +11,8 @@ import { getUserInsights, shortDay, type UserInsights } from '@/lib/api/insights
 import { listUsers } from '@/lib/api/users';
 import { formatDate } from '@/lib/format';
 import { useDebounced, usePagedList } from '@/lib/usePagedList';
+import { ExportButton } from '@/components/data/ExportButton';
+import { csvDate, type CsvColumn } from '@/lib/csv';
 import { useToast } from '@/components/Toast';
 import type { AdminUserListItem, UserRole } from '@/lib/types';
 
@@ -20,6 +22,17 @@ const ROLE_TABS: { key: UserRole | 'all'; label: string }[] = [
   { key: 'customer', label: 'Clients' },
   { key: 'business', label: 'Commerçants' },
   { key: 'courier', label: 'Livreurs' },
+];
+
+const USER_CSV: CsvColumn<AdminUserListItem>[] = [
+  { header: 'Identifiant', value: (u) => u.id },
+  { header: 'Nom', value: (u) => u.fullName },
+  { header: 'Courriel', value: (u) => u.email },
+  { header: 'Rôle', value: (u) => (u.role ? ROLE_LABELS[u.role] : '') },
+  { header: 'Membre depuis', value: (u) => csvDate(u.memberSince) },
+  { header: 'Dernière connexion', value: (u) => csvDate(u.lastSignInAt) },
+  { header: 'Commerce lié', value: (u) => u.vendorId },
+  { header: 'Livreur lié', value: (u) => u.courierId },
 ];
 
 export default function UsersPage() {
@@ -106,7 +119,19 @@ export default function UsersPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <PageHeader icon={UsersIcon} title="Utilisateurs" description="Tous les comptes de la plateforme : clients, commerçants et livreurs." />
+      <PageHeader
+        icon={UsersIcon}
+        title="Utilisateurs"
+        description="Tous les comptes de la plateforme : clients, commerçants et livreurs."
+        actions={
+          <ExportButton
+            name="utilisateurs"
+            columns={USER_CSV}
+            sort={list.sort ? { sort: list.sort.key, dir: list.sort.dir } : undefined}
+            fetchPage={(page) => listUsers({ role: role === 'all' ? undefined : role, search: debouncedSearch }, page)}
+          />
+        }
+      />
 
       <KpiGrid>
         <KpiCard

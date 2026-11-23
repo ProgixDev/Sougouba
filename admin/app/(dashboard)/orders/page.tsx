@@ -6,6 +6,8 @@ import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { DataTable, type Column } from '@/components/data/DataTable';
+import { ExportButton } from '@/components/data/ExportButton';
+import { csvDate, type CsvColumn } from '@/lib/csv';
 import { Avatar, BarSeries, Breakdown, CHART, KpiCard, KpiGrid, PageHeader, SectionCard } from '@/components/insights/Insights';
 import { getOrderInsights, shortDay, type OrderInsights } from '@/lib/api/insights';
 import { listOrders } from '@/lib/api/orders';
@@ -96,9 +98,37 @@ export default function OrdersPage() {
     },
   ];
 
+  const csvColumns: CsvColumn<AdminOrderListItem>[] = [
+    { header: 'Commande', value: (o) => o.id },
+    { header: 'Date', value: (o) => csvDate(o.createdAt) },
+    { header: 'Statut', value: (o) => orderStatusMeta(o.status).label },
+    { header: 'Client', value: (o) => o.customerName },
+    { header: 'Commerce', value: (o) => o.vendorName },
+    { header: 'Type', value: (o) => (o.vendorType === 'restaurant' ? 'Restaurant' : 'Épicerie') },
+    { header: 'Livreur', value: (o) => o.courierName },
+    { header: 'Sous-total ($)', value: (o) => o.subtotalCad },
+    { header: 'Total ($)', value: (o) => o.totalCad },
+    { header: 'Remboursé le', value: (o) => csvDate(o.refundedAt) },
+    { header: 'Montant remboursé ($)', value: (o) => o.refundAmountCad },
+    { header: 'Litige', value: (o) => o.hasDispute },
+    { header: 'Incident livreur', value: (o) => o.hasCourierIssue },
+  ];
+
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <PageHeader icon={Package} title="Commandes" description="Toutes les commandes de la plateforme, et leur tendance." />
+      <PageHeader
+        icon={Package}
+        title="Commandes"
+        description="Toutes les commandes de la plateforme, et leur tendance."
+        actions={
+          <ExportButton
+            name="commandes"
+            columns={csvColumns}
+            sort={list.sort ? { sort: list.sort.key, dir: list.sort.dir } : undefined}
+            fetchPage={(page) => listOrders({ status: status === 'all' ? undefined : status, search: debouncedSearch }, page)}
+          />
+        }
+      />
 
       <KpiGrid>
         <KpiCard
