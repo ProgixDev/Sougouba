@@ -114,7 +114,10 @@ export class PaymentsService {
    * - **owner** — an intent id is not a secret between users; without this,
    *   one shopper's paid intent could be replayed by another.
    */
-  async assertPaidBy(paymentIntentId: string, expected: { amountCents: number; customerId: string }): Promise<void> {
+  async assertPaidBy(
+    paymentIntentId: string,
+    expected: { amountCents: number; customerId: string }
+  ): Promise<{ split: boolean; applicationFeeCents: number }> {
     let intent: Stripe.PaymentIntent;
     try {
       intent = await this.client().paymentIntents.retrieve(paymentIntentId, { expand: ['latest_charge'] });
@@ -148,6 +151,15 @@ export class PaymentsService {
     if (charge && typeof charge !== 'string' && charge.amount_refunded > 0) {
       throw new BadRequestException('This payment has been refunded');
     }
+
+    // How the money was divided, for the order's own record (and, months later,
+    // the shop's statement). Read off the intent that was actually paid rather
+    // than recomputed: whether a payment was split depended on the shop having
+    // a Stripe account at that moment, which nothing else remembers.
+    return {
+      split: Boolean(intent.transfer_data?.destination),
+      applicationFeeCents: intent.application_fee_amount ?? 0,
+    };
   }
 
   /**

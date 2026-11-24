@@ -78,6 +78,13 @@ const BUDGETS: { prefix: string; max: number; windowMs: number; why: string }[] 
     why: 'renders a PDF per call',
   },
   {
+    // The same, for a merchant's monthly statement.
+    prefix: '/statements',
+    max: 30,
+    windowMs: 60_000,
+    why: 'renders a PDF per call',
+  },
+  {
     // The back office is a handful of people. A thousand requests a minute from
     // an admin session is not an admin.
     prefix: '/admin',

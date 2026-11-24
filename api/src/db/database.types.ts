@@ -790,6 +790,50 @@ export type Database = {
           },
         ]
       }
+      merchant_statements: {
+        Row: {
+          created_at: string
+          emailed_at: string | null
+          id: string
+          lines: Json
+          number: number
+          period_end: string
+          period_start: string
+          totals: Json
+          vendor_id: string
+        }
+        Insert: {
+          created_at?: string
+          emailed_at?: string | null
+          id?: string
+          lines: Json
+          number?: number
+          period_end: string
+          period_start: string
+          totals: Json
+          vendor_id: string
+        }
+        Update: {
+          created_at?: string
+          emailed_at?: string | null
+          id?: string
+          lines?: Json
+          number?: number
+          period_end?: string
+          period_start?: string
+          totals?: Json
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merchant_statements_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       merchant_subscriptions: {
         Row: {
           cancel_at: string | null
@@ -1089,6 +1133,8 @@ export type Database = {
       }
       orders: {
         Row: {
+          commission_cad: number | null
+          commission_rate: number | null
           coupon_code: string | null
           coupon_discount_cad: number | null
           created_at: string
@@ -1107,6 +1153,7 @@ export type Database = {
           delivery_unit: string | null
           gst_cad: number
           id: string
+          merchant_paid_cad: number | null
           points_discount_cad: number | null
           points_redeemed: number | null
           qst_cad: number
@@ -1123,6 +1170,8 @@ export type Database = {
           vendor_id: string
         }
         Insert: {
+          commission_cad?: number | null
+          commission_rate?: number | null
           coupon_code?: string | null
           coupon_discount_cad?: number | null
           created_at?: string
@@ -1141,6 +1190,7 @@ export type Database = {
           delivery_unit?: string | null
           gst_cad: number
           id?: string
+          merchant_paid_cad?: number | null
           points_discount_cad?: number | null
           points_redeemed?: number | null
           qst_cad: number
@@ -1157,6 +1207,8 @@ export type Database = {
           vendor_id: string
         }
         Update: {
+          commission_cad?: number | null
+          commission_rate?: number | null
           coupon_code?: string | null
           coupon_discount_cad?: number | null
           created_at?: string
@@ -1175,6 +1227,7 @@ export type Database = {
           delivery_unit?: string | null
           gst_cad?: number
           id?: string
+          merchant_paid_cad?: number | null
           points_discount_cad?: number | null
           points_redeemed?: number | null
           qst_cad?: number

@@ -3,6 +3,7 @@ import {
   ChevronRight,
   Clock,
   Clock3,
+  FileText,
   LogOut,
   MapPin,
   Moon,
@@ -195,6 +196,13 @@ export default function BusinessProfileScreen() {
                   title={t('business.coupons.title')}
                   hint={t('business.coupons.rowHint')}
                   onPress={() => router.push(routes.businessCoupons)}
+                />
+                <View className="h-px bg-border ml-16" />
+                <MenuRow
+                  icon={FileText}
+                  title={t('business.statements.title')}
+                  hint={t('business.statements.rowHint')}
+                  onPress={() => router.push(routes.businessStatements)}
                 />
               </>
             ) : null}

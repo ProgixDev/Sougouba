@@ -11,6 +11,10 @@
     {
       "path": "/internal/cron/retention",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/internal/cron/statements",
+      "schedule": "0 11 1 * *"
     }
   ]
 }

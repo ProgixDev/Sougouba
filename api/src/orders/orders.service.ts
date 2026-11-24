@@ -242,7 +242,7 @@ export class OrdersService {
   private async write(customerId: string, input: PlaceOrderInput) {
     const { priced, address } = await this.quote(customerId, input);
 
-    await this.payments.assertPaidBy(input.paymentIntentId, {
+    const payment = await this.payments.assertPaidBy(input.paymentIntentId, {
       amountCents: toStripeAmount(priced.totalCad),
       customerId,
     });
@@ -336,8 +336,45 @@ export class OrdersService {
       this.notify.orderPlaced(orderId),
       this.rememberDelivery(customerId, input),
       this.receipts.orderPlaced(orderId),
+      this.recordCommission(orderId, priced, payment),
     ]);
     return order;
+  }
+
+  /**
+   * What Sougouba keeps on this order and what Stripe has already sent the
+   * shop, written down while both are known — the shop's monthly statement is
+   * drawn from these months later (`billing/statements/`).
+   *
+   * When the payment was split, the commission is the fee Stripe actually
+   * withheld and the shop has received the rest. When it was not — the shop has
+   * no Stripe account yet — the commission is the rate on the goods and nothing
+   * has been sent: the whole payment is on Sougouba's balance, owed to the shop.
+   *
+   * Best effort, after the order exists: the order is paid and placed whether
+   * or not this lands, and a statement falls back to the current rate for an
+   * order with no record.
+   */
+  private async recordCommission(
+    orderId: string,
+    priced: PricedOrder,
+    payment: { split: boolean; applicationFeeCents: number }
+  ): Promise<void> {
+    try {
+      const { commissionRate } = await this.settings.all();
+      const commissionCad = payment.split ? payment.applicationFeeCents / 100 : roundCad(priced.subtotalCad * commissionRate);
+      const { error } = await this.db
+        .from('orders')
+        .update({
+          commission_rate: commissionRate,
+          commission_cad: commissionCad,
+          merchant_paid_cad: payment.split ? roundCad(priced.totalCad - commissionCad) : 0,
+        })
+        .eq('id', orderId);
+      if (error) this.logger.warn(`Commission of order ${orderId} not recorded: ${error.message}`);
+    } catch (error) {
+      this.logger.warn(`Commission of order ${orderId} not recorded: ${String(error)}`);
+    }
   }
 
   /**

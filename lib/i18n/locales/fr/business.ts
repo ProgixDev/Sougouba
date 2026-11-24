@@ -188,6 +188,26 @@ export const business = {
     commission: 'Commission Sougouba (%{rate})',
     subscriptionNote: 'Abonnement de %{amount} par mois facturé séparément.',
   },
+  /** Monthly statements — `app/(business)/statements.tsx`. */
+  statements: {
+    title: 'Relevés mensuels',
+    rowHint: 'Vos ventes, la commission et ce qui vous est dû',
+    currentMonth: 'Mois en cours',
+    currentHint: 'Chiffres provisoires. Le relevé est émis le 1er du mois suivant.',
+    orders: plural({ one: '%{count} commande livrée', other: '%{count} commandes livrées' }),
+    collected: 'Payé par les clients',
+    refunds: 'Remboursements',
+    commission: 'Commission Sougouba',
+    paid: 'Déjà versé par Stripe',
+    balance: 'Solde à vous verser',
+    balanceOwed: 'Solde dû à Sougouba',
+    issued: 'Relevés émis',
+    emptyTitle: 'Aucun relevé pour l’instant',
+    emptyBody: 'Votre premier relevé sera émis le 1er du mois qui suit votre première commande livrée.',
+    openA11y: 'Voir le relevé : %{month}',
+    failed: 'Impossible d’ouvrir le relevé. Réessayez dans un instant.',
+    notInvoice: 'Un relevé est un état de compte, pas une facture fiscale. L’abonnement mensuel est facturé séparément.',
+  },
   /** The monthly subscription's standing on the profile — `hooks/useMerchantSubscription.ts`. */
   subscription: {
     notSubscribed: 'Abonnement non souscrit',

@@ -1,8 +1,9 @@
-import { Controller, Get, Logger, Post, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Logger, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 
 import { RetentionScheduler } from '../admin/retention.scheduler.js';
 import { PayoutsScheduler } from '../billing/payouts.scheduler.js';
+import { StatementsScheduler } from '../billing/statements/statements.scheduler.js';
 import { DispatchScheduler } from '../courier/dispatch.scheduler.js';
 import { CronGuard } from './cron.guard.js';
 
@@ -34,7 +35,8 @@ export class CronController {
   constructor(
     private readonly dispatch: DispatchScheduler,
     private readonly payouts: PayoutsScheduler,
-    private readonly retention: RetentionScheduler
+    private readonly retention: RetentionScheduler,
+    private readonly statements: StatementsScheduler
   ) {}
 
   /**
@@ -100,6 +102,34 @@ export class CronController {
 
   private async nightlyRetention(): Promise<{ ok: true }> {
     await this.retention.nightly();
+    return { ok: true };
+  }
+
+  /**
+   * The merchant statements for a month that is over — by default the one
+   * before today's, which is what the 1st-of-the-month schedule wants.
+   *
+   * `?period=2026-10` re-runs a past month by hand; `?email=0` issues the
+   * statements without mailing them, for catching up on old months without
+   * every shop receiving six emails at once. Safe to repeat either way: a
+   * statement exists once per shop per month, and one already sent is not
+   * sent again.
+   */
+  @Get('statements')
+  monthlyStatementsViaGet(@Query('period') period?: string, @Query('email') email?: string): Promise<{ ok: true }> {
+    return this.monthlyStatements(period, email);
+  }
+
+  @Post('statements')
+  monthlyStatementsViaPost(@Query('period') period?: string, @Query('email') email?: string): Promise<{ ok: true }> {
+    return this.monthlyStatements(period, email);
+  }
+
+  private async monthlyStatements(period?: string, email?: string): Promise<{ ok: true }> {
+    if (period !== undefined && !/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+      throw new BadRequestException('period must be YYYY-MM');
+    }
+    await this.statements.monthly(period, email !== '0' && email !== 'false');
     return { ok: true };
   }
 }

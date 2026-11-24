@@ -10,6 +10,7 @@ import { merchantSignOut, type MerchantSession } from '@/lib/merchantAuth';
 const NAV = [
   { href: '/merchant', label: 'Aperçu' },
   { href: '/merchant/orders', label: 'Commandes' },
+  { href: '/merchant/statements', label: 'Relevés' },
 ];
 
 export function MerchantHeader({ session }: { session: MerchantSession }) {

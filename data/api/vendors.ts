@@ -5,7 +5,7 @@ import type { PickedImage } from '../../hooks/useImagePicker';
 import type { PlatformPlan } from '../../lib/monetization';
 import type { PickedDocument } from '../../lib/validation/merchant';
 
-import { ApiError, api, type Page } from '../http';
+import { ApiError, api, type Page, apiUrl } from '../http';
 import type { Address, ID, Vendor, VendorHours, VendorStatus, VendorType } from '../types';
 import { toVendor } from './mappers';
 import { uploadMediaImage, type MediaImageType } from './media';
@@ -254,6 +254,56 @@ export async function openSubscriptionPortal(): Promise<string> {
     body: { returnUrl: billingReturn('done') },
   });
   return url;
+}
+
+// ── monthly statements ──────────────────────────────────────────────────────
+
+/** A month's figures, as the API adds them up — see `api/src/billing/statements/statement.ts`. */
+export interface StatementTotals {
+  orderCount: number;
+  goodsCad: number;
+  gstCad: number;
+  qstCad: number;
+  deliveryCad: number;
+  discountsCad: number;
+  /** Everything shoppers paid for the orders delivered in the month. */
+  collectedCad: number;
+  refundCount: number;
+  refundsCad: number;
+  commissionCad: number;
+  commissionRate: number | null;
+  /** Already sent to the shop by Stripe. */
+  paidCad: number;
+  /** Still owed to the shop — negative when the shop owes instead. */
+  balanceCad: number;
+}
+
+/** A statement that has been issued: frozen, numbered, available as a PDF. */
+export interface MerchantStatement {
+  id: ID;
+  /** `RM-000123`. */
+  number: string | null;
+  /** `2026-11`. */
+  period: string;
+  issuedAt: string;
+  emailedAt: string | null;
+  totals: StatementTotals;
+}
+
+/** The month in progress, added up live, then every statement issued, newest first. */
+export async function getMyStatements(): Promise<{
+  current: { period: string; totals: StatementTotals };
+  statements: MerchantStatement[];
+}> {
+  return api('/vendors/me/statements');
+}
+
+/** A short-lived link to a statement's PDF, drawn in `locale` — the same mechanism as an order's receipt. */
+export async function getStatementUrl(id: ID, locale: 'fr' | 'en'): Promise<string> {
+  const { path } = await api<{ path: string; expiresAt: string }>(`/vendors/me/statements/${id}/link`, {
+    query: { locale },
+  });
+  return apiUrl(path);
 }
 
 /** Upload the shop's cover photo and return the Storage path to save as `coverUrl`. */

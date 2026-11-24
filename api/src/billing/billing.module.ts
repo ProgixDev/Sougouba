@@ -16,6 +16,13 @@ import { PayoutsScheduler } from './payouts.scheduler.js';
 import { PayoutsService } from './payouts.service.js';
 import { StripeWebhookController } from './stripe-webhook.controller.js';
 import { SubscriptionsService } from './subscriptions.service.js';
+import {
+  AdminStatementsController,
+  MerchantStatementsController,
+  StatementDownloadController,
+} from './statements/statements.controller.js';
+import { StatementsScheduler } from './statements/statements.scheduler.js';
+import { StatementsService } from './statements/statements.service.js';
 
 /**
  * Phase 7 — the money that moves *after* an order: the platform's 12 % cut, the
@@ -37,8 +44,19 @@ import { SubscriptionsService } from './subscriptions.service.js';
     // Stripe's one callback. Here rather than in `OrdersModule` because it
     // records subscriptions as well as reconciling order payments.
     StripeWebhookController,
+    MerchantStatementsController,
+    AdminStatementsController,
+    StatementDownloadController,
   ],
-  providers: [AnalyticsService, ConnectService, PayoutsService, PayoutsScheduler, SubscriptionsService],
-  exports: [AnalyticsService, PayoutsService, PayoutsScheduler, SubscriptionsService],
+  providers: [
+    AnalyticsService,
+    ConnectService,
+    PayoutsService,
+    PayoutsScheduler,
+    SubscriptionsService,
+    StatementsService,
+    StatementsScheduler,
+  ],
+  exports: [AnalyticsService, PayoutsService, PayoutsScheduler, SubscriptionsService, StatementsScheduler],
 })
 export class BillingModule {}

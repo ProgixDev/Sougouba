@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/data/Skeleton';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
 import { getVendor, approveVendor, rejectVendor, suspendVendor } from '@/lib/api/vendors';
+import { getStatementUrl, listVendorStatements, statementMonth, type Statement } from '@/lib/api/statements';
 import { vendorStatusMeta } from '@/lib/statusMeta';
 import { formatCad, formatDate } from '@/lib/format';
 import type { AdminVendorDetail } from '@/lib/types';
@@ -24,6 +25,22 @@ export default function MerchantDetailPage() {
   const [vendor, setVendor] = useState<AdminVendorDetail | null | undefined>(undefined);
   const [dialog, setDialog] = useState<'reject' | 'suspend' | null>(null);
   const [busy, setBusy] = useState(false);
+  // Null while unread or unavailable: the card is simply not shown.
+  const [statements, setStatements] = useState<Statement[] | null>(null);
+
+  async function openStatement(statement: Statement) {
+    // Opened before the request, while this is still the click — see the order page.
+    const tab = window.open('', '_blank');
+    if (tab) tab.opener = null;
+    try {
+      const url = await getStatementUrl(statement.id);
+      if (tab) tab.location.href = url;
+      else window.location.href = url;
+    } catch (error) {
+      tab?.close();
+      toast('error', error instanceof Error ? error.message : 'Le relevé n’a pas pu être ouvert.');
+    }
+  }
 
   async function load() {
     // One request, not two. The rejection/suspension reason used to live in a
@@ -38,6 +55,11 @@ export default function MerchantDetailPage() {
 
   useEffect(() => {
     load();
+    // Independent of the shop itself: an API older than statements answers 404,
+    // and that must not blank the page.
+    listVendorStatements(id)
+      .then(setStatements)
+      .catch(() => setStatements(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -241,6 +263,51 @@ export default function MerchantDetailPage() {
           </dl>
         </Card>
       </div>
+
+      {statements && (
+        <Card className="p-5">
+          <Text variant="subtitle" className="mb-1">
+            Relevés mensuels
+          </Text>
+          <Text variant="caption" tone="muted" className="mb-3">
+            Ce que la boutique a vendu, la commission, et ce qui lui reste dû. Émis le 1er de chaque mois.
+          </Text>
+          {statements.length === 0 ? (
+            <Text variant="body" tone="muted">
+              Aucun relevé émis.
+            </Text>
+          ) : (
+            <ul className="flex flex-col">
+              {statements.map((statement) => (
+                <li key={statement.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-3 last:border-0 last:pb-0">
+                  <div>
+                    <Text variant="body" className="font-medium capitalize">
+                      {statementMonth(statement.period)}
+                    </Text>
+                    <Text variant="caption" tone="muted">
+                      {statement.number} · {statement.totals.orderCount} commande{statement.totals.orderCount > 1 ? 's' : ''} ·{' '}
+                      {statement.emailedAt ? `envoyé le ${formatDate(statement.emailedAt)}` : 'non envoyé'}
+                    </Text>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <Text variant="body" className="tabular font-semibold">
+                        {formatCad(Math.abs(statement.totals.balanceCad))}
+                      </Text>
+                      <Text variant="caption" tone="muted">
+                        {statement.totals.balanceCad < 0 ? 'dû par la boutique' : 'dû à la boutique'}
+                      </Text>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => openStatement(statement)}>
+                      PDF
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
 
       <ConfirmDialog
         open={dialog !== null}
