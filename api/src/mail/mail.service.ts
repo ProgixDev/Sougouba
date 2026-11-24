@@ -8,6 +8,9 @@ export interface MailAttachment {
   filename: string;
   content: Buffer;
   contentType: string;
+  /** Set on an image the HTML shows in place (`<img src="cid:…">`) rather than a file to download. */
+  cid?: string;
+  contentDisposition?: 'inline' | 'attachment';
 }
 
 export interface Mail {

@@ -20,6 +20,7 @@ import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
 import { unwrap, unwrapVoid } from '../db/unwrap.js';
 import { MailService } from '../mail/mail.service.js';
+import { renderSignInCodeEmail } from './signin-code-email.js';
 
 const CODE_TTL_MS = 10 * 60_000;
 const RESEND_COOLDOWN_MS = 60_000;
@@ -106,14 +107,7 @@ export class SignupService {
       })
     );
 
-    await this.mail.send({
-      to: email,
-      subject: `${code} — votre code Sougouba`,
-      text:
-        `Votre code de connexion Sougouba : ${code}\n\n` +
-        `Il expire dans 10 minutes. Si vous n'avez rien demandé, ignorez ce message.\n\n` +
-        `Your Sougouba sign-in code: ${code} (expires in 10 minutes).`,
-    });
+    await this.mail.send({ to: email, ...renderSignInCodeEmail(code, CODE_TTL_MS / 60_000) });
   }
 
   async verify(email: string, code: string): Promise<EmailSession> {

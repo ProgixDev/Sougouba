@@ -222,12 +222,15 @@ export class ReceiptsService {
       return null;
     });
 
+    const email = renderReceiptEmail(loaded.receipt, locale, kind, pdf !== null);
     await this.mail.send({
       to,
-      ...renderReceiptEmail(loaded.receipt, locale, kind, pdf !== null),
-      ...(pdf && {
-        attachments: [{ filename: receiptFileName(loaded.receipt, locale), content: pdf, contentType: 'application/pdf' }],
-      }),
+      ...email,
+      // The email's own inline images (logo, band) first, then the PDF as the one real attachment.
+      attachments: [
+        ...email.attachments,
+        ...(pdf ? [{ filename: receiptFileName(loaded.receipt, locale), content: pdf, contentType: 'application/pdf' }] : []),
+      ],
     });
 
     return { sentAt: new Date().toISOString() };

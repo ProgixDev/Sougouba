@@ -1,3 +1,5 @@
+import { brandEmail, EMAIL_COLOR as COLOR, esc, heroHeading, heroNote } from '../../mail/brand-email.js';
+import type { MailAttachment } from '../../mail/mail.service.js';
 import { money, type Locale } from '../../notifications/messages.js';
 import { describeReceipt, labelSeparator, type AmountKind, type Receipt, type ReceiptDocument } from './receipt.js';
 
@@ -5,10 +7,8 @@ import { describeReceipt, labelSeparator, type AmountKind, type Receipt, type Re
  * The receipt as an email: a subject, an HTML body and the plain-text twin
  * every mail client that refuses HTML falls back to.
  *
- * Tables and inline styles, deliberately. An email is rendered by Outlook's
- * Word engine and by Gmail's style-stripping sanitiser as often as by a
- * browser, and `<table>` with `style=""` is the one dialect all of them read
- * the same way.
+ * Written on the same sheet as every other Sougouba email (`mail/brand-email.ts`):
+ * the thanks on the forest slab, the receipt itself on the paper below the band.
  *
  * Every value that came from a person — a product name, a shop name, an
  * address — goes through `esc`. Nobody can run a script in a mail client, but a
@@ -22,6 +22,8 @@ export interface ReceiptEmail {
   subject: string;
   text: string;
   html: string;
+  /** The inline images the HTML shows — the caller adds the PDF to these. */
+  attachments: MailAttachment[];
 }
 
 const COPY = {
@@ -83,7 +85,7 @@ export function renderReceiptEmail(
   return {
     subject,
     text: renderText(doc, heading, [intro, attached]),
-    html: renderHtml(doc, subject, heading, [intro, attached]),
+    ...renderHtml(doc, subject, heading, [intro, attached]),
   };
 }
 
@@ -111,22 +113,6 @@ function renderText(doc: ReceiptDocument, heading: string, intro: (string | null
 
 // ── html ────────────────────────────────────────────────────────────────────
 
-const esc = (value: string): string =>
-  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-
-/** The app's own palette (`theme/tokens.ts`), so the email looks like it came from the same place. */
-const COLOR = {
-  brand: '#1C5439',
-  page: '#F6F4EF',
-  card: '#FFFFFF',
-  text: '#1F2421',
-  muted: '#6B716D',
-  border: '#E7E3DC',
-  refund: '#B42318',
-};
-
-const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
-
 /** How each tier of the money column is set — the same three weights `PriceSummary` uses in the app. */
 const AMOUNT_STYLE: Record<AmountKind, { label: string; value: string; row: string }> = {
   base: { label: `color:${COLOR.muted};`, value: 'font-weight:600;', row: '' },
@@ -145,14 +131,19 @@ function party(block: { label: string; lines: string[] }): string {
   const [first, ...rest] = block.lines;
   return (
     `<td valign="top" width="50%" style="padding:0 8px 0 0;font-size:14px;line-height:20px;">` +
-    `<div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:${COLOR.muted};padding-bottom:4px;">${esc(block.label)}</div>` +
+    `<div style="font-size:13px;color:${COLOR.muted};padding-bottom:3px;">${esc(block.label)}</div>` +
     `<div style="font-weight:600;">${esc(first ?? '')}</div>` +
     rest.map((line) => `<div style="color:${COLOR.muted};">${esc(line)}</div>`).join('') +
     `</td>`
   );
 }
 
-function renderHtml(doc: ReceiptDocument, subject: string, heading: string, intro: (string | null)[]): string {
+function renderHtml(
+  doc: ReceiptDocument,
+  subject: string,
+  heading: string,
+  intro: (string | null)[]
+): { html: string; attachments: MailAttachment[] } {
   const items = doc.lines
     .map(
       (line) =>
@@ -178,46 +169,32 @@ function renderHtml(doc: ReceiptDocument, subject: string, heading: string, intr
     .join('');
 
   const meta = [doc.numberLine, doc.orderLine, doc.dateLine].filter((line): line is string => Boolean(line));
+  const notes = intro.filter((line): line is string => Boolean(line));
 
-  return (
-    `<!doctype html>` +
-    `<html lang="${doc.locale}"><head><meta charset="utf-8">` +
-    `<meta name="viewport" content="width=device-width,initial-scale=1">` +
-    `<title>${esc(subject)}</title></head>` +
-    `<body style="margin:0;padding:0;background:${COLOR.page};font-family:${FONT};color:${COLOR.text};">` +
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${COLOR.page};"><tr><td align="center" style="padding:24px 12px;">` +
-    `<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:${COLOR.card};border-radius:12px;overflow:hidden;">` +
-    // Header band
-    `<tr><td style="background:${COLOR.brand};padding:20px 28px;color:#FFFFFF;font-size:20px;font-weight:700;letter-spacing:.01em;">Sougouba</td></tr>` +
-    `<tr><td style="padding:28px;">` +
-    `<h1 style="margin:0 0 8px;font-size:22px;line-height:28px;font-weight:700;">${esc(heading)}</h1>` +
-    intro
-      .filter((line): line is string => Boolean(line))
-      .map((line) => `<p style="margin:0 0 6px;font-size:15px;line-height:22px;color:${COLOR.muted};">${esc(line)}</p>`)
-      .join('') +
-    // Number, order reference, date
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 0;border-top:1px solid ${COLOR.border};border-bottom:1px solid ${COLOR.border};"><tr>` +
-    `<td style="padding:12px 0;font-size:14px;line-height:20px;">` +
-    meta.map((line, i) => `<div style="${i === 0 ? 'font-weight:700;' : `color:${COLOR.muted};`}">${esc(line)}</div>`).join('') +
-    `</td></tr></table>` +
-    (doc.notice
-      ? `<p style="margin:16px 0 0;padding:10px 12px;border-radius:8px;background:#FDF1EF;color:${COLOR.refund};font-size:14px;font-weight:600;">${esc(doc.notice)}</p>`
-      : '') +
-    // Seller and customer
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 0;"><tr>` +
-    party(doc.seller) +
-    party(doc.customer) +
-    `</tr></table>` +
-    // Lines
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 0;border-top:1px solid ${COLOR.border};">${items}</table>` +
-    // Money column
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0 0;">${amounts}</table>` +
-    `<p style="margin:20px 0 0;font-size:14px;line-height:20px;"><span style="color:${COLOR.muted};">${esc(doc.payment.label + labelSeparator(doc.locale))}</span>${esc(doc.payment.value)}</p>` +
-    `</td></tr>` +
-    // Footer
-    `<tr><td style="padding:16px 28px 24px;border-top:1px solid ${COLOR.border};font-size:12px;line-height:18px;color:${COLOR.muted};">` +
-    doc.footer.map((line) => `<div>${esc(line)}</div>`).join('') +
-    `</td></tr>` +
-    `</table></td></tr></table></body></html>`
-  );
+  return brandEmail({
+    locale: doc.locale,
+    title: subject,
+    preheader: notes.join(' '),
+    hero: heroHeading(heading) + notes.map(heroNote).join(''),
+    body:
+      // Number, order reference, date
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid ${COLOR.border};"><tr>` +
+      `<td style="padding:0 0 14px;font-size:14px;line-height:20px;">` +
+      meta.map((line, i) => `<div style="${i === 0 ? 'font-weight:700;font-size:16px;line-height:24px;' : `color:${COLOR.muted};`}">${esc(line)}</div>`).join('') +
+      `</td></tr></table>` +
+      (doc.notice
+        ? `<p style="margin:16px 0 0;padding:10px 12px;border-radius:8px;background:#FDF1EF;color:${COLOR.refund};font-size:14px;font-weight:600;">${esc(doc.notice)}</p>`
+        : '') +
+      // Seller and customer
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0 0;"><tr>` +
+      party(doc.seller) +
+      party(doc.customer) +
+      `</tr></table>` +
+      // Lines
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 0;border-top:1px solid ${COLOR.border};">${items}</table>` +
+      // Money column
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0 0;">${amounts}</table>` +
+      `<p style="margin:20px 0 0;font-size:14px;line-height:20px;"><span style="color:${COLOR.muted};">${esc(doc.payment.label + labelSeparator(doc.locale))}</span>${esc(doc.payment.value)}</p>`,
+    footer: doc.footer,
+  });
 }
