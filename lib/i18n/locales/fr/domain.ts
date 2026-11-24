@@ -82,6 +82,7 @@ export const domain = {
     merchant: 'Annulée par la boutique',
     admin: 'Annulée par l’équipe Sougouba',
     system: 'Annulée : aucun livreur disponible',
+    shopNoResponse: 'Annulée : la boutique n’a pas répondu',
     unknown: 'Commande annulée',
   },
   /** What a courier can flag from the road. */

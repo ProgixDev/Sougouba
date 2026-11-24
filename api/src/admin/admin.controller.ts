@@ -163,6 +163,17 @@ export class AdminController {
     return this.stalledOrders.list();
   }
 
+  /**
+   * Orders a shop never answered and that the timer left alone — older than a
+   * day, or automatic cancellation is off. Listed beside the ones waiting for a
+   * courier, for the same reason: they need a person.
+   */
+  @RequirePermission('orders.view')
+  @Get('orders/awaiting-shop')
+  ordersAwaitingShop() {
+    return this.stalledOrders.listUnanswered();
+  }
+
   @RequirePermission('orders.view')
   @Get('orders/:id')
   order(@Param('id', ParseUUIDPipe) id: string) {

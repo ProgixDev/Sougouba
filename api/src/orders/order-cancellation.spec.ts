@@ -6,7 +6,7 @@ import { releaseRunSchema } from '../courier/dto/courier.dto.js';
 import { customerCopy, merchantCopy } from '../notifications/messages.js';
 import { cancelOrderSchema } from './dto/order.dto.js';
 import { OrderCancellationService } from './order-cancellation.service.js';
-import { canCancelAs, ORDER_STATUSES, type CancelActor, type OrderStatus } from './order-status.js';
+import { canCancelAs, ORDER_STATUSES, SYSTEM_CANCEL_FROM, type CancelActor, type OrderStatus } from './order-status.js';
 import { StalledOrdersService } from './stalled-orders.service.js';
 
 describe('who may cancel an order, and until when', () => {
@@ -24,8 +24,9 @@ describe('who may cancel an order, and until when', () => {
     expect(allowed('admin')).toEqual(['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery']);
   });
 
-  it('lets the timer cancel only a packed order', () => {
-    expect(allowed('system')).toEqual(['ready']);
+  it('lets the timers cancel only where an order waits on someone: the shop’s answer, or a courier', () => {
+    expect(allowed('system')).toEqual(['pending', 'ready']);
+    expect(SYSTEM_CANCEL_FROM).toEqual({ shop_no_response: 'pending', no_courier: 'ready' });
   });
 
   it('lets nobody cancel an order that is delivered or already cancelled', () => {
@@ -157,7 +158,7 @@ describe('cancelling an order', () => {
     expect(h.refunds).toEqual([{ amount: 2913, orderId: 'order-1', unwind: false }]);
     expect(h.rpcArgs.order_cancel_refunded).toMatchObject({ p_amount_cad: 29.13, p_stripe_refund_id: 're_1' });
     expect(outcome).toEqual({ refund: 'refunded', refundAmountCad: 29.13, courierId: null });
-    expect(h.notified).toEqual([{ by: 'customer', refunded: true, courierId: null }]);
+    expect(h.notified).toEqual([{ by: 'customer', reason: 'changed_mind', refunded: true, courierId: null }]);
   });
 
   it('sends no money when the order moved under the request', async () => {
@@ -190,7 +191,7 @@ describe('cancelling an order', () => {
     expect(outcome).toEqual({ refund: 'failed', refundAmountCad: null, courierId: null });
     // Not recorded as refunded, no refund email, and the push does not promise money.
     expect(h.calls).toEqual(['rpc:order_cancel', 'stripe:refund', 'push']);
-    expect(h.notified).toEqual([{ by: 'customer', refunded: false, courierId: null }]);
+    expect(h.notified).toEqual([{ by: 'customer', reason: 'changed_mind', refunded: false, courierId: null }]);
   });
 
   it('moves no money on an order that was never paid by card, or already refunded', async () => {
@@ -231,7 +232,7 @@ describe('cancelling an order', () => {
     });
     // The courier the cancellation released is handed on, so they can be told.
     expect(outcome.courierId).toBe('courier-7');
-    expect(h.notified).toEqual([{ by: 'admin', refunded: true, courierId: 'courier-7' }]);
+    expect(h.notified).toEqual([{ by: 'admin', reason: null, refunded: true, courierId: 'courier-7' }]);
   });
 
   it('refuses staff on a delivered or already cancelled order', async () => {
@@ -253,6 +254,25 @@ describe('cancelling an order', () => {
     expect(await harness({ ...ORDER, status: 'ready' }, { movedInDb: true }).service.bySystem('order-1', 'no_courier')).toBeNull();
     expect(await harness(null).service.bySystem('order-1', 'no_courier')).toBeNull();
   });
+
+  it('lets the shop-answer timer cancel a pending order, and only a pending one', async () => {
+    const h = harness(ORDER);
+    expect(await h.service.bySystem('order-1', 'shop_no_response')).toMatchObject({ refund: 'refunded' });
+    expect(h.rpcArgs.order_cancel).toMatchObject({ p_by: 'system', p_by_id: null, p_reason: 'shop_no_response', p_from: 'pending' });
+    expect(h.rpcArgs.order_cancel_refunded.p_reason).toBe('Commande annulée : la boutique n’a pas répondu');
+    expect(h.notified).toEqual([{ by: 'system', reason: 'shop_no_response', refunded: true, courierId: null }]);
+
+    // Each timer keeps to its own status: the shop accepted in the meantime, or the order is packed.
+    for (const status of ['confirmed', 'preparing', 'ready', 'out_for_delivery'] as const) {
+      const moved = harness({ ...ORDER, status });
+      expect(await moved.service.bySystem('order-1', 'shop_no_response'), status).toBeNull();
+      expect(moved.calls, status).toEqual([]);
+    }
+    // And the courier timer never cancels an order the shop has not even seen.
+    const pending = harness(ORDER);
+    expect(await pending.service.bySystem('order-1', 'no_courier')).toBeNull();
+    expect(pending.calls).toEqual([]);
+  });
 });
 
 describe('what people are told', () => {
@@ -269,6 +289,22 @@ describe('what people are told', () => {
     );
   });
 
+  it('tells both sides when the shop never answered', () => {
+    expect(
+      customerCopy.cancelledBy({ ref: '#A1B2', vendor: 'Marché Teranga', by: 'system', reason: 'shop_no_response', refunded: true }, 'fr').body
+    ).toBe('Marché Teranga n’a pas répondu à votre commande #A1B2 : elle est annulée. Vous êtes remboursé.');
+    expect(merchantCopy.orderCancelled({ ref: '#A1B2', by: 'system', reason: 'shop_no_response' }, 'fr').body).toBe(
+      'Commande #A1B2 annulée : elle n’a pas été acceptée à temps. Le client est remboursé.'
+    );
+  });
+
+  it('reminds the shop how long it has left — or just nudges when nothing cancels automatically', () => {
+    expect(merchantCopy.orderWaiting({ ref: '#A1B2', minutesLeft: 7 }, 'fr').body).toBe(
+      'Commande #A1B2 : acceptez-la, sinon elle sera annulée dans 7 min.'
+    );
+    expect(merchantCopy.orderWaiting({ ref: '#A1B2', minutesLeft: null }, 'en').body).toBe('Order #A1B2: accept or decline it from the app.');
+  });
+
   it('tells the shop to stop preparing an order its customer cancelled', () => {
     expect(merchantCopy.orderCancelled({ ref: '#A1B2', by: 'customer' }, 'fr').body).toBe(
       'Le client a annulé la commande #A1B2. Ne la préparez pas.'
@@ -279,16 +315,19 @@ describe('what people are told', () => {
 // ── orders nobody is carrying ──
 
 function stalledHarness(opts: {
-  settings: { no_courier_alert_min?: number; no_courier_cancel_min?: number } | null;
-  orders: { order_id: string; waiting_min: number; alerted: boolean; offers?: number }[];
+  settings: Record<string, number | undefined> | null;
+  orders: { order_id: string; waiting_min: number; alerted?: boolean; reminded?: boolean; offers?: number }[];
   /** Order ids another sweep already flagged between the read and the claim. */
   claimedElsewhere?: string[];
   staffEmail?: string;
 }) {
   const cancelled: string[] = [];
+  const cancelReasons: string[] = [];
   const claimed: string[] = [];
+  const reminders: { orderId: string; minutesLeft: number | null }[] = [];
   const mails: { to: string; subject: string; text: string }[] = [];
   let rpcArgs: Record<string, unknown> | null = null;
+  let rpcName: string | null = null;
 
   const db = {
     from: (table: string) => {
@@ -305,6 +344,7 @@ function stalledHarness(opts: {
           return q;
         },
         or: () => q,
+        is: () => q,
         select: async () => {
           if (opts.claimedElsewhere?.includes(id)) return { data: [], error: null };
           claimed.push(id);
@@ -313,7 +353,8 @@ function stalledHarness(opts: {
       };
       return q;
     },
-    rpc: async (_name: string, args: Record<string, unknown>) => {
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      rpcName = name;
       rpcArgs = args;
       return {
         data: opts.orders.map((o) => ({
@@ -329,12 +370,17 @@ function stalledHarness(opts: {
       };
     },
   };
-  const cancellation = { bySystem: async (orderId: string) => (cancelled.push(orderId), { refund: 'refunded' }) };
+  const cancellation = {
+    bySystem: async (orderId: string, reason: string) => (cancelled.push(orderId), cancelReasons.push(reason), { refund: 'refunded' }),
+  };
+  const notify = {
+    orderWaitingForShop: async (orderId: string, minutesLeft: number | null) => void reminders.push({ orderId, minutesLeft }),
+  };
   const mail = { send: async (m: { to: string; subject: string; text: string }) => void mails.push(m) };
   const config = { get: (key: string) => (key === 'STAFF_ALERT_EMAIL' ? opts.staffEmail : undefined) };
 
-  const service = new StalledOrdersService(db as never, cancellation as never, mail as never, config as never);
-  return { service, cancelled, claimed, mails, rpcArgs: () => rpcArgs };
+  const service = new StalledOrdersService(db as never, cancellation as never, mail as never, config as never, notify as never);
+  return { service, cancelled, cancelReasons, claimed, reminders, mails, rpcArgs: () => rpcArgs, rpcName: () => rpcName };
 }
 
 describe('orders waiting for a courier', () => {
@@ -425,5 +471,76 @@ describe('orders waiting for a courier', () => {
     // Listing is a read: nothing is cancelled or flagged by looking.
     expect(h.cancelled).toEqual([]);
     expect(h.claimed).toEqual([]);
+  });
+});
+
+describe('orders the shop has not answered', () => {
+  const settings = { shop_confirm_remind_min: 3, shop_confirm_cancel_min: 10 };
+
+  it('reminds the shop once after the first delay and cancels after the second', async () => {
+    const h = stalledHarness({
+      settings,
+      orders: [
+        { order_id: 'late', waiting_min: 11 },
+        { order_id: 'waiting', waiting_min: 4 },
+        { order_id: 'nudged', waiting_min: 6, reminded: true },
+      ],
+    });
+    expect(await h.service.sweepUnanswered()).toEqual({ reminded: 1, cancelled: 1 });
+    expect(h.cancelled).toEqual(['late']);
+    expect(h.cancelReasons).toEqual(['shop_no_response']);
+    // One reminder, to the order not yet reminded, saying how long it has left.
+    expect(h.reminders).toEqual([{ orderId: 'waiting', minutesLeft: 6 }]);
+    expect(h.claimed).toEqual(['waiting']);
+    // From the earlier delay, and never further back than a day.
+    expect(h.rpcName()).toBe('orders_awaiting_shop');
+    expect(h.rpcArgs()).toEqual({ p_min_waiting_min: 3, p_max_waiting_min: 1440 });
+  });
+
+  it('rings the shop once when two sweeps see the same order', async () => {
+    const h = stalledHarness({ settings, orders: [{ order_id: 'a', waiting_min: 4 }], claimedElsewhere: ['a'] });
+    expect(await h.service.sweepUnanswered()).toEqual({ reminded: 0, cancelled: 0 });
+    expect(h.reminders).toEqual([]);
+  });
+
+  it('only reminds when automatic cancellation is off, without a countdown', async () => {
+    const h = stalledHarness({
+      settings: { shop_confirm_remind_min: 3, shop_confirm_cancel_min: 0 },
+      orders: [{ order_id: 'a', waiting_min: 500 }],
+    });
+    expect(await h.service.sweepUnanswered()).toEqual({ reminded: 1, cancelled: 0 });
+    expect(h.cancelled).toEqual([]);
+    expect(h.reminders).toEqual([{ orderId: 'a', minutesLeft: null }]);
+  });
+
+  it('only cancels when the reminder is off', async () => {
+    const h = stalledHarness({
+      settings: { shop_confirm_remind_min: 0, shop_confirm_cancel_min: 10 },
+      orders: [{ order_id: 'late', waiting_min: 10 }],
+    });
+    expect(await h.service.sweepUnanswered()).toEqual({ reminded: 0, cancelled: 1 });
+    expect(h.reminders).toEqual([]);
+    expect(h.rpcArgs()).toEqual({ p_min_waiting_min: 10, p_max_waiting_min: 1440 });
+  });
+
+  it('does nothing with both switched off, or against a database without the two delays', async () => {
+    for (const none of [{ shop_confirm_remind_min: 0, shop_confirm_cancel_min: 0 }, { no_courier_alert_min: 15, no_courier_cancel_min: 60 }, null]) {
+      const h = stalledHarness({ settings: none, orders: [{ order_id: 'a', waiting_min: 900 }] });
+      expect(await h.service.sweepUnanswered()).toEqual({ reminded: 0, cancelled: 0 });
+      expect(h.cancelled).toEqual([]);
+      expect(h.rpcArgs()).toBeNull();
+    }
+  });
+
+  it('lists for the back office what the timer left alone, with no age limit', async () => {
+    const h = stalledHarness({ settings, orders: [{ order_id: 'ancient', waiting_min: 55_000, reminded: false }] });
+    const list = await h.service.listUnanswered();
+    expect(list.remindAfterMin).toBe(3);
+    expect(list.cancelAfterMin).toBe(10);
+    expect(list.orders.map((o) => [o.orderId, o.waitingMin])).toEqual([['ancient', 55_000]]);
+    // Past the point where it should have been cancelled — and looking changes nothing.
+    expect(h.rpcArgs()).toEqual({ p_min_waiting_min: 10, p_max_waiting_min: null });
+    expect(h.cancelled).toEqual([]);
+    expect(h.reminders).toEqual([]);
   });
 });

@@ -116,6 +116,19 @@ export class SettingsService {
       );
     }
 
+    // Same for the shop-answer pair. 0 on either switches that step off.
+    const remindMin = patch.shopConfirmRemindMin ?? Number(before.shopConfirmRemindMin);
+    const shopCancelMin = patch.shopConfirmCancelMin ?? Number(before.shopConfirmCancelMin);
+    if (
+      (patch.shopConfirmRemindMin !== undefined || patch.shopConfirmCancelMin !== undefined) &&
+      shopCancelMin !== 0 &&
+      shopCancelMin <= remindMin
+    ) {
+      throw new BadRequestException(
+        'Le délai d’annulation d’une commande sans réponse doit être plus long que le délai de rappel (ou 0 pour le désactiver).'
+      );
+    }
+
     const updated = await unwrapRpc<Tables<'platform_settings'>>(
       this.db.rpc('settings_update', {
         p_admin_id: adminId,

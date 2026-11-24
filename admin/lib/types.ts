@@ -427,4 +427,11 @@ export interface PlatformSettings {
    */
   noCourierAlertMin?: number;
   noCourierCancelMin?: number;
+  /**
+   * How long an order may wait for the shop to accept it, in minutes: before the
+   * shop is reminded (0 = no reminder) and before the order is cancelled and
+   * refunded (0 = never automatically). Absent before migration 0055.
+   */
+  shopConfirmRemindMin?: number;
+  shopConfirmCancelMin?: number;
 }

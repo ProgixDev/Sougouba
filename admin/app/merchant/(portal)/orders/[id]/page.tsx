@@ -62,7 +62,7 @@ export default function MerchantOrderDetailPage() {
           {order.status === 'cancelled' && order.cancellation?.by && (
             <Text variant="body" className="mt-2 text-destructive">
               {CANCELLED_BY_LABELS[order.cancellation.by]}
-              {order.cancellation.by === 'customer' && order.cancellation.reason
+              {(order.cancellation.by === 'customer' || order.cancellation.by === 'system') && order.cancellation.reason
                 ? ` — ${CANCEL_REASON_LABELS[order.cancellation.reason] ?? order.cancellation.reason}`
                 : ''}
               {order.cancellation.note ? ` : ${order.cancellation.note}` : ''}

@@ -8,6 +8,7 @@ import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
 import { MailService } from '../mail/mail.service.js';
 import { money, orderReference } from '../notifications/messages.js';
+import { NotifyService } from '../notifications/notify.service.js';
 import { OrderCancellationService } from './order-cancellation.service.js';
 
 /** A packed order nobody is carrying, as `dispatch_stalled_orders` reports it. */
@@ -25,6 +26,19 @@ export interface StalledOrder {
   offers: number;
 }
 
+/** An order the shop has not answered, as `orders_awaiting_shop` reports it. */
+export interface UnansweredOrder {
+  orderId: string;
+  vendorId: string;
+  vendorName: string;
+  customerName: string | null;
+  totalCad: number;
+  waitingSince: string;
+  waitingMin: number;
+  /** The shop was already reminded. */
+  reminded: boolean;
+}
+
 /**
  * The automatic sweep never touches an order that has been waiting longer than
  * this. Past a day it is not a dispatch problem any more, and a timer
@@ -34,7 +48,12 @@ export interface StalledOrder {
 const SWEEP_WINDOW_MIN = 24 * 60;
 
 /**
- * Orders that are packed and that no courier has taken.
+ * The two places an order waits on somebody who may never come: the shop's
+ * answer (`sweepUnanswered`) and a courier for a packed order (`sweep`). Both
+ * are bounded by a pair of delays set in the back office, and both end the same
+ * way — through `OrderCancellationService`, refunded in full.
+ *
+ * On the second of the two: orders that are packed and that no courier has taken.
  *
  * Dispatch offers a run to one courier at a time and never to the same one
  * twice, so when everyone in range has passed — or nobody is on shift — the
@@ -57,8 +76,128 @@ export class StalledOrdersService {
     @Inject(DB) private readonly db: Db,
     private readonly cancellation: OrderCancellationService,
     private readonly mail: MailService,
-    private readonly config: ConfigService<Env, true>
+    private readonly config: ConfigService<Env, true>,
+    private readonly notify: NotifyService
   ) {}
+
+  // ── a shop that never answers ─────────────────────────────────────────────
+
+  /**
+   * Orders the shop has not accepted, past the delay after which the timer
+   * would have cancelled them — the ones it did not, because they are older
+   * than a day or because automatic cancellation is off. What the back office
+   * lists; no age limit.
+   */
+  async listUnanswered(): Promise<{ remindAfterMin: number; cancelAfterMin: number; orders: UnansweredOrder[] }> {
+    const delays = await this.shopDelays();
+    if (!delays) return { remindAfterMin: 0, cancelAfterMin: 0, orders: [] };
+    // With cancellation off there is no "should have been cancelled by now": list what is past the reminder instead.
+    const threshold = delays.cancelAfterMin > 0 ? delays.cancelAfterMin : Math.max(delays.remindAfterMin, 1);
+    return { ...delays, orders: await this.unanswered(threshold, null) };
+  }
+
+  /**
+   * One pass over orders still waiting for the shop's answer.
+   *
+   * The shopper paid when they ordered, so every minute here is money held for
+   * a shop that may be closed, busy, or holding a phone on silent. The large
+   * delivery platforms all bound this the same way — about ten minutes, with a
+   * prod to the shop first — and so does this:
+   *
+   * 1. after `shopConfirmRemindMin` the shop gets one reminder push, saying how
+   *    long it has left (0 = no reminder);
+   * 2. after `shopConfirmCancelMin` the order is cancelled and refunded in
+   *    full, and both sides are told why (0 = never automatically).
+   *
+   * The sweep runs once a minute, so each step lands within a minute after its
+   * delay. Never throws.
+   */
+  async sweepUnanswered(): Promise<{ reminded: number; cancelled: number }> {
+    try {
+      const delays = await this.shopDelays();
+      if (!delays) return { reminded: 0, cancelled: 0 };
+      const { remindAfterMin, cancelAfterMin } = delays;
+      if (remindAfterMin === 0 && cancelAfterMin === 0) return { reminded: 0, cancelled: 0 };
+
+      // From the earlier of the two delays that is switched on.
+      const from = Math.min(...[remindAfterMin, cancelAfterMin].filter((m) => m > 0));
+      const orders = await this.unanswered(from, SWEEP_WINDOW_MIN);
+      let reminded = 0;
+      let cancelled = 0;
+
+      for (const order of orders) {
+        if (cancelAfterMin > 0 && order.waitingMin >= cancelAfterMin) {
+          if (await this.cancellation.bySystem(order.orderId, 'shop_no_response')) cancelled++;
+          continue;
+        }
+        if (remindAfterMin > 0 && order.waitingMin >= remindAfterMin && !order.reminded && (await this.claimReminder(order))) {
+          const minutesLeft = cancelAfterMin > 0 ? Math.max(cancelAfterMin - order.waitingMin, 1) : null;
+          await this.notify.orderWaitingForShop(order.orderId, minutesLeft);
+          reminded++;
+        }
+      }
+
+      if (cancelled > 0 || reminded > 0) {
+        this.logger.warn(`Shop not answering: ${reminded} reminder(s) sent, ${cancelled} order(s) cancelled and refunded`);
+      }
+      return { reminded, cancelled };
+    } catch (error) {
+      this.logger.error(`Unanswered-order sweep failed: ${String(error)}`);
+      return { reminded: 0, cancelled: 0 };
+    }
+  }
+
+  /** The two delays, or null against a database older than migration 0055 — the sweep then stands down. */
+  private async shopDelays(): Promise<{ remindAfterMin: number; cancelAfterMin: number } | null> {
+    const { data, error } = await this.db.from('platform_settings').select('*').eq('id', 1).maybeSingle();
+    if (error || !data) return null;
+    const row = data as Record<string, unknown>;
+    // `undefined` → NaN: the columns are not there yet.
+    const remindAfterMin = Number(row.shop_confirm_remind_min ?? Number.NaN);
+    const cancelAfterMin = Number(row.shop_confirm_cancel_min ?? Number.NaN);
+    if (!Number.isFinite(remindAfterMin) || !Number.isFinite(cancelAfterMin)) return null;
+    return { remindAfterMin, cancelAfterMin };
+  }
+
+  private async unanswered(minWaitingMin: number, maxWaitingMin: number | null): Promise<UnansweredOrder[]> {
+    const { data, error } = await this.db.rpc('orders_awaiting_shop', {
+      p_min_waiting_min: minWaitingMin,
+      p_max_waiting_min: maxWaitingMin as number,
+    });
+    if (error) throw new Error(`orders_awaiting_shop: ${error.code} ${error.message}`);
+    return (data ?? []).map((row) => ({
+      orderId: row.order_id,
+      vendorId: row.vendor_id,
+      vendorName: row.vendor_name,
+      customerName: row.customer_name,
+      totalCad: Number(row.total_cad),
+      waitingSince: row.waiting_since,
+      waitingMin: row.waiting_min,
+      reminded: row.reminded,
+    }));
+  }
+
+  /**
+   * Mark the order as reminded, and say whether this call is the one that did:
+   * two sweeps a moment apart must not both ring the shop's phone. Only an
+   * order still `pending` — one accepted since the list was read needs no nudge.
+   */
+  private async claimReminder(order: UnansweredOrder): Promise<boolean> {
+    const { data, error } = await this.db
+      .from('orders')
+      .update({ shop_reminded_at: new Date().toISOString() })
+      .eq('id', order.orderId)
+      .eq('status', 'pending')
+      .is('shop_reminded_at', null)
+      .select('id');
+    if (error) {
+      this.logger.error(`Could not mark order ${order.orderId} as reminded: ${error.code} ${error.message}`);
+      return false;
+    }
+    return (data ?? []).length > 0;
+  }
+
+  // ── a packed order no courier takes ───────────────────────────────────────
 
   /** Everything waiting past the alert delay, oldest first — what the back office lists. No age limit. */
   async list(): Promise<{ alertAfterMin: number; cancelAfterMin: number; orders: StalledOrder[] }> {
@@ -237,6 +376,8 @@ export class StalledOrdersScheduler {
     }
     this.running = true;
     try {
+      // The shop's answer first: it is the shorter delay, and the earlier step.
+      await this.stalled.sweepUnanswered();
       await this.stalled.sweep();
     } finally {
       this.running = false;

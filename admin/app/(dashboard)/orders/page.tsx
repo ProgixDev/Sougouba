@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, Ban, Package, Search, ShoppingCart, Truck, Wallet } from 'lucide-react';
+import { AlertCircle, Ban, Package, Search, ShoppingCart, Store, Truck, Wallet } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { StatusBadge } from '@/components/data/StatusBadge';
@@ -11,7 +11,7 @@ import { ExportButton } from '@/components/data/ExportButton';
 import { csvDate, type CsvColumn } from '@/lib/csv';
 import { Avatar, BarSeries, Breakdown, CHART, KpiCard, KpiGrid, PageHeader, SectionCard } from '@/components/insights/Insights';
 import { getOrderInsights, shortDay, type OrderInsights } from '@/lib/api/insights';
-import { listOrders, listOrdersWaitingForCourier } from '@/lib/api/orders';
+import { listOrders, listOrdersAwaitingShop, listOrdersWaitingForCourier } from '@/lib/api/orders';
 import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { useToast } from '@/components/Toast';
 import { orderStatusMeta } from '@/lib/statusMeta';
@@ -36,6 +36,7 @@ export default function OrdersPage() {
   const [search, setSearch] = useState('');
   const [insights, setInsights] = useState<OrderInsights | null>(null);
   const [waiting, setWaiting] = useState<Awaited<ReturnType<typeof listOrdersWaitingForCourier>> | null>(null);
+  const [unanswered, setUnanswered] = useState<Awaited<ReturnType<typeof listOrdersAwaitingShop>> | null>(null);
 
   useEffect(() => {
     getOrderInsights()
@@ -45,6 +46,10 @@ export default function OrdersPage() {
     // such route; the card then simply does not appear.
     listOrdersWaitingForCourier()
       .then(setWaiting)
+      .catch(() => undefined);
+    // And the ones a shop never answered, that the timer did not cancel.
+    listOrdersAwaitingShop()
+      .then(setUnanswered)
       .catch(() => undefined);
   }, []);
 
@@ -136,6 +141,43 @@ export default function OrdersPage() {
           />
         }
       />
+
+      {unanswered && unanswered.orders.length > 0 && (
+        <Card className="border border-destructive/40 p-5" elevated={false}>
+          <div className="mb-1 flex items-center gap-2">
+            <Store size={17} className="text-destructive" />
+            <Text variant="subtitle">
+              {unanswered.orders.length === 1
+                ? '1 commande sans réponse du commerce'
+                : `${unanswered.orders.length} commandes sans réponse du commerce`}
+            </Text>
+          </div>
+          <Text variant="caption" tone="muted" className="mb-3">
+            {unanswered.cancelAfterMin > 0
+              ? `Une commande sans réponse est annulée et remboursée automatiquement après ${unanswered.cancelAfterMin} min. Celles-ci attendent depuis plus d’un jour : elles restent à annuler à la main.`
+              : 'L’annulation automatique est désactivée : c’est à vous de décider.'}
+          </Text>
+          <ul className="flex flex-col">
+            {unanswered.orders.map((o) => (
+              <li key={o.orderId} className="border-b border-border last:border-0">
+                <Link href={`/orders/${o.orderId}`} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2.5 hover:bg-muted">
+                  <div className="min-w-0">
+                    <Text variant="body" className="font-medium">
+                      #{o.orderId.slice(0, 8)} · {o.vendorName}
+                    </Text>
+                    <Text variant="caption" tone="muted">
+                      {o.customerName ?? 'Client'} · {formatCad(o.totalCad)}
+                    </Text>
+                  </div>
+                  <Text variant="body" className="tabular font-semibold text-destructive">
+                    {waitingLabel(o.waitingMin)}
+                  </Text>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {waiting && waiting.orders.length > 0 && (
         <Card className="border border-destructive/40 p-5" elevated={false}>

@@ -90,3 +90,24 @@ export interface StalledOrder {
 export async function listOrdersWaitingForCourier(): Promise<{ alertAfterMin: number; cancelAfterMin: number; orders: StalledOrder[] }> {
   return apiGet('/admin/orders/waiting-for-courier');
 }
+
+/** An order the shop never accepted. */
+export interface UnansweredOrder {
+  orderId: ID;
+  vendorId: ID;
+  vendorName: string;
+  customerName: string | null;
+  totalCad: number;
+  waitingSince: string;
+  waitingMin: number;
+  reminded: boolean;
+}
+
+/**
+ * Orders a shop never answered and that the timer left alone: older than a day,
+ * or automatic cancellation is off (`cancelAfterMin` 0). Oldest first. Empty
+ * against an API or a database that does not have the feature yet.
+ */
+export async function listOrdersAwaitingShop(): Promise<{ remindAfterMin: number; cancelAfterMin: number; orders: UnansweredOrder[] }> {
+  return apiGet('/admin/orders/awaiting-shop');
+}

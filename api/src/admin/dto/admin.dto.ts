@@ -215,6 +215,14 @@ export const updateSettingsSchema = z
      */
     noCourierAlertMin: z.number().int().min(1, 'Au moins 1 minute').max(1440).optional(),
     noCourierCancelMin: z.number().int().min(0).max(1440).optional(),
+    /**
+     * How long an order may wait for the shop to accept it, in minutes: before
+     * the shop is reminded (0 = no reminder), and before the order is cancelled
+     * and refunded (0 = never automatically). The cancellation has to come
+     * after the reminder; `SettingsService.update` checks the pair.
+     */
+    shopConfirmRemindMin: z.number().int().min(0).max(120).optional(),
+    shopConfirmCancelMin: z.number().int().min(0).max(1440).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, 'Aucun champ à modifier')
   .refine(

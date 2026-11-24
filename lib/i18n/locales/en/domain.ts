@@ -56,6 +56,7 @@ export const domain: Widen<typeof reference> = {
     merchant: 'Cancelled by the shop',
     admin: 'Cancelled by the Sougouba team',
     system: 'Cancelled: no courier available',
+    shopNoResponse: 'Cancelled: the shop did not answer',
     unknown: 'Order cancelled',
   },
   courierIssueReason: {

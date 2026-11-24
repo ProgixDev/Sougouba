@@ -210,8 +210,18 @@ export async function hydrateOrders(
     // Out of the flat spread below, or the shop would read it off the row.
     // The cancellation columns leave it too and come back as `cancellation`,
     // minus what is not for these readers.
-    const { deliveryDoorCode, cancelledAt, cancelledBy, cancelledById: _actor, cancelReason, cancelNote, noCourierAlertedAt: _alerted, ...row } =
-      rawRow;
+    const {
+      deliveryDoorCode,
+      cancelledAt,
+      cancelledBy,
+      cancelledById: _actor,
+      cancelReason,
+      cancelNote,
+      // The two timers' bookkeeping: of no use to anyone reading an order.
+      noCourierAlertedAt: _alerted,
+      shopRemindedAt: _reminded,
+      ...row
+    } = rawRow;
     const p = parts.get(row.id)!;
     const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
     return {

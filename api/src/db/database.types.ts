@@ -1216,6 +1216,7 @@ export type Database = {
           refund_amount_cad: number | null
           refund_reason: string | null
           refunded_at: string | null
+          shop_reminded_at: string | null
           status: Database["public"]["Enums"]["order_status"]
           stripe_payment_intent_id: string | null
           stripe_refund_id: string | null
@@ -1259,6 +1260,7 @@ export type Database = {
           refund_amount_cad?: number | null
           refund_reason?: string | null
           refunded_at?: string | null
+          shop_reminded_at?: string | null
           status?: Database["public"]["Enums"]["order_status"]
           stripe_payment_intent_id?: string | null
           stripe_refund_id?: string | null
@@ -1302,6 +1304,7 @@ export type Database = {
           refund_amount_cad?: number | null
           refund_reason?: string | null
           refunded_at?: string | null
+          shop_reminded_at?: string | null
           status?: Database["public"]["Enums"]["order_status"]
           stripe_payment_intent_id?: string | null
           stripe_refund_id?: string | null
@@ -1448,6 +1451,8 @@ export type Database = {
           points_per_cad_redeemed: number
           referral_min_first_order_cad: number
           referral_reward_points: number
+          shop_confirm_cancel_min: number
+          shop_confirm_remind_min: number
           updated_at: string
         }
         Insert: {
@@ -1467,6 +1472,8 @@ export type Database = {
           points_per_cad_redeemed?: number
           referral_min_first_order_cad?: number
           referral_reward_points?: number
+          shop_confirm_cancel_min?: number
+          shop_confirm_remind_min?: number
           updated_at?: string
         }
         Update: {
@@ -1486,6 +1493,8 @@ export type Database = {
           points_per_cad_redeemed?: number
           referral_min_first_order_cad?: number
           referral_reward_points?: number
+          shop_confirm_cancel_min?: number
+          shop_confirm_remind_min?: number
           updated_at?: string
         }
         Relationships: []
@@ -2680,6 +2689,19 @@ export type Database = {
         }
         Returns: undefined
       }
+      orders_awaiting_shop: {
+        Args: { p_max_waiting_min?: number; p_min_waiting_min: number }
+        Returns: {
+          customer_name: string
+          order_id: string
+          reminded: boolean
+          total_cad: number
+          vendor_id: string
+          vendor_name: string
+          waiting_min: number
+          waiting_since: string
+        }[]
+      }
       payout_run_start: {
         Args: { p_actor_id?: string; p_trigger: string }
         Returns: string
@@ -2750,6 +2772,8 @@ export type Database = {
           points_per_cad_redeemed: number
           referral_min_first_order_cad: number
           referral_reward_points: number
+          shop_confirm_cancel_min: number
+          shop_confirm_remind_min: number
           updated_at: string
         }
         SetofOptions: {

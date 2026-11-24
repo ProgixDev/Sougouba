@@ -50,6 +50,8 @@ export function canReleaseRun(order: Order): boolean {
 /** "Cancelled by …", as one line. Falls back to a plain "cancelled" on an order that never recorded who. */
 export function cancelledByKey(order: Order): MessageKey {
   const by = order.cancellation?.by;
+  // The system has two timers; the reason says which one gave up.
+  if (by === 'system' && order.cancellation?.reason === 'shop_no_response') return 'domain.cancelledBy.shopNoResponse';
   return (by ? `domain.cancelledBy.${by}` : 'domain.cancelledBy.unknown') as MessageKey;
 }
 

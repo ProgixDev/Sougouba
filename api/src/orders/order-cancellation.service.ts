@@ -13,7 +13,7 @@ import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
 import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import { NotifyService } from '../notifications/notify.service.js';
-import { canCancelAs, type CancelActor, type OrderStatus } from './order-status.js';
+import { canCancelAs, SYSTEM_CANCEL_FROM, type CancelActor, type OrderStatus, type SystemCancelReason } from './order-status.js';
 import { PaymentsService } from './payments.service.js';
 import { toStripeAmount } from './pricing.js';
 import { ReceiptsService } from './receipts/receipts.service.js';
@@ -113,14 +113,16 @@ export class OrderCancellationService {
   }
 
   /**
-   * The timer: a packed order no courier took. Never throws — it runs from a
-   * sweep over several orders, and one that moved under it (a courier accepted
-   * a second ago) must not stop the others.
+   * A timer giving up: on a shop that never answered, or on finding a courier
+   * for a packed order. Never throws — it runs from a sweep over several
+   * orders, and one that moved under it (the shop accepted, a courier took it,
+   * a second ago) must not stop the others. Null when there was nothing to do.
    */
-  async bySystem(orderId: string, reason: 'no_courier'): Promise<CancellationOutcome | null> {
+  async bySystem(orderId: string, reason: SystemCancelReason): Promise<CancellationOutcome | null> {
     try {
       const order = await this.find(orderId);
-      if (!canCancelAs(order.status, 'system')) return null;
+      // Each timer only from its own status: see `SYSTEM_CANCEL_FROM`.
+      if (order.status !== SYSTEM_CANCEL_FROM[reason]) return null;
       return await this.cancel(order, { by: 'system', byId: null, reason, note: null });
     } catch (error) {
       if (error instanceof ConflictException || error instanceof NotFoundException) return null;
@@ -178,7 +180,7 @@ export class OrderCancellationService {
           );
 
     const courierId = result?.courierId ?? null;
-    const refund = await this.refund(order, actor.by);
+    const refund = await this.refund(order, actor.by, actor.reason);
 
     this.logger.log(
       `Order ${order.id} cancelled by ${actor.by}${actor.byId ? ` ${actor.byId}` : ''} from "${order.status}" — refund: ${refund.refund}`
@@ -188,7 +190,12 @@ export class OrderCancellationService {
     // already happened. The receipt email is the one that shows the money
     // coming back, so it only goes out when money actually moved.
     await Promise.all([
-      this.notify.orderCancelled(order.id, { by: actor.by, refunded: refund.refund === 'refunded', courierId }),
+      this.notify.orderCancelled(order.id, {
+        by: actor.by,
+        reason: actor.reason,
+        refunded: refund.refund === 'refunded',
+        courierId,
+      }),
       refund.refund === 'refunded' ? this.receipts.orderRefunded(order.id) : Promise.resolve(),
     ]);
 
@@ -200,7 +207,11 @@ export class OrderCancellationService {
    * order is cancelled, and a refund that failed is reported, not raised —
    * raising would tell the shopper their cancellation failed when it did not.
    */
-  private async refund(order: OrderRow, by: CancelActor): Promise<Pick<CancellationOutcome, 'refund' | 'refundAmountCad'>> {
+  private async refund(
+    order: OrderRow,
+    by: CancelActor,
+    reason: string | null
+  ): Promise<Pick<CancellationOutcome, 'refund' | 'refundAmountCad'>> {
     // No payment (seeded history), or staff refunded it before cancelling.
     if (!order.stripePaymentIntentId || order.refundedAt) return { refund: 'not_needed', refundAmountCad: null };
 
@@ -226,7 +237,7 @@ export class OrderCancellationService {
           p_order_id: order.id,
           p_amount_cad: totalCad,
           p_stripe_refund_id: stripeRefundId,
-          p_reason: REFUND_REASON[by],
+          p_reason: by === 'system' && reason === 'shop_no_response' ? SHOP_NO_RESPONSE_REFUND : REFUND_REASON[by],
         })
       );
     } catch (error) {
@@ -245,6 +256,8 @@ const REFUND_REASON: Record<CancelActor, string> = {
   admin: 'Commande annulée par Sougouba',
   system: 'Commande annulée : aucun livreur disponible',
 };
+
+const SHOP_NO_RESPONSE_REFUND = 'Commande annulée : la boutique n’a pas répondu';
 
 /** `order_cancel` raises this when the order left the status the caller read. */
 const STATUS_MOVED = 'SGB04';

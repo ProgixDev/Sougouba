@@ -103,25 +103,29 @@ export const customerCopy = {
    * changes the second — a refund that Stripe has not confirmed is not promised
    * on a lock screen.
    */
-  cancelledBy: (({ ref, vendor, by, refunded }, l) => {
+  cancelledBy: (({ ref, vendor, by, reason, refunded }, l) => {
     const fr =
       by === 'merchant'
         ? `${vendor} a annulé votre commande ${ref}.`
         : by === 'system'
-          ? `Aucun livreur n’était disponible pour votre commande ${ref} : elle est annulée.`
+          ? reason === 'shop_no_response'
+            ? `${vendor} n’a pas répondu à votre commande ${ref} : elle est annulée.`
+            : `Aucun livreur n’était disponible pour votre commande ${ref} : elle est annulée.`
           : `Sougouba a annulé votre commande ${ref}.`;
     const en =
       by === 'merchant'
         ? `${vendor} cancelled your order ${ref}.`
         : by === 'system'
-          ? `No courier was available for your order ${ref}, so it was cancelled.`
+          ? reason === 'shop_no_response'
+            ? `${vendor} did not answer your order ${ref}, so it was cancelled.`
+            : `No courier was available for your order ${ref}, so it was cancelled.`
           : `Sougouba cancelled your order ${ref}.`;
     return pick(
       l,
       { title: 'Commande annulée', body: refunded ? `${fr} Vous êtes remboursé.` : fr },
       { title: 'Order cancelled', body: refunded ? `${en} You have been refunded.` : en },
     );
-  }) as Copy<OrderParams & { by: 'merchant' | 'admin' | 'system'; refunded: boolean }>,
+  }) as Copy<OrderParams & { by: 'merchant' | 'admin' | 'system'; reason?: string | null; refunded: boolean }>,
 
   disputeResolved: (({ ref }, l) =>
     pick(
@@ -179,7 +183,7 @@ export const merchantCopy = {
     )) as Copy<{ ref: string }>,
 
   /** An order in the shop's queue was cancelled by someone else: stop preparing it. */
-  orderCancelled: (({ ref, by }, l) =>
+  orderCancelled: (({ ref, by, reason }, l) =>
     pick(
       l,
       {
@@ -188,7 +192,9 @@ export const merchantCopy = {
           by === 'customer'
             ? `Le client a annulé la commande ${ref}. Ne la préparez pas.`
             : by === 'system'
-              ? `Commande ${ref} annulée : aucun livreur n’était disponible.`
+              ? reason === 'shop_no_response'
+                ? `Commande ${ref} annulée : elle n’a pas été acceptée à temps. Le client est remboursé.`
+                : `Commande ${ref} annulée : aucun livreur n’était disponible.`
               : `Sougouba a annulé la commande ${ref}.`,
       },
       {
@@ -197,10 +203,36 @@ export const merchantCopy = {
           by === 'customer'
             ? `The customer cancelled order ${ref}. Do not prepare it.`
             : by === 'system'
-              ? `Order ${ref} was cancelled: no courier was available.`
+              ? reason === 'shop_no_response'
+                ? `Order ${ref} was cancelled: it was not accepted in time. The customer is refunded.`
+                : `Order ${ref} was cancelled: no courier was available.`
               : `Sougouba cancelled order ${ref}.`,
       },
-    )) as Copy<{ ref: string; by: 'customer' | 'admin' | 'system' }>,
+    )) as Copy<{ ref: string; by: 'customer' | 'admin' | 'system'; reason?: string | null }>,
+
+  /**
+   * An order is still waiting for the shop's answer. Sent once, before the
+   * order is cancelled for lack of one; `minutesLeft` is null when automatic
+   * cancellation is switched off, and the push then only nudges.
+   */
+  orderWaiting: (({ ref, minutesLeft }, l) =>
+    pick(
+      l,
+      {
+        title: 'Une commande attend votre réponse',
+        body:
+          minutesLeft === null
+            ? `Commande ${ref} : acceptez-la ou refusez-la depuis l’app.`
+            : `Commande ${ref} : acceptez-la, sinon elle sera annulée dans ${minutesLeft} min.`,
+      },
+      {
+        title: 'An order is waiting for your answer',
+        body:
+          minutesLeft === null
+            ? `Order ${ref}: accept or decline it from the app.`
+            : `Order ${ref}: accept it, or it will be cancelled in ${minutesLeft} min.`,
+      },
+    )) as Copy<{ ref: string; minutesLeft: number | null }>,
 
   subscriptionPaymentFailed: ((_params, l) =>
     pick(

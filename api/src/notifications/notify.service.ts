@@ -90,7 +90,13 @@ export class NotifyService {
    */
   async orderCancelled(
     orderId: string,
-    event: { by: 'customer' | 'merchant' | 'admin' | 'system'; refunded: boolean; courierId?: string | null },
+    event: {
+      by: 'customer' | 'merchant' | 'admin' | 'system';
+      /** The order's `cancel_reason` — what tells the system's two timers apart. */
+      reason?: string | null;
+      refunded: boolean;
+      courierId?: string | null;
+    },
   ): Promise<void> {
     await this.guard('orderCancelled', async () => {
       const order = await this.order(orderId);
@@ -103,7 +109,7 @@ export class NotifyService {
         const by = event.by;
         sends.push(
           this.push.send([order.customerId], {
-            content: (l) => customerCopy.cancelledBy({ ref, vendor, by, refunded: event.refunded }, l),
+            content: (l) => customerCopy.cancelledBy({ ref, vendor, by, reason: event.reason, refunded: event.refunded }, l),
             url: customerOrderUrl(order.id),
             channel: 'orders',
             category: 'orderUpdates',
@@ -114,7 +120,7 @@ export class NotifyService {
         const by = event.by;
         sends.push(
           this.push.send([order.vendor.ownerId], {
-            content: (l) => merchantCopy.orderCancelled({ ref, by }, l),
+            content: (l) => merchantCopy.orderCancelled({ ref, by, reason: event.reason }, l),
             url: `/(business)/order/${order.id}`,
             channel: 'orders',
           }),
@@ -135,6 +141,23 @@ export class NotifyService {
         }
       }
       await Promise.all(sends);
+    });
+  }
+
+  /**
+   * The shop has not answered an order yet: one reminder, before the order is
+   * cancelled for lack of an answer. `minutesLeft` is how long it still has.
+   */
+  async orderWaitingForShop(orderId: string, minutesLeft: number | null): Promise<void> {
+    await this.guard('orderWaitingForShop', async () => {
+      const order = await this.order(orderId);
+      if (!order?.vendor) return;
+      const ref = orderReference(order.id);
+      await this.push.send([order.vendor.ownerId], {
+        content: (l) => merchantCopy.orderWaiting({ ref, minutesLeft }, l),
+        url: `/(business)/order/${order.id}`,
+        channel: 'orders',
+      });
     });
   }
 

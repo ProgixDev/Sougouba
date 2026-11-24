@@ -32,6 +32,8 @@ interface FieldState {
   /** Empty when the API does not have the two delays yet: the card is hidden and they are not sent. */
   noCourierAlertMin: string;
   noCourierCancelMin: string;
+  shopConfirmRemindMin: string;
+  shopConfirmCancelMin: string;
 }
 
 function toFields(s: PlatformSettings): FieldState {
@@ -46,6 +48,8 @@ function toFields(s: PlatformSettings): FieldState {
     referralMinFirstOrderCad: String(s.referralMinFirstOrderCad),
     noCourierAlertMin: s.noCourierAlertMin === undefined ? '' : String(s.noCourierAlertMin),
     noCourierCancelMin: s.noCourierCancelMin === undefined ? '' : String(s.noCourierCancelMin),
+    shopConfirmRemindMin: s.shopConfirmRemindMin === undefined ? '' : String(s.shopConfirmRemindMin),
+    shopConfirmCancelMin: s.shopConfirmCancelMin === undefined ? '' : String(s.shopConfirmCancelMin),
   };
 }
 
@@ -63,6 +67,9 @@ function toPatch(f: FieldState, doublePointsActive: boolean): PlatformSettings {
     doublePointsActive,
     ...(f.noCourierAlertMin !== '' && f.noCourierCancelMin !== ''
       ? { noCourierAlertMin: Math.round(num(f.noCourierAlertMin)), noCourierCancelMin: Math.round(num(f.noCourierCancelMin)) }
+      : {}),
+    ...(f.shopConfirmRemindMin !== '' && f.shopConfirmCancelMin !== ''
+      ? { shopConfirmRemindMin: Math.round(num(f.shopConfirmRemindMin)), shopConfirmCancelMin: Math.round(num(f.shopConfirmCancelMin)) }
       : {}),
   };
 }
@@ -188,6 +195,38 @@ export default function SettingsPage() {
           </div>
         </label>
       </Card>
+
+      {fields.shopConfirmRemindMin !== '' && (
+        <Card className="p-6">
+          <Text variant="subtitle" className="mb-1">
+            Commande sans réponse du commerce
+          </Text>
+          <Text variant="caption" tone="muted" className="mb-4">
+            Le client paie en commandant. Si le commerce n’accepte pas la commande, il reçoit un rappel, puis elle est annulée
+            et le client remboursé en totalité. Le délai compte à partir de la commande.
+          </Text>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Input
+              label="Rappeler le commerce après (minutes)"
+              type="number"
+              step="1"
+              min={0}
+              max={120}
+              helper="Une notification sur son téléphone, une seule fois. 0 = pas de rappel."
+              {...field('shopConfirmRemindMin')}
+            />
+            <Input
+              label="Annuler et rembourser après (minutes)"
+              type="number"
+              step="1"
+              min={0}
+              max={1440}
+              helper="Doit être plus long que le délai de rappel. 0 = jamais automatiquement."
+              {...field('shopConfirmCancelMin')}
+            />
+          </div>
+        </Card>
+      )}
 
       {fields.noCourierAlertMin !== '' && (
         <Card className="p-6">

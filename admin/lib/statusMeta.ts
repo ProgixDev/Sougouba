@@ -80,7 +80,7 @@ export const CANCELLED_BY_LABELS: Record<'customer' | 'merchant' | 'admin' | 'sy
   customer: 'Annulée par le client',
   merchant: 'Annulée par le commerçant',
   admin: 'Annulée par l’équipe Sougouba',
-  system: 'Annulée automatiquement : aucun livreur',
+  system: 'Annulée automatiquement',
   unknown: 'Annulée',
 };
 
@@ -93,6 +93,7 @@ export const CANCEL_REASON_LABELS: Record<string, string> = {
   too_long: 'La boutique tardait à répondre',
   other: 'Autre',
   no_courier: 'Aucun livreur disponible',
+  shop_no_response: 'Le commerce n’a pas répondu à temps',
 };
 
 /** Why a courier no longer has an order. `order_cancelled` is written by a cancellation, not chosen. */

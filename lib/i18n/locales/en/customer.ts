@@ -241,6 +241,7 @@ export const customer: Widen<typeof reference> = {
     submit: 'Cancel my order',
     keep: 'Keep my order',
     failed: 'Could not cancel. Check your connection and try again.',
+    pendingHint: 'Waiting for the shop. If it does not answer, your order is cancelled and refunded automatically.',
     sectionTitle: 'Cancellation',
     byYou: 'You cancelled this order',
     refunded: 'A refund of %{amount} was sent to your payment method. It shows up within a few business days.',

@@ -94,7 +94,10 @@ export type CancelActor = 'customer' | 'merchant' | 'admin' | 'system';
  * - the **shop**, while it still holds the bag;
  * - the **back office**, at any point before delivery — it is who gets called
  *   when the other two cannot fix it, courier on the road included;
- * - the **system**, only a packed order no courier has taken.
+ * - the **system**, at the two points where an order waits on someone who may
+ *   never come: `pending` (the shop has not answered) and `ready` (no courier
+ *   has taken it). Which of the two a given timer may act on is
+ *   `SYSTEM_CANCEL_FROM`.
  *
  * A delivered order is never cancelled: what happened cannot be undone, and
  * money going back from there is a refund (`RefundsService`).
@@ -111,9 +114,22 @@ export function canCancelAs(status: OrderStatus, actor: CancelActor): boolean {
     case 'admin':
       return isActiveStatus(status);
     case 'system':
-      return status === 'ready';
+      return status === 'pending' || status === 'ready';
   }
 }
+
+/** Why the system gives up on an order. Stored as the order's `cancel_reason`. */
+export type SystemCancelReason = 'shop_no_response' | 'no_courier';
+
+/**
+ * The one status each timer may cancel from. The shop-answer timer has no
+ * business cancelling a packed order, nor the courier timer one the shop has
+ * not seen — and an order that moved on since the sweep read it is left alone.
+ */
+export const SYSTEM_CANCEL_FROM: Record<SystemCancelReason, OrderStatus> = {
+  shop_no_response: 'pending',
+  no_courier: 'ready',
+};
 
 /** The merchant's rule, as `assertTransition` asks it. A courier never cancels: they hand the run back. */
 export function canCancel(status: OrderStatus, actor: StatusActor): boolean {

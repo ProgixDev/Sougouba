@@ -437,6 +437,12 @@ export default function OrderDetailScreen() {
                 </Text>
               ) : null}
             </View>
+            {/* While the shop has not answered: what happens if it never does. */}
+            {order.status === 'pending' ? (
+              <Text variant="caption" tone="muted" className="text-center text-[12px] leading-[17px]">
+                {t('customer.cancel.pendingHint')}
+              </Text>
+            ) : null}
             {canCustomerCancel(order) ? (
               <Button
                 label={t('customer.cancel.action')}

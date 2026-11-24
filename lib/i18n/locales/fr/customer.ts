@@ -249,6 +249,7 @@ export const customer = {
     submit: 'Annuler ma commande',
     keep: 'Garder ma commande',
     failed: 'Annulation impossible. Vérifiez votre connexion et réessayez.',
+    pendingHint: 'En attente de la boutique. Si elle ne répond pas, votre commande est annulée et remboursée automatiquement.',
     sectionTitle: 'Annulation',
     byYou: 'Vous avez annulé cette commande',
     refunded: 'Remboursement de %{amount} envoyé sur votre moyen de paiement. Il apparaît sous quelques jours ouvrables.',
