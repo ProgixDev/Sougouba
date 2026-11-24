@@ -26,6 +26,7 @@ import {
   type CompleteDeliveryInput,
   type LocationPingInput,
   type ProofUploadInput,
+  type ReleaseRunInput,
   type SignatureInput,
 } from './dto/courier.dto.js';
 
@@ -119,6 +120,48 @@ export class DeliveryService {
       this.notify.orderStatusChanged(orderId, 'out_for_delivery'),
     ]);
     return view;
+  }
+
+  /**
+   * The courier gives the run back — a flat tyre, a shop that is nowhere near
+   * ready, a run that turned out too far — with the reason why.
+   *
+   * Before pickup only. Until then nothing has left the shop, and the honest
+   * thing for a courier who cannot do the run is to say so early: the order
+   * goes straight back to dispatch and the next courier is offered it, instead
+   * of a shopper watching a courier who is not coming. Once the bag is in their
+   * hands there is nobody to hand it back to; that is `reportIssue`, and a
+   * person decides.
+   *
+   * The courier is not offered this order again: dispatch never offers a run
+   * twice to the same courier, and their accepted offer is still on file.
+   */
+  async release(courierId: string, orderId: string, input: ReleaseRunInput) {
+    const run = await this.ownedRun(courierId, orderId);
+    if (run.deliveredAt) throw new ConflictException('Cette course est déjà terminée.');
+    if (run.pickedUpAt || run.status !== 'ready') {
+      throw new ConflictException(
+        'Vous avez déjà récupéré cette commande : elle ne peut plus être rendue. Signalez un problème à la place.'
+      );
+    }
+
+    // The check above is for the message; this is the rule. The delete only
+    // matches a run that is still this courier's and still not picked up.
+    await unwrapRpc<void>(
+      this.db.rpc('delivery_release', {
+        p_order_id: orderId,
+        p_courier_id: courierId,
+        p_reason: input.reason,
+        p_note: (input.note ?? null) as string,
+      }),
+      (error) => {
+        if (error.code === NOT_RELEASABLE) throw new ConflictException('Cette course ne peut plus être rendue.');
+        throw unexpectedDbError(error);
+      }
+    );
+
+    this.logger.warn(`Courier ${courierId} handed back order ${orderId}: ${input.reason}`);
+    return { released: true as const };
   }
 
   /**
@@ -331,6 +374,8 @@ export class DeliveryService {
 
 /** `delivery_mark_picked_up` / `delivery_complete` raise this when the order moved under the courier. */
 const STATUS_MOVED = 'SGB04';
+/** `delivery_release` raises this when the run is no longer this courier's to hand back. */
+const NOT_RELEASABLE = 'SGB12';
 /** Postgres's own code for "unique violation". */
 const UNIQUE_VIOLATION = '23505';
 

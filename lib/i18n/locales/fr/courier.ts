@@ -62,6 +62,18 @@ export const courier = {
     retakePhoto: 'Reprendre la photo',
     tapToShoot: 'Toucher pour photographier',
   },
+  release: {
+    action: 'Rendre cette course',
+    title: 'Rendre la course',
+    note: 'La commande repart tout de suite vers un autre livreur. Vous ne serez pas payé pour cette course et elle ne vous sera plus proposée.',
+    why: 'Pourquoi la rendez-vous ?',
+    details: 'Précisions',
+    detailsRequired: 'Dites-nous pourquoi, en quelques mots.',
+    submit: 'Rendre la course',
+    failed: 'Impossible de rendre la course. Vérifiez votre connexion et réessayez.',
+    tooLateTitle: 'Trop tard pour la rendre',
+    tooLateBody: 'Vous avez déjà récupéré la commande. Si quelque chose bloque, signalez un problème : Sougouba prendra le relais.',
+  },
   report: {
     title: 'Signaler un problème',
     whatHappened: 'Ce qui s’est passé',

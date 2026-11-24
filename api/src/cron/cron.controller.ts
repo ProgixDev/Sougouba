@@ -5,6 +5,7 @@ import { RetentionScheduler } from '../admin/retention.scheduler.js';
 import { PayoutsScheduler } from '../billing/payouts.scheduler.js';
 import { StatementsScheduler } from '../billing/statements/statements.scheduler.js';
 import { DispatchScheduler } from '../courier/dispatch.scheduler.js';
+import { StalledOrdersScheduler } from '../orders/stalled-orders.service.js';
 import { CronGuard } from './cron.guard.js';
 
 /**
@@ -36,7 +37,8 @@ export class CronController {
     private readonly dispatch: DispatchScheduler,
     private readonly payouts: PayoutsScheduler,
     private readonly retention: RetentionScheduler,
-    private readonly statements: StatementsScheduler
+    private readonly statements: StatementsScheduler,
+    private readonly stalled: StalledOrdersScheduler
   ) {}
 
   /**
@@ -70,6 +72,8 @@ export class CronController {
 
   private async dispatchTick(): Promise<{ ok: true }> {
     await this.dispatch.tick();
+    // And what dispatch could not place: flag, or cancel, the orders no courier took.
+    await this.stalled.tick();
     return { ok: true };
   }
 

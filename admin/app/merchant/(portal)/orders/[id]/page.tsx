@@ -8,7 +8,13 @@ import { Text } from '@/components/ui/Text';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { Skeleton } from '@/components/data/Skeleton';
 import { getMerchantOrder } from '@/lib/api/merchantOrders';
-import { orderStatusMeta, DISPUTE_REASON_LABELS, COURIER_ISSUE_REASON_LABELS } from '@/lib/statusMeta';
+import {
+  orderStatusMeta,
+  CANCELLED_BY_LABELS,
+  CANCEL_REASON_LABELS,
+  COURIER_ISSUE_REASON_LABELS,
+  DISPUTE_REASON_LABELS,
+} from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
 import type { Order } from '@/lib/types';
 
@@ -52,6 +58,16 @@ export default function MerchantOrderDetailPage() {
           <Text variant="body" tone="muted" className="mt-1">
             {order.customerName ?? 'Client'} · {formatDateTime(order.createdAt)}
           </Text>
+          {/* Who stopped the order and, when the customer did, why. */}
+          {order.status === 'cancelled' && order.cancellation?.by && (
+            <Text variant="body" className="mt-2 text-destructive">
+              {CANCELLED_BY_LABELS[order.cancellation.by]}
+              {order.cancellation.by === 'customer' && order.cancellation.reason
+                ? ` — ${CANCEL_REASON_LABELS[order.cancellation.reason] ?? order.cancellation.reason}`
+                : ''}
+              {order.cancellation.note ? ` : ${order.cancellation.note}` : ''}
+            </Text>
+          )}
         </div>
       </div>
 

@@ -80,6 +80,64 @@ export class NotifyService {
     });
   }
 
+  /**
+   * An order was cancelled. Everyone still involved hears about it — except
+   * whoever did it, who is looking at the result already.
+   *
+   * `courierId` is the courier the cancellation released, when there was one:
+   * by the time this runs their delivery row is gone, so the caller is the only
+   * one who still knows who that was.
+   */
+  async orderCancelled(
+    orderId: string,
+    event: { by: 'customer' | 'merchant' | 'admin' | 'system'; refunded: boolean; courierId?: string | null },
+  ): Promise<void> {
+    await this.guard('orderCancelled', async () => {
+      const order = await this.order(orderId);
+      if (!order) return;
+      const ref = orderReference(order.id);
+      const vendor = order.vendor?.name ?? 'Sougouba';
+      const sends: Promise<unknown>[] = [];
+
+      if (event.by !== 'customer') {
+        const by = event.by;
+        sends.push(
+          this.push.send([order.customerId], {
+            content: (l) => customerCopy.cancelledBy({ ref, vendor, by, refunded: event.refunded }, l),
+            url: customerOrderUrl(order.id),
+            channel: 'orders',
+            category: 'orderUpdates',
+          }),
+        );
+      }
+      if (event.by !== 'merchant' && order.vendor) {
+        const by = event.by;
+        sends.push(
+          this.push.send([order.vendor.ownerId], {
+            content: (l) => merchantCopy.orderCancelled({ ref, by }, l),
+            url: `/(business)/order/${order.id}`,
+            channel: 'orders',
+          }),
+        );
+      }
+      if (event.courierId) {
+        const courier = await unwrap<{ userId: string } | null>(
+          this.db.from('couriers').select('userId:user_id').eq('id', event.courierId).maybeSingle(),
+        );
+        if (courier) {
+          sends.push(
+            this.push.send([courier.userId], {
+              content: (l) => courierCopy.runCancelled({ ref, vendor }, l),
+              url: '/(courier)/(tabs)/missions',
+              channel: 'orders',
+            }),
+          );
+        }
+      }
+      await Promise.all(sends);
+    });
+  }
+
   /** A paid order has just landed in the shop's queue. */
   async orderPlaced(orderId: string): Promise<void> {
     await this.guard('orderPlaced', async () => {

@@ -36,6 +36,28 @@ export const domain: Widen<typeof reference> = {
   dispute: {
     answered: '%{reason} · answered',
   },
+  cancelReason: {
+    changed_mind: 'I changed my mind',
+    ordered_by_mistake: 'Ordered by mistake',
+    wrong_address: 'Wrong delivery address',
+    wrong_items: 'I want to change my order',
+    too_long: 'The shop is slow to answer',
+    other: 'Other',
+  },
+  releaseReason: {
+    vehicle_problem: 'Vehicle problem',
+    too_far: 'Too far for me',
+    shop_delay: 'The order is not ready',
+    personal: 'Something came up',
+    other: 'Other',
+  },
+  cancelledBy: {
+    customer: 'Cancelled by the customer',
+    merchant: 'Cancelled by the shop',
+    admin: 'Cancelled by the Sougouba team',
+    system: 'Cancelled: no courier available',
+    unknown: 'Order cancelled',
+  },
   courierIssueReason: {
     customer_absent: 'Customer not there',
     wrong_address: 'Wrong address',

@@ -29,6 +29,9 @@ interface FieldState {
   pointsExpiryMonths: string;
   referralRewardPoints: string;
   referralMinFirstOrderCad: string;
+  /** Empty when the API does not have the two delays yet: the card is hidden and they are not sent. */
+  noCourierAlertMin: string;
+  noCourierCancelMin: string;
 }
 
 function toFields(s: PlatformSettings): FieldState {
@@ -41,6 +44,8 @@ function toFields(s: PlatformSettings): FieldState {
     pointsExpiryMonths: String(s.pointsExpiryMonths),
     referralRewardPoints: String(s.referralRewardPoints),
     referralMinFirstOrderCad: String(s.referralMinFirstOrderCad),
+    noCourierAlertMin: s.noCourierAlertMin === undefined ? '' : String(s.noCourierAlertMin),
+    noCourierCancelMin: s.noCourierCancelMin === undefined ? '' : String(s.noCourierCancelMin),
   };
 }
 
@@ -56,6 +61,9 @@ function toPatch(f: FieldState, doublePointsActive: boolean): PlatformSettings {
     referralRewardPoints: num(f.referralRewardPoints),
     referralMinFirstOrderCad: num(f.referralMinFirstOrderCad),
     doublePointsActive,
+    ...(f.noCourierAlertMin !== '' && f.noCourierCancelMin !== ''
+      ? { noCourierAlertMin: Math.round(num(f.noCourierAlertMin)), noCourierCancelMin: Math.round(num(f.noCourierCancelMin)) }
+      : {}),
   };
 }
 
@@ -94,11 +102,18 @@ export default function SettingsPage() {
   async function handleSave() {
     if (!fields) return;
     setSaving(true);
-    const saved = await updateSettings(toPatch(fields, doublePointsActive));
-    setFields(toFields(saved));
-    setDoublePointsActive(saved.doublePointsActive);
-    setSaving(false);
-    toast('success', 'Paramètres enregistrés.');
+    try {
+      const saved = await updateSettings(toPatch(fields, doublePointsActive));
+      setFields(toFields(saved));
+      setDoublePointsActive(saved.doublePointsActive);
+      toast('success', 'Paramètres enregistrés.');
+    } catch (error) {
+      // A refused value — a cancellation delay shorter than the alert delay,
+      // say — used to leave the button spinning for good.
+      toast('error', error instanceof Error ? error.message : 'Les paramètres n’ont pas pu être enregistrés.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -173,6 +188,38 @@ export default function SettingsPage() {
           </div>
         </label>
       </Card>
+
+      {fields.noCourierAlertMin !== '' && (
+        <Card className="p-6">
+          <Text variant="subtitle" className="mb-1">
+            Commande prête, sans livreur
+          </Text>
+          <Text variant="caption" tone="muted" className="mb-4">
+            Ce qui arrive quand une commande est prête et qu’aucun livreur ne la prend. Le délai compte à partir du moment où
+            elle est prête — ou du moment où un livreur l’a rendue.
+          </Text>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Input
+              label="Prévenir l’équipe après (minutes)"
+              type="number"
+              step="1"
+              min={1}
+              max={1440}
+              helper="Un courriel à l’équipe, et la commande s’affiche en haut de la page Commandes."
+              {...field('noCourierAlertMin')}
+            />
+            <Input
+              label="Annuler et rembourser après (minutes)"
+              type="number"
+              step="1"
+              min={0}
+              max={1440}
+              helper="Doit être plus long que le délai d’alerte. 0 = jamais automatiquement : l’équipe décide."
+              {...field('noCourierCancelMin')}
+            />
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

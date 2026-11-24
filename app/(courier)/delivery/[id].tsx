@@ -1,5 +1,5 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { DoorOpen, Hand, KeyRound, MapPin, MessageSquare, Navigation, NotebookPen, Store, TriangleAlert } from 'lucide-react-native';
+import { DoorOpen, Hand, KeyRound, MapPin, MessageSquare, Navigation, NotebookPen, Store, TriangleAlert, Undo2 } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import { useThemeColors } from '@/hooks/useColorScheme';
 import { useDeliveryProgress } from '@/hooks/useDeliveryProgress';
 import { useOrderChatUnread } from '@/hooks/useOrderChatUnread';
 import { useOwnPosition } from '@/hooks/useOwnPosition';
+import { canReleaseRun } from '@/lib/cancellation';
 import { formatCad } from '@/lib/format';
 import { useT } from '@/lib/i18n/useT';
 import { formatDistance } from '@/lib/geo';
@@ -241,6 +242,21 @@ export default function CourierDeliveryScreen() {
                       </Text>
                     </View>
                   ) : null}
+                </Pressable>
+              ) : null}
+
+              {/* Before pickup only: nothing has left the shop, so the run can
+                  still go to someone else. After that it is the report below. */}
+              {canReleaseRun(order) ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push({ pathname: dynamicRoutes.courierRelease, params: { id: order.id } })}
+                  className="flex-row items-center gap-2.5 rounded-2xl border border-border p-4 active:bg-muted"
+                >
+                  <Undo2 size={16} color={colors.mutedForeground} strokeWidth={2} />
+                  <Text variant="caption" tone="muted" className="flex-1 text-[13px]">
+                    {t('courier.release.action')}
+                  </Text>
                 </Pressable>
               ) : null}
 

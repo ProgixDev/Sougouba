@@ -59,6 +59,31 @@ export const domain = {
   dispute: {
     answered: '%{reason} · répondu',
   },
+  /** Why a shopper cancels an order the shop has not accepted yet. */
+  cancelReason: {
+    changed_mind: 'J’ai changé d’avis',
+    ordered_by_mistake: 'Commandé par erreur',
+    wrong_address: 'Mauvaise adresse de livraison',
+    wrong_items: 'Je veux modifier ma commande',
+    too_long: 'La boutique tarde à répondre',
+    other: 'Autre',
+  },
+  /** Why a courier hands a run back before pickup. */
+  releaseReason: {
+    vehicle_problem: 'Problème de véhicule',
+    too_far: 'Trop loin pour moi',
+    shop_delay: 'La commande n’est pas prête',
+    personal: 'Empêchement personnel',
+    other: 'Autre',
+  },
+  /** Who cancelled an order, as one line. */
+  cancelledBy: {
+    customer: 'Annulée par le client',
+    merchant: 'Annulée par la boutique',
+    admin: 'Annulée par l’équipe Sougouba',
+    system: 'Annulée : aucun livreur disponible',
+    unknown: 'Commande annulée',
+  },
   /** What a courier can flag from the road. */
   courierIssueReason: {
     customer_absent: 'Client absent',

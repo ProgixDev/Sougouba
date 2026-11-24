@@ -97,6 +97,32 @@ export const customerCopy = {
       },
     )) as Copy<OrderParams>,
 
+  /**
+   * The order was cancelled by someone other than the shopper. Who did it
+   * changes the first sentence; whether the money is already on its way back
+   * changes the second — a refund that Stripe has not confirmed is not promised
+   * on a lock screen.
+   */
+  cancelledBy: (({ ref, vendor, by, refunded }, l) => {
+    const fr =
+      by === 'merchant'
+        ? `${vendor} a annulé votre commande ${ref}.`
+        : by === 'system'
+          ? `Aucun livreur n’était disponible pour votre commande ${ref} : elle est annulée.`
+          : `Sougouba a annulé votre commande ${ref}.`;
+    const en =
+      by === 'merchant'
+        ? `${vendor} cancelled your order ${ref}.`
+        : by === 'system'
+          ? `No courier was available for your order ${ref}, so it was cancelled.`
+          : `Sougouba cancelled your order ${ref}.`;
+    return pick(
+      l,
+      { title: 'Commande annulée', body: refunded ? `${fr} Vous êtes remboursé.` : fr },
+      { title: 'Order cancelled', body: refunded ? `${en} You have been refunded.` : en },
+    );
+  }) as Copy<OrderParams & { by: 'merchant' | 'admin' | 'system'; refunded: boolean }>,
+
   disputeResolved: (({ ref }, l) =>
     pick(
       l,
@@ -151,6 +177,30 @@ export const merchantCopy = {
         body: `Order ${ref} — reply from the app.`,
       },
     )) as Copy<{ ref: string }>,
+
+  /** An order in the shop's queue was cancelled by someone else: stop preparing it. */
+  orderCancelled: (({ ref, by }, l) =>
+    pick(
+      l,
+      {
+        title: 'Commande annulée',
+        body:
+          by === 'customer'
+            ? `Le client a annulé la commande ${ref}. Ne la préparez pas.`
+            : by === 'system'
+              ? `Commande ${ref} annulée : aucun livreur n’était disponible.`
+              : `Sougouba a annulé la commande ${ref}.`,
+      },
+      {
+        title: 'Order cancelled',
+        body:
+          by === 'customer'
+            ? `The customer cancelled order ${ref}. Do not prepare it.`
+            : by === 'system'
+              ? `Order ${ref} was cancelled: no courier was available.`
+              : `Sougouba cancelled order ${ref}.`,
+      },
+    )) as Copy<{ ref: string; by: 'customer' | 'admin' | 'system' }>,
 
   subscriptionPaymentFailed: ((_params, l) =>
     pick(
@@ -209,6 +259,20 @@ export const courierCopy = {
         body: `${vendor} · ${km.toFixed(1)} km · ${money(earningsCad, l)} — accept it fast.`,
       },
     )) as Copy<{ vendor: string; km: number; earningsCad: number }>,
+
+  /** The order a courier was carrying, or heading to, no longer exists as a delivery. */
+  runCancelled: (({ ref, vendor }, l) =>
+    pick(
+      l,
+      {
+        title: 'Course annulée',
+        body: `La commande ${ref} (${vendor}) a été annulée. Vous êtes libre pour une autre course.`,
+      },
+      {
+        title: 'Delivery cancelled',
+        body: `Order ${ref} (${vendor}) was cancelled. You are free for another delivery.`,
+      },
+    )) as Copy<OrderParams>,
 };
 
 /** Either side of an order's chat: who wrote, and the start of what they wrote. */

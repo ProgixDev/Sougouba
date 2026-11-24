@@ -14,7 +14,7 @@ export const PERMISSION_GROUPS = [
     area: 'Commandes',
     permissions: [
       { key: 'orders.view', label: 'Voir les commandes' },
-      { key: 'orders.refund', label: 'Rembourser une commande' },
+      { key: 'orders.refund', label: 'Annuler ou rembourser une commande' },
     ],
   },
   {

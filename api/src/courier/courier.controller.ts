@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 
@@ -16,6 +16,7 @@ import {
   completeDeliverySchema,
   locationPingSchema,
   proofUploadSchema,
+  releaseRunSchema,
   setShiftSchema,
   signatureSchema,
   updateCourierSchema,
@@ -23,6 +24,7 @@ import {
   type CompleteDeliveryInput,
   type LocationPingInput,
   type ProofUploadInput,
+  type ReleaseRunInput,
   type SetShiftInput,
   type SignatureInput,
   type UpdateCourierInput,
@@ -187,6 +189,24 @@ export class CourierController {
   }
 
   /** Something stopped the delivery. The run stays open; an administrator picks it up (Phase 6). */
+  /**
+   * Hand the run back before pickup, with a reason. The order returns to
+   * dispatch and the next courier is offered it straight away.
+   */
+  @Post('me/runs/:orderId/release')
+  @HttpCode(200)
+  async release(
+    @CurrentUser() userId: string,
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+    @Body(new ZodValidationPipe(releaseRunSchema)) body: ReleaseRunInput
+  ) {
+    const courierId = await this.couriers.courierIdFor(userId);
+    const result = await this.delivery.release(courierId, orderId, body);
+    // Offer it onward now, for the same reason a decline does.
+    await this.dispatcher.nudge();
+    return result;
+  }
+
   @Post('me/runs/:orderId/issue')
   async reportIssue(
     @CurrentUser() userId: string,

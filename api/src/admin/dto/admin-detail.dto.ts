@@ -111,6 +111,38 @@ export interface AdminOrderDetail {
    */
   receipt: { number: string | null; emailedAt: Date | null };
 
+  /**
+   * Who cancelled the order, and why — null unless it is cancelled.
+   *
+   * `by` is null on an order cancelled before `0054_order_cancellation.sql`:
+   * nothing recorded who did it. `reason` is a code (the shopper's choice, or
+   * `no_courier` for the system); `note` is free text — the shopper's own
+   * words, or the reason staff wrote, which only the back office sees.
+   */
+  cancellation: {
+    at: Date | null;
+    by: 'customer' | 'merchant' | 'admin' | 'system' | null;
+    /** The account that did it, when it was a person. */
+    byName: string | null;
+    reason: string | null;
+    note: string | null;
+  } | null;
+
+  /**
+   * Couriers who held this order and no longer do, oldest first. `reason` is
+   * the courier's (`vehicle_problem`, `too_far`, `shop_delay`, `personal`,
+   * `other`) or `order_cancelled` when the cancellation released them;
+   * `pickedUpAt` is only ever set in that last case.
+   */
+  releases: {
+    courier: { id: string; fullName: string } | null;
+    reason: string;
+    note: string | null;
+    acceptedAt: Date;
+    pickedUpAt: Date | null;
+    releasedAt: Date;
+  }[];
+
   deliveryAddress: {
     label: string;
     street: string;

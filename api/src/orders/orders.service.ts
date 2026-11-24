@@ -15,6 +15,7 @@ import { DB } from '../db/db.module.js';
 import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import type { Page } from '../catalog/dto/query.dto.js';
 import type {
+  CancelOrderInput,
   CartInput,
   OpenDisputeInput,
   OrderQuery,
@@ -22,6 +23,7 @@ import type {
   ReplyDisputeInput,
   SubmitReviewInput,
 } from './dto/order.dto.js';
+import { OrderCancellationService } from './order-cancellation.service.js';
 import { hydrateOrders } from './order-view.js';
 import { assertTransition, isActiveStatus, type OrderStatus, type StatusActor } from './order-status.js';
 import { priceOrder, roundCad, toStripeAmount, type PricedLine, type PricedOrder } from './pricing.js';
@@ -48,7 +50,8 @@ export class OrdersService {
     private readonly coupons: CouponsService,
     private readonly settings: SettingsService,
     private readonly notify: NotifyService,
-    private readonly receipts: ReceiptsService
+    private readonly receipts: ReceiptsService,
+    private readonly cancellation: OrderCancellationService
   ) {}
 
   // ── pricing ───────────────────────────────────────────────────────────────
@@ -545,6 +548,14 @@ export class OrdersService {
 
     assertTransition(order.status, to, actor);
 
+    // Cancelling is not a step along the way: it also gives the shopper their
+    // money back, returns the stock and tells them. It used to be a bare status
+    // change here, which left a cancelled order paid for.
+    if (to === 'cancelled') {
+      await this.cancellation.byMerchant(userId, vendor.id, orderId);
+      return this.byId(userId, orderId, 'merchant');
+    }
+
     // The move and its history row land together, and the status is re-checked
     // inside the write — two dashboard taps a moment apart would otherwise both
     // pass `assertTransition` against the same stale value and append two
@@ -559,6 +570,15 @@ export class OrdersService {
 
     const [view] = await Promise.all([this.byId(userId, orderId, 'merchant'), this.notify.orderStatusChanged(orderId, to)]);
     return view;
+  }
+
+  /**
+   * The shopper cancels their own order, with a reason — only while the shop
+   * has not answered it. Refunded in full; see `OrderCancellationService`.
+   */
+  async cancelAsCustomer(customerId: string, orderId: string, input: CancelOrderInput) {
+    await this.cancellation.byCustomer(customerId, orderId, input);
+    return this.byId(customerId, orderId, 'customer');
   }
 
   // ── disputes ──────────────────────────────────────────────────────────────

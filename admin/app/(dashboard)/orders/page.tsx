@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, Ban, Package, Search, ShoppingCart, Wallet } from 'lucide-react';
+import { AlertCircle, Ban, Package, Search, ShoppingCart, Truck, Wallet } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { StatusBadge } from '@/components/data/StatusBadge';
@@ -10,7 +11,7 @@ import { ExportButton } from '@/components/data/ExportButton';
 import { csvDate, type CsvColumn } from '@/lib/csv';
 import { Avatar, BarSeries, Breakdown, CHART, KpiCard, KpiGrid, PageHeader, SectionCard } from '@/components/insights/Insights';
 import { getOrderInsights, shortDay, type OrderInsights } from '@/lib/api/insights';
-import { listOrders } from '@/lib/api/orders';
+import { listOrders, listOrdersWaitingForCourier } from '@/lib/api/orders';
 import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { useToast } from '@/components/Toast';
 import { orderStatusMeta } from '@/lib/statusMeta';
@@ -34,10 +35,16 @@ export default function OrdersPage() {
   const [status, setStatus] = useState<OrderStatus | 'all'>('all');
   const [search, setSearch] = useState('');
   const [insights, setInsights] = useState<OrderInsights | null>(null);
+  const [waiting, setWaiting] = useState<Awaited<ReturnType<typeof listOrdersWaitingForCourier>> | null>(null);
 
   useEffect(() => {
     getOrderInsights()
       .then(setInsights)
+      .catch(() => undefined);
+    // Orders that are packed and that nobody is carrying. An older API has no
+    // such route; the card then simply does not appear.
+    listOrdersWaitingForCourier()
+      .then(setWaiting)
       .catch(() => undefined);
   }, []);
 
@@ -129,6 +136,43 @@ export default function OrdersPage() {
           />
         }
       />
+
+      {waiting && waiting.orders.length > 0 && (
+        <Card className="border border-destructive/40 p-5" elevated={false}>
+          <div className="mb-1 flex items-center gap-2">
+            <Truck size={17} className="text-destructive" />
+            <Text variant="subtitle">
+              {waiting.orders.length === 1 ? '1 commande prête sans livreur' : `${waiting.orders.length} commandes prêtes sans livreur`}
+            </Text>
+          </div>
+          <Text variant="caption" tone="muted" className="mb-3">
+            Prêtes depuis plus de {waiting.alertAfterMin} min, aucun livreur ne les a prises.{' '}
+            {waiting.cancelAfterMin > 0
+              ? `Elles sont annulées et remboursées automatiquement après ${waiting.cancelAfterMin} min — sauf celles qui attendent depuis plus d’un jour, qui restent à traiter à la main.`
+              : 'L’annulation automatique est désactivée : c’est à vous de décider.'}
+          </Text>
+          <ul className="flex flex-col">
+            {waiting.orders.map((o) => (
+              <li key={o.orderId} className="border-b border-border last:border-0">
+                <Link href={`/orders/${o.orderId}`} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2.5 hover:bg-muted">
+                  <div className="min-w-0">
+                    <Text variant="body" className="font-medium">
+                      #{o.orderId.slice(0, 8)} · {o.vendorName}
+                    </Text>
+                    <Text variant="caption" tone="muted">
+                      {o.customerName ?? 'Client'} · {formatCad(o.totalCad)} ·{' '}
+                      {o.offers === 0 ? 'aucun livreur à portée' : `${o.offers} livreur${o.offers > 1 ? 's' : ''} sollicité${o.offers > 1 ? 's' : ''}`}
+                    </Text>
+                  </div>
+                  <Text variant="body" className="tabular font-semibold text-destructive">
+                    {waitingLabel(o.waitingMin)}
+                  </Text>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <KpiGrid>
         <KpiCard
@@ -236,4 +280,11 @@ export default function OrdersPage() {
       </Card>
     </div>
   );
+}
+
+/** « 25 min », « 3 h 10 », « 4 j » — how long an order has been waiting, at the size that matters. */
+function waitingLabel(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 24 * 60) return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}`;
+  return `${Math.floor(minutes / (24 * 60))} j`;
 }

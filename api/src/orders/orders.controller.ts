@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../auth/current-user.decorator.js';
@@ -6,11 +6,13 @@ import { SupabaseAuthGuard } from '../auth/supabase-auth.guard.js';
 import { DispatchScheduler } from '../courier/dispatch.scheduler.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import {
+  cancelOrderSchema,
   cartSchema,
   openDisputeSchema,
   orderQuerySchema,
   placeOrderSchema,
   submitReviewSchema,
+  type CancelOrderInput,
   type CartInput,
   type OpenDisputeInput,
   type OrderQuery,
@@ -86,6 +88,20 @@ export class OrdersController {
   @Get(':id/courier-location')
   courierLocation(@CurrentUser() userId: string, @Param('id', ParseUUIDPipe) id: string) {
     return this.orders.courierLocation(userId, id);
+  }
+
+  /**
+   * The shopper cancels, while the shop has not accepted the order yet. A
+   * reason is required; the payment is refunded in full.
+   */
+  @Post(':id/cancel')
+  @HttpCode(200)
+  cancel(
+    @CurrentUser() userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(cancelOrderSchema)) body: CancelOrderInput
+  ) {
+    return this.orders.cancelAsCustomer(userId, id, body);
   }
 
   @Post(':id/dispute')

@@ -208,7 +208,10 @@ export async function hydrateOrders(
 
   return rows.map((rawRow) => {
     // Out of the flat spread below, or the shop would read it off the row.
-    const { deliveryDoorCode, ...row } = rawRow;
+    // The cancellation columns leave it too and come back as `cancellation`,
+    // minus what is not for these readers.
+    const { deliveryDoorCode, cancelledAt, cancelledBy, cancelledById: _actor, cancelReason, cancelNote, noCourierAlertedAt: _alerted, ...row } =
+      rawRow;
     const p = parts.get(row.id)!;
     const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
     return {
@@ -241,6 +244,23 @@ export async function hydrateOrders(
       delivery: p.delivery,
       courierIssue: p.courierIssue,
       review: p.review,
+      // Who ended the order and why, for whoever is looking at it — shopper,
+      // shop or courier. The reason staff wrote stays in the back office: it is
+      // addressed to colleagues ("suspected fraud"), not to the people it is
+      // about. `by` is null on an order cancelled before this was recorded.
+      cancellation:
+        row.status === 'cancelled'
+          ? {
+              by: cancelledBy ?? null,
+              reason: cancelReason ?? null,
+              note: cancelledBy === 'admin' ? null : (cancelNote ?? null),
+              at: cancelledAt ?? null,
+            }
+          : null,
+      // Null until money has gone back. Present on a cancelled order once
+      // Stripe confirmed the refund — which is what lets the app say
+      // "remboursée" rather than promise it.
+      refund: row.refundedAt ? { amountCad: num(row.refundAmountCad), at: row.refundedAt } : null,
     };
   });
 }

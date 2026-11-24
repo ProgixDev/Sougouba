@@ -206,6 +206,15 @@ export const updateSettingsSchema = z
      */
     courierLocationRetentionDays: z.number().int().min(1).max(3650).optional(),
     deliveryProofRetentionDays: z.number().int().min(1).max(3650).optional(),
+    /**
+     * How long a packed order may wait for a courier, in minutes: before staff
+     * are told, and before it is cancelled and refunded. 0 on the second one
+     * switches the automatic cancellation off. The database refuses a
+     * cancellation delay that is not longer than the alert delay; the check
+     * below only catches the case where both arrive in the same request.
+     */
+    noCourierAlertMin: z.number().int().min(1, 'Au moins 1 minute').max(1440).optional(),
+    noCourierCancelMin: z.number().int().min(0).max(1440).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, 'Aucun champ à modifier')
   .refine(
@@ -227,6 +236,17 @@ export const refundOrderSchema = z.object({
 });
 
 export type RefundOrderInput = z.infer<typeof refundOrderSchema>;
+
+/**
+ * Staff cancelling an order still in flight. The reason is free text and
+ * required: it is what the audit log shows next to the name of who did it, and
+ * what the next person reading the order needs in order not to ask again.
+ */
+export const cancelOrderAdminSchema = z.object({
+  reason: z.string().trim().min(5, 'Motif requis').max(500),
+});
+
+export type CancelOrderAdminInput = z.infer<typeof cancelOrderAdminSchema>;
 
 // ── audit log ───────────────────────────────────────────────────────────────
 

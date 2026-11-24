@@ -32,6 +32,7 @@ import {
   adminRoleSchema,
   adminSearchQuerySchema,
   auditQuerySchema,
+  cancelOrderAdminSchema,
   courierIssueQuerySchema,
   createAdminSchema,
   createSpecialtySchema,
@@ -56,6 +57,7 @@ import {
   type AdminRoleInput,
   type AdminSearchQuery,
   type AuditQuery,
+  type CancelOrderAdminInput,
   type CourierIssueQuery,
   type CreateAdminInput,
   type CreateSpecialtyInput,
@@ -76,7 +78,9 @@ import {
   type UserQuery,
 } from './dto/admin.dto.js';
 import { RefundsService } from './refunds.service.js';
+import { OrderCancellationService } from '../orders/order-cancellation.service.js';
 import { ReceiptsService } from '../orders/receipts/receipts.service.js';
+import { StalledOrdersService } from '../orders/stalled-orders.service.js';
 import { SpecialtiesAdminService } from './specialties-admin.service.js';
 import { SupportAdminService } from './support-admin.service.js';
 import { ModerationService } from './moderation.service.js';
@@ -118,7 +122,9 @@ export class AdminController {
     private readonly supportAdmin: SupportAdminService,
     private readonly moderation: ModerationService,
     private readonly adminAccounts: AdminAccountsService,
-    private readonly receipts: ReceiptsService
+    private readonly receipts: ReceiptsService,
+    private readonly cancellation: OrderCancellationService,
+    private readonly stalledOrders: StalledOrdersService
   ) {}
 
   @RequirePermission('dashboard.view')
@@ -142,6 +148,19 @@ export class AdminController {
   @Get('orders')
   orders(@Query(new ZodValidationPipe(orderListQuerySchema)) query: OrderListQuery) {
     return this.admin.listOrders(query);
+  }
+
+  /**
+   * Orders that are packed and that no courier has taken, oldest first, with
+   * the two delays that decide what happens to them. What the orders page puts
+   * at the top: these are the ones waiting on a person.
+   *
+   * A static segment, so it cannot be read as `orders/:id`.
+   */
+  @RequirePermission('orders.view')
+  @Get('orders/waiting-for-courier')
+  ordersWaitingForCourier() {
+    return this.stalledOrders.list();
   }
 
   @RequirePermission('orders.view')
@@ -661,6 +680,27 @@ export class AdminController {
     @Body(new ZodValidationPipe(refundOrderSchema)) body: RefundOrderInput
   ) {
     return this.refunds.refundOrder(adminId, orderId, body);
+  }
+
+  /**
+   * Cancel an order that is still in flight — at any step before delivery,
+   * courier on the road included. The shopper is refunded in full, the stock
+   * and any points or coupon come back, and a courier carrying it is released.
+   * Audited as `order.cancel`, with the reason.
+   *
+   * Under `orders.refund`: cancelling *is* refunding, and a role trusted with
+   * one is the role trusted with the other. A delivered order is refused here
+   * and belongs to the route above.
+   */
+  @RequirePermission('orders.refund')
+  @Post('orders/:orderId/cancel')
+  @HttpCode(200)
+  cancelOrder(
+    @CurrentUser() adminId: string,
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+    @Body(new ZodValidationPipe(cancelOrderAdminSchema)) body: CancelOrderAdminInput
+  ) {
+    return this.cancellation.byAdmin(adminId, orderId, body.reason);
   }
 
   // ── receipts ──────────────────────────────────────────────────────────────

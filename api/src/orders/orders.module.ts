@@ -4,11 +4,13 @@ import { CourierModule } from '../courier/courier.module.js';
 import { LoyaltyModule } from '../loyalty/loyalty.module.js';
 import { CourierChatController, CustomerChatController } from './order-chat.controller.js';
 import { OrderChatService } from './order-chat.service.js';
+import { OrderCancellationService } from './order-cancellation.service.js';
 import { OrdersController } from './orders.controller.js';
 import { OrdersService } from './orders.service.js';
 import { PaymentsService } from './payments.service.js';
 import { OrderReceiptController, ReceiptDownloadController } from './receipts/receipts.controller.js';
 import { ReceiptsService } from './receipts/receipts.service.js';
+import { StalledOrdersScheduler, StalledOrdersService } from './stalled-orders.service.js';
 import { VendorOrdersController } from './vendor-orders.controller.js';
 
 /**
@@ -40,11 +42,33 @@ import { VendorOrdersController } from './vendor-orders.controller.js';
   // `ReceiptsService` lives here rather than in a module of its own: it needs
   // `PaymentsService` and `OrdersService` needs it, which between two modules
   // would be a cycle.
-  providers: [OrdersService, PaymentsService, OrderChatService, ReceiptsService],
+  //
+  // `OrderCancellationService` and the stalled-order sweep are here for the
+  // same reason: they refund through `PaymentsService` and email through
+  // `ReceiptsService`. The sweep cancels orders, so it cannot sit beside
+  // dispatch in `CourierModule`, which this module imports.
+  providers: [
+    OrdersService,
+    PaymentsService,
+    OrderChatService,
+    ReceiptsService,
+    OrderCancellationService,
+    StalledOrdersService,
+    StalledOrdersScheduler,
+  ],
   // `PaymentsService` is exported so Phase 6's refunds go back through the same
   // Stripe client that took the money, rather than a second one configured
   // separately. `ReceiptsService` likewise: a refund sends the shopper a
   // notice, and the back office resends a receipt.
-  exports: [OrdersService, PaymentsService, ReceiptsService],
+  // The cancellation path and the stalled-order list are exported for the
+  // back office, the scheduler for the cron route.
+  exports: [
+    OrdersService,
+    PaymentsService,
+    ReceiptsService,
+    OrderCancellationService,
+    StalledOrdersService,
+    StalledOrdersScheduler,
+  ],
 })
 export class OrdersModule {}

@@ -63,6 +63,18 @@ export const courier: Widen<typeof reference> = {
     retakePhoto: 'Retake the photo',
     tapToShoot: 'Tap to take a photo',
   },
+  release: {
+    action: 'Hand this run back',
+    title: 'Hand the run back',
+    note: 'The order goes straight to another courier. You will not be paid for this run and it will not be offered to you again.',
+    why: 'Why are you handing it back?',
+    details: 'Details',
+    detailsRequired: 'Tell us why, in a few words.',
+    submit: 'Hand the run back',
+    failed: 'Could not hand the run back. Check your connection and try again.',
+    tooLateTitle: 'Too late to hand it back',
+    tooLateBody: 'You have already picked the order up. If something is stuck, report a problem and Sougouba will take over.',
+  },
   report: {
     title: 'Report a problem',
     whatHappened: 'What happened',

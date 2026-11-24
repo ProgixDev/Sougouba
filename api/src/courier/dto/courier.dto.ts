@@ -182,3 +182,27 @@ export const signatureSchema = z.object({
 });
 
 export type SignatureInput = z.infer<typeof signatureSchema>;
+
+// ── handing a run back ──────────────────────────────────────────────────────
+
+/**
+ * Why a courier gives a run back before pickup. `order_cancelled` also exists
+ * in `delivery_releases.reason`, but it is written by the cancellation path and
+ * is not something a courier can claim.
+ *
+ * Mirrored by the app's `lib/cancellation.ts`.
+ */
+export const RELEASE_REASONS = ['vehicle_problem', 'too_far', 'shop_delay', 'personal', 'other'] as const;
+
+export const releaseRunSchema = z
+  .object({
+    reason: z.enum(RELEASE_REASONS, { message: 'Choisissez un motif' }),
+    note: z.string().trim().max(500, 'Trop long').optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.reason === 'other' && (value.note ?? '').length < 5) {
+      ctx.addIssue({ code: 'custom', path: ['note'], message: 'Précisez le motif en quelques mots' });
+    }
+  });
+
+export type ReleaseRunInput = z.infer<typeof releaseRunSchema>;

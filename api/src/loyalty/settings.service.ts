@@ -1,4 +1,4 @@
-import { Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import type { PostgrestError } from '@supabase/supabase-js';
 
 import { diffSettings } from '../admin/audit.service.js';
@@ -100,6 +100,21 @@ export class SettingsService {
     // and worth knowing when reading the log.
     const before = await this.readRow();
     if (!before) throw new NotFoundException('Platform settings row is missing');
+
+    // The two no-courier delays are checked as a pair, against the row as it
+    // will be: either can arrive alone, and the database's own check would
+    // answer a bad pair with an anonymous 500.
+    const alertMin = patch.noCourierAlertMin ?? Number(before.noCourierAlertMin);
+    const cancelMin = patch.noCourierCancelMin ?? Number(before.noCourierCancelMin);
+    if (
+      (patch.noCourierAlertMin !== undefined || patch.noCourierCancelMin !== undefined) &&
+      cancelMin !== 0 &&
+      cancelMin <= alertMin
+    ) {
+      throw new BadRequestException(
+        'Le délai d’annulation automatique doit être plus long que le délai d’alerte (ou 0 pour le désactiver).'
+      );
+    }
 
     const updated = await unwrapRpc<Tables<'platform_settings'>>(
       this.db.rpc('settings_update', {

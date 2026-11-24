@@ -1,10 +1,10 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { MapPin, MessageSquareWarning, ReceiptText, Sparkles, Star, Store } from 'lucide-react-native';
+import { CircleX, MapPin, MessageSquareWarning, ReceiptText, Sparkles, Star, Store } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CourierTrackingCard, DisputeSheet, OrderStatusTimeline, ReviewSheet } from '@/components/customer';
+import { CancelOrderSheet, CourierTrackingCard, DisputeSheet, OrderStatusTimeline, ReviewSheet } from '@/components/customer';
 import type { ReviewInput } from '@/components/customer';
 import { DeliveryMap } from '@/components/map';
 import { useThemeColors } from '@/hooks/useColorScheme';
@@ -13,7 +13,8 @@ import { useOrderChatUnread } from '@/hooks/useOrderChatUnread';
 import { useOrderReceipt } from '@/hooks/useOrderReceipt';
 import { Badge, BackHeader, Button, EmptyState, PriceSummary, Reveal, Skeleton, StarRating, Text } from '@/components/ui';
 import { loyaltyApi, ordersApi, vendorsApi } from '@/data/api';
-import type { Courier, DisputeReason, Order, Vendor } from '@/data/types';
+import type { Courier, CustomerCancelReason, DisputeReason, Order, Vendor } from '@/data/types';
+import { canCustomerCancel, cancellationReasonKey, cancelledByKey } from '@/lib/cancellation';
 import { formatCad, formatDate, formatTime } from '@/lib/format';
 import { canOpenDispute, canReview, disputeReasonKey } from '@/lib/disputes';
 import { useT } from '@/lib/i18n/useT';
@@ -32,6 +33,7 @@ export default function OrderDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [reporting, setReporting] = useState(false);
   const [reviewing, setReviewing] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   // The courier's position is their phone's GPS, polled on its own below; the
   // order poll only has to catch *status* changes — a pickup, a delivery —
@@ -122,6 +124,20 @@ export default function OrderDetailScreen() {
     const updated = await ordersApi.openDispute(order.id, { reason, message });
     if (updated) setOrder(updated);
     setReporting(false);
+  }
+
+  // Not caught here either: the sheet shows the refusal and stays open. The
+  // usual one is that the shop accepted the order while the sheet was up — so
+  // the order is re-read, and the button behind the sheet goes away with it.
+  async function cancel(reason: CustomerCancelReason, note: string) {
+    if (!order) return;
+    try {
+      setOrder(await ordersApi.cancelOrder(order.id, { reason, ...(note ? { note } : {}) }));
+      setCancelling(false);
+    } catch (error) {
+      void load();
+      throw error;
+    }
   }
 
   // Not caught here: a refusal (already rated, not delivered) is shown inside
@@ -224,6 +240,37 @@ export default function OrderDetailScreen() {
             <Section title={t('common.tracking')}>
               <OrderStatusTimeline order={order} courierName={courier?.fullName} />
             </Section>
+
+            {order.status === 'cancelled' ? (
+              <Section title={t('customer.cancel.sectionTitle')}>
+                <View className="gap-2">
+                  <View className="flex-row items-center gap-2">
+                    <CircleX size={16} color={colors.destructive} strokeWidth={2} />
+                    <Text variant="caption" weight="bold" className="flex-1">
+                      {order.cancellation?.by === 'customer' ? t('customer.cancel.byYou') : t(cancelledByKey(order))}
+                    </Text>
+                  </View>
+                  {cancellationReasonKey(order) ? (
+                    <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
+                      {t(cancellationReasonKey(order)!)}
+                      {order.cancellation?.note ? ` — ${order.cancellation.note}` : ''}
+                    </Text>
+                  ) : null}
+                  {/* Said only once it is true: "refunded" when Stripe confirmed it,
+                      "in progress" while a paid order waits for it. An order the
+                      app cannot tell was paid says nothing about money. */}
+                  {order.refund ? (
+                    <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
+                      {t('customer.cancel.refunded', { amount: formatCad(order.refund.amountCad ?? order.totalCad) })}
+                    </Text>
+                  ) : order.cancellation?.by ? (
+                    <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
+                      {t('customer.cancel.refundPending')}
+                    </Text>
+                  ) : null}
+                </View>
+              </Section>
+            ) : null}
 
             {order.review ? (
               <Section title={t('customer.orderDetail.yourReview')}>
@@ -390,6 +437,16 @@ export default function OrderDetailScreen() {
                 </Text>
               ) : null}
             </View>
+            {canCustomerCancel(order) ? (
+              <Button
+                label={t('customer.cancel.action')}
+                variant="outline"
+                size="md"
+                fullWidth
+                icon={<CircleX size={17} color={colors.primary} strokeWidth={2.2} />}
+                onPress={() => setCancelling(true)}
+              />
+            ) : null}
             {canReview(order) ? (
               <Button
                 label={t('customer.orderDetail.rateOrder')}
@@ -421,6 +478,7 @@ export default function OrderDetailScreen() {
         onClose={() => setReviewing(false)}
         onSubmit={review}
       />
+      <CancelOrderSheet visible={cancelling} onClose={() => setCancelling(false)} onSubmit={cancel} />
       <DisputeSheet
         visible={reporting}
         onClose={() => setReporting(false)}

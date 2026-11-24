@@ -75,6 +75,36 @@ export const DISPUTE_REASON_LABELS: Record<string, string> = {
   other: 'Autre',
 };
 
+/** Who cancelled an order. `unknown` is an order cancelled before the app recorded it. */
+export const CANCELLED_BY_LABELS: Record<'customer' | 'merchant' | 'admin' | 'system' | 'unknown', string> = {
+  customer: 'Annulée par le client',
+  merchant: 'Annulée par le commerçant',
+  admin: 'Annulée par l’équipe Sougouba',
+  system: 'Annulée automatiquement : aucun livreur',
+  unknown: 'Annulée',
+};
+
+/** The shopper's reasons, plus the system's. An unknown code is shown as it is. */
+export const CANCEL_REASON_LABELS: Record<string, string> = {
+  changed_mind: 'A changé d’avis',
+  ordered_by_mistake: 'Commandé par erreur',
+  wrong_address: 'Mauvaise adresse de livraison',
+  wrong_items: 'Voulait modifier la commande',
+  too_long: 'La boutique tardait à répondre',
+  other: 'Autre',
+  no_courier: 'Aucun livreur disponible',
+};
+
+/** Why a courier no longer has an order. `order_cancelled` is written by a cancellation, not chosen. */
+export const RELEASE_REASON_LABELS: Record<string, string> = {
+  vehicle_problem: 'Problème de véhicule',
+  too_far: 'Trop loin',
+  shop_delay: 'Commande pas prête',
+  personal: 'Empêchement personnel',
+  other: 'Autre',
+  order_cancelled: 'Commande annulée',
+};
+
 export const COURIER_ISSUE_REASON_LABELS: Record<string, string> = {
   customer_absent: 'Client absent',
   wrong_address: 'Adresse erronée',

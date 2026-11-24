@@ -85,6 +85,39 @@ export const advanceStatusSchema = z.object({
 
 export type AdvanceStatusInput = z.infer<typeof advanceStatusSchema>;
 
+// ── cancellation ────────────────────────────────────────────────────────────
+
+/**
+ * Why a shopper cancels. A list rather than a free field because the back
+ * office sorts by it — "ordered by mistake" and "the shop is too slow to
+ * answer" are different problems with different owners. `other` asks for a
+ * sentence, since on its own it says nothing.
+ *
+ * Mirrored by the app's `lib/cancellation.ts`; a code added here needs its
+ * label there.
+ */
+export const CUSTOMER_CANCEL_REASONS = [
+  'changed_mind',
+  'ordered_by_mistake',
+  'wrong_address',
+  'wrong_items',
+  'too_long',
+  'other',
+] as const;
+
+export const cancelOrderSchema = z
+  .object({
+    reason: z.enum(CUSTOMER_CANCEL_REASONS, { message: 'Choisissez un motif' }),
+    note: z.string().trim().max(500, 'Trop long').optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.reason === 'other' && (value.note ?? '').length < 5) {
+      ctx.addIssue({ code: 'custom', path: ['note'], message: 'Précisez le motif en quelques mots' });
+    }
+  });
+
+export type CancelOrderInput = z.infer<typeof cancelOrderSchema>;
+
 // ── disputes ────────────────────────────────────────────────────────────────
 
 export const openDisputeSchema = z.object({

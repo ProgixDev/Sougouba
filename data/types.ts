@@ -348,6 +348,35 @@ export interface Order {
   courierIssue?: CourierIssue;
   /** Absent until the shopper rates the order. Null-ish for a courier, who is never shown it. */
   review?: OrderReview | null;
+  /** Who ended the order early, and why. Null unless it is cancelled. */
+  cancellation?: OrderCancellation | null;
+  /** Set once money has actually gone back to the shopper — not before. */
+  refund?: { amountCad: number | null; at: string } | null;
+}
+
+/** Everyone who can cancel an order. `system` is the timer that gives up on finding a courier. */
+export type CancelActor = 'customer' | 'merchant' | 'admin' | 'system';
+
+/** Why a shopper cancels. The API's list (`CUSTOMER_CANCEL_REASONS`); labels in `lib/cancellation.ts`. */
+export type CustomerCancelReason =
+  | 'changed_mind'
+  | 'ordered_by_mistake'
+  | 'wrong_address'
+  | 'wrong_items'
+  | 'too_long'
+  | 'other';
+
+/** Why a courier hands a run back before pickup. The API's list (`RELEASE_REASONS`). */
+export type RunReleaseReason = 'vehicle_problem' | 'too_far' | 'shop_delay' | 'personal' | 'other';
+
+export interface OrderCancellation {
+  /** Null on an order cancelled before the app recorded who did it. */
+  by: CancelActor | null;
+  /** A code: the shopper's reason, or `no_courier`. Null when the shop or the Sougouba team cancelled. */
+  reason: string | null;
+  /** The shopper's own words, when they wrote any. The team's internal reason is never sent. */
+  note: string | null;
+  at: string | null;
 }
 
 /**

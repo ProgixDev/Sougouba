@@ -556,6 +556,14 @@ export class AdminService {
     const courierIssue = one<any>(row.courierIssue);
     const delivery = one<any>(row.delivery);
 
+    // Read apart from the main query on purpose: an embed of a table the
+    // database does not have yet fails the whole read, and the order page is
+    // the one staff open when something is already going wrong.
+    const [releases, cancelledByName] = await Promise.all([
+      this.releasesOf(id),
+      row.cancelledById ? this.nameOf(row.cancelledById) : Promise.resolve(null),
+    ]);
+
     return {
       id: row.id,
       status: row.status,
@@ -604,6 +612,21 @@ export class AdminService {
             },
 
       receipt: { number: formatReceiptNumber(row.receiptNumber), emailedAt: row.receiptEmailedAt ?? null },
+
+      // Who ended it and why. `by` is null on an order cancelled before the
+      // app recorded it — the UI then says only that it was cancelled.
+      cancellation:
+        row.status === 'cancelled'
+          ? {
+              at: row.cancelledAt ?? null,
+              by: row.cancelledBy ?? null,
+              byName: cancelledByName,
+              reason: row.cancelReason ?? null,
+              note: row.cancelNote ?? null,
+            }
+          : null,
+
+      releases,
 
       deliveryAddress: {
         label: row.deliveryAddressLabel,
@@ -671,6 +694,36 @@ export class AdminService {
           }
         : null,
     };
+  }
+
+  /**
+   * Every courier who held this order and no longer does, oldest first: handed
+   * back before pickup, or released when the order was cancelled. Empty, not an
+   * error, against a database older than `0054_order_cancellation.sql`.
+   */
+  private async releasesOf(orderId: string): Promise<AdminOrderDetail['releases']> {
+    const { data, error } = await this.db
+      .from('delivery_releases')
+      .select('reason, note, acceptedAt:accepted_at, pickedUpAt:picked_up_at, releasedAt:released_at, courier:couriers(id, fullName:full_name)')
+      .eq('order_id', orderId)
+      .order('released_at', { ascending: true });
+    if (error) return [];
+    return (data ?? []).map((row: any) => {
+      const courier = one<any>(row.courier);
+      return {
+        courier: courier ? { id: courier.id, fullName: courier.fullName } : null,
+        reason: row.reason,
+        note: row.note,
+        acceptedAt: row.acceptedAt,
+        pickedUpAt: row.pickedUpAt,
+        releasedAt: row.releasedAt,
+      };
+    });
+  }
+
+  private async nameOf(userId: string): Promise<string | null> {
+    const { data } = await this.db.from('profiles').select('fullName:full_name').eq('id', userId).maybeSingle();
+    return (data as { fullName: string | null } | null)?.fullName ?? null;
   }
 }
 

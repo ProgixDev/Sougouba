@@ -179,6 +179,28 @@ export interface AdminOrderDetail {
    * migration 0051 is applied, `emailedAt` until an email has gone out.
    */
   receipt?: { number: string | null; emailedAt: string | null };
+  /**
+   * Who cancelled the order and why; null unless it is cancelled. `by` is null
+   * on an order cancelled before this was recorded. `reason` is a code (the
+   * shopper's choice, or `no_courier`); `note` is free text — the shopper's
+   * words, or the reason a colleague wrote. Absent from an older API.
+   */
+  cancellation?: {
+    at: string | null;
+    by: 'customer' | 'merchant' | 'admin' | 'system' | null;
+    byName: string | null;
+    reason: string | null;
+    note: string | null;
+  } | null;
+  /** Couriers who held the order and no longer do, oldest first. Absent from an older API. */
+  releases?: {
+    courier: { id: ID; fullName: string } | null;
+    reason: string;
+    note: string | null;
+    acceptedAt: string;
+    pickedUpAt: string | null;
+    releasedAt: string;
+  }[];
   deliveryAddress: { label: string; street: string; city: string; postalCode: string; lat: number; lng: number };
   /** Copied from the address at checkout; absent from an API older than migration 0050. */
   deliveryInstructions?: { unit: string | null; doorCode: string | null; notes: string | null; dropoff: 'hand' | 'door' };
@@ -398,4 +420,11 @@ export interface PlatformSettings {
   referralRewardPoints: number;
   referralMinFirstOrderCad: number;
   doublePointsActive: boolean;
+  /**
+   * How long a packed order may wait for a courier, in minutes: before staff
+   * are told, and before it is cancelled and refunded (0 = never automatically).
+   * Absent from an API or a database older than migration 0054.
+   */
+  noCourierAlertMin?: number;
+  noCourierCancelMin?: number;
 }

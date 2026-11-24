@@ -2,16 +2,25 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { MapPin, MessageCircleWarning, ReceiptText, Send, TriangleAlert } from 'lucide-react';
+import { Ban, MapPin, MessageCircleWarning, ReceiptText, Send, TriangleAlert, Undo2 } from 'lucide-react';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { Skeleton } from '@/components/data/Skeleton';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
-import { getOrder, getReceiptUrl, resendReceipt } from '@/lib/api/orders';
-import { orderStatusMeta, DISPUTE_REASON_LABELS, COURIER_ISSUE_REASON_LABELS } from '@/lib/statusMeta';
+import { cancelOrder, getOrder, getReceiptUrl, resendReceipt } from '@/lib/api/orders';
+import { useAdmin } from '@/lib/permissions';
+import {
+  orderStatusMeta,
+  CANCELLED_BY_LABELS,
+  CANCEL_REASON_LABELS,
+  COURIER_ISSUE_REASON_LABELS,
+  DISPUTE_REASON_LABELS,
+  RELEASE_REASON_LABELS,
+} from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
 import type { AdminOrderDetail } from '@/lib/types';
 
@@ -20,7 +29,10 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<AdminOrderDetail | null | undefined>(undefined);
   const [openingReceipt, setOpeningReceipt] = useState(false);
   const [resending, setResending] = useState(false);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const toast = useToast();
+  const { can } = useAdmin();
 
   async function openReceipt() {
     // The tab is opened before the request, while this is still the click: a
@@ -55,6 +67,32 @@ export default function OrderDetailPage() {
     }
   }
 
+  /**
+   * Cancel the order, with the reason typed in the dialog. Whatever the answer,
+   * the order is read again: a refusal usually means it moved (delivered, or
+   * cancelled by someone else) and the page should show where it now stands.
+   */
+  async function cancel(reason?: string) {
+    if (!reason) return;
+    setCancelling(true);
+    try {
+      const outcome = await cancelOrder(id, reason);
+      if (outcome.refund === 'failed') {
+        toast('error', 'Commande annulée, mais le remboursement n’est pas parti. Remboursez le client depuis Stripe.');
+      } else if (outcome.refund === 'refunded') {
+        toast('success', `Commande annulée. ${formatCad(outcome.refundAmountCad ?? 0)} remboursés au client.`);
+      } else {
+        toast('success', 'Commande annulée. Aucun paiement à rembourser.');
+      }
+    } catch (error) {
+      toast('error', error instanceof Error ? error.message : 'La commande n’a pas pu être annulée.');
+    } finally {
+      setConfirmingCancel(false);
+      setCancelling(false);
+      setOrder((await getOrder(id).catch(() => null)) ?? null);
+    }
+  }
+
   useEffect(() => {
     let active = true;
     // The vendor is embedded in the detail response now — this used to fire a
@@ -86,6 +124,9 @@ export default function OrderDetailPage() {
   }
 
   const meta = orderStatusMeta(order.status);
+  // Any step before delivery. A delivered order is refunded, not cancelled.
+  const cancellable = order.status !== 'delivered' && order.status !== 'cancelled';
+  const onTheRoad = order.status === 'out_for_delivery';
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
@@ -121,8 +162,56 @@ export default function OrderDetailPage() {
             <Send size={15} />
             {resending ? 'Envoi…' : 'Renvoyer le reçu'}
           </Button>
+          {cancellable && can('orders.refund') && (
+            <Button variant="outline" size="sm" className="border-destructive/50 text-destructive" onClick={() => setConfirmingCancel(true)}>
+              <Ban size={15} />
+              Annuler la commande
+            </Button>
+          )}
         </div>
       </div>
+
+      {order.status === 'cancelled' && (
+        <Card className="p-5">
+          <div className="mb-2 flex items-center gap-2">
+            <Ban size={17} className="text-destructive" />
+            <Text variant="subtitle">{CANCELLED_BY_LABELS[order.cancellation?.by ?? 'unknown']}</Text>
+          </div>
+          <dl className="flex flex-col gap-1.5 font-sans text-[0.875rem]">
+            {order.cancellation?.at && (
+              <div className="flex flex-wrap gap-x-2">
+                <dt className="text-muted-foreground">Le</dt>
+                <dd>
+                  {formatDateTime(order.cancellation.at)}
+                  {order.cancellation.byName ? ` · ${order.cancellation.byName}` : ''}
+                </dd>
+              </div>
+            )}
+            {order.cancellation?.reason && (
+              <div className="flex flex-wrap gap-x-2">
+                <dt className="text-muted-foreground">Motif</dt>
+                <dd>{CANCEL_REASON_LABELS[order.cancellation.reason] ?? order.cancellation.reason}</dd>
+              </div>
+            )}
+            {order.cancellation?.note && (
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-muted-foreground">{order.cancellation.by === 'admin' ? 'Motif' : 'Précisions du client'}</dt>
+                <dd className="whitespace-pre-wrap">{order.cancellation.note}</dd>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-x-2">
+              <dt className="text-muted-foreground">Remboursement</dt>
+              <dd>
+                {order.refund
+                  ? `${formatCad(order.refund.refundAmountCad ?? 0)} le ${formatDateTime(order.refund.refundedAt)}`
+                  : order.stripePaymentIntentId
+                    ? 'Pas encore envoyé — à faire depuis Stripe'
+                    : 'Aucun paiement par carte sur cette commande'}
+              </dd>
+            </div>
+          </dl>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="p-5 lg:col-span-2">
@@ -215,6 +304,43 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
+      {order.releases && order.releases.length > 0 && (
+        <Card className="p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <Undo2 size={17} className="text-muted-foreground" />
+            <Text variant="subtitle">Livreurs qui ont eu cette commande</Text>
+          </div>
+          <ul className="flex flex-col">
+            {order.releases.map((release, i) => (
+              <li key={i} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border py-2.5 last:border-0 last:pb-0">
+                <div>
+                  <Text variant="body" className="font-medium">
+                    {release.courier ? (
+                      <Link href={`/couriers/${release.courier.id}`} className="hover:underline">
+                        {release.courier.fullName}
+                      </Link>
+                    ) : (
+                      'Livreur supprimé'
+                    )}
+                  </Text>
+                  <Text variant="caption" tone="muted">
+                    {release.reason === 'order_cancelled'
+                      ? release.pickedUpAt
+                        ? 'Avait récupéré la commande quand elle a été annulée'
+                        : 'En route vers le commerce quand la commande a été annulée'
+                      : `A rendu la course — ${RELEASE_REASON_LABELS[release.reason] ?? release.reason}`}
+                    {release.note ? ` : ${release.note}` : ''}
+                  </Text>
+                </div>
+                <Text variant="caption" tone="muted">
+                  {formatDateTime(release.releasedAt)}
+                </Text>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
       {order.dispute && (
         <Card className="p-5">
           <div className="mb-3 flex items-center gap-2">
@@ -245,6 +371,29 @@ export default function OrderDetailPage() {
           </Link>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={confirmingCancel}
+        title="Annuler cette commande ?"
+        description={
+          (order.stripePaymentIntentId
+            ? `Le client sera remboursé de ${formatCad(order.totals.totalCad)}, le stock et ses points lui reviennent.`
+            : 'Le stock et les points du client lui reviennent. Aucun paiement par carte à rembourser.') +
+          (onTheRoad
+            ? ' Attention : un livreur a déjà récupéré cette commande. Il sera libéré et ne sera pas payé pour cette course.'
+            : order.delivery
+              ? ' Le livreur assigné sera libéré.'
+              : '') +
+          ' Le client, le commerçant et le livreur sont prévenus. Cette action est définitive.'
+        }
+        confirmLabel="Annuler la commande"
+        tone="destructive"
+        requireReason
+        reasonLabel="Motif (visible dans le journal d’audit)"
+        busy={cancelling}
+        onConfirm={cancel}
+        onCancel={() => setConfirmingCancel(false)}
+      />
     </div>
   );
 }

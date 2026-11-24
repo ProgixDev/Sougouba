@@ -12,6 +12,7 @@ import { ordersApi } from '@/data/api';
 import type { Courier, Order } from '@/data/types';
 import { customerName } from '@/lib/customerNames';
 import { useT } from '@/lib/i18n/useT';
+import { cancellationReasonKey, cancelledByKey } from '@/lib/cancellation';
 import { courierIssueKey } from '@/lib/disputes';
 import { formatCad, formatDate, formatTime } from '@/lib/format';
 import {
@@ -149,6 +150,24 @@ export default function BusinessOrderDetailScreen() {
             </View>
 
             {order.dispute ? <DisputeCard dispute={order.dispute} onReply={reply} /> : null}
+
+            {/* Who stopped it and, when the shopper did, why — so the shop is
+                not left guessing whether to keep preparing. */}
+            {order.status === 'cancelled' && order.cancellation?.by ? (
+              <Section title={t(orderStatusKey('cancelled'))}>
+                <View className="gap-1.5">
+                  <Text variant="caption" weight="bold">
+                    {t(cancelledByKey(order))}
+                  </Text>
+                  {cancellationReasonKey(order) ? (
+                    <Text variant="caption" tone="muted" className="text-[13px] leading-[19px]">
+                      {t(cancellationReasonKey(order)!)}
+                      {order.cancellation.note ? ` — ${order.cancellation.note}` : ''}
+                    </Text>
+                  ) : null}
+                </View>
+              </Section>
+            ) : null}
 
             {order.review ? (
               <Section title={t('business.orderDetail.customerReview')}>

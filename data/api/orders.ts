@@ -202,6 +202,18 @@ export async function updateOrderStatus(id: ID, status: OrderStatus, _at: string
   return (await tryPost<Order>(`/vendors/me/orders/${id}/status`, { status }, 'PATCH')) ?? undefined;
 }
 
+/**
+ * The shopper cancels their own order, with a reason — only while the shop has
+ * not accepted it. Refunded in full by the server.
+ *
+ * Not `tryPost`: every refusal here carries a sentence written for the shopper
+ * ("la boutique a déjà accepté…"), so the caller shows the error's message
+ * rather than a generic one.
+ */
+export async function cancelOrder(orderId: ID, input: { reason: string; note?: string }): Promise<Order> {
+  return api<Order>(`/orders/${orderId}/cancel`, { method: 'POST', body: input });
+}
+
 export async function openDispute(
   orderId: ID,
   input: { reason: string; message: string }
@@ -329,6 +341,15 @@ export async function saveDeliverySignature(orderId: ID, strokes: SignatureStrok
     body: strokes,
   });
   return path;
+}
+
+/**
+ * The courier hands the run back before pickup, with a reason. The order goes
+ * straight back to dispatch. Throws with the server's sentence when the run can
+ * no longer be handed back.
+ */
+export async function releaseRun(orderId: ID, input: { reason: string; note?: string }): Promise<void> {
+  await api<{ released: true }>(`/couriers/me/runs/${orderId}/release`, { method: 'POST', body: input });
 }
 
 export async function reportCourierIssue(

@@ -117,6 +117,12 @@ const envSchema = z.object({
   PLATFORM_QST_NUMBER: z.string().optional(),
   /** Where a shopper with a question about a receipt is told to write. */
   SUPPORT_EMAIL: z.string().optional(),
+  /**
+   * Who is emailed when something needs a person — today, an order that is
+   * packed and that no courier has taken. Falls back to `SUPPORT_EMAIL`; with
+   * neither set no email goes out and the back office's list is the only alert.
+   */
+  STAFF_ALERT_EMAIL: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

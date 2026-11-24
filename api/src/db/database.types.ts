@@ -543,6 +543,54 @@ export type Database = {
           },
         ]
       }
+      delivery_releases: {
+        Row: {
+          accepted_at: string
+          courier_id: string
+          id: string
+          note: string | null
+          order_id: string
+          picked_up_at: string | null
+          reason: string
+          released_at: string
+        }
+        Insert: {
+          accepted_at: string
+          courier_id: string
+          id?: string
+          note?: string | null
+          order_id: string
+          picked_up_at?: string | null
+          reason: string
+          released_at?: string
+        }
+        Update: {
+          accepted_at?: string
+          courier_id?: string
+          id?: string
+          note?: string | null
+          order_id?: string
+          picked_up_at?: string | null
+          reason?: string
+          released_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_releases_courier_id_fkey"
+            columns: ["courier_id"]
+            isOneToOne: false
+            referencedRelation: "couriers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_releases_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dispatch_offers: {
         Row: {
           courier_id: string
@@ -1133,6 +1181,11 @@ export type Database = {
       }
       orders: {
         Row: {
+          cancel_note: string | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          cancelled_by_id: string | null
           commission_cad: number | null
           commission_rate: number | null
           coupon_code: string | null
@@ -1154,6 +1207,7 @@ export type Database = {
           gst_cad: number
           id: string
           merchant_paid_cad: number | null
+          no_courier_alerted_at: string | null
           points_discount_cad: number | null
           points_redeemed: number | null
           qst_cad: number
@@ -1170,6 +1224,11 @@ export type Database = {
           vendor_id: string
         }
         Insert: {
+          cancel_note?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          cancelled_by_id?: string | null
           commission_cad?: number | null
           commission_rate?: number | null
           coupon_code?: string | null
@@ -1191,6 +1250,7 @@ export type Database = {
           gst_cad: number
           id?: string
           merchant_paid_cad?: number | null
+          no_courier_alerted_at?: string | null
           points_discount_cad?: number | null
           points_redeemed?: number | null
           qst_cad: number
@@ -1207,6 +1267,11 @@ export type Database = {
           vendor_id: string
         }
         Update: {
+          cancel_note?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          cancelled_by_id?: string | null
           commission_cad?: number | null
           commission_rate?: number | null
           coupon_code?: string | null
@@ -1228,6 +1293,7 @@ export type Database = {
           gst_cad?: number
           id?: string
           merchant_paid_cad?: number | null
+          no_courier_alerted_at?: string | null
           points_discount_cad?: number | null
           points_redeemed?: number | null
           qst_cad?: number
@@ -1375,6 +1441,8 @@ export type Database = {
           id: number
           max_redemption_share: number
           monthly_subscription_cad: number
+          no_courier_alert_min: number
+          no_courier_cancel_min: number
           points_expiry_months: number
           points_per_cad: number
           points_per_cad_redeemed: number
@@ -1392,6 +1460,8 @@ export type Database = {
           id?: number
           max_redemption_share?: number
           monthly_subscription_cad?: number
+          no_courier_alert_min?: number
+          no_courier_cancel_min?: number
           points_expiry_months?: number
           points_per_cad?: number
           points_per_cad_redeemed?: number
@@ -1409,6 +1479,8 @@ export type Database = {
           id?: number
           max_redemption_share?: number
           monthly_subscription_cad?: number
+          no_courier_alert_min?: number
+          no_courier_cancel_min?: number
           points_expiry_months?: number
           points_per_cad?: number
           points_per_cad_redeemed?: number
@@ -2195,6 +2267,15 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_order_cancel: {
+        Args: {
+          p_admin_id: string
+          p_from: string
+          p_order_id: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       admin_overview: {
         Args: {
           p_cur_end: string
@@ -2443,6 +2524,15 @@ export type Database = {
         Args: { p_from: string; p_order_id: string }
         Returns: undefined
       }
+      delivery_release: {
+        Args: {
+          p_courier_id: string
+          p_note?: string
+          p_order_id: string
+          p_reason: string
+        }
+        Returns: undefined
+      }
       dispatch_accept: {
         Args: {
           p_courier_id: string
@@ -2469,6 +2559,20 @@ export type Database = {
           distance_to_pickup_km: number
           id: string
           vehicle: string
+        }[]
+      }
+      dispatch_stalled_orders: {
+        Args: { p_max_waiting_min?: number; p_min_waiting_min: number }
+        Returns: {
+          alerted: boolean
+          customer_name: string
+          offers: number
+          order_id: string
+          total_cad: number
+          vendor_id: string
+          vendor_name: string
+          waiting_min: number
+          waiting_since: string
         }[]
       }
       dispatch_waiting_orders: {
@@ -2505,6 +2609,26 @@ export type Database = {
       order_advance_status: {
         Args: { p_from: string; p_order_id: string; p_to: string }
         Returns: undefined
+      }
+      order_cancel: {
+        Args: {
+          p_by: string
+          p_by_id?: string
+          p_from: string
+          p_note?: string
+          p_order_id: string
+          p_reason?: string
+        }
+        Returns: Json
+      }
+      order_cancel_refunded: {
+        Args: {
+          p_amount_cad: number
+          p_order_id: string
+          p_reason: string
+          p_stripe_refund_id: string
+        }
+        Returns: boolean
       }
       order_place: {
         Args: {
@@ -2619,6 +2743,8 @@ export type Database = {
           id: number
           max_redemption_share: number
           monthly_subscription_cad: number
+          no_courier_alert_min: number
+          no_courier_cancel_min: number
           points_expiry_months: number
           points_per_cad: number
           points_per_cad_redeemed: number

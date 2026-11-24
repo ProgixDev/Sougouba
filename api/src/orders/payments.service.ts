@@ -373,6 +373,40 @@ export class PaymentsService {
     return refund.id;
   }
 
+  /**
+   * Give back the whole payment of an order that was cancelled before it was
+   * delivered. Returns Stripe's refund id; throws like `refund` does.
+   *
+   * Two things a refund after delivery does not need:
+   *
+   * - **`unwind`**, for a payment that was split with the shop. Nothing was
+   *   sold, so the shop's share comes back from its Stripe account
+   *   (`reverse_transfer`) and Sougouba gives up its commission
+   *   (`refund_application_fee`) — otherwise the platform would refund the
+   *   shopper out of its own balance while the shop kept the money for an order
+   *   it never handed over.
+   * - **an idempotency key** on the order. A cancellation is retried by
+   *   whoever notices it did not finish; the key makes the second call return
+   *   the first refund instead of sending the money twice.
+   */
+  async refundCancelledOrder(
+    paymentIntentId: string,
+    amountCents: number,
+    opts: { orderId: string; unwind: boolean }
+  ): Promise<string> {
+    const refund = await this.client().refunds.create(
+      {
+        payment_intent: paymentIntentId,
+        amount: amountCents,
+        reason: 'requested_by_customer',
+        ...(opts.unwind ? { reverse_transfer: true, refund_application_fee: true } : {}),
+      },
+      { idempotencyKey: `order-cancel-${opts.orderId}` }
+    );
+    this.logger.log(`Cancelled order ${opts.orderId}: refunded ${amountCents} on ${paymentIntentId} → ${refund.id} (${refund.status})`);
+    return refund.id;
+  }
+
   // ── Billing: the merchant's monthly subscription ──────────────────────────
 
   /**

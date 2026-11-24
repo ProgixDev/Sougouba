@@ -78,22 +78,46 @@ export function isActiveStatus(status: OrderStatus): boolean {
 }
 
 /**
- * Who may cancel, and until when.
- *
- * Nothing in the mock ever set `cancelled` — the status existed with no code
- * path reaching it. The rule chosen here is the conservative one: a merchant
- * may cancel while they still hold the bag, and nobody may cancel once a
- * courier is carrying it, because at that point there is food in a car and the
- * question is a refund rather than a cancellation.
- *
- * A *shopper*-initiated cancellation is deliberately not offered: it would have
- * to reverse a captured Stripe payment, and the refund flow that implies is
- * Phase 6's, wired to `reverseForOrder`. Until then, a shopper who needs one
- * opens a dispute, which is a path that exists and that a human reads.
+ * Everyone who can end an order early. Wider than `StatusActor`, which is only
+ * the two roles that *advance* one: a shopper and the back office never move an
+ * order forward, and `system` is the timer that gives up on finding a courier.
  */
+export type CancelActor = 'customer' | 'merchant' | 'admin' | 'system';
+
+/**
+ * Who may cancel, and until when. Each rule follows who is out of pocket if the
+ * order stops there:
+ *
+ * - the **shopper**, only while the shop has not answered — once it is
+ *   confirmed someone has started cooking for them, and changing their mind is
+ *   a conversation, not a button;
+ * - the **shop**, while it still holds the bag;
+ * - the **back office**, at any point before delivery — it is who gets called
+ *   when the other two cannot fix it, courier on the road included;
+ * - the **system**, only a packed order no courier has taken.
+ *
+ * A delivered order is never cancelled: what happened cannot be undone, and
+ * money going back from there is a refund (`RefundsService`).
+ *
+ * This says who may *ask*. `order_cancel` re-checks the status in the write, so
+ * two of them asking in the same second cannot both win.
+ */
+export function canCancelAs(status: OrderStatus, actor: CancelActor): boolean {
+  switch (actor) {
+    case 'customer':
+      return status === 'pending';
+    case 'merchant':
+      return status === 'pending' || status === 'confirmed' || status === 'preparing';
+    case 'admin':
+      return isActiveStatus(status);
+    case 'system':
+      return status === 'ready';
+  }
+}
+
+/** The merchant's rule, as `assertTransition` asks it. A courier never cancels: they hand the run back. */
 export function canCancel(status: OrderStatus, actor: StatusActor): boolean {
-  if (actor !== 'merchant') return false;
-  return status === 'pending' || status === 'confirmed' || status === 'preparing';
+  return actor === 'merchant' && canCancelAs(status, 'merchant');
 }
 
 /**
