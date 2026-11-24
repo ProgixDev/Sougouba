@@ -15,6 +15,8 @@ export interface MenuItemRowProps {
   categoryIcon?: string;
   onPress?: () => void;
   onAdd?: () => void;
+  /** The shop is closed right now: the dish can be looked at, not added. */
+  closed?: boolean;
 }
 
 const THUMB = 84;
@@ -32,7 +34,7 @@ const THUMB = 84;
  * than as cards, because a menu is a list of things to read, and ten stacked
  * card surfaces read as ten separate objects.
  */
-export function MenuItemRow({ product, categoryIcon, onPress, onAdd }: MenuItemRowProps) {
+export function MenuItemRow({ product, categoryIcon, onPress, onAdd, closed = false }: MenuItemRowProps) {
   const t = useT();
   const colors = useThemeColors();
   const soldOut = !product.isAvailable;
@@ -92,7 +94,8 @@ export function MenuItemRow({ product, categoryIcon, onPress, onAdd }: MenuItemR
         ) : (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={t('common.a11y.addToCart', { name: product.name })}
+            disabled={closed}
+            accessibilityLabel={closed ? t('customer.misc.shopClosed') : t('common.a11y.addToCart', { name: product.name })}
             // The button is 32px so it does not crowd an 84px thumbnail; the
             // hitSlop is what actually makes it a 44pt target.
             hitSlop={8}
@@ -100,9 +103,9 @@ export function MenuItemRow({ product, categoryIcon, onPress, onAdd }: MenuItemR
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               onAdd?.();
             }}
-            className="absolute -bottom-1 -right-1 w-8 h-8 items-center justify-center rounded-full bg-primary"
+            className={`absolute -bottom-1 -right-1 w-8 h-8 items-center justify-center rounded-full ${closed ? 'bg-muted' : 'bg-primary'}`}
           >
-            <Plus size={17} color={colors.primaryForeground} strokeWidth={2.6} />
+            <Plus size={17} color={closed ? colors.mutedForeground : colors.primaryForeground} strokeWidth={2.6} />
           </Pressable>
         )}
       </View>

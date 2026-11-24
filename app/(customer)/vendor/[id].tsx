@@ -190,6 +190,8 @@ export default function VendorDetailScreen() {
   }
 
   const day = vendor ? shopDay(vendor) : null;
+  // A closed shop is for looking, not ordering: the notice below says so, and the add buttons follow it.
+  const closed = Boolean(day && !day.isOpen);
 
   return (
     <View className="flex-1 bg-background">
@@ -331,6 +333,7 @@ export default function VendorDetailScreen() {
                     unitPriceCad: row[0].priceCad,
                   })
                 }
+                closed={closed}
               />
               <View className="h-px bg-border ml-5" />
             </View>
@@ -352,6 +355,7 @@ export default function VendorDetailScreen() {
                       unitPriceCad: product.priceCad,
                     })
                   }
+                  closed={closed}
                 />
               ))}
             </View>

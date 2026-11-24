@@ -92,6 +92,18 @@ export function shopDay(vendor: Vendor, now: Date = new Date()): ShopDay {
 }
 
 /**
+ * Can an order be placed with this shop right now?
+ *
+ * What decides whether an "add to cart" or a "pay" button is live. The server
+ * decides again when the order is priced and when the payment is created
+ * (`public.is_open`, the same hours on its own clock), so a button that is a
+ * minute out of date is refused there, before any money moves.
+ */
+export function isShopOpen(vendor: Vendor, now: Date = new Date()): boolean {
+  return shopDay(vendor, now).isOpen;
+}
+
+/**
  * One line telling the merchant their trading state.
  *
  * Phrased as what happens next rather than as a status word — "ferme à 21:00" is

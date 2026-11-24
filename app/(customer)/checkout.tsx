@@ -15,6 +15,7 @@ import { roundCad } from '@/data/taxes';
 import { useCartDetails } from '@/hooks/useCartDetails';
 import { formatCad } from '@/lib/format';
 import { dynamicRoutes, routes } from '@/lib/routes';
+import { isShopOpen, shopDay, shopStatusLine } from '@/lib/shopHours';
 import { useCartStore } from '@/store/useCartStore';
 import { useSessionStore } from '@/store/useSessionStore';
 import { ApiError } from '@/data/http';
@@ -42,6 +43,11 @@ export default function CheckoutScreen() {
 
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // The shop closed while the cart was waiting. The cart is kept; paying is
+  // not offered. The server refuses a closed shop anyway, before any money
+  // moves — this only says so before the tap instead of after it.
+  const shopClosed = vendor ? !isShopOpen(vendor) : false;
 
   // One of the shopper's own saved addresses — the API refuses anything else,
   // because it prices the delivery from the geocoded point it stored. An account
@@ -409,6 +415,17 @@ export default function CheckoutScreen() {
             />
           </View>
 
+          {shopClosed && vendor ? (
+            <View className="rounded-2xl bg-muted px-4 py-3">
+              <Text variant="caption" weight="semibold">
+                {t('customer.misc.shopClosed')} · {t(shopStatusLine(shopDay(vendor)))}
+              </Text>
+              <Text variant="caption" tone="muted" className="text-[12px] leading-[17px]">
+                {t('customer.checkout.shopClosedBody')}
+              </Text>
+            </View>
+          ) : null}
+
           {error ? (
             <Text variant="caption" tone="destructive">
               {error}
@@ -420,15 +437,17 @@ export default function CheckoutScreen() {
       <View className="px-5 pt-3 border-t border-border bg-card">
         <Button
           label={
-            address
-              ? t('customer.checkout.confirm', { total: formatCad(discountedTotalCad) })
-              : t('customer.checkout.addAddress')
+            shopClosed
+              ? t('customer.misc.shopClosed')
+              : address
+                ? t('customer.checkout.confirm', { total: formatCad(discountedTotalCad) })
+                : t('customer.checkout.addAddress')
           }
           variant="cta"
           size="lg"
           fullWidth
           loading={placing}
-          disabled={lines.length === 0 || !vendor}
+          disabled={lines.length === 0 || !vendor || shopClosed}
           onPress={address ? placeOrder : () => router.push(routes.accountAddresses)}
         />
         <Text variant="caption" tone="muted" className="text-center mt-2 mb-1 text-[11px]">

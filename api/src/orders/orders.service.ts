@@ -29,6 +29,7 @@ import { assertTransition, isActiveStatus, type OrderStatus, type StatusActor } 
 import { priceOrder, roundCad, toStripeAmount, type PricedLine, type PricedOrder } from './pricing.js';
 import { PaymentsService } from './payments.service.js';
 import { ReceiptsService } from './receipts/receipts.service.js';
+import { closedShopMessage, nextOpening, type ShopHours } from './shop-hours.js';
 import { CouponsService } from '../loyalty/coupons.service.js';
 import { LoyaltyService } from '../loyalty/loyalty.service.js';
 import { SettingsService } from '../loyalty/settings.service.js';
@@ -65,20 +66,40 @@ export class OrdersService {
    * catalogue as it stands *now*, the shop's coordinates and the shopper's
    * address from their rows, the points balance from the ledger. The client
    * supplies ids and quantities and nothing else.
+   *
+   * `requireOpen` refuses a shop that is closed right now. It is asked for by
+   * the two steps that come *before* the money moves — the quote and the
+   * PaymentIntent — so a shopper is told before they pay, and is never charged
+   * for an order the shop is not there to take. It is deliberately not asked
+   * for when the order is written: by then the card has been charged, and a
+   * shopper who paid at 20:59 for a shop closing at 21:00 gets their order
+   * rather than a charge and a refund over a few seconds.
    */
-  private async quote(customerId: string, cart: CartInput) {
+  private async quote(customerId: string, cart: CartInput, opts: { requireOpen: boolean }) {
     const vendor = await unwrap<VendorRow | null>(
       this.db
         .from('vendors')
-        .select('id, name, status, lat:address_lat, lng:address_lng')
+        // `is_open` is a PostgREST computed column (`public.is_open(vendors)`):
+        // the shop's posted hours against the database's clock, in Montréal
+        // time — the same answer the catalogue and the shop page show. Cast
+        // because a computed column is not in the generated row type.
+        .select('id, name, status, lat:address_lat, lng:address_lng, isOpen:is_open' as never)
         .eq('id', cart.vendorId)
-        .maybeSingle()
+        .maybeSingle() as never
     );
     if (!vendor) throw new NotFoundException('Vendor not found');
     // A shop the platform has not vouched for, or has taken offline, cannot
     // take orders — the same rule the catalogue browse applies, restated here
     // because a client could hold a vendor id from before a suspension.
     if (vendor.status !== 'approved') throw new ForbiddenException('This shop is not currently accepting orders');
+
+    if (opts.requireOpen && !vendor.isOpen) {
+      // Only read once the answer is no: the hours are for the sentence, not for the decision.
+      const hours = await unwrap<ShopHours[]>(
+        this.db.from('vendor_hours').select('day, open, close, closed').eq('vendor_id', vendor.id)
+      );
+      throw new ConflictException(closedShopMessage(vendor.name, nextOpening(hours)));
+    }
 
     const address = await unwrap<AddressRow | null>(
       this.db
@@ -154,7 +175,7 @@ export class OrdersService {
 
   /** What the checkout screen shows before the payment sheet opens. */
   async quoteFor(customerId: string, cart: CartInput): Promise<PricedOrder> {
-    const { priced } = await this.quote(customerId, cart);
+    const { priced } = await this.quote(customerId, cart, { requireOpen: true });
     return priced;
   }
 
@@ -173,7 +194,8 @@ export class OrdersService {
       throw new ForbiddenException('Ce compte a été bloqué. Contactez le support Sougouba.');
     }
 
-    const { priced } = await this.quote(customerId, cart);
+    // The last check before money moves: a closed shop is refused here.
+    const { priced } = await this.quote(customerId, cart, { requireOpen: true });
 
     // Phase 7's split. The commission is taken on the **subtotal**, not the
     // order total: the CDC says "calculée sur le montant de la vente", and TPS,
@@ -243,7 +265,8 @@ export class OrdersService {
   }
 
   private async write(customerId: string, input: PlaceOrderInput) {
-    const { priced, address } = await this.quote(customerId, input);
+    // Already paid: opening hours are not re-checked — see `quote`.
+    const { priced, address } = await this.quote(customerId, input, { requireOpen: false });
 
     const payment = await this.payments.assertPaidBy(input.paymentIntentId, {
       amountCents: toStripeAmount(priced.totalCad),
@@ -716,7 +739,7 @@ function unexpectedDbError(error: PostgrestError): Error {
   return new InternalServerErrorException('Database request failed');
 }
 
-type VendorRow = { id: string; name: string; status: string; lat: number; lng: number };
+type VendorRow = { id: string; name: string; status: string; lat: number; lng: number; isOpen: boolean };
 type AddressRow = {
   label: string;
   street: string;

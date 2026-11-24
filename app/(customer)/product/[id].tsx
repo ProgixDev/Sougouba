@@ -15,6 +15,7 @@ import type { Category, Product, Vendor } from '@/data/types';
 import { categoryIcons } from '@/lib/categoryIcons';
 import { formatCad } from '@/lib/format';
 import { dynamicRoutes, routes } from '@/lib/routes';
+import { isShopOpen, shopDay, shopStatusLine } from '@/lib/shopHours';
 import { useCartStore } from '@/store/useCartStore';
 import { useColorScheme, useThemeColors } from '@/hooks/useColorScheme';
 import { useFavoritesStore } from '@/store/useFavoritesStore';
@@ -42,6 +43,8 @@ export default function ProductDetailScreen() {
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [category, setCategory] = useState<Category | null>(null);
   const [loading, setLoading] = useState(true);
+  // Closed right now: the product can be read about, not added. Unknown while the shop is loading — not closed.
+  const shopClosed = vendor ? !isShopOpen(vendor) : false;
 
   useEffect(() => {
     if (!id) return;
@@ -236,17 +239,22 @@ export default function ProductDetailScreen() {
           label={
             product && !product.isAvailable
               ? t('customer.misc.productOutOfStock')
-              : t('customer.addToCart')
+              : shopClosed
+                ? t('customer.misc.shopClosed')
+                : t('customer.addToCart')
           }
           caption={
-            addedCount > 0
-              ? inCartQty > 0
-                ? t('customer.addedAgain', { count: inCartQty })
-                : t('customer.addedToCart')
-              : undefined
+            shopClosed && vendor
+              ? // When it opens again, in place of "added": the one thing worth knowing here.
+                t(shopStatusLine(shopDay(vendor)))
+              : addedCount > 0
+                ? inCartQty > 0
+                  ? t('customer.addedAgain', { count: inCartQty })
+                  : t('customer.addedToCart')
+                : undefined
           }
           price={product ? formatCad(product.priceCad) : undefined}
-          disabled={!product || !product.isAvailable || loading}
+          disabled={!product || !product.isAvailable || loading || shopClosed}
           bumpKey={addedCount}
           accessibilityLabel={
             product ? t('customer.addToCartPrice', { price: formatCad(product.priceCad) }) : undefined

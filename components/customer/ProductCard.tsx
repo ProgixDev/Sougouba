@@ -23,6 +23,8 @@ export interface ProductCardProps {
   vendorName?: string;
   onPress?: () => void;
   onAdd?: () => void;
+  /** The shop is closed right now: the product can be looked at, not added. */
+  closed?: boolean;
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -43,7 +45,7 @@ const LOW_STOCK = 5;
  * the name's two lines, the weight line and the struck-through price line are
  * all reserved whether or not they have anything to show.
  */
-export function ProductCard({ product, width, categoryIcon, vendorName, onPress, onAdd }: ProductCardProps) {
+export function ProductCard({ product, width, categoryIcon, vendorName, onPress, onAdd, closed = false }: ProductCardProps) {
   const t = useT();
   const scale = useSharedValue(1);
   const isFavorite = useFavoritesStore((s) => s.productIds.includes(product.id));
@@ -174,23 +176,30 @@ export function ProductCard({ product, width, categoryIcon, vendorName, onPress,
 
         <Pressable
           hitSlop={6}
-          disabled={soldOut}
+          disabled={soldOut || closed}
           accessibilityRole="button"
-          accessibilityLabel={soldOut ? t('customer.misc.productOutOfStock') : t('common.a11y.addToCart', { name: product.name })}
+          accessibilityLabel={
+            soldOut
+              ? t('customer.misc.productOutOfStock')
+              : closed
+                ? t('customer.misc.shopClosed')
+                : t('common.a11y.addToCart', { name: product.name })
+          }
           accessibilityValue={inCart > 0 ? { text: t('customer.productCard.inCart', { count: inCart }) } : undefined}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             onAdd?.();
           }}
           className="w-9 h-9 items-center justify-center rounded-full"
-          style={{ backgroundColor: soldOut ? neutral[200] : inCart > 0 ? forest[900] : forest[600] }}
+          // Greyed out the same way for sold out and for a closed shop: either way it cannot be added now.
+          style={{ backgroundColor: soldOut || closed ? neutral[200] : inCart > 0 ? forest[900] : forest[600] }}
         >
-          {inCart > 0 && !soldOut ? (
+          {inCart > 0 && !soldOut && !closed ? (
             <Text key={inCart} variant="caption" weight="bold" className="text-[14px]" style={{ color: mustard[300] }}>
               {inCart}
             </Text>
           ) : (
-            <Plus size={18} color={soldOut ? neutral[400] : '#FFFFFF'} strokeWidth={2.5} />
+            <Plus size={18} color={soldOut || closed ? neutral[400] : '#FFFFFF'} strokeWidth={2.5} />
           )}
         </Pressable>
       </View>

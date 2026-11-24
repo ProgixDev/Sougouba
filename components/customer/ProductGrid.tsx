@@ -2,6 +2,8 @@ import { useWindowDimensions, View } from 'react-native';
 
 import { Reveal, SkeletonCard } from '@/components/ui';
 import type { Product, Vendor } from '@/data/types';
+import { isShopOpen } from '@/lib/shopHours';
+
 import { ProductCard } from './ProductCard';
 
 export const GRID_GUTTER = 14;
@@ -47,6 +49,10 @@ export function ProductGrid({
 }: ProductGridProps) {
   const cardWidth = useCardWidth();
   const vendorNames = new Map((vendors ?? []).map((v) => [v.id, v.name]));
+  // Shops that are closed right now. A product whose shop is not in `vendors`
+  // is left addable: the server refuses at checkout, and guessing "closed"
+  // from missing data would lock products that can be ordered.
+  const closedVendorIds = new Set((vendors ?? []).filter((v) => !isShopOpen(v)).map((v) => v.id));
 
   if (loading) {
     return (
@@ -80,6 +86,7 @@ export function ProductGrid({
             vendorName={vendorNames.get(product.vendorId)}
             onPress={() => onPressProduct?.(product)}
             onAdd={() => onAddProduct?.(product)}
+            closed={closedVendorIds.has(product.vendorId)}
           />
         </Reveal>
       ))}
