@@ -4,6 +4,7 @@ import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
 import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import { PaymentsService } from '../orders/payments.service.js';
+import { ReceiptsService } from '../orders/receipts/receipts.service.js';
 import { roundCad, toStripeAmount } from '../orders/pricing.js';
 
 
@@ -32,7 +33,8 @@ export class RefundsService {
   // refund.
   constructor(
     @Inject(DB) private readonly db: Db,
-    private readonly payments: PaymentsService
+    private readonly payments: PaymentsService,
+    private readonly receipts: ReceiptsService
   ) {}
 
   /**
@@ -104,6 +106,10 @@ export class RefundsService {
     );
 
     this.logger.log(`Admin ${adminId} refunded ${amountCad} CAD on order ${orderId} (stripe: ${stripeRefundId ?? 'none'})`);
+    // The shopper is told, with a receipt that now shows the money coming back.
+    // Only when money actually moved: a decision recorded on seeded history
+    // refunds nobody, and an email saying otherwise would be a lie.
+    if (stripeRefundId) await this.receipts.orderRefunded(orderId);
     return { refundAmountCad: amountCad, stripeRefundId };
   }
 

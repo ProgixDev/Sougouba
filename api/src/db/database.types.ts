@@ -1101,6 +1101,8 @@ export type Database = {
           points_discount_cad: number | null
           points_redeemed: number | null
           qst_cad: number
+          receipt_emailed_at: string | null
+          receipt_number: number
           refund_amount_cad: number | null
           refund_reason: string | null
           refunded_at: string | null
@@ -1133,6 +1135,8 @@ export type Database = {
           points_discount_cad?: number | null
           points_redeemed?: number | null
           qst_cad: number
+          receipt_emailed_at?: string | null
+          receipt_number?: number
           refund_amount_cad?: number | null
           refund_reason?: string | null
           refunded_at?: string | null
@@ -1165,6 +1169,8 @@ export type Database = {
           points_discount_cad?: number | null
           points_redeemed?: number | null
           qst_cad?: number
+          receipt_emailed_at?: string | null
+          receipt_number?: number
           refund_amount_cad?: number | null
           refund_reason?: string | null
           refunded_at?: string | null
@@ -2170,6 +2176,10 @@ export type Database = {
           p_product_id: string
           p_reason: string
         }
+        Returns: undefined
+      }
+      admin_receipt_resent: {
+        Args: { p_admin_id: string; p_order_id: string; p_sent_at: string }
         Returns: undefined
       }
       admin_record_user_block: {

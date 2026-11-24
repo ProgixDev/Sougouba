@@ -104,6 +104,13 @@ export interface AdminOrderDetail {
     refundReason: string | null;
   } | null;
 
+  /**
+   * The shopper's receipt: its number (`R-000123`) and when it was last emailed.
+   * Both null against a database older than `drizzle/0051_order_receipts.sql`,
+   * and `emailedAt` null whenever the email has not gone out.
+   */
+  receipt: { number: string | null; emailedAt: Date | null };
+
   deliveryAddress: {
     label: string;
     street: string;

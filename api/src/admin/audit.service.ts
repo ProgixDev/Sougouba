@@ -25,6 +25,7 @@ export type AdminAction =
   | 'courier_issue.resolve'
   | 'settings.update'
   | 'order.refund'
+  | 'order.receipt_resend'
   | 'user.block'
   | 'user.unblock'
   | 'specialty.create'
@@ -54,6 +55,7 @@ export const ADMIN_ACTIONS: AdminAction[] = [
   'courier_issue.resolve',
   'settings.update',
   'order.refund',
+  'order.receipt_resend',
   'user.block',
   'user.unblock',
   'specialty.create',

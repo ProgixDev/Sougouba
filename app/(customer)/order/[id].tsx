@@ -10,6 +10,7 @@ import { DeliveryMap } from '@/components/map';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useDeliveryProgress } from '@/hooks/useDeliveryProgress';
 import { useOrderChatUnread } from '@/hooks/useOrderChatUnread';
+import { useOrderReceipt } from '@/hooks/useOrderReceipt';
 import { Badge, BackHeader, Button, EmptyState, PriceSummary, Reveal, Skeleton, StarRating, Text } from '@/components/ui';
 import { loyaltyApi, ordersApi, vendorsApi } from '@/data/api';
 import type { Courier, DisputeReason, Order, Vendor } from '@/data/types';
@@ -37,6 +38,7 @@ export default function OrderDetailScreen() {
   // which is why eight seconds is plenty.
   const live = useLiveCourierPosition(order);
   const progress = useDeliveryProgress(order, vendor, courier, live);
+  const receipt = useOrderReceipt(id);
 
   // "Votre commande est livrée : vous avez gagné 45 points" (client brief) —
   // there is no push notification pipeline in this prototype (see
@@ -371,6 +373,23 @@ export default function OrderDetailScreen() {
                 />
               </View>
             </Section>
+            {/* Available from the moment the order exists: it is only ever written once paid. */}
+            <View className="gap-2">
+              <Button
+                label={t('customer.receipt.view')}
+                variant="outline"
+                size="md"
+                fullWidth
+                loading={receipt.opening}
+                icon={<ReceiptText size={17} color={colors.primary} strokeWidth={2.2} />}
+                onPress={() => void receipt.open()}
+              />
+              {receipt.error ? (
+                <Text variant="caption" tone="destructive" className="text-center">
+                  {receipt.error}
+                </Text>
+              ) : null}
+            </View>
             {canReview(order) ? (
               <Button
                 label={t('customer.orderDetail.rateOrder')}

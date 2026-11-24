@@ -101,6 +101,22 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   /** The From header, e.g. `Sougouba <no-reply@sougouba.com>`. Falls back to `SMTP_USER`. */
   MAIL_FROM: z.string().optional(),
+
+  /**
+   * Sougouba's own legal identity, printed at the foot of every receipt
+   * (`orders/receipts/`): the company that runs the platform and delivers the
+   * order, as opposed to the shop that sold the goods.
+   *
+   * All optional, and an unset one prints nothing — a receipt without a company
+   * line is incomplete, one with a guessed company is wrong. Set them once the
+   * operating company and its TPS/TVQ registrations exist.
+   */
+  PLATFORM_LEGAL_NAME: z.string().optional(),
+  PLATFORM_LEGAL_ADDRESS: z.string().optional(),
+  PLATFORM_GST_NUMBER: z.string().optional(),
+  PLATFORM_QST_NUMBER: z.string().optional(),
+  /** Where a shopper with a question about a receipt is told to write. */
+  SUPPORT_EMAIL: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -394,6 +394,11 @@ export const customer: Widen<typeof reference> = {
     track: 'Track my order',
     home: 'Back to home',
   },
+  receipt: {
+    label: 'Receipt',
+    view: 'View receipt',
+    failed: 'The receipt could not be opened. Try again in a moment.',
+  },
   product: {
     notFoundTitle: 'Product not found',
     notFoundBody: 'This product is no longer available, or the link has expired.',

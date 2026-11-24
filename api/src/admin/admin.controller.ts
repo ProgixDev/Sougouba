@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   Param,
   ParseUUIDPipe,
@@ -75,6 +76,7 @@ import {
   type UserQuery,
 } from './dto/admin.dto.js';
 import { RefundsService } from './refunds.service.js';
+import { ReceiptsService } from '../orders/receipts/receipts.service.js';
 import { SpecialtiesAdminService } from './specialties-admin.service.js';
 import { SupportAdminService } from './support-admin.service.js';
 import { ModerationService } from './moderation.service.js';
@@ -115,7 +117,8 @@ export class AdminController {
     private readonly specialtiesAdmin: SpecialtiesAdminService,
     private readonly supportAdmin: SupportAdminService,
     private readonly moderation: ModerationService,
-    private readonly adminAccounts: AdminAccountsService
+    private readonly adminAccounts: AdminAccountsService,
+    private readonly receipts: ReceiptsService
   ) {}
 
   @RequirePermission('dashboard.view')
@@ -658,5 +661,35 @@ export class AdminController {
     @Body(new ZodValidationPipe(refundOrderSchema)) body: RefundOrderInput
   ) {
     return this.refunds.refundOrder(adminId, orderId, body);
+  }
+
+  // ── receipts ──────────────────────────────────────────────────────────────
+
+  /**
+   * A short-lived link to an order's receipt PDF — the same document the
+   * shopper opens from the app. A link rather than the file because the browser
+   * tab that shows a PDF cannot send this session's token; see
+   * `orders/receipts/receipt-link.ts`.
+   */
+  @RequirePermission('orders.view')
+  @Get('orders/:orderId/receipt-link')
+  @Header('Cache-Control', 'no-store')
+  receiptLink(@Param('orderId', ParseUUIDPipe) orderId: string) {
+    return this.receipts.linkForAdmin(orderId, 'fr');
+  }
+
+  /**
+   * Email the receipt to the shopper again — "I never got it" is a support
+   * call, and this is its answer. Audited as `order.receipt_resend`.
+   *
+   * Under `orders.view` and not a permission of its own: it sends the shopper
+   * their own receipt at their own address and changes nothing about the
+   * order. What stops it being leaned on is the one-minute cooldown in
+   * `ReceiptsService.resend`.
+   */
+  @RequirePermission('orders.view')
+  @Post('orders/:orderId/receipt-email')
+  resendReceipt(@CurrentUser() adminId: string, @Param('orderId', ParseUUIDPipe) orderId: string) {
+    return this.receipts.resend(adminId, orderId);
   }
 }

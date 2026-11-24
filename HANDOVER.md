@@ -31,6 +31,7 @@ Sougouba is a multi-vendor local delivery marketplace with three roles in one mo
 - **Database**: Supabase project `wyjkaiquugoblvvzpjnq`, 35 migrations applied, RLS + column grants audited.
 - **Super-admin back office** (`admin/`) reads the real API (approval queues, disputes, courier issues, users, settings, stats).
 - **Push notifications** (Expo push → FCM/APNs) and **AI support assistant** (`api/src/support/`, OpenAI Responses API) are built in code.
+- **Receipts** (`api/src/orders/receipts/`, CDC module 04): a paid order emails the shopper a receipt (HTML body + PDF attachment, in French or English), a refund emails a refund notice, and the same PDF opens from the order screen in the app and from the order page in the back office, which can also resend it (audited as `order.receipt_resend`). The PDF is drawn on demand from the order's own snapshot — nothing is stored but `orders.receipt_number` and `orders.receipt_emailed_at` (migration `api/drizzle/0051_order_receipts.sql`, applied to the database on 2026-11-24 with `supabase db query --linked`; like `0036`–`0050` it has no row in `supabase_migrations.schema_migrations`). Sougouba's own legal identity on the receipt comes from the `PLATFORM_*` variables in `api/.env.example`; an empty one prints nothing.
 - **OTA updates** via EAS Update (`npm run update:prod`, iOS only for now).
 - **TestFlight** build 1.0.0 (6) was submitted 2026-10-16; later builds/OTAs went out after that.
 
@@ -42,6 +43,7 @@ Sougouba is a multi-vendor local delivery marketplace with three roles in one mo
 - **Coupons**: the checkout field works, but **nothing can create a coupon** (no admin endpoint/UI; rows only via SQL). Coupon rules in `CouponsService` are assumptions not yet confirmed by the client.
 - **Merchant portal** (`admin/` → `/merchant`) still runs on the localStorage mock (`admin/lib/api/storage.ts`, `merchantOrders.ts`), and its login is a demo login.
 - **Stripe Connect payouts**: accounts are created on Accounts v2 and onboarding works; the full chain (paid order → 12 % application fee → weekly courier transfer → refund) has not been walked end-to-end in Stripe.
+- **Receipts — limits**: the receipt prints the taxes the order was charged, and the pricing engine taxes every product at 14.975 % (`api/src/orders/pricing.ts`) — basic groceries are zero-rated in Canada, so the tax rules need an accountant before launch. Product names written only in a non-Latin script print as a dash in the PDF (the email shows them). The merchant's monthly statement / commission invoice ("facturation", phase 2) is not built.
 - **AI assistant** answers 503 / "bientôt disponible" until `OPENAI_API_KEY` is set.
 - **Apple Pay**: no merchant ID registered yet. Google Pay disabled.
 - **Android**: not published to Google Play; OTAs are published for iOS only.
@@ -141,6 +143,7 @@ After the transfer, check:
 - [x] Test-phase switches and demo buttons removed from the code — delete the leftover env vars on the host
 - [ ] Stripe: switch to live keys, live webhook + new `whsec_`, finish Connect live verification
 - [ ] Apple Pay merchant ID (and Google Pay if wanted)
+- [ ] Receipts: deploy the API, the back office and an app update; set `PLATFORM_LEGAL_NAME`, `PLATFORM_LEGAL_ADDRESS`, `PLATFORM_GST_NUMBER`, `PLATFORM_QST_NUMBER`, `SUPPORT_EMAIL` on the API host; register the sending domain with Apple's private email relay, or receipts to "Hide My Email" accounts bounce
 - [ ] Coupon creation in the admin + confirm coupon rules with the client
 - [ ] Merchant portal on the real API + real auth
 - [ ] Dedicated Mapbox server token; rotate every key that was shared during handover

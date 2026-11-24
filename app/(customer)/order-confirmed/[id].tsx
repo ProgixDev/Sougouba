@@ -1,13 +1,14 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Check, Clock } from 'lucide-react-native';
+import { Check, Clock, ReceiptText } from 'lucide-react-native';
 import { MotiView } from 'moti';
 import { useEffect, useState } from 'react';
-import { BackHandler, View } from 'react-native';
+import { BackHandler, Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Text } from '@/components/ui';
 import { useT } from '@/lib/i18n/useT';
 import { useThemeColors } from '@/hooks/useColorScheme';
+import { useOrderReceipt } from '@/hooks/useOrderReceipt';
 import { ordersApi, vendorsApi } from '@/data/api';
 import type { Order, Vendor } from '@/data/types';
 import { formatCad } from '@/lib/format';
@@ -20,6 +21,7 @@ export default function OrderConfirmedScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [order, setOrder] = useState<Order | null>(null);
   const [vendor, setVendor] = useState<Vendor | null>(null);
+  const receipt = useOrderReceipt(order?.id);
 
   useEffect(() => {
     if (!id) return;
@@ -131,6 +133,31 @@ export default function OrderConfirmedScreen() {
                   </Text>
                 </View>
               </View>
+            ) : null}
+            {/* The same document the API emails when the order is placed, one tap away. */}
+            <View className="flex-row items-center justify-between">
+              <Text variant="caption" tone="muted">
+                {t('customer.receipt.label')}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('customer.receipt.view')}
+                accessibilityState={{ busy: receipt.opening }}
+                disabled={receipt.opening}
+                hitSlop={12}
+                onPress={() => void receipt.open()}
+                className={`flex-row items-center gap-1.5 ${receipt.opening ? 'opacity-50' : ''}`}
+              >
+                <ReceiptText size={13} color={colors.primary} strokeWidth={2} />
+                <Text variant="caption" weight="bold" tone="primary">
+                  {t('customer.receipt.view')}
+                </Text>
+              </Pressable>
+            </View>
+            {receipt.error ? (
+              <Text variant="caption" tone="destructive">
+                {receipt.error}
+              </Text>
             ) : null}
           </MotiView>
         ) : null}

@@ -7,6 +7,8 @@ import { OrderChatService } from './order-chat.service.js';
 import { OrdersController } from './orders.controller.js';
 import { OrdersService } from './orders.service.js';
 import { PaymentsService } from './payments.service.js';
+import { OrderReceiptController, ReceiptDownloadController } from './receipts/receipts.controller.js';
+import { ReceiptsService } from './receipts/receipts.service.js';
 import { StripeWebhookController } from './stripe-webhook.controller.js';
 import { VendorOrdersController } from './vendor-orders.controller.js';
 
@@ -28,11 +30,23 @@ import { VendorOrdersController } from './vendor-orders.controller.js';
   // clamp a redemption against, the debit to write once the order exists, and
   // the coupon to price and then mark used.
   imports: [LoyaltyModule, CourierModule],
-  controllers: [OrdersController, VendorOrdersController, StripeWebhookController, CustomerChatController, CourierChatController],
-  providers: [OrdersService, PaymentsService, OrderChatService],
+  controllers: [
+    OrdersController,
+    VendorOrdersController,
+    StripeWebhookController,
+    CustomerChatController,
+    CourierChatController,
+    OrderReceiptController,
+    ReceiptDownloadController,
+  ],
+  // `ReceiptsService` lives here rather than in a module of its own: it needs
+  // `PaymentsService` and `OrdersService` needs it, which between two modules
+  // would be a cycle.
+  providers: [OrdersService, PaymentsService, OrderChatService, ReceiptsService],
   // `PaymentsService` is exported so Phase 6's refunds go back through the same
   // Stripe client that took the money, rather than a second one configured
-  // separately.
-  exports: [OrdersService, PaymentsService],
+  // separately. `ReceiptsService` likewise: a refund sends the shopper a
+  // notice, and the back office resends a receipt.
+  exports: [OrdersService, PaymentsService, ReceiptsService],
 })
 export class OrdersModule {}

@@ -3,7 +3,7 @@ import { fetch } from 'expo/fetch';
 
 import type { DeliveryOffer } from '../../lib/dispatch';
 import { useSessionStore } from '../../store/useSessionStore';
-import { api, ApiError, type Page } from '../http';
+import { api, ApiError, apiUrl, type Page } from '../http';
 import type { DeliveryDetails } from './addresses';
 import type {
   Address,
@@ -97,6 +97,21 @@ export interface CourierPing {
 export async function getCourierLocation(orderId: ID): Promise<CourierPing | null> {
   const { location } = await api<{ location: CourierPing | null }>(`/orders/${orderId}/courier-location`);
   return location;
+}
+
+/**
+ * A link to the order's receipt, as a PDF drawn in `locale`.
+ *
+ * A link and not the file: the receipt opens in the system browser, which
+ * cannot send this app's token, so the API signs a URL that is itself the
+ * credential. It names this one order and stops working after a few minutes —
+ * ask for a fresh one each time rather than keeping it.
+ */
+export async function getReceiptUrl(orderId: ID, locale: 'fr' | 'en'): Promise<string> {
+  const { path } = await api<{ path: string; expiresAt: string }>(`/orders/${orderId}/receipt-link`, {
+    query: { locale },
+  });
+  return apiUrl(path);
 }
 
 // ── checkout ────────────────────────────────────────────────────────────────

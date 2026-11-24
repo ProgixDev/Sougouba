@@ -26,6 +26,7 @@ import { hydrateOrders } from './order-view.js';
 import { assertTransition, isActiveStatus, type OrderStatus, type StatusActor } from './order-status.js';
 import { priceOrder, roundCad, toStripeAmount, type PricedLine, type PricedOrder } from './pricing.js';
 import { PaymentsService } from './payments.service.js';
+import { ReceiptsService } from './receipts/receipts.service.js';
 import { CouponsService } from '../loyalty/coupons.service.js';
 import { LoyaltyService } from '../loyalty/loyalty.service.js';
 import { SettingsService } from '../loyalty/settings.service.js';
@@ -46,7 +47,8 @@ export class OrdersService {
     private readonly loyalty: LoyaltyService,
     private readonly coupons: CouponsService,
     private readonly settings: SettingsService,
-    private readonly notify: NotifyService
+    private readonly notify: NotifyService,
+    private readonly receipts: ReceiptsService
   ) {}
 
   // ── pricing ───────────────────────────────────────────────────────────────
@@ -326,11 +328,14 @@ export class OrdersService {
     );
 
     // The shop hears about it while the receipt is being read back — in
-    // parallel, never in sequence, and a failed push fails nothing.
+    // parallel, never in sequence, and a failed push fails nothing. The
+    // shopper's emailed receipt starts here too; `ReceiptsService` makes sure a
+    // slow mail server is never what this response waits on.
     const [order] = await Promise.all([
       this.byId(customerId, orderId, 'customer'),
       this.notify.orderPlaced(orderId),
       this.rememberDelivery(customerId, input),
+      this.receipts.orderPlaced(orderId),
     ]);
     return order;
   }

@@ -4,11 +4,19 @@ import nodemailer, { type Transporter } from 'nodemailer';
 
 import type { Env } from '../config/env.js';
 
+export interface MailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+}
+
 export interface Mail {
   to: string;
   subject: string;
   text: string;
   html?: string;
+  /** Files sent with the message — an order's receipt as a PDF. */
+  attachments?: MailAttachment[];
 }
 
 /**

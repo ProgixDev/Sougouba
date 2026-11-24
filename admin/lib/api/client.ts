@@ -91,6 +91,15 @@ function buildUrl(path: string, params?: QueryParams): string {
 
 export type QueryParams = Record<string, string | number | boolean | undefined | null>;
 
+/**
+ * An absolute URL on the API, for a link handed to something that is not
+ * `request()` — a browser tab opening a receipt PDF. Such a tab sends no token,
+ * so the path it is given has to carry its own credential.
+ */
+export function apiUrl(path: string): string {
+  return buildUrl(path);
+}
+
 async function request<T>(
   method: string,
   path: string,

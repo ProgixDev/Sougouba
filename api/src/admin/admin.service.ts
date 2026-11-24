@@ -25,6 +25,7 @@ import type {
   ResolveDisputeInput,
 } from './dto/admin.dto.js';
 import { RefundsService } from './refunds.service.js';
+import { formatReceiptNumber } from '../orders/receipts/receipt.js';
 import { deltaPct, overviewWindow, round2, type OverviewRange } from './stats-window.js';
 import { NotifyService } from '../notifications/notify.service.js';
 
@@ -601,6 +602,8 @@ export class AdminService {
               stripeRefundId: row.stripeRefundId,
               refundReason: row.refundReason,
             },
+
+      receipt: { number: formatReceiptNumber(row.receiptNumber), emailedAt: row.receiptEmailedAt ?? null },
 
       deliveryAddress: {
         label: row.deliveryAddressLabel,

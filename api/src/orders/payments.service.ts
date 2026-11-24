@@ -180,6 +180,35 @@ export class PaymentsService {
     }
   }
 
+  /**
+   * How a payment was made — the card network, its last four digits, and the
+   * wallet it came through — for the receipt's "Paiement" line.
+   *
+   * Read back from Stripe rather than stored at checkout: the card never
+   * touches this API, and a receipt asks for this rarely enough that one
+   * retrieve is cheaper than a column to keep in step.
+   *
+   * Never throws, and null is a normal answer — Stripe unconfigured, a seeded
+   * order with no intent, a network blip. A receipt without its payment line is
+   * still a receipt; a receipt that fails to render is not.
+   */
+  async describePayment(
+    paymentIntentId: string | null
+  ): Promise<{ brand: string | null; last4: string | null; wallet: string | null } | null> {
+    if (!paymentIntentId || !this.stripe) return null;
+    try {
+      const intent = await this.stripe.paymentIntents.retrieve(paymentIntentId, { expand: ['latest_charge'] });
+      const charge = intent.latest_charge;
+      if (!charge || typeof charge === 'string') return null;
+      const card = charge.payment_method_details?.card;
+      if (!card) return null;
+      return { brand: card.brand ?? null, last4: card.last4 ?? null, wallet: card.wallet?.type ?? null };
+    } catch (error) {
+      this.logger.warn(`Payment method of ${paymentIntentId} could not be read: ${String(error)}`);
+      return null;
+    }
+  }
+
   // ── Connect (Phase 7) ─────────────────────────────────────────────────────
 
   /**

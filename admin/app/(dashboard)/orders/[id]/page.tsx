@@ -2,13 +2,15 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { MapPin, MessageCircleWarning, TriangleAlert } from 'lucide-react';
+import { MapPin, MessageCircleWarning, ReceiptText, Send, TriangleAlert } from 'lucide-react';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
+import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { Skeleton } from '@/components/data/Skeleton';
-import { getOrder } from '@/lib/api/orders';
+import { useToast } from '@/components/Toast';
+import { getOrder, getReceiptUrl, resendReceipt } from '@/lib/api/orders';
 import { orderStatusMeta, DISPUTE_REASON_LABELS, COURIER_ISSUE_REASON_LABELS } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
 import type { AdminOrderDetail } from '@/lib/types';
@@ -16,6 +18,42 @@ import type { AdminOrderDetail } from '@/lib/types';
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [order, setOrder] = useState<AdminOrderDetail | null | undefined>(undefined);
+  const [openingReceipt, setOpeningReceipt] = useState(false);
+  const [resending, setResending] = useState(false);
+  const toast = useToast();
+
+  async function openReceipt() {
+    // The tab is opened before the request, while this is still the click: a
+    // tab opened after an `await` is a pop-up, and browsers block those.
+    const tab = window.open('', '_blank');
+    if (tab) tab.opener = null;
+    setOpeningReceipt(true);
+    try {
+      const url = await getReceiptUrl(id);
+      if (tab) tab.location.href = url;
+      else window.location.href = url;
+    } catch (error) {
+      tab?.close();
+      toast('error', error instanceof Error ? error.message : 'Le reçu n’a pas pu être ouvert.');
+    } finally {
+      setOpeningReceipt(false);
+    }
+  }
+
+  async function resend() {
+    setResending(true);
+    try {
+      const { sentAt } = await resendReceipt(id);
+      setOrder((current) =>
+        current ? { ...current, receipt: { number: current.receipt?.number ?? null, emailedAt: sentAt } } : current
+      );
+      toast('success', 'Reçu renvoyé au client par courriel.');
+    } catch (error) {
+      toast('error', error instanceof Error ? error.message : 'Le reçu n’a pas pu être envoyé.');
+    } finally {
+      setResending(false);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -64,6 +102,25 @@ export default function OrderDetailPage() {
           <Text variant="body" tone="muted" className="mt-1">
             {order.customerName ?? 'Client'} · {order.vendor.name} · {formatDateTime(order.createdAt)}
           </Text>
+          {/* Absent against an API that predates receipts; the buttons still work without it. */}
+          {order.receipt && (
+            <Text variant="caption" tone="muted" className="mt-1">
+              {order.receipt.number ? `Reçu ${order.receipt.number}` : 'Reçu'} ·{' '}
+              {order.receipt.emailedAt
+                ? `envoyé au client le ${formatDateTime(order.receipt.emailedAt)}`
+                : 'pas encore envoyé par courriel'}
+            </Text>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={openReceipt} disabled={openingReceipt}>
+            <ReceiptText size={15} />
+            Reçu (PDF)
+          </Button>
+          <Button variant="outline" size="sm" onClick={resend} disabled={resending}>
+            <Send size={15} />
+            {resending ? 'Envoi…' : 'Renvoyer le reçu'}
+          </Button>
         </div>
       </div>
 

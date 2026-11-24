@@ -403,6 +403,12 @@ export const customer = {
     track: 'Suivre ma commande',
     home: 'Retour à l’accueil',
   },
+  /** The order's receipt, opened as a PDF — `hooks/useOrderReceipt.ts`. */
+  receipt: {
+    label: 'Reçu',
+    view: 'Voir le reçu',
+    failed: 'Impossible d’ouvrir le reçu. Réessayez dans un instant.',
+  },
   product: {
     notFoundTitle: 'Produit introuvable',
     notFoundBody: 'Ce produit n’est plus disponible ou le lien est expiré.',

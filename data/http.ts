@@ -27,6 +27,15 @@ if (!BASE_URL) {
 /** Long enough for a cold serverless start, short enough that a dead network is not a spinner forever. */
 const TIMEOUT_MS = 15_000;
 
+/**
+ * An absolute URL on the API, for the one kind of caller that is not `api()`:
+ * something outside the app that has to be handed a link — the system browser
+ * opening a receipt. Everything the app itself fetches still goes through `api()`.
+ */
+export function apiUrl(path: string): string {
+  return `${BASE_URL}${path}`;
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,

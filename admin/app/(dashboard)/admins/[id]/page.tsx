@@ -27,6 +27,7 @@ function actionLabel(action: string): string {
     'dispute.resolve': 'Litige résolu',
     'courier_issue.resolve': 'Incident résolu',
     'order.refund': 'Commande remboursée',
+    'order.receipt_resend': 'Reçu renvoyé',
     'settings.update': 'Paramètres modifiés',
     'specialty.create': 'Spécialité ajoutée',
     'specialty.update': 'Spécialité modifiée',

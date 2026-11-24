@@ -126,3 +126,22 @@ export const sendOrderMessageSchema = z.object({
 });
 
 export type SendOrderMessageInput = z.infer<typeof sendOrderMessageSchema>;
+
+// ── receipts ────────────────────────────────────────────────────────────────
+
+/**
+ * `GET /orders/:id/receipt-link` — the language the PDF is drawn in, which is
+ * whichever the app is showing.
+ */
+export const receiptLinkQuerySchema = z.object({
+  locale: z.enum(['fr', 'en']).default('fr'),
+});
+
+export type ReceiptLinkQuery = z.infer<typeof receiptLinkQuerySchema>;
+
+/** `GET /receipts/pdf?token=…` — the signed link itself. Bounded so a junk query string is refused before it is parsed. */
+export const receiptDownloadQuerySchema = z.object({
+  token: z.string().min(1).max(1024),
+});
+
+export type ReceiptDownloadQuery = z.infer<typeof receiptDownloadQuerySchema>;

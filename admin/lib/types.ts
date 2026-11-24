@@ -173,6 +173,12 @@ export interface AdminOrderDetail {
     totalCad: number;
   };
   refund: { refundedAt: string; refundAmountCad: number | null; stripeRefundId: string | null; refundReason: string | null } | null;
+  /**
+   * The shopper's receipt: its number (`R-000123`) and when it was last emailed.
+   * Absent from an API older than the receipts feature; `number` is null until
+   * migration 0051 is applied, `emailedAt` until an email has gone out.
+   */
+  receipt?: { number: string | null; emailedAt: string | null };
   deliveryAddress: { label: string; street: string; city: string; postalCode: string; lat: number; lng: number };
   /** Copied from the address at checkout; absent from an API older than migration 0050. */
   deliveryInstructions?: { unit: string | null; doorCode: string | null; notes: string | null; dropoff: 'hand' | 'door' };

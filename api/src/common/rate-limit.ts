@@ -69,6 +69,15 @@ const BUDGETS: { prefix: string; max: number; windowMs: number; why: string }[] 
     why: 'ends in a Stripe call',
   },
   {
+    // A receipt link, opened: every hit verifies a signature, reads an order and
+    // draws a PDF. Keyed by IP — the browser that opens a link carries no token.
+    // One shopper opens a receipt once or twice; thirty a minute is a script.
+    prefix: '/receipts',
+    max: 30,
+    windowMs: 60_000,
+    why: 'renders a PDF per call',
+  },
+  {
     // The back office is a handful of people. A thousand requests a minute from
     // an admin session is not an admin.
     prefix: '/admin',

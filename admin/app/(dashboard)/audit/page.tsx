@@ -43,6 +43,7 @@ const ACTION_LABELS: Record<string, { label: string; tone: Tone }> = {
   'dispute.resolve': { label: 'Litige résolu', tone: 'primary' },
   'courier_issue.resolve': { label: 'Incident résolu', tone: 'primary' },
   'order.refund': { label: 'Commande remboursée', tone: 'warning' },
+  'order.receipt_resend': { label: 'Reçu renvoyé', tone: 'secondary' },
   'settings.update': { label: 'Paramètres modifiés', tone: 'secondary' },
   'specialty.create': { label: 'Spécialité ajoutée', tone: 'success' },
   'specialty.update': { label: 'Spécialité modifiée', tone: 'secondary' },
