@@ -145,6 +145,11 @@ export const merchantApiGet = <T>(path: string, params?: QueryParams) =>
   request<T>('GET', path, { params, caller: 'merchant' });
 export const merchantApiPost = <T>(path: string, body?: unknown) =>
   request<T>('POST', path, { body, caller: 'merchant' });
+export const merchantApiPatch = <T>(path: string, body?: unknown) =>
+  request<T>('PATCH', path, { body, caller: 'merchant' });
+export const merchantApiPut = <T>(path: string, body?: unknown) =>
+  request<T>('PUT', path, { body, caller: 'merchant' });
+export const merchantApiDelete = <T>(path: string) => request<T>('DELETE', path, { caller: 'merchant' });
 
 /** No token at all — signing in, before there is a session to send. */
 export const anonymousApiPost = <T>(path: string, body?: unknown) =>

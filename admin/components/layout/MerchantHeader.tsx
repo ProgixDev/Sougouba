@@ -10,7 +10,10 @@ import { merchantSignOut, type MerchantSession } from '@/lib/merchantAuth';
 const NAV = [
   { href: '/merchant', label: 'Aperçu' },
   { href: '/merchant/orders', label: 'Commandes' },
+  { href: '/merchant/products', label: 'Produits' },
+  { href: '/merchant/coupons', label: 'Codes promo' },
   { href: '/merchant/statements', label: 'Relevés' },
+  { href: '/merchant/shop', label: 'Boutique' },
 ];
 
 export function MerchantHeader({ session }: { session: MerchantSession }) {
@@ -33,16 +36,19 @@ export function MerchantHeader({ session }: { session: MerchantSession }) {
             </Text>
           </div>
         </div>
-        <nav className="flex flex-1 items-center gap-1">
+        {/* Six entries do not fit a phone's width: the row scrolls sideways rather than wrapping the header. */}
+        <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {NAV.map((item) => {
             const active = item.href === '/merchant' ? pathname === '/merchant' : pathname.startsWith(item.href);
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                // On a phone the row scrolls: bring the current entry into view rather than leave it off the edge.
+                ref={active ? (el) => el?.scrollIntoView({ block: 'nearest', inline: 'nearest' }) : undefined}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'rounded-full px-3.5 py-2 font-sans text-[0.8125rem] font-semibold transition-colors',
+                  'shrink-0 whitespace-nowrap rounded-full px-3.5 py-2 font-sans text-[0.8125rem] font-semibold transition-colors',
                   active ? 'bg-terracotta-50 text-terracotta-700 dark:bg-terracotta-950 dark:text-terracotta-200' : 'text-muted-foreground hover:text-foreground'
                 )}
               >
