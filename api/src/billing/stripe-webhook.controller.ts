@@ -7,7 +7,8 @@ import type Stripe from 'stripe';
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
 import { unwrap } from '../db/unwrap.js';
-import { PaymentsService } from './payments.service.js';
+import { PaymentsService } from '../orders/payments.service.js';
+import { SubscriptionsService } from './subscriptions.service.js';
 
 /**
  * Stripe's callback. **Unauthenticated by design** — Stripe has no bearer token
@@ -23,6 +24,15 @@ import { PaymentsService } from './payments.service.js';
  * moved, no order exists, and nothing on the device will ever try again. That
  * is money taken for nothing, and this is the only place it is detectable.
  *
+ * It is also the only way this API learns what happens to a merchant's
+ * **subscription** while nobody is looking: a renewal that went through, a card
+ * that was declined on the 1st, a cancellation made in Stripe's portal. Those
+ * are not optional to hear about — without them the recorded standing is right
+ * on the day of checkout and wrong from the first renewal on.
+ *
+ * Declared in `BillingModule` rather than `OrdersModule`, where it started:
+ * it needs `SubscriptionsService`, and billing already depends on orders.
+ *
  * Hidden from Swagger: it is not part of the app's API surface, and publishing
  * its shape only helps someone probing it.
  */
@@ -33,6 +43,7 @@ export class StripeWebhookController {
 
   constructor(
     private readonly payments: PaymentsService,
+    private readonly subscriptions: SubscriptionsService,
     @Inject(DB) private readonly db: Db
   ) {}
 
@@ -58,17 +69,58 @@ export class StripeWebhookController {
         // failure rate is a real signal about the payment configuration.
         this.logger.warn(`PaymentIntent ${event.data.object.id} failed: ${event.data.object.last_payment_error?.message}`);
         break;
+      // ── the merchant's subscription ───────────────────────────────────────
+      //
+      // Every one of these ends the same way: re-read that customer's
+      // subscription from Stripe and record it. None trusts its own payload for
+      // the standing, so a late, repeated or out-of-order event is harmless.
+      case 'checkout.session.completed':
+        // The shopper's checkout is a PaymentIntent, not a Checkout Session;
+        // the only sessions this account opens are subscriptions.
+        if (event.data.object.mode === 'subscription') await this.onCustomer(event.data.object.customer);
+        break;
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated':
+      case 'customer.subscription.deleted':
+      case 'invoice.paid':
+      case 'invoice.payment_failed':
+        await this.onCustomer(event.data.object.customer);
+        break;
+      case 'charge.refunded':
+        // A subscription payment given back from the dashboard: Stripe may have
+        // changed the subscription with it.
+        await this.onCustomer(event.data.object.customer);
+        break;
+      case 'charge.dispute.created':
+        // A merchant's bank is reversing a subscription payment (or a shopper's
+        // an order). Nothing here can answer a dispute; a person has to, in the
+        // Stripe dashboard, before its deadline.
+        this.logger.error(
+          `DISPUTE ${event.data.object.id} opened on charge ${String(event.data.object.charge)} (${event.data.object.amount} ${event.data.object.currency}, reason ${event.data.object.reason}) — answer it in the Stripe dashboard.`
+        );
+        break;
+      case 'radar.early_fraud_warning.created':
+        this.logger.error(
+          `FRAUD WARNING ${event.data.object.id} on charge ${String(event.data.object.charge)} (${event.data.object.fraud_type}) — review it in the Stripe dashboard before it becomes a dispute.`
+        );
+        break;
       default:
         // Stripe sends far more event types than any integration subscribes to,
-        // and an unrecognised one is not an error. Phase 7 adds the `invoice.*`
-        // cases for merchant subscriptions here.
+        // and an unrecognised one is not an error.
         break;
     }
 
-    // Always 200, as long as the signature was good. A non-2xx makes Stripe
-    // retry with backoff for days, which is right for a transient failure and
-    // wrong for an event this integration simply has no case for.
+    // 200 once the event is handled. A handler that throws — the database or
+    // Stripe unreachable while recording a subscription — answers 500 instead,
+    // and that is deliberate: Stripe retries with backoff, which is exactly
+    // what a transient failure needs.
     return { received: true };
+  }
+
+  /** `customer` arrives as an id, an expanded object, or nothing at all on an event with no customer. */
+  private async onCustomer(customer: string | { id: string } | null | undefined): Promise<void> {
+    const id = typeof customer === 'string' ? customer : customer?.id;
+    if (id) await this.subscriptions.onCustomerEvent(id);
   }
 
   /**

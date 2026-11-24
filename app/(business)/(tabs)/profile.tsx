@@ -29,13 +29,16 @@ import {
   Text,
 } from '@/components/ui';
 import { MIN_DELIVERY_FEE_CAD } from '@/data/deliveryPricing';
+import type { MerchantSubscription } from '@/data/api/vendors';
 import { usePlatformPlan } from '@/data/queries';
 import type { VendorHours } from '@/data/types';
 import { useThemeColors } from '@/hooks/useColorScheme';
 import { useDeleteAccount } from '@/hooks/useDeleteAccount';
+import { useMerchantSubscription } from '@/hooks/useMerchantSubscription';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
-import { formatCad, formatPercent } from '@/lib/format';
+import { formatCad, formatDate, formatPercent } from '@/lib/format';
+import type { TFunction } from '@/lib/i18n';
 import { useT } from '@/lib/i18n/useT';
 import { routes } from '@/lib/routes';
 import { shopDay, shopStatusLine, shopWeekday } from '@/lib/shopHours';
@@ -53,6 +56,7 @@ export default function BusinessProfileScreen() {
   const { confirmDeleteAccount } = useDeleteAccount();
   const { vendor, loading, missing, approved } = useOwnerVendor();
   const plan = usePlatformPlan();
+  const billing = useMerchantSubscription(approved);
 
   const preference = useThemeStore((s) => s.preference);
   const setPreference = useThemeStore((s) => s.setPreference);
@@ -211,13 +215,63 @@ export default function BusinessProfileScreen() {
               </View>
               <View className="flex-1 gap-0.5">
                 <Text variant="caption" weight="semibold">
-                  {t('business.shopProfile.monthlyFee', { amount: formatCad(plan.monthlySubscriptionCad) })}
+                  {/* A subscribed shop is shown the price it is billed, which can be an older one than today's. */}
+                  {t('business.shopProfile.monthlyFee', {
+                    amount: formatCad(billing.subscription?.priceCad ?? plan.monthlySubscriptionCad),
+                  })}
                 </Text>
                 <Text variant="caption" tone="muted" className="text-[12px]">
                   {t('business.shopProfile.commissionLine', { rate: formatPercent(plan.commissionRate) })}
                 </Text>
               </View>
             </View>
+            {/* Where the subscription stands, and the one thing to do about it. Absent
+                while it is unread or the server has no Stripe: the price above still holds. */}
+            {billing.subscription?.available ? (
+              <View className="gap-2.5 pt-1">
+                <Text
+                  variant="caption"
+                  tone={billing.subscription.status === 'past_due' ? 'destructive' : 'muted'}
+                  weight={billing.subscription.status === 'past_due' ? 'semibold' : undefined}
+                  className="text-[12px]"
+                >
+                  {subscriptionLine(t, billing.subscription)}
+                </Text>
+                {billing.subscription.status === 'active' ? (
+                  <Button
+                    label={t('business.subscription.manage')}
+                    variant="outline"
+                    size="sm"
+                    fullWidth
+                    loading={billing.busy}
+                    onPress={() => void billing.manage()}
+                  />
+                ) : billing.subscription.status === 'past_due' ? (
+                  <Button
+                    label={t('business.subscription.updateCard')}
+                    variant="primary"
+                    size="sm"
+                    fullWidth
+                    loading={billing.busy}
+                    onPress={() => void billing.manage()}
+                  />
+                ) : (
+                  <Button
+                    label={t('business.subscription.subscribe')}
+                    variant="primary"
+                    size="sm"
+                    fullWidth
+                    loading={billing.busy}
+                    onPress={() => void billing.subscribe()}
+                  />
+                )}
+                {billing.error ? (
+                  <Text variant="caption" tone="destructive" className="text-[12px]">
+                    {billing.error}
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
           </Reveal>
         ) : null}
 
@@ -349,4 +403,25 @@ function HoursRow({ entry, isToday }: { entry: VendorHours; isToday: boolean }) 
       </Text>
     </View>
   );
+}
+
+/**
+ * One sentence for where the subscription stands. A cancelled subscription is
+ * still "active" at Stripe until the month already paid for runs out, so the
+ * end date is what is said — not a status the merchant would read as a mistake.
+ */
+function subscriptionLine(t: TFunction, subscription: MerchantSubscription): string {
+  switch (subscription.status) {
+    case 'active':
+      if (subscription.cancelAt) return t('business.subscription.endsOn', { date: formatDate(subscription.cancelAt) });
+      return subscription.currentPeriodEnd
+        ? t('business.subscription.renewsOn', { date: formatDate(subscription.currentPeriodEnd) })
+        : t('business.subscription.active');
+    case 'past_due':
+      return t('business.subscription.pastDue');
+    case 'canceled':
+      return t('business.subscription.ended');
+    default:
+      return t('business.subscription.notSubscribed');
+  }
 }

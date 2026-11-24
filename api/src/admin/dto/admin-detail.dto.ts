@@ -184,6 +184,18 @@ export interface AdminVendorDetail {
   owner: { id: string; fullName: string; email: string | null; avatarUrl: string | null; memberSince: Date };
 
   /**
+   * The monthly subscription (CDC addendum §05), as last recorded from Stripe.
+   * `inactive` for a shop that never subscribed; `priceCad` is what it is billed,
+   * null until it has subscribed.
+   */
+  subscription: {
+    status: 'inactive' | 'active' | 'past_due' | 'canceled';
+    currentPeriodEnd: Date | null;
+    cancelAt: Date | null;
+    priceCad: number | null;
+  };
+
+  /**
    * Null when the shop predates the registration flow. The fields added with
    * the client's 2026-09-27 document list are null on files submitted before it.
    *

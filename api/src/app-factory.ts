@@ -30,7 +30,7 @@ export async function createApp(): Promise<NestFastifyApplication> {
     // Keeps the unparsed request body available as `request.rawBody`. Stripe
     // signs the exact bytes it sent, so the webhook's signature check cannot
     // work against a re-serialised JSON object — see
-    // `orders/stripe-webhook.controller.ts`.
+    // `billing/stripe-webhook.controller.ts`.
     { rawBody: true }
   );
 

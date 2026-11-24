@@ -253,6 +253,17 @@ export interface AdminVendorDetail {
   reviewedAt: string | null;
   reviewer: { id: ID; fullName: string } | null;
   owner: { id: ID; fullName: string; email: string | null; avatarUrl: string | null; memberSince: string };
+  /**
+   * The monthly subscription (CDC addendum §05), as last recorded from Stripe.
+   * Absent from an API older than the feature. `priceCad` is what the shop is
+   * billed, null until it has subscribed.
+   */
+  subscription?: {
+    status: 'inactive' | 'active' | 'past_due' | 'canceled';
+    currentPeriodEnd: string | null;
+    cancelAt: string | null;
+    priceCad: number | null;
+  };
   /** The fields added with the client's 2026-09-27 list are null on files submitted before it. */
   registration: {
     legalName: string | null;

@@ -151,6 +151,19 @@ export const merchantCopy = {
         body: `Order ${ref} — reply from the app.`,
       },
     )) as Copy<{ ref: string }>,
+
+  subscriptionPaymentFailed: ((_params, l) =>
+    pick(
+      l,
+      {
+        title: 'Paiement de l’abonnement refusé',
+        body: 'Mettez votre carte à jour depuis votre profil pour régler l’abonnement Sougouba.',
+      },
+      {
+        title: 'Subscription payment declined',
+        body: 'Update your card from your profile to pay the Sougouba subscription.',
+      },
+    )) as Copy<Record<string, never>>,
 };
 
 /** Merchant or courier: the back office approved their application. */

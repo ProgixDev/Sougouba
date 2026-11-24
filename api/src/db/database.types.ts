@@ -792,28 +792,37 @@ export type Database = {
       }
       merchant_subscriptions: {
         Row: {
+          cancel_at: string | null
           created_at: string
           current_period_end: string | null
+          price_cad: number | null
           status: Database["public"]["Enums"]["subscription_status"]
           stripe_connect_account_id: string | null
+          stripe_customer_id: string | null
           stripe_subscription_id: string | null
           updated_at: string
           vendor_id: string
         }
         Insert: {
+          cancel_at?: string | null
           created_at?: string
           current_period_end?: string | null
+          price_cad?: number | null
           status?: Database["public"]["Enums"]["subscription_status"]
           stripe_connect_account_id?: string | null
+          stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           updated_at?: string
           vendor_id: string
         }
         Update: {
+          cancel_at?: string | null
           created_at?: string
           current_period_end?: string | null
+          price_cad?: number | null
           status?: Database["public"]["Enums"]["subscription_status"]
           stripe_connect_account_id?: string | null
+          stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           updated_at?: string
           vendor_id?: string

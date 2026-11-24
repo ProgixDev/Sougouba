@@ -192,7 +192,7 @@ export class ApprovalsService {
     // Left, not inner: `vendor_registrations` is 1:1-optional.
     const reg = one<any>(row.registration);
 
-    const [ownerAuth, hours, sections, categoryRows, stats] = await Promise.all([
+    const [ownerAuth, hours, sections, categoryRows, stats, subscription] = await Promise.all([
       // `auth.users` is reachable only through this one definer function now —
       // `service_role` holds no SELECT on it. See the migration.
       unwrap<{ id: string; email: string | null }[]>(
@@ -214,6 +214,9 @@ export class ApprovalsService {
         this.db.from('vendor_categories').select('categories!inner(id, slug, nameFr:name_fr)').eq('vendor_id', id)
       ).then((rows) => rows.map((r: any) => one<any>(r.categories)).filter(Boolean)),
       unwrap<Record<string, any>>(this.db.rpc('admin_vendor_stats', { p_vendor_id: id })),
+      // The monthly subscription, as last recorded from Stripe. `*`, so this
+      // read survives a database that migration 0052 has not reached.
+      unwrap<any>(this.db.from('merchant_subscriptions').select('*').eq('vendor_id', id).maybeSingle()),
     ]);
 
     const base = {
@@ -288,6 +291,12 @@ export class ApprovalsService {
         email: base.ownerEmail,
         avatarUrl: base.ownerAvatarUrl,
         memberSince: base.ownerMemberSince,
+      },
+      subscription: {
+        status: subscription?.status ?? 'inactive',
+        currentPeriodEnd: subscription?.current_period_end ?? null,
+        cancelAt: subscription?.cancel_at ?? null,
+        priceCad: subscription?.price_cad == null ? null : Number(subscription.price_cad),
       },
       registration: reg
         ? {

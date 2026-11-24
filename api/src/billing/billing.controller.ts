@@ -12,6 +12,7 @@ import { CouriersService } from '../courier/couriers.service.js';
 import { PaymentsService } from '../orders/payments.service.js';
 import { AnalyticsService } from './analytics.service.js';
 import { ConnectService } from './connect.service.js';
+import { SubscriptionsService } from './subscriptions.service.js';
 import {
   payoutAttemptQuerySchema,
   payoutOwedQuerySchema,
@@ -38,6 +39,19 @@ const onboardSchema = z.object({
 });
 type OnboardInput = z.infer<typeof onboardSchema>;
 
+/**
+ * Where Stripe's checkout sends the merchant: back on success, and back if they
+ * give up. Validated as URLs for the same reason as the onboarding pair.
+ */
+const subscribeSchema = z.object({
+  successUrl: z.url('URL de retour requise'),
+  cancelUrl: z.url('URL d’annulation requise'),
+});
+type SubscribeInput = z.infer<typeof subscribeSchema>;
+
+const portalSchema = z.object({ returnUrl: z.url('URL de retour requise') });
+type PortalInput = z.infer<typeof portalSchema>;
+
 @ApiTags('merchant')
 @ApiBearerAuth()
 @UseGuards(SupabaseAuthGuard)
@@ -45,7 +59,8 @@ type OnboardInput = z.infer<typeof onboardSchema>;
 export class MerchantBillingController {
   constructor(
     private readonly analytics: AnalyticsService,
-    private readonly connect: ConnectService
+    private readonly connect: ConnectService,
+    private readonly subscriptions: SubscriptionsService
   ) {}
 
   /** The merchant dashboard's numbers, computed server-side instead of shipped as raw rows. */
@@ -68,6 +83,26 @@ export class MerchantBillingController {
   @Get('stripe/status')
   status(@CurrentUser() userId: string) {
     return this.connect.vendorStatus(userId);
+  }
+
+  // ── the monthly subscription (CDC addendum §05) ───────────────────────────
+
+  /** Where the shop's subscription stands, re-read from Stripe. */
+  @Get('subscription')
+  subscription(@CurrentUser() userId: string) {
+    return this.subscriptions.statusFor(userId);
+  }
+
+  /** A link to Stripe's hosted checkout, to enter a card and start the subscription. */
+  @Post('subscription/checkout')
+  subscribe(@CurrentUser() userId: string, @Body(new ZodValidationPipe(subscribeSchema)) body: SubscribeInput) {
+    return this.subscriptions.startCheckout(userId, body);
+  }
+
+  /** A link to Stripe's portal: change the card, read the invoices, cancel. */
+  @Post('subscription/portal')
+  portal(@CurrentUser() userId: string, @Body(new ZodValidationPipe(portalSchema)) body: PortalInput) {
+    return this.subscriptions.openPortal(userId, body.returnUrl);
   }
 }
 
@@ -187,5 +222,24 @@ export class ConnectReturnController {
   back(@Query('state') state?: string) {
     // `refresh` means the link expired before it was finished; the app asks for a new one.
     return { url: `${APP_RETURN_URL}?state=${state === 'refresh' ? 'refresh' : 'done'}` };
+  }
+}
+
+/** Where the app waits for the browser after Stripe's checkout or portal. */
+const APP_SUBSCRIPTION_RETURN_URL = 'sougouba://subscription-return';
+
+/**
+ * Where Stripe's hosted checkout and portal send the browser back to — the
+ * subscription's counterpart of `ConnectReturnController`, and public for the
+ * same reason: Stripe's redirect carries no token. The target is fixed, and the
+ * app re-reads the subscription from the API rather than believing `state`.
+ */
+@ApiExcludeController()
+@Controller('stripe/billing')
+export class BillingReturnController {
+  @Get('return')
+  @Redirect(APP_SUBSCRIPTION_RETURN_URL, 302)
+  back(@Query('state') state?: string) {
+    return { url: `${APP_SUBSCRIPTION_RETURN_URL}?state=${state === 'cancel' ? 'cancel' : 'done'}` };
   }
 }

@@ -186,6 +186,17 @@ export const business: Widen<typeof reference> = {
     commission: 'Sougouba commission (%{rate})',
     subscriptionNote: 'The %{amount} monthly subscription is billed separately.',
   },
+  subscription: {
+    notSubscribed: 'Not subscribed yet',
+    ended: 'Subscription ended',
+    renewsOn: 'Subscription active, next charge on %{date}',
+    endsOn: 'Subscription cancelled, active until %{date}',
+    active: 'Subscription active',
+    pastDue: 'Payment declined. Update your card to pay the subscription.',
+    subscribe: 'Start the subscription',
+    manage: 'Manage the subscription',
+    updateCard: 'Update the card',
+  },
   dispute: {
     reply: 'Reply to the customer',
     send: 'Send the reply',

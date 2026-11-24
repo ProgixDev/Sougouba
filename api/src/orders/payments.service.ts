@@ -361,6 +361,150 @@ export class PaymentsService {
     return refund.id;
   }
 
+  // ── Billing: the merchant's monthly subscription ──────────────────────────
+
+  /**
+   * The Stripe Price a new subscription is created on, for the platform's
+   * current monthly fee.
+   *
+   * Stripe prices are immutable, and the fee is an admin setting that can move.
+   * So the price is looked up by a key that *contains the amount*: changing the
+   * fee from 70 $ to 80 $ makes the next subscriber land on a new price, while
+   * every shop already subscribed stays on the one it agreed to — moving them
+   * is a decision, not a side effect of saving a settings form.
+   *
+   * One Product, by a fixed id, so the dashboard shows one line for "the
+   * Sougouba subscription" however many prices it has had.
+   */
+  async subscriptionPrice(amountCad: number): Promise<string> {
+    const stripe = this.client();
+    const lookupKey = subscriptionPriceKey(amountCad);
+
+    const existing = await stripe.prices.list({ lookup_keys: [lookupKey], active: true, limit: 1 });
+    if (existing.data[0]) return existing.data[0].id;
+
+    try {
+      await stripe.products.retrieve(SUBSCRIPTION_PRODUCT_ID);
+    } catch {
+      await stripe.products.create({
+        id: SUBSCRIPTION_PRODUCT_ID,
+        name: 'Abonnement Sougouba',
+        description: 'Abonnement mensuel du commerce sur la plateforme Sougouba.',
+      });
+    }
+
+    const price = await stripe.prices.create({
+      product: SUBSCRIPTION_PRODUCT_ID,
+      currency: 'cad',
+      unit_amount: Math.round(amountCad * 100),
+      recurring: { interval: 'month' },
+      lookup_key: lookupKey,
+    });
+    this.logger.log(`Created subscription price ${price.id} (${lookupKey})`);
+    return price.id;
+  }
+
+  /** The Stripe customer a shop's subscription, invoices and card hang off. */
+  async createBillingCustomer(shop: { vendorId: string; name: string; email: string }): Promise<string> {
+    const customer = await this.client().customers.create({
+      name: shop.name,
+      email: shop.email,
+      preferred_locales: ['fr-CA'],
+      // For a human reading the dashboard. Webhooks are matched on the customer
+      // id stored in `merchant_subscriptions`, never on this.
+      metadata: { sougoubaVendorId: shop.vendorId },
+    });
+    this.logger.log(`Created billing customer ${customer.id} for vendor ${shop.vendorId}`);
+    return customer.id;
+  }
+
+  /**
+   * Stripe's hosted page where the merchant enters a card and starts the
+   * subscription. Hosted, so the card never touches this API or the app.
+   *
+   * No `payment_method_types`: Stripe offers whatever the dashboard enables.
+   */
+  async createSubscriptionCheckout(input: {
+    customerId: string;
+    priceId: string;
+    vendorId: string;
+    successUrl: string;
+    cancelUrl: string;
+  }): Promise<string> {
+    const session = await this.client().checkout.sessions.create({
+      mode: 'subscription',
+      customer: input.customerId,
+      line_items: [{ price: input.priceId, quantity: 1 }],
+      success_url: input.successUrl,
+      cancel_url: input.cancelUrl,
+      client_reference_id: input.vendorId,
+      locale: 'fr-CA',
+      integration_identifier: 'sougouba_merchant_subscription_kqzvmxha',
+      subscription_data: { description: 'Abonnement mensuel Sougouba' },
+    });
+    if (!session.url) throw new ServiceUnavailableException('Stripe returned a checkout session with no URL');
+    return session.url;
+  }
+
+  /**
+   * Stripe's hosted page where a subscribed merchant changes their card, reads
+   * their invoices or cancels. The portal needs a configuration saying which of
+   * those it offers; one is created the first time and reused after.
+   */
+  async createBillingPortal(customerId: string, returnUrl: string): Promise<string> {
+    const session = await this.client().billingPortal.sessions.create({
+      customer: customerId,
+      return_url: returnUrl,
+      configuration: await this.portalConfiguration(),
+      locale: 'fr-CA',
+    });
+    return session.url;
+  }
+
+  private portalConfigurationId: string | null = null;
+
+  private async portalConfiguration(): Promise<string> {
+    if (this.portalConfigurationId) return this.portalConfigurationId;
+    const stripe = this.client();
+    const existing = await stripe.billingPortal.configurations.list({ active: true, limit: 20 });
+    const ours = existing.data.find((c) => c.metadata?.sougouba === PORTAL_TAG);
+    const configuration =
+      ours ??
+      (await stripe.billingPortal.configurations.create({
+        business_profile: { headline: 'Votre abonnement Sougouba' },
+        features: {
+          invoice_history: { enabled: true },
+          payment_method_update: { enabled: true },
+          customer_update: { enabled: true, allowed_updates: ['email', 'name', 'address', 'tax_id'] },
+          // At the end of the month already paid for, not at once: the merchant
+          // keeps what they bought, and nobody has to compute a partial refund.
+          subscription_cancel: { enabled: true, mode: 'at_period_end' },
+        },
+        metadata: { sougouba: PORTAL_TAG },
+      }));
+    this.portalConfigurationId = configuration.id;
+    return configuration.id;
+  }
+
+  /**
+   * Where a customer's subscription stands right now, read from Stripe.
+   *
+   * A customer can accumulate several over time — cancelled, then subscribed
+   * again — so the one that matters is chosen by `pickSubscription`. Null when
+   * they have never had one.
+   */
+  async subscriptionOf(customerId: string): Promise<BillingSubscription | null> {
+    const list = await this.client().subscriptions.list({ customer: customerId, status: 'all', limit: 20 });
+    const chosen = pickSubscription(list.data);
+    return chosen ? toBillingSubscription(chosen) : null;
+  }
+
+  /** End a subscription now — the shop's account is being deleted, and a card must not keep being charged for it. */
+  async cancelSubscription(subscriptionId: string): Promise<void> {
+    await this.client().subscriptions.cancel(subscriptionId);
+    this.logger.log(`Cancelled subscription ${subscriptionId}`);
+  }
+
   /**
    * Verify a webhook's signature and return the event.
    *
@@ -384,4 +528,55 @@ export class PaymentsService {
       throw new BadRequestException('Invalid webhook signature');
     }
   }
+}
+
+// ── billing helpers (pure) ──────────────────────────────────────────────────
+
+/** Fixed, so the dashboard shows one product for the subscription whatever prices it has had. */
+const SUBSCRIPTION_PRODUCT_ID = 'sougouba_merchant_subscription';
+/** How this API recognises the customer-portal configuration it created. */
+const PORTAL_TAG = 'merchant-subscription';
+
+/** `sougouba_merchant_monthly_cad_7000` — the amount is part of the key, see `subscriptionPrice`. */
+export function subscriptionPriceKey(amountCad: number): string {
+  return `sougouba_merchant_monthly_cad_${Math.round(amountCad * 100)}`;
+}
+
+export interface BillingSubscription {
+  id: string;
+  status: Stripe.Subscription.Status;
+  /** End of the month already paid for — when the next charge is due, or when a cancelled subscription stops. */
+  currentPeriodEnd: string | null;
+  /** Set once the merchant has cancelled: the subscription runs until then and does not renew. */
+  cancelAt: string | null;
+  priceCad: number | null;
+}
+
+/**
+ * Which of a customer's subscriptions describes their standing.
+ *
+ * A live one beats a dead one whatever their dates — a shop that cancelled in
+ * March and subscribed again in May is subscribed. Among live ones (there
+ * should only be one) and among dead ones, the most recent.
+ */
+export function pickSubscription<T extends { status: Stripe.Subscription.Status; created: number }>(list: T[]): T | null {
+  const ended = (s: T) => s.status === 'canceled' || s.status === 'incomplete_expired';
+  const newestFirst = [...list].sort((a, b) => b.created - a.created);
+  return newestFirst.find((s) => !ended(s)) ?? newestFirst[0] ?? null;
+}
+
+const iso = (seconds: number | null | undefined): string | null =>
+  seconds === null || seconds === undefined ? null : new Date(seconds * 1000).toISOString();
+
+export function toBillingSubscription(subscription: Stripe.Subscription): BillingSubscription {
+  // Since Stripe's 2025 API versions the billing period lives on the item, not the subscription.
+  const item = subscription.items.data[0];
+  const periodEnd = item?.current_period_end ?? null;
+  return {
+    id: subscription.id,
+    status: subscription.status,
+    currentPeriodEnd: iso(periodEnd),
+    cancelAt: iso(subscription.cancel_at ?? (subscription.cancel_at_period_end ? periodEnd : null)),
+    priceCad: item?.price?.unit_amount === null || item?.price?.unit_amount === undefined ? null : item.price.unit_amount / 100,
+  };
 }

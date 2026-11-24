@@ -8,6 +8,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import { SubscriptionsService } from '../billing/subscriptions.service.js';
 import { MERCHANT_DOCUMENTS_BUCKET } from '../catalog/media-paths.js';
 import type { Db } from '../db/client.js';
 import { DB } from '../db/db.module.js';
@@ -59,7 +60,10 @@ const AVATARS_BUCKET = 'avatars';
 export class AccountDeletionService {
   private readonly logger = new Logger(AccountDeletionService.name);
 
-  constructor(@Inject(DB) private readonly db: Db) {}
+  constructor(
+    @Inject(DB) private readonly db: Db,
+    private readonly subscriptions: SubscriptionsService
+  ) {}
 
   async deleteAccount(userId: string, accessToken: string | null): Promise<void> {
     const profile = await unwrap<{ role: string | null } | null>(
@@ -89,7 +93,11 @@ export class AccountDeletionService {
 
     await this.eraseCustomerData(userId, email);
     if (courier) await this.eraseCourier(courier.id);
-    if (vendor) await this.eraseVendor(vendor.id, userId);
+    if (vendor) {
+      // Before the shop is blanked: its subscription is found through it.
+      await this.subscriptions.cancelForVendor(vendor.id);
+      await this.eraseVendor(vendor.id, userId);
+    }
 
     await unwrapVoid(
       this.db

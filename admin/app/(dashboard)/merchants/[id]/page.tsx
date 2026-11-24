@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { CheckCircle2, XCircle, Ban, MapPin, Phone, FileText, Star, ExternalLink, Landmark } from 'lucide-react';
+import { CheckCircle2, XCircle, Ban, MapPin, Phone, FileText, Star, ExternalLink, Landmark, CreditCard } from 'lucide-react';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
@@ -12,7 +12,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
 import { getVendor, approveVendor, rejectVendor, suspendVendor } from '@/lib/api/vendors';
 import { vendorStatusMeta } from '@/lib/statusMeta';
-import { formatDate } from '@/lib/format';
+import { formatCad, formatDate } from '@/lib/format';
 import type { AdminVendorDetail } from '@/lib/types';
 import { useAdmin } from '@/lib/permissions';
 
@@ -234,6 +234,10 @@ export default function MerchantDetailPage() {
             <Field label="Certifié halal" value={vendor.isHalalCertified ? 'Oui' : 'Non'} icon={FileText} />
             {vendor.status === 'approved' && <Field label="Note" value={`${vendor.rating.toFixed(1)} (${vendor.reviewCount} avis)`} icon={Star} />}
             <Field label="Délai de livraison" value={`${vendor.deliveryEtaMin} min`} icon={FileText} />
+            {/* Recorded from Stripe, which bills it. Shown for information: it does not gate the shop. */}
+            {vendor.subscription && (
+              <Field label="Abonnement mensuel" value={subscriptionLabel(vendor.subscription)} icon={CreditCard} />
+            )}
           </dl>
         </Card>
       </div>
@@ -279,4 +283,22 @@ function Field({ label, value, icon: Icon }: { label: string; value: string; ico
       </div>
     </div>
   );
+}
+
+/** Where a shop's monthly subscription stands, in one line. */
+function subscriptionLabel(subscription: NonNullable<AdminVendorDetail['subscription']>): string {
+  const price = subscription.priceCad === null ? '' : ` — ${formatCad(subscription.priceCad)}/mois`;
+  switch (subscription.status) {
+    case 'active':
+      if (subscription.cancelAt) return `Résilié, actif jusqu’au ${formatDate(subscription.cancelAt)}${price}`;
+      return subscription.currentPeriodEnd
+        ? `Actif, prochain prélèvement le ${formatDate(subscription.currentPeriodEnd)}${price}`
+        : `Actif${price}`;
+    case 'past_due':
+      return `Paiement en retard${price}`;
+    case 'canceled':
+      return 'Terminé';
+    default:
+      return 'Non souscrit';
+  }
 }

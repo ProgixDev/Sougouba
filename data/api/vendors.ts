@@ -207,6 +207,55 @@ export async function getMyPlan(): Promise<PlatformPlan> {
   return api<PlatformPlan>('/vendors/me/plan');
 }
 
+// ── the monthly subscription ────────────────────────────────────────────────
+
+/**
+ * Where the shop's monthly subscription stands (CDC addendum v1.1, §05).
+ *
+ * `inactive` has never subscribed; `past_due` has a renewal the card refused;
+ * `canceled` has ended. `cancelAt` is set while a subscription the merchant
+ * cancelled is still running out the month already paid for.
+ */
+export interface MerchantSubscription {
+  status: 'inactive' | 'active' | 'past_due' | 'canceled';
+  /** What this shop is billed each month — or, before it subscribes, what subscribing costs. */
+  priceCad: number;
+  currentPeriodEnd: string | null;
+  cancelAt: string | null;
+  /** False when the server cannot reach Stripe: there is nothing to subscribe with. */
+  available: boolean;
+}
+
+export async function getMySubscription(): Promise<MerchantSubscription> {
+  return api<MerchantSubscription>('/vendors/me/subscription');
+}
+
+/**
+ * The URL the in-app browser waits for. The API's `/stripe/billing/return`
+ * redirects here, so the sheet closes itself when Stripe is done.
+ */
+export const SUBSCRIPTION_RETURN_URL = 'sougouba://subscription-return';
+
+const billingReturn = (state: 'done' | 'cancel') => `${process.env.EXPO_PUBLIC_API_URL}/stripe/billing/return?state=${state}`;
+
+/** A link to Stripe's hosted checkout, where the merchant enters a card and the subscription starts. */
+export async function startSubscriptionCheckout(): Promise<string> {
+  const { url } = await api<{ url: string }>('/vendors/me/subscription/checkout', {
+    method: 'POST',
+    body: { successUrl: billingReturn('done'), cancelUrl: billingReturn('cancel') },
+  });
+  return url;
+}
+
+/** A link to Stripe's portal: change the card, read the invoices, cancel. */
+export async function openSubscriptionPortal(): Promise<string> {
+  const { url } = await api<{ url: string }>('/vendors/me/subscription/portal', {
+    method: 'POST',
+    body: { returnUrl: billingReturn('done') },
+  });
+  return url;
+}
+
 /** Upload the shop's cover photo and return the Storage path to save as `coverUrl`. */
 export async function uploadShopCover(image: PickedImage, contentType: MediaImageType): Promise<string> {
   return uploadMediaImage('/vendors/me/media-upload', image, contentType);

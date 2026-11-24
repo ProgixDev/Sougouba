@@ -188,6 +188,18 @@ export const business = {
     commission: 'Commission Sougouba (%{rate})',
     subscriptionNote: 'Abonnement de %{amount} par mois facturé séparément.',
   },
+  /** The monthly subscription's standing on the profile — `hooks/useMerchantSubscription.ts`. */
+  subscription: {
+    notSubscribed: 'Abonnement non souscrit',
+    ended: 'Abonnement terminé',
+    renewsOn: 'Abonnement actif, prochain prélèvement le %{date}',
+    endsOn: 'Abonnement résilié, actif jusqu’au %{date}',
+    active: 'Abonnement actif',
+    pastDue: 'Paiement refusé. Mettez votre carte à jour pour régler l’abonnement.',
+    subscribe: 'Souscrire l’abonnement',
+    manage: 'Gérer l’abonnement',
+    updateCard: 'Mettre la carte à jour',
+  },
   dispute: {
     reply: 'Répondre au client',
     send: 'Envoyer la réponse',

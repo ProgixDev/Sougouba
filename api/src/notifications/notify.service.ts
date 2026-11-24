@@ -98,6 +98,24 @@ export class NotifyService {
     });
   }
 
+  /**
+   * The monthly subscription could not be charged. Stripe emails the merchant
+   * too, and retries on its own; this is the nudge that reaches a phone.
+   */
+  async subscriptionPaymentFailed(vendorId: string): Promise<void> {
+    await this.guard('subscriptionPaymentFailed', async () => {
+      const vendor = await unwrap<{ ownerId: string } | null>(
+        this.db.from('vendors').select('ownerId:owner_id').eq('id', vendorId).maybeSingle(),
+      );
+      if (!vendor) return;
+      await this.push.send([vendor.ownerId], {
+        content: (l) => merchantCopy.subscriptionPaymentFailed({}, l),
+        url: '/(business)/(tabs)/profile',
+        channel: 'orders',
+      });
+    });
+  }
+
   /** The shopper opened a dispute: the merchant is asked to answer it. */
   async disputeOpened(orderId: string): Promise<void> {
     await this.guard('disputeOpened', async () => {

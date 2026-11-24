@@ -9,7 +9,6 @@ import { OrdersService } from './orders.service.js';
 import { PaymentsService } from './payments.service.js';
 import { OrderReceiptController, ReceiptDownloadController } from './receipts/receipts.controller.js';
 import { ReceiptsService } from './receipts/receipts.service.js';
-import { StripeWebhookController } from './stripe-webhook.controller.js';
 import { VendorOrdersController } from './vendor-orders.controller.js';
 
 /**
@@ -33,7 +32,6 @@ import { VendorOrdersController } from './vendor-orders.controller.js';
   controllers: [
     OrdersController,
     VendorOrdersController,
-    StripeWebhookController,
     CustomerChatController,
     CourierChatController,
     OrderReceiptController,
