@@ -174,6 +174,16 @@ export class AdminController {
     return this.stalledOrders.listUnanswered();
   }
 
+  /**
+   * Runs a courier accepted and never came for, that the timer left alone — a
+   * day or more overdue, a problem reported on them, or taking back is off.
+   */
+  @RequirePermission('orders.view')
+  @Get('orders/late-pickups')
+  ordersLatePickups() {
+    return this.stalledOrders.listLatePickups();
+  }
+
   @RequirePermission('orders.view')
   @Get('orders/:id')
   order(@Param('id', ParseUUIDPipe) id: string) {

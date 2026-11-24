@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { cancelOrderAdminSchema } from '../admin/dto/admin.dto.js';
 import { releaseRunSchema } from '../courier/dto/courier.dto.js';
-import { customerCopy, merchantCopy } from '../notifications/messages.js';
+import { courierCopy, customerCopy, merchantCopy } from '../notifications/messages.js';
 import { cancelOrderSchema } from './dto/order.dto.js';
 import { OrderCancellationService } from './order-cancellation.service.js';
 import { canCancelAs, ORDER_STATUSES, SYSTEM_CANCEL_FROM, type CancelActor, type OrderStatus } from './order-status.js';
@@ -298,6 +298,18 @@ describe('what people are told', () => {
     );
   });
 
+  it('tells a late courier what to do and how long is left, then that the run is gone', () => {
+    const base = { ref: '#A1B2', vendor: 'Marché Teranga' };
+    expect(courierCopy.pickupOverdue({ ...base, minutesLeft: 10 }, 'fr')).toEqual({
+      title: 'Marché Teranga vous attend',
+      body: 'Commande #A1B2 : récupérez-la ou rendez la course. Sinon elle sera confiée à un autre livreur dans 10 min.',
+    });
+    expect(courierCopy.pickupOverdue({ ...base, minutesLeft: null }, 'en').body).toBe('Order #A1B2: pick it up, or hand the run back if you cannot.');
+    expect(courierCopy.runTakenBack(base, 'fr').body).toBe(
+      'La commande #A1B2 (Marché Teranga) n’a pas été récupérée à temps : elle a été confiée à un autre livreur.'
+    );
+  });
+
   it('reminds the shop how long it has left — or just nudges when nothing cancels automatically', () => {
     expect(merchantCopy.orderWaiting({ ref: '#A1B2', minutesLeft: 7 }, 'fr').body).toBe(
       'Commande #A1B2 : acceptez-la, sinon elle sera annulée dans 7 min.'
@@ -319,12 +331,18 @@ function stalledHarness(opts: {
   orders: { order_id: string; waiting_min: number; alerted?: boolean; reminded?: boolean; offers?: number }[];
   /** Order ids another sweep already flagged between the read and the claim. */
   claimedElsewhere?: string[];
+  /** Rows `deliveries_awaiting_pickup` answers with. */
+  pickups?: { order_id: string; courier_id: string; late_min: number; reminded?: boolean; has_open_issue?: boolean }[];
+  /** Order ids whose courier picked up between the read and the take-back. */
+  pickedUpMeanwhile?: string[];
   staffEmail?: string;
 }) {
   const cancelled: string[] = [];
   const cancelReasons: string[] = [];
   const claimed: string[] = [];
   const reminders: { orderId: string; minutesLeft: number | null }[] = [];
+  const courierPushes: { orderId: string; courierId: string; event: unknown }[] = [];
+  const released: Record<string, unknown>[] = [];
   const mails: { to: string; subject: string; text: string }[] = [];
   let rpcArgs: Record<string, unknown> | null = null;
   let rpcName: string | null = null;
@@ -340,7 +358,7 @@ function stalledHarness(opts: {
       const q = {
         update: () => q,
         eq: (column: string, value: string) => {
-          if (column === 'id') id = value;
+          if (column === 'id' || column === 'order_id') id = value;
           return q;
         },
         or: () => q,
@@ -354,8 +372,30 @@ function stalledHarness(opts: {
       return q;
     },
     rpc: async (name: string, args: Record<string, unknown>) => {
+      if (name === 'delivery_release') {
+        if (opts.pickedUpMeanwhile?.includes(args.p_order_id as string)) return { data: null, error: { code: 'SGB12', message: 'no longer releasable' } };
+        released.push(args);
+        return { data: null, error: null };
+      }
       rpcName = name;
       rpcArgs = args;
+      if (name === 'deliveries_awaiting_pickup') {
+        return {
+          data: (opts.pickups ?? []).map((p) => ({
+            courier_name: 'Karim',
+            vendor_id: 'vendor-1',
+            vendor_name: 'Marché Teranga',
+            customer_name: 'Awa',
+            total_cad: 29.13,
+            accepted_at: '2026-11-24T14:00:00+00:00',
+            due_at: '2026-11-24T14:10:00+00:00',
+            reminded: false,
+            has_open_issue: false,
+            ...p,
+          })),
+          error: null,
+        };
+      }
       return {
         data: opts.orders.map((o) => ({
           vendor_id: 'vendor-1',
@@ -375,12 +415,13 @@ function stalledHarness(opts: {
   };
   const notify = {
     orderWaitingForShop: async (orderId: string, minutesLeft: number | null) => void reminders.push({ orderId, minutesLeft }),
+    courierPickupOverdue: async (orderId: string, courierId: string, event: unknown) => void courierPushes.push({ orderId, courierId, event }),
   };
   const mail = { send: async (m: { to: string; subject: string; text: string }) => void mails.push(m) };
   const config = { get: (key: string) => (key === 'STAFF_ALERT_EMAIL' ? opts.staffEmail : undefined) };
 
   const service = new StalledOrdersService(db as never, cancellation as never, mail as never, config as never, notify as never);
-  return { service, cancelled, cancelReasons, claimed, reminders, mails, rpcArgs: () => rpcArgs, rpcName: () => rpcName };
+  return { service, cancelled, cancelReasons, claimed, reminders, courierPushes, released, mails, rpcArgs: () => rpcArgs, rpcName: () => rpcName };
 }
 
 describe('orders waiting for a courier', () => {
@@ -542,5 +583,103 @@ describe('orders the shop has not answered', () => {
     expect(h.rpcArgs()).toEqual({ p_min_waiting_min: 10, p_max_waiting_min: null });
     expect(h.cancelled).toEqual([]);
     expect(h.reminders).toEqual([]);
+  });
+});
+
+describe('a courier who accepted and has not come', () => {
+  const settings = { courier_late_remind_min: 5, courier_late_release_min: 15 };
+  const pickup = (order_id: string, late_min: number, extra: Record<string, unknown> = {}) => ({ order_id, courier_id: `courier-${order_id}`, late_min, ...extra });
+
+  it('reminds once after the first delay and takes the run back after the second', async () => {
+    const h = stalledHarness({
+      settings,
+      orders: [],
+      pickups: [pickup('gone', 16), pickup('late', 7), pickup('nudged', 9, { reminded: true })],
+    });
+    expect(await h.service.sweepLatePickups()).toEqual({ reminded: 1, released: 1 });
+    // Taken back through the courier's own hand-back function, as a no-show.
+    expect(h.released).toEqual([{ p_order_id: 'gone', p_courier_id: 'courier-gone', p_reason: 'no_show', p_note: null }]);
+    expect(h.courierPushes).toEqual([
+      { orderId: 'gone', courierId: 'courier-gone', event: { kind: 'taken_back' } },
+      // 15 - 7: how long the late one still has.
+      { orderId: 'late', courierId: 'courier-late', event: { kind: 'late', minutesLeft: 8 } },
+    ]);
+    expect(h.claimed).toEqual(['late']);
+    expect(h.rpcArgs()).toEqual({ p_min_late_min: 5, p_max_late_min: 1440 });
+    // Nothing is cancelled: the order goes back to dispatch.
+    expect(h.cancelled).toEqual([]);
+  });
+
+  it('leaves alone a run the courier reported a problem on', async () => {
+    const h = stalledHarness({ settings, orders: [], pickups: [pickup('blocked', 40, { has_open_issue: true })] });
+    expect(await h.service.sweepLatePickups()).toEqual({ reminded: 0, released: 0 });
+    expect(h.released).toEqual([]);
+    expect(h.courierPushes).toEqual([]);
+  });
+
+  it('lets a courier who picks up as the timer fires keep the run, and tells them nothing', async () => {
+    const h = stalledHarness({ settings, orders: [], pickups: [pickup('justintime', 15)], pickedUpMeanwhile: ['justintime'] });
+    expect(await h.service.sweepLatePickups()).toEqual({ reminded: 0, released: 0 });
+    expect(h.courierPushes).toEqual([]);
+  });
+
+  it('reminds only once when two sweeps see the same run', async () => {
+    const h = stalledHarness({ settings, orders: [], pickups: [pickup('late', 7)], claimedElsewhere: ['late'] });
+    expect(await h.service.sweepLatePickups()).toEqual({ reminded: 0, released: 0 });
+    expect(h.courierPushes).toEqual([]);
+  });
+
+  it('only reminds when taking back is off, and only takes back when the reminder is off', async () => {
+    const remindOnly = stalledHarness({
+      settings: { courier_late_remind_min: 5, courier_late_release_min: 0 },
+      orders: [],
+      pickups: [pickup('late', 300)],
+    });
+    expect(await remindOnly.service.sweepLatePickups()).toEqual({ reminded: 1, released: 0 });
+    expect(remindOnly.courierPushes).toEqual([{ orderId: 'late', courierId: 'courier-late', event: { kind: 'late', minutesLeft: null } }]);
+    expect(remindOnly.released).toEqual([]);
+
+    const releaseOnly = stalledHarness({
+      settings: { courier_late_remind_min: 0, courier_late_release_min: 15 },
+      orders: [],
+      pickups: [pickup('gone', 15), pickup('late', 14)],
+    });
+    expect(await releaseOnly.service.sweepLatePickups()).toEqual({ reminded: 0, released: 1 });
+    expect(releaseOnly.rpcArgs()).toEqual({ p_min_late_min: 15, p_max_late_min: 1440 });
+    expect(releaseOnly.released.map((r) => r.p_order_id)).toEqual(['gone']);
+  });
+
+  it('does nothing with both switched off, or against a database without the two delays', async () => {
+    for (const none of [{ courier_late_remind_min: 0, courier_late_release_min: 0 }, { shop_confirm_remind_min: 3, shop_confirm_cancel_min: 10 }, null]) {
+      const h = stalledHarness({ settings: none, orders: [], pickups: [pickup('gone', 900)] });
+      expect(await h.service.sweepLatePickups()).toEqual({ reminded: 0, released: 0 });
+      expect(h.released).toEqual([]);
+      expect(h.rpcArgs()).toBeNull();
+    }
+  });
+
+  it('lists for the back office what the timer left alone, with no age limit', async () => {
+    const h = stalledHarness({ settings, orders: [], pickups: [pickup('ancient', 77_000, { has_open_issue: true })] });
+    const list = await h.service.listLatePickups();
+    expect(list.remindAfterMin).toBe(5);
+    expect(list.releaseAfterMin).toBe(15);
+    expect(list.pickups).toEqual([
+      {
+        orderId: 'ancient',
+        courierId: 'courier-ancient',
+        courierName: 'Karim',
+        vendorId: 'vendor-1',
+        vendorName: 'Marché Teranga',
+        customerName: 'Awa',
+        totalCad: 29.13,
+        acceptedAt: '2026-11-24T14:00:00+00:00',
+        dueAt: '2026-11-24T14:10:00+00:00',
+        lateMin: 77_000,
+        reminded: false,
+        hasOpenIssue: true,
+      },
+    ]);
+    expect(h.rpcArgs()).toEqual({ p_min_late_min: 15, p_max_late_min: null });
+    expect(h.released).toEqual([]);
   });
 });

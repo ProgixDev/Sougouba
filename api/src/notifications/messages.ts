@@ -292,6 +292,43 @@ export const courierCopy = {
       },
     )) as Copy<{ vendor: string; km: number; earningsCad: number }>,
 
+  /**
+   * The courier accepted a run and is late at the shop. Sent once, before the
+   * run is taken back; `minutesLeft` is null when it never is automatically.
+   */
+  pickupOverdue: (({ ref, vendor, minutesLeft }, l) =>
+    pick(
+      l,
+      {
+        title: `${vendor} vous attend`,
+        body:
+          minutesLeft === null
+            ? `Commande ${ref} : récupérez-la, ou rendez la course si vous ne pouvez pas.`
+            : `Commande ${ref} : récupérez-la ou rendez la course. Sinon elle sera confiée à un autre livreur dans ${minutesLeft} min.`,
+      },
+      {
+        title: `${vendor} is waiting for you`,
+        body:
+          minutesLeft === null
+            ? `Order ${ref}: pick it up, or hand the run back if you cannot.`
+            : `Order ${ref}: pick it up or hand the run back. Otherwise it goes to another courier in ${minutesLeft} min.`,
+      },
+    )) as Copy<OrderParams & { minutesLeft: number | null }>,
+
+  /** The run was taken back because the courier never came for it. */
+  runTakenBack: (({ ref, vendor }, l) =>
+    pick(
+      l,
+      {
+        title: 'Course retirée',
+        body: `La commande ${ref} (${vendor}) n’a pas été récupérée à temps : elle a été confiée à un autre livreur.`,
+      },
+      {
+        title: 'Delivery reassigned',
+        body: `Order ${ref} (${vendor}) was not picked up in time, so it went to another courier.`,
+      },
+    )) as Copy<OrderParams>,
+
   /** The order a courier was carrying, or heading to, no longer exists as a delivery. */
   runCancelled: (({ ref, vendor }, l) =>
     pick(

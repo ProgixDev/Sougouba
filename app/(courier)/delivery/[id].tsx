@@ -254,9 +254,15 @@ export default function CourierDeliveryScreen() {
                   className="flex-row items-center gap-2.5 rounded-2xl border border-border p-4 active:bg-muted"
                 >
                   <Undo2 size={16} color={colors.mutedForeground} strokeWidth={2} />
-                  <Text variant="caption" tone="muted" className="flex-1 text-[13px]">
-                    {t('courier.release.action')}
-                  </Text>
+                  <View className="flex-1 gap-0.5">
+                    <Text variant="caption" tone="muted" className="text-[13px]">
+                      {t('courier.release.action')}
+                    </Text>
+                    {/* Said before it happens: a run not picked up in time is taken back. */}
+                    <Text variant="caption" tone="muted" className="text-[11px] leading-[15px]">
+                      {t('courier.release.lateHint')}
+                    </Text>
+                  </View>
                 </Pressable>
               ) : null}
 

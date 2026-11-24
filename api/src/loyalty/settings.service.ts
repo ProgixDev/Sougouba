@@ -129,6 +129,19 @@ export class SettingsService {
       );
     }
 
+    // And for a courier late at pickup.
+    const lateRemindMin = patch.courierLateRemindMin ?? Number(before.courierLateRemindMin);
+    const lateReleaseMin = patch.courierLateReleaseMin ?? Number(before.courierLateReleaseMin);
+    if (
+      (patch.courierLateRemindMin !== undefined || patch.courierLateReleaseMin !== undefined) &&
+      lateReleaseMin !== 0 &&
+      lateReleaseMin <= lateRemindMin
+    ) {
+      throw new BadRequestException(
+        'Le délai avant de retirer une course doit être plus long que le délai de rappel du livreur (ou 0 pour le désactiver).'
+      );
+    }
+
     const updated = await unwrapRpc<Tables<'platform_settings'>>(
       this.db.rpc('settings_update', {
         p_admin_id: adminId,

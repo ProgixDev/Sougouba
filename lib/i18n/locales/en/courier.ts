@@ -65,6 +65,7 @@ export const courier: Widen<typeof reference> = {
   },
   release: {
     action: 'Hand this run back',
+    lateHint: 'If you cannot make it, hand the run back: an order not picked up in time goes to another courier.',
     title: 'Hand the run back',
     note: 'The order goes straight to another courier. You will not be paid for this run and it will not be offered to you again.',
     why: 'Why are you handing it back?',

@@ -328,7 +328,9 @@ export default function OrderDetailPage() {
                       ? release.pickedUpAt
                         ? 'Avait récupéré la commande quand elle a été annulée'
                         : 'En route vers le commerce quand la commande a été annulée'
-                      : `A rendu la course — ${RELEASE_REASON_LABELS[release.reason] ?? release.reason}`}
+                      : release.reason === 'no_show'
+                        ? 'Course retirée automatiquement : commande non récupérée à temps'
+                        : `A rendu la course — ${RELEASE_REASON_LABELS[release.reason] ?? release.reason}`}
                     {release.note ? ` : ${release.note}` : ''}
                   </Text>
                 </div>

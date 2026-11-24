@@ -161,6 +161,36 @@ export class NotifyService {
     });
   }
 
+  /**
+   * A courier accepted a run and has not come for it. `late` is the one
+   * reminder, with how long they still have; `taken_back` tells them the run
+   * is no longer theirs. The courier is named by the caller: by the time the
+   * second one is sent, the order no longer says who was carrying it.
+   */
+  async courierPickupOverdue(
+    orderId: string,
+    courierId: string,
+    event: { kind: 'late'; minutesLeft: number | null } | { kind: 'taken_back' },
+  ): Promise<void> {
+    await this.guard('courierPickupOverdue', async () => {
+      const [order, courier] = await Promise.all([
+        this.order(orderId),
+        unwrap<{ userId: string } | null>(this.db.from('couriers').select('userId:user_id').eq('id', courierId).maybeSingle()),
+      ]);
+      if (!order || !courier) return;
+      const params = { ref: orderReference(order.id), vendor: order.vendor?.name ?? 'Sougouba' };
+      await this.push.send([courier.userId], {
+        content: (l) =>
+          event.kind === 'late'
+            ? courierCopy.pickupOverdue({ ...params, minutesLeft: event.minutesLeft }, l)
+            : courierCopy.runTakenBack(params, l),
+        // The run while it is still theirs; the missions list once it is not.
+        url: event.kind === 'late' ? `/(courier)/delivery/${order.id}` : '/(courier)/(tabs)/missions',
+        channel: 'orders',
+      });
+    });
+  }
+
   /** A paid order has just landed in the shop's queue. */
   async orderPlaced(orderId: string): Promise<void> {
     await this.guard('orderPlaced', async () => {

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, Ban, Package, Search, ShoppingCart, Store, Truck, Wallet } from 'lucide-react';
+import { AlertCircle, Ban, Clock, Package, Search, ShoppingCart, Store, Truck, Wallet } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { StatusBadge } from '@/components/data/StatusBadge';
@@ -11,7 +11,7 @@ import { ExportButton } from '@/components/data/ExportButton';
 import { csvDate, type CsvColumn } from '@/lib/csv';
 import { Avatar, BarSeries, Breakdown, CHART, KpiCard, KpiGrid, PageHeader, SectionCard } from '@/components/insights/Insights';
 import { getOrderInsights, shortDay, type OrderInsights } from '@/lib/api/insights';
-import { listOrders, listOrdersAwaitingShop, listOrdersWaitingForCourier } from '@/lib/api/orders';
+import { listLatePickups, listOrders, listOrdersAwaitingShop, listOrdersWaitingForCourier } from '@/lib/api/orders';
 import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { useToast } from '@/components/Toast';
 import { orderStatusMeta } from '@/lib/statusMeta';
@@ -37,6 +37,7 @@ export default function OrdersPage() {
   const [insights, setInsights] = useState<OrderInsights | null>(null);
   const [waiting, setWaiting] = useState<Awaited<ReturnType<typeof listOrdersWaitingForCourier>> | null>(null);
   const [unanswered, setUnanswered] = useState<Awaited<ReturnType<typeof listOrdersAwaitingShop>> | null>(null);
+  const [latePickups, setLatePickups] = useState<Awaited<ReturnType<typeof listLatePickups>> | null>(null);
 
   useEffect(() => {
     getOrderInsights()
@@ -50,6 +51,10 @@ export default function OrdersPage() {
     // And the ones a shop never answered, that the timer did not cancel.
     listOrdersAwaitingShop()
       .then(setUnanswered)
+      .catch(() => undefined);
+    // And the runs a courier accepted and never came for.
+    listLatePickups()
+      .then(setLatePickups)
       .catch(() => undefined);
   }, []);
 
@@ -171,6 +176,44 @@ export default function OrdersPage() {
                   </div>
                   <Text variant="body" className="tabular font-semibold text-destructive">
                     {waitingLabel(o.waitingMin)}
+                  </Text>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {latePickups && latePickups.pickups.length > 0 && (
+        <Card className="border border-destructive/40 p-5" elevated={false}>
+          <div className="mb-1 flex items-center gap-2">
+            <Clock size={17} className="text-destructive" />
+            <Text variant="subtitle">
+              {latePickups.pickups.length === 1
+                ? '1 commande acceptée par un livreur qui ne vient pas'
+                : `${latePickups.pickups.length} commandes acceptées par un livreur qui ne vient pas`}
+            </Text>
+          </div>
+          <Text variant="caption" tone="muted" className="mb-3">
+            {latePickups.releaseAfterMin > 0
+              ? `Un livreur en retard de ${latePickups.releaseAfterMin} min perd la course, qui repart vers un autre. Celles-ci n’ont pas été reprises : retard de plus d’un jour, ou un incident a été signalé dessus.`
+              : 'Le retrait automatique est désactivé : c’est à vous de décider.'}
+          </Text>
+          <ul className="flex flex-col">
+            {latePickups.pickups.map((p) => (
+              <li key={p.orderId} className="border-b border-border last:border-0">
+                <Link href={`/orders/${p.orderId}`} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2.5 hover:bg-muted">
+                  <div className="min-w-0">
+                    <Text variant="body" className="font-medium">
+                      #{p.orderId.slice(0, 8)} · {p.vendorName}
+                    </Text>
+                    <Text variant="caption" tone="muted">
+                      Livreur : {p.courierName} · {formatCad(p.totalCad)}
+                      {p.hasOpenIssue ? ' · incident signalé' : ''}
+                    </Text>
+                  </div>
+                  <Text variant="body" className="tabular font-semibold text-destructive">
+                    {waitingLabel(p.lateMin)} de retard
                   </Text>
                 </Link>
               </li>

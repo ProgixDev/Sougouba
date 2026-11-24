@@ -39,6 +39,24 @@ export interface UnansweredOrder {
   reminded: boolean;
 }
 
+/** A run accepted and not picked up, past the time the courier was expected, as `deliveries_awaiting_pickup` reports it. */
+export interface LatePickup {
+  orderId: string;
+  courierId: string;
+  courierName: string;
+  vendorId: string;
+  vendorName: string;
+  customerName: string | null;
+  totalCad: number;
+  acceptedAt: string;
+  /** When the courier was expected at the shop: acceptance plus the travel time estimated then. */
+  dueAt: string;
+  lateMin: number;
+  reminded: boolean;
+  /** The courier reported a problem on this run — the timer leaves it to a person. */
+  hasOpenIssue: boolean;
+}
+
 /**
  * The automatic sweep never touches an order that has been waiting longer than
  * this. Past a day it is not a dispatch problem any more, and a timer
@@ -48,10 +66,12 @@ export interface UnansweredOrder {
 const SWEEP_WINDOW_MIN = 24 * 60;
 
 /**
- * The two places an order waits on somebody who may never come: the shop's
- * answer (`sweepUnanswered`) and a courier for a packed order (`sweep`). Both
- * are bounded by a pair of delays set in the back office, and both end the same
- * way — through `OrderCancellationService`, refunded in full.
+ * The three places an order waits on somebody who may never come: the shop's
+ * answer (`sweepUnanswered`), a courier who accepted and has not come
+ * (`sweepLatePickups`), and a courier for a packed order nobody took
+ * (`sweep`). Each is bounded by a pair of delays set in the back office. The
+ * first and the last end in a cancellation, refunded in full, through
+ * `OrderCancellationService`; the middle one puts the order back in dispatch.
  *
  * On the second of the two: orders that are packed and that no courier has taken.
  *
@@ -192,6 +212,148 @@ export class StalledOrdersService {
       .select('id');
     if (error) {
       this.logger.error(`Could not mark order ${order.orderId} as reminded: ${error.code} ${error.message}`);
+      return false;
+    }
+    return (data ?? []).length > 0;
+  }
+
+  // ── a courier who accepted and never came ─────────────────────────────────
+
+  /**
+   * Runs the timer would have taken back and did not: more than a day
+   * overdue, a problem reported on them, or taking back is switched off. What
+   * the back office lists; no age limit.
+   */
+  async listLatePickups(): Promise<{ remindAfterMin: number; releaseAfterMin: number; pickups: LatePickup[] }> {
+    const delays = await this.courierDelays();
+    if (!delays) return { remindAfterMin: 0, releaseAfterMin: 0, pickups: [] };
+    const threshold = delays.releaseAfterMin > 0 ? delays.releaseAfterMin : Math.max(delays.remindAfterMin, 1);
+    return { ...delays, pickups: await this.latePickups(threshold, null) };
+  }
+
+  /**
+   * One pass over runs that were accepted and not picked up.
+   *
+   * Accepting takes the order out of dispatch, so a courier who then never
+   * comes holds it hostage: nobody else is offered it. The clock is the
+   * courier's own estimate — acceptance plus the travel time worked out then —
+   * so one coming from far is not punished and one round the corner is not
+   * waited on for long.
+   *
+   * 1. `courierLateRemindMin` past that time, the courier gets one reminder:
+   *    pick it up, or hand it back (0 = no reminder);
+   * 2. `courierLateReleaseMin` past it, the run is taken back and returns to
+   *    dispatch, recorded as a `no_show` (0 = never automatically). The courier
+   *    is told, is not paid for it, and is never offered that order again.
+   *
+   * A run with a problem reported on it is left alone: a courier standing at a
+   * shop that will not hand the bag over is not a no-show, and a person reads
+   * those. If no other courier takes the order, the no-courier sweep below
+   * picks it up from there, its clock restarted. Never throws.
+   */
+  async sweepLatePickups(): Promise<{ reminded: number; released: number }> {
+    try {
+      const delays = await this.courierDelays();
+      if (!delays) return { reminded: 0, released: 0 };
+      const { remindAfterMin, releaseAfterMin } = delays;
+      if (remindAfterMin === 0 && releaseAfterMin === 0) return { reminded: 0, released: 0 };
+
+      const from = Math.min(...[remindAfterMin, releaseAfterMin].filter((m) => m > 0));
+      const pickups = await this.latePickups(from, SWEEP_WINDOW_MIN);
+      let reminded = 0;
+      let released = 0;
+
+      for (const pickup of pickups) {
+        if (pickup.hasOpenIssue) continue;
+        if (releaseAfterMin > 0 && pickup.lateMin >= releaseAfterMin) {
+          if (await this.takeBack(pickup)) {
+            released++;
+            await this.notify.courierPickupOverdue(pickup.orderId, pickup.courierId, { kind: 'taken_back' });
+          }
+          continue;
+        }
+        if (remindAfterMin > 0 && pickup.lateMin >= remindAfterMin && !pickup.reminded && (await this.claimLateReminder(pickup))) {
+          const minutesLeft = releaseAfterMin > 0 ? Math.max(releaseAfterMin - pickup.lateMin, 1) : null;
+          await this.notify.courierPickupOverdue(pickup.orderId, pickup.courierId, { kind: 'late', minutesLeft });
+          reminded++;
+        }
+      }
+
+      if (released > 0 || reminded > 0) {
+        this.logger.warn(`Courier not at pickup: ${reminded} reminder(s) sent, ${released} run(s) taken back and re-dispatched`);
+      }
+      return { reminded, released };
+    } catch (error) {
+      this.logger.error(`Late-pickup sweep failed: ${String(error)}`);
+      return { reminded: 0, released: 0 };
+    }
+  }
+
+  /** The two delays, or null against a database older than migration 0056 — the sweep then stands down. */
+  private async courierDelays(): Promise<{ remindAfterMin: number; releaseAfterMin: number } | null> {
+    const { data, error } = await this.db.from('platform_settings').select('*').eq('id', 1).maybeSingle();
+    if (error || !data) return null;
+    const row = data as Record<string, unknown>;
+    const remindAfterMin = Number(row.courier_late_remind_min ?? Number.NaN);
+    const releaseAfterMin = Number(row.courier_late_release_min ?? Number.NaN);
+    if (!Number.isFinite(remindAfterMin) || !Number.isFinite(releaseAfterMin)) return null;
+    return { remindAfterMin, releaseAfterMin };
+  }
+
+  private async latePickups(minLateMin: number, maxLateMin: number | null): Promise<LatePickup[]> {
+    const { data, error } = await this.db.rpc('deliveries_awaiting_pickup', {
+      p_min_late_min: minLateMin,
+      p_max_late_min: maxLateMin as number,
+    });
+    if (error) throw new Error(`deliveries_awaiting_pickup: ${error.code} ${error.message}`);
+    return (data ?? []).map((row) => ({
+      orderId: row.order_id,
+      courierId: row.courier_id,
+      courierName: row.courier_name,
+      vendorId: row.vendor_id,
+      vendorName: row.vendor_name,
+      customerName: row.customer_name,
+      totalCad: Number(row.total_cad),
+      acceptedAt: row.accepted_at,
+      dueAt: row.due_at,
+      lateMin: row.late_min,
+      reminded: row.reminded,
+      hasOpenIssue: row.has_open_issue,
+    }));
+  }
+
+  /**
+   * Take the run back, through the same function a courier's own hand-back
+   * uses. It only matches a run that is still this courier's and still not
+   * picked up — so one who picks up in the second this fires keeps the run,
+   * and that is reported here as "nothing taken back", not as an error.
+   */
+  private async takeBack(pickup: LatePickup): Promise<boolean> {
+    const { error } = await this.db.rpc('delivery_release', {
+      p_order_id: pickup.orderId,
+      p_courier_id: pickup.courierId,
+      p_reason: 'no_show',
+      p_note: null as unknown as string,
+    });
+    if (!error) return true;
+    if (error.code !== NOT_RELEASABLE) {
+      this.logger.error(`Could not take back order ${pickup.orderId} from courier ${pickup.courierId}: ${error.code} ${error.message}`);
+    }
+    return false;
+  }
+
+  /** Mark this courier as reminded, once — on their delivery row, so the next courier on the order starts clean. */
+  private async claimLateReminder(pickup: LatePickup): Promise<boolean> {
+    const { data, error } = await this.db
+      .from('order_deliveries')
+      .update({ late_reminded_at: new Date().toISOString() })
+      .eq('order_id', pickup.orderId)
+      .eq('courier_id', pickup.courierId)
+      .is('picked_up_at', null)
+      .is('late_reminded_at', null)
+      .select('order_id');
+    if (error) {
+      this.logger.error(`Could not mark the late reminder on order ${pickup.orderId}: ${error.code} ${error.message}`);
       return false;
     }
     return (data ?? []).length > 0;
@@ -339,6 +501,9 @@ export class StalledOrdersService {
   }
 }
 
+/** `delivery_release` raises this when the run is no longer the courier's to give up — picked up, or already released. */
+const NOT_RELEASABLE = 'SGB12';
+
 const TICK_MS = 60_000;
 
 /**
@@ -378,6 +543,8 @@ export class StalledOrdersScheduler {
     try {
       // The shop's answer first: it is the shorter delay, and the earlier step.
       await this.stalled.sweepUnanswered();
+      // Before the no-courier sweep: a run taken back here is an order with no courier from now.
+      await this.stalled.sweepLatePickups();
       await this.stalled.sweep();
     } finally {
       this.running = false;

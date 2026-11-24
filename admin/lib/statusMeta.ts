@@ -104,6 +104,7 @@ export const RELEASE_REASON_LABELS: Record<string, string> = {
   personal: 'Empêchement personnel',
   other: 'Autre',
   order_cancelled: 'Commande annulée',
+  no_show: 'N’est pas venu chercher la commande',
 };
 
 export const COURIER_ISSUE_REASON_LABELS: Record<string, string> = {

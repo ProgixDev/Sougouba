@@ -434,4 +434,11 @@ export interface PlatformSettings {
    */
   shopConfirmRemindMin?: number;
   shopConfirmCancelMin?: number;
+  /**
+   * How late a courier may be at the shop, in minutes past the pickup time
+   * estimated when they accepted: before they are reminded (0 = no reminder)
+   * and before the run is taken back (0 = never). Absent before migration 0056.
+   */
+  courierLateRemindMin?: number;
+  courierLateReleaseMin?: number;
 }

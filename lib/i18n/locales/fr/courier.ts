@@ -64,6 +64,7 @@ export const courier = {
   },
   release: {
     action: 'Rendre cette course',
+    lateHint: 'Si vous ne pouvez pas venir, rendez la course : une commande non récupérée à temps est confiée à un autre livreur.',
     title: 'Rendre la course',
     note: 'La commande repart tout de suite vers un autre livreur. Vous ne serez pas payé pour cette course et elle ne vous sera plus proposée.',
     why: 'Pourquoi la rendez-vous ?',

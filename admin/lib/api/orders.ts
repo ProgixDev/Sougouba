@@ -111,3 +111,31 @@ export interface UnansweredOrder {
 export async function listOrdersAwaitingShop(): Promise<{ remindAfterMin: number; cancelAfterMin: number; orders: UnansweredOrder[] }> {
   return apiGet('/admin/orders/awaiting-shop');
 }
+
+/** A run a courier accepted and has not come for. */
+export interface LatePickup {
+  orderId: ID;
+  courierId: ID;
+  courierName: string;
+  vendorId: ID;
+  vendorName: string;
+  customerName: string | null;
+  totalCad: number;
+  acceptedAt: string;
+  /** When the courier was expected at the shop. */
+  dueAt: string;
+  lateMin: number;
+  reminded: boolean;
+  /** The courier reported a problem on this run: it is left to you, not to the timer. */
+  hasOpenIssue: boolean;
+}
+
+/**
+ * Runs accepted and never picked up that the timer left alone: more than a day
+ * overdue, a problem reported on them, or taking back is off
+ * (`releaseAfterMin` 0). Most overdue first. Empty against an API or a database
+ * that does not have the feature yet.
+ */
+export async function listLatePickups(): Promise<{ remindAfterMin: number; releaseAfterMin: number; pickups: LatePickup[] }> {
+  return apiGet('/admin/orders/late-pickups');
+}

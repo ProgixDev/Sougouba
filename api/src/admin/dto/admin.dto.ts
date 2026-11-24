@@ -223,6 +223,14 @@ export const updateSettingsSchema = z
      */
     shopConfirmRemindMin: z.number().int().min(0).max(120).optional(),
     shopConfirmCancelMin: z.number().int().min(0).max(1440).optional(),
+    /**
+     * How late a courier may be at the shop, in minutes past the pickup time
+     * estimated when they accepted: before they are reminded (0 = no reminder),
+     * and before the run is taken back and re-dispatched (0 = never
+     * automatically). `SettingsService.update` checks the pair.
+     */
+    courierLateRemindMin: z.number().int().min(0).max(240).optional(),
+    courierLateReleaseMin: z.number().int().min(0).max(1440).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, 'Aucun champ à modifier')
   .refine(

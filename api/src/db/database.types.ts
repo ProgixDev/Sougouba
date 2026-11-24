@@ -937,6 +937,7 @@ export type Database = {
           distance_km: number
           dropoff_eta_min: number
           earnings_cad: number
+          late_reminded_at: string | null
           order_id: string
           paid_out_at: string | null
           picked_up_at: string | null
@@ -952,6 +953,7 @@ export type Database = {
           distance_km: number
           dropoff_eta_min: number
           earnings_cad: number
+          late_reminded_at?: string | null
           order_id: string
           paid_out_at?: string | null
           picked_up_at?: string | null
@@ -967,6 +969,7 @@ export type Database = {
           distance_km?: number
           dropoff_eta_min?: number
           earnings_cad?: number
+          late_reminded_at?: string | null
           order_id?: string
           paid_out_at?: string | null
           picked_up_at?: string | null
@@ -1436,6 +1439,8 @@ export type Database = {
       platform_settings: {
         Row: {
           commission_rate: number
+          courier_late_release_min: number
+          courier_late_remind_min: number
           courier_location_retention_days: number
           delivery_proof_retention_days: number
           double_points_active: boolean
@@ -1457,6 +1462,8 @@ export type Database = {
         }
         Insert: {
           commission_rate?: number
+          courier_late_release_min?: number
+          courier_late_remind_min?: number
           courier_location_retention_days?: number
           delivery_proof_retention_days?: number
           double_points_active?: boolean
@@ -1478,6 +1485,8 @@ export type Database = {
         }
         Update: {
           commission_rate?: number
+          courier_late_release_min?: number
+          courier_late_remind_min?: number
           courier_location_retention_days?: number
           delivery_proof_retention_days?: number
           double_points_active?: boolean
@@ -2516,6 +2525,23 @@ export type Database = {
         Returns: string
       }
       customer_order_stats: { Args: { p_customer_id: string }; Returns: Json }
+      deliveries_awaiting_pickup: {
+        Args: { p_max_late_min?: number; p_min_late_min: number }
+        Returns: {
+          accepted_at: string
+          courier_id: string
+          courier_name: string
+          customer_name: string
+          due_at: string
+          has_open_issue: boolean
+          late_min: number
+          order_id: string
+          reminded: boolean
+          total_cad: number
+          vendor_id: string
+          vendor_name: string
+        }[]
+      }
       delivery_complete: {
         Args: {
           p_courier_id: string
@@ -2757,6 +2783,8 @@ export type Database = {
         Args: { p_admin_id: string; p_changes: Json; p_patch: Json }
         Returns: {
           commission_rate: number
+          courier_late_release_min: number
+          courier_late_remind_min: number
           courier_location_retention_days: number
           delivery_proof_retention_days: number
           double_points_active: boolean

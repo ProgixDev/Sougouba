@@ -34,6 +34,8 @@ interface FieldState {
   noCourierCancelMin: string;
   shopConfirmRemindMin: string;
   shopConfirmCancelMin: string;
+  courierLateRemindMin: string;
+  courierLateReleaseMin: string;
 }
 
 function toFields(s: PlatformSettings): FieldState {
@@ -50,6 +52,8 @@ function toFields(s: PlatformSettings): FieldState {
     noCourierCancelMin: s.noCourierCancelMin === undefined ? '' : String(s.noCourierCancelMin),
     shopConfirmRemindMin: s.shopConfirmRemindMin === undefined ? '' : String(s.shopConfirmRemindMin),
     shopConfirmCancelMin: s.shopConfirmCancelMin === undefined ? '' : String(s.shopConfirmCancelMin),
+    courierLateRemindMin: s.courierLateRemindMin === undefined ? '' : String(s.courierLateRemindMin),
+    courierLateReleaseMin: s.courierLateReleaseMin === undefined ? '' : String(s.courierLateReleaseMin),
   };
 }
 
@@ -70,6 +74,9 @@ function toPatch(f: FieldState, doublePointsActive: boolean): PlatformSettings {
       : {}),
     ...(f.shopConfirmRemindMin !== '' && f.shopConfirmCancelMin !== ''
       ? { shopConfirmRemindMin: Math.round(num(f.shopConfirmRemindMin)), shopConfirmCancelMin: Math.round(num(f.shopConfirmCancelMin)) }
+      : {}),
+    ...(f.courierLateRemindMin !== '' && f.courierLateReleaseMin !== ''
+      ? { courierLateRemindMin: Math.round(num(f.courierLateRemindMin)), courierLateReleaseMin: Math.round(num(f.courierLateReleaseMin)) }
       : {}),
   };
 }
@@ -223,6 +230,39 @@ export default function SettingsPage() {
               max={1440}
               helper="Doit être plus long que le délai de rappel. 0 = jamais automatiquement."
               {...field('shopConfirmCancelMin')}
+            />
+          </div>
+        </Card>
+      )}
+
+      {fields.courierLateRemindMin !== '' && (
+        <Card className="p-6">
+          <Text variant="subtitle" className="mb-1">
+            Livreur qui ne vient pas chercher la commande
+          </Text>
+          <Text variant="caption" tone="muted" className="mb-4">
+            Un livreur qui accepte une course la bloque pour les autres. Le retard se compte à partir de l’heure d’arrivée
+            estimée quand il a accepté (selon sa distance et son véhicule). La course retirée repart vers un autre livreur ; une
+            course sur laquelle le livreur a signalé un incident n’est jamais retirée automatiquement.
+          </Text>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Input
+              label="Rappeler le livreur après (minutes de retard)"
+              type="number"
+              step="1"
+              min={0}
+              max={240}
+              helper="Une notification, une seule fois. 0 = pas de rappel."
+              {...field('courierLateRemindMin')}
+            />
+            <Input
+              label="Retirer la course après (minutes de retard)"
+              type="number"
+              step="1"
+              min={0}
+              max={1440}
+              helper="Doit être plus long que le délai de rappel. 0 = jamais automatiquement."
+              {...field('courierLateReleaseMin')}
             />
           </div>
         </Card>
