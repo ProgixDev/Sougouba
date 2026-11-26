@@ -1,8 +1,17 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { budgetFor, isExempt, tooManyRequests, trackerFor } from './rate-limit.js';
+import {
+  budgetFor,
+  createTracker,
+  isExempt,
+  proxyWarning,
+  rememberingVerifier,
+  tooManyRequests,
+  trustedProxyHops,
+  type TokenVerifier,
+} from './rate-limit.js';
 
 /** Enough of a Fastify request for the two functions that read one. */
 function req(url: string, opts: { ip?: string; authorization?: string } = {}) {
@@ -13,10 +22,16 @@ function req(url: string, opts: { ip?: string; authorization?: string } = {}) {
   } as unknown as FastifyRequest;
 }
 
-/** An unsigned JWT-shaped token. `trackerFor` reads the payload without verifying it, on purpose. */
+/** A JWT-shaped token naming a subject. Whether it "verifies" is up to the verifier each spec supplies. */
 function tokenFor(payload: Record<string, unknown>) {
   const part = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
-  return `${part({ alg: 'HS256', typ: 'JWT' })}.${part(payload)}.not-a-real-signature`;
+  return `${part({ alg: 'ES256', typ: 'JWT' })}.${part(payload)}.signature`;
+}
+
+/** Stands in for the signature check: believes the tokens it was given, by subject, and no others. */
+function verifierFor(...subjects: string[]): TokenVerifier {
+  const known = new Map(subjects.map((sub) => [tokenFor({ sub }), sub]));
+  return async (token) => known.get(token) ?? null;
 }
 
 describe('budgetFor', () => {
@@ -71,42 +86,134 @@ describe('isExempt', () => {
   });
 });
 
-describe('trackerFor', () => {
-  it('keys on the user when there is a bearer token', () => {
-    const token = tokenFor({ sub: 'aaaaaaaa-0000-4000-8000-000000000001' });
+describe('createTracker', () => {
+  it('keys on the account when the token verifies', async () => {
+    const sub = 'aaaaaaaa-0000-4000-8000-000000000001';
+    const tracker = createTracker(verifierFor(sub));
 
-    expect(trackerFor(req('/orders', { authorization: `Bearer ${token}` }))).toBe(
-      'user:aaaaaaaa-0000-4000-8000-000000000001'
-    );
+    await expect(tracker(req('/orders', { authorization: `Bearer ${tokenFor({ sub })}` }))).resolves.toBe(`user:${sub}`);
   });
 
-  it('separates two users behind one carrier NAT', () => {
+  it('separates two users behind one carrier NAT', async () => {
     // The case this exists for. Keyed on IP, an apartment block on the same
     // mobile network would share — and exhaust — one budget.
-    const a = trackerFor(req('/vendors', { ip: '100.64.0.1', authorization: `Bearer ${tokenFor({ sub: 'user-a' })}` }));
-    const b = trackerFor(req('/vendors', { ip: '100.64.0.1', authorization: `Bearer ${tokenFor({ sub: 'user-b' })}` }));
+    const tracker = createTracker(verifierFor('user-a', 'user-b'));
+    const a = await tracker(req('/vendors', { ip: '100.64.0.1', authorization: `Bearer ${tokenFor({ sub: 'user-a' })}` }));
+    const b = await tracker(req('/vendors', { ip: '100.64.0.1', authorization: `Bearer ${tokenFor({ sub: 'user-b' })}` }));
 
     expect(a).not.toBe(b);
   });
 
-  it('falls back to the IP with no token', () => {
-    expect(trackerFor(req('/vendors', { ip: '198.51.100.4' }))).toBe('ip:198.51.100.4');
+  it('gives a forged token no bucket of its own', async () => {
+    // The hole this closes: on a public route nothing else checks the token,
+    // so a made-up `sub` per request used to be a fresh budget per request.
+    const tracker = createTracker(verifierFor('real-user'));
+    const forged = await Promise.all(
+      ['made-up-1', 'made-up-2', 'made-up-3'].map((sub) =>
+        tracker(req('/products', { ip: '198.51.100.4', authorization: `Bearer ${tokenFor({ sub })}` }))
+      )
+    );
+
+    expect(forged).toEqual(['ip:198.51.100.4', 'ip:198.51.100.4', 'ip:198.51.100.4']);
   });
 
-  it('falls back to the IP on a malformed token rather than throwing', () => {
+  it('falls back to the IP with no token', async () => {
+    const tracker = createTracker(verifierFor());
+    await expect(tracker(req('/vendors', { ip: '198.51.100.4' }))).resolves.toBe('ip:198.51.100.4');
+  });
+
+  it('does not ask the verifier about anything that is not a bearer token', async () => {
+    const verify = vi.fn(async () => 'someone');
+    const tracker = createTracker(verify);
+
+    await expect(tracker(req('/vendors', { ip: '198.51.100.4', authorization: 'Basic abc' }))).resolves.toBe('ip:198.51.100.4');
+    expect(verify).not.toHaveBeenCalled();
+  });
+});
+
+describe('rememberingVerifier', () => {
+  const HOUR = 3_600_000;
+
+  it('checks a token once, then answers from memory until it expires', async () => {
+    let clock = 1_000_000;
+    const check = vi.fn(async () => ({ sub: 'user-a', expiresAt: 1_000_000 + HOUR }));
+    const verify = rememberingVerifier(check, () => clock);
+    const token = tokenFor({ sub: 'user-a' });
+
+    await expect(verify(token)).resolves.toBe('user-a');
+    await expect(verify(token)).resolves.toBe('user-a');
+    expect(check).toHaveBeenCalledTimes(1);
+
+    // Past its expiry the remembered answer is worth nothing: checked again.
+    clock += HOUR;
+    await verify(token);
+    expect(check).toHaveBeenCalledTimes(2);
+  });
+
+  it('answers null, never throws, when the signature check fails', async () => {
+    const verify = rememberingVerifier(async () => {
+      throw new Error('signature verification failed');
+    });
+
+    await expect(verify(tokenFor({ sub: 'forged' }))).resolves.toBeNull();
+  });
+
+  it('does not remember a failure, and does not believe an expired token', async () => {
+    const check = vi
+      .fn<(token: string) => Promise<{ sub: string; expiresAt: number } | null>>()
+      .mockRejectedValueOnce(new Error('keys unreachable'))
+      .mockResolvedValueOnce({ sub: 'user-a', expiresAt: 500 })
+      .mockResolvedValue({ sub: 'user-a', expiresAt: 5_000 });
+    const verify = rememberingVerifier(check, () => 1_000);
+    const token = tokenFor({ sub: 'user-a' });
+
+    await expect(verify(token)).resolves.toBeNull();
+    await expect(verify(token)).resolves.toBeNull();
+    await expect(verify(token)).resolves.toBe('user-a');
+    expect(check).toHaveBeenCalledTimes(3);
+  });
+
+  it('refuses what is not shaped like a token before doing any work', async () => {
+    const check = vi.fn(async () => ({ sub: 'x', expiresAt: Number.MAX_SAFE_INTEGER }));
+    const verify = rememberingVerifier(check);
+
     // A garbage Authorization header must not 500 the request ahead of the
     // guard that would have rejected it properly.
-    for (const header of ['Bearer', 'Bearer ...', 'Bearer a.b.c', 'Bearer not-base64!!.x.y', 'Basic abc']) {
-      expect(trackerFor(req('/vendors', { ip: '198.51.100.4', authorization: header }))).toBe('ip:198.51.100.4');
+    for (const token of ['', '..', 'a..c', 'a.b', 'a.b.c.d', 'not-a-token', `${'a'.repeat(5000)}.b.c`]) {
+      await expect(verify(token)).resolves.toBeNull();
     }
+    expect(check).not.toHaveBeenCalled();
+  });
+});
+
+describe('trustedProxyHops', () => {
+  it('trusts no proxy unless told how many there are', () => {
+    expect(trustedProxyHops({})).toBe(0);
+    for (const value of ['', '0', '-1', 'abc', 'true']) expect(trustedProxyHops({ TRUST_PROXY_HOPS: value })).toBe(0);
   });
 
-  it('falls back to the IP when the payload carries no string sub', () => {
-    for (const payload of [{}, { sub: 42 }, { sub: null }]) {
-      expect(trackerFor(req('/vendors', { ip: '198.51.100.4', authorization: `Bearer ${tokenFor(payload)}` }))).toBe(
-        'ip:198.51.100.4'
-      );
-    }
+  it('reads the number of proxies in front of the server', () => {
+    expect(trustedProxyHops({ TRUST_PROXY_HOPS: '1' })).toBe(1);
+    expect(trustedProxyHops({ TRUST_PROXY_HOPS: '3' })).toBe(3);
+    // Believing a hundred entries of a header a client can write is believing the client.
+    expect(trustedProxyHops({ TRUST_PROXY_HOPS: '100' })).toBe(10);
+  });
+});
+
+describe('proxyWarning', () => {
+  it('says nothing when no proxy is involved, or once the proxies are declared', () => {
+    expect(proxyWarning(undefined, 0)).toBeNull();
+    expect(proxyWarning('', 0)).toBeNull();
+    expect(proxyWarning('203.0.113.7, 10.0.0.2', 2)).toBeNull();
+  });
+
+  it('names the likely setting when requests arrive through an undeclared proxy', () => {
+    const warning = proxyWarning('203.0.113.7, 172.71.0.9, 10.0.0.2', 0);
+
+    expect(warning).toContain('TRUST_PROXY_HOPS');
+    expect(warning).toContain('3 entries');
+    // Counts only: an address in a log line is personal data nobody asked for.
+    expect(warning).not.toContain('203.0.113.7');
   });
 });
 

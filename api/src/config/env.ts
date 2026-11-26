@@ -44,6 +44,26 @@ const envSchema = z.object({
    */
   CORS_ALLOWED_ORIGINS: z.string().optional(),
 
+  /**
+   * How many proxies stand in front of this process — 0 when it faces the
+   * internet itself. Behind Render, Vercel or nginx it **must** be set, or
+   * every visitor is seen at the proxy's address and all requests without a
+   * token share one rate-limit budget (`common/rate-limit.ts`). The server
+   * logs a warning naming the likely value the first time it sees a
+   * forwarded request while this is 0.
+   */
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
+
+  /**
+   * Where the rate limiter keeps its counters when more than one instance of
+   * the API runs. Unset: in each process's own memory, which is correct for a
+   * single instance. `redis://` or `rediss://`.
+   */
+  REDIS_URL: z
+    .string()
+    .regex(/^rediss?:\/\//, 'REDIS_URL must start with redis:// or rediss://')
+    .optional(),
+
   /** Phase 3/7: never optional once payments exist, optional until then so Phase 0/1/2 can boot without it. */
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),

@@ -1,5 +1,8 @@
+import { createHash } from 'node:crypto';
+
 import { HttpException, HttpStatus } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 /**
  * Rate limits, as one table rather than a decorator per controller.
@@ -14,12 +17,12 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
  * how per-route budgets happen here without Nest having to pass route config
  * down into Fastify. The table below is the whole policy, readable in one place.
  *
- * ⚠️ **Per instance, in memory.** Two API processes mean two counters and
- * effectively double every budget — the same single-instance caveat the dispatch
- * scheduler carries. The plugin takes a Redis store when that day comes, and
- * Redis is already the one item in the devis's stack list that nothing has
- * needed yet (see "Outstanding, and why" in the phases doc). This is the number
- * that will justify it.
+ * ⚠️ **Per instance, in memory — unless `REDIS_URL` is set.** Two API processes
+ * with their own memory mean two counters and effectively double every budget,
+ * the same single-instance caveat the dispatch scheduler carries. With
+ * `REDIS_URL` the counters live in Redis and every instance shares them
+ * (`app-factory.ts`). One instance needs none of that, which is why it is
+ * optional: set it the day a second instance is started, not before.
  */
 
 /** Requests allowed per window. First matching prefix wins, so order matters. */
@@ -127,42 +130,150 @@ export function isExempt(url: string): boolean {
 /**
  * Who a budget is spent by.
  *
- * The user id when there is one, and the IP only when there is not. Keying on
- * IP alone would be wrong in the specific way that matters for this app: mobile
- * carriers NAT thousands of subscribers behind one address, so a single
- * apartment block on the same network could exhaust a shared budget and lock
- * each other out of the catalogue.
+ * The account when the request carries a token that checks out, and the IP
+ * address only when it does not. Keying on IP alone would be wrong in the
+ * specific way that matters for this app: mobile carriers NAT thousands of
+ * subscribers behind one address, so a single apartment block on the same
+ * network could exhaust a shared budget and lock each other out of the
+ * catalogue. (The app sends its token on public reads too, for exactly this.)
  *
- * `request.userId` is what `SupabaseAuthGuard` sets. Guards run *after* this
- * plugin in the Fastify lifecycle, so on an authenticated route the id is only
- * present if it was set by a previous request on the same connection — which it
- * is not. The bearer token's `sub` is therefore read straight off the JWT
- * payload here, **without verifying the signature**: this is a bucket key, not
- * an authorisation decision, and the real verification still happens in the
- * guard moments later. A forged token buys the forger their own bucket and
- * nothing else.
+ * The token is **verified** before its `sub` is believed. It used not to be —
+ * the reasoning was that a forged token only bought the forger their own
+ * bucket. On a route behind the auth guard that is true: the guard refuses the
+ * request a moment later. On a public route nothing does, so a script minting
+ * a fresh made-up `sub` per request had a fresh budget per request, which is
+ * no limit at all. A token that fails the check is counted against the address
+ * it came from, like a request with none.
  */
-export function trackerFor(request: FastifyRequest): string {
-  const header = request.headers.authorization;
-  if (header?.startsWith('Bearer ')) {
-    const sub = unverifiedSub(header.slice('Bearer '.length));
-    if (sub) return `user:${sub}`;
-  }
-  return `ip:${request.ip}`;
+export function createTracker(verify: TokenVerifier): (request: FastifyRequest) => Promise<string> {
+  return async (request) => {
+    const header = request.headers.authorization;
+    if (header?.startsWith('Bearer ')) {
+      const sub = await verify(header.slice('Bearer '.length).trim());
+      if (sub) return `user:${sub}`;
+    }
+    return `ip:${request.ip}`;
+  };
 }
 
-/** The `sub` claim, read without verification. See `trackerFor` for why that is safe here. */
-function unverifiedSub(token: string): string | null {
-  const payload = token.split('.')[1];
-  if (!payload) return null;
-  try {
-    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { sub?: unknown };
-    return typeof decoded.sub === 'string' ? decoded.sub : null;
-  } catch {
-    // A malformed token is not our problem here — it will fail the guard. Fall
-    // back to the IP so the request is still counted against something.
-    return null;
-  }
+/** The account a token belongs to, or `null` when it is forged, expired, malformed or cannot be checked. Never throws. */
+export type TokenVerifier = (token: string) => Promise<string | null>;
+
+/** Tokens remembered as verified. An access token lives an hour; this is every account active in that hour, with room. */
+const VERIFIED_TOKENS_KEPT = 5_000;
+
+/** A Supabase access token is around a kilobyte. Anything far past that is not one, and is not worth hashing. */
+const MAX_TOKEN_LENGTH = 4_096;
+
+/**
+ * Remembers which tokens have already been checked, so the signature is
+ * verified once per token rather than once per request — this runs ahead of
+ * everything, on every call.
+ *
+ * Only successes are remembered, each until its own expiry, under a hash of
+ * the token rather than the token. A failure is not: remembering it would
+ * hand a flood of distinct forged tokens a way to fill the memory, and
+ * verifying a signature is cheap next to the request it precedes.
+ *
+ * `check` may throw (a bad signature does); that is a `null` here, because a
+ * garbage `Authorization` header must not turn into a 500 ahead of the guard
+ * that would have refused it properly.
+ */
+export function rememberingVerifier(
+  check: (token: string) => Promise<{ sub: string; expiresAt: number } | null>,
+  now: () => number = Date.now
+): TokenVerifier {
+  const verified = new Map<string, { sub: string; expiresAt: number }>();
+
+  return async (token) => {
+    // Three non-empty dot-separated parts or it is not a JWT — refused before any hashing.
+    if (!token || token.length > MAX_TOKEN_LENGTH) return null;
+    const parts = token.split('.');
+    if (parts.length !== 3 || !parts.every(Boolean)) return null;
+
+    const key = createHash('sha256').update(token).digest('base64url');
+    const known = verified.get(key);
+    if (known) {
+      if (known.expiresAt > now()) return known.sub;
+      verified.delete(key);
+    }
+
+    try {
+      const result = await check(token);
+      if (!result || result.expiresAt <= now()) return null;
+      verified.set(key, result);
+      // Insertion order is close enough to expiry order: drop from the front.
+      while (verified.size > VERIFIED_TOKENS_KEPT) {
+        const oldest = verified.keys().next();
+        if (oldest.done) break;
+        verified.delete(oldest.value);
+      }
+      return result.sub;
+    } catch {
+      return null;
+    }
+  };
+}
+
+/**
+ * The verifier the API runs with: the same check `SupabaseAuthGuard` makes —
+ * this project's own signing keys, its own issuer, an unexpired token — so the
+ * limiter and the guard cannot disagree about whose request it is.
+ *
+ * Its own key set rather than the guard's: the guard is the authorisation
+ * decision and stays untouched; this is only a bucket key. `jose` fetches the
+ * keys once and re-fetches on rotation. If they cannot be fetched, every token
+ * fails the check and requests are counted by address until they can.
+ */
+export function createTokenVerifier(supabaseUrl: string): TokenVerifier {
+  const issuer = `${supabaseUrl}/auth/v1`;
+  const jwks = createRemoteJWKSet(new URL(`${issuer}/.well-known/jwks.json`));
+
+  return rememberingVerifier(async (token) => {
+    const { payload } = await jwtVerify(token, jwks, { issuer });
+    if (typeof payload.sub !== 'string' || typeof payload.exp !== 'number') return null;
+    return { sub: payload.sub, expiresAt: payload.exp * 1000 };
+  });
+}
+
+// ── whose address a request comes from ───────────────────────────────────────
+
+/**
+ * How many proxies stand between the internet and this process — `TRUST_PROXY_HOPS`.
+ *
+ * Behind a proxy (Render, Vercel, nginx on a VPS) the connection this process
+ * sees comes *from the proxy*, so without this every visitor has the proxy's
+ * address: all the requests without a token share one budget, and `/auth`'s
+ * ten sign-in codes a minute become ten for the whole platform. The visitor's
+ * own address is in `X-Forwarded-For`, which each proxy appends to — and which
+ * a client can also write into, so only the entries the trusted proxies added
+ * (the last `hops` of them) may be believed. Zero, the default, believes none:
+ * right for a process facing the internet directly, wrong behind anything.
+ *
+ * Read when first asked rather than at import: on a developer's machine the
+ * value comes from `.env`, which Nest loads after the HTTP adapter is built.
+ */
+export function trustedProxyHops(env: { TRUST_PROXY_HOPS?: string } = process.env): number {
+  const hops = Number.parseInt(env.TRUST_PROXY_HOPS ?? '', 10);
+  return Number.isInteger(hops) && hops > 0 ? Math.min(hops, 10) : 0;
+}
+
+/**
+ * What to tell whoever runs the server when requests plainly arrive through a
+ * proxy that this process has not been told about — or `null` when there is
+ * nothing to say. Counts only, never an address: this goes to the log.
+ */
+export function proxyWarning(forwardedFor: string | string[] | undefined, hops: number): string | null {
+  if (hops > 0 || !forwardedFor) return null;
+  const entries = (Array.isArray(forwardedFor) ? forwardedFor.join(',') : forwardedFor)
+    .split(',')
+    .filter((entry) => entry.trim()).length;
+  if (entries === 0) return null;
+  return (
+    `Requests arrive through a proxy (X-Forwarded-For carried ${entries} entr${entries === 1 ? 'y' : 'ies'}) but TRUST_PROXY_HOPS is not set: ` +
+    `every request without a token is rate-limited as one visitor, sign-in codes included. ` +
+    `Set TRUST_PROXY_HOPS to the number of proxies in front of this server — ${entries} if this request came straight from a browser or the app.`
+  );
 }
 
 /**
