@@ -446,6 +446,15 @@ export const customer: Widen<typeof reference> = {
       one: '%{count} result for “%{query}”',
       other: '%{count} results for “%{query}”',
     }),
+    suggestions: {
+      searchFor: 'Search for “%{query}”',
+      recent: 'Recent searches',
+      clearRecent: 'Clear',
+      removeRecent: 'Remove “%{query}” from recent searches',
+      popular: 'Popular right now',
+      category: 'Category',
+      hint: 'Search for a product, a shop or a category.',
+    },
   },
   notifications: {
     activeCount: plural({

@@ -464,6 +464,19 @@ export const customer = {
       one: '%{count} résultat pour « %{query} »',
       other: '%{count} résultats pour « %{query} »',
     }),
+    /** The panel under the focused search field — `components/customer/SearchSuggestions.tsx`. */
+    suggestions: {
+      /** Same guillemets rule as `resultsForQuery`. */
+      searchFor: 'Rechercher « %{query} »',
+      recent: 'Recherches récentes',
+      clearRecent: 'Effacer',
+      /** Read by a screen reader on the small × beside a past search. */
+      removeRecent: 'Retirer « %{query} » des recherches récentes',
+      popular: 'Populaires en ce moment',
+      /** Under a category's name, where a shop shows its specialty. */
+      category: 'Catégorie',
+      hint: 'Cherchez un produit, un commerce ou une catégorie.',
+    },
   },
   notifications: {
     /**

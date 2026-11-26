@@ -1526,6 +1526,7 @@ export type Database = {
           nutrition_protein_g: number | null
           nutrition_weight_g: number | null
           price_cad: number
+          search_doc: string | null
           section_id: string
           stock_qty: number
           tags: string[]
@@ -1549,6 +1550,7 @@ export type Database = {
           nutrition_protein_g?: number | null
           nutrition_weight_g?: number | null
           price_cad: number
+          search_doc?: never
           section_id: string
           stock_qty?: number
           tags?: string[]
@@ -1572,6 +1574,7 @@ export type Database = {
           nutrition_protein_g?: number | null
           nutrition_weight_g?: number | null
           price_cad?: number
+          search_doc?: never
           section_id?: string
           stock_qty?: number
           tags?: string[]
@@ -2778,6 +2781,10 @@ export type Database = {
         }[]
       }
       retention_purge_locations: { Args: { p_days: number }; Returns: number }
+      search_suggest: {
+        Args: { p_q: string; p_term_limit?: number; p_vendor_limit?: number }
+        Returns: Json
+      }
       seed_reset: { Args: { p_prefix: string }; Returns: Json }
       settings_update: {
         Args: { p_admin_id: string; p_changes: Json; p_patch: Json }

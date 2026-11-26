@@ -1,4 +1,5 @@
 import { Search, SlidersHorizontal } from 'lucide-react-native';
+import type { RefObject } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 
 import { Text } from '@/components/ui';
@@ -15,6 +16,15 @@ export interface SearchFieldProps {
   /** Render as a button that navigates to the search screen instead of a live field. */
   onPress?: () => void;
   placeholder?: string;
+  /**
+   * The live field only: when it gains and loses the keyboard, the keyboard's
+   * own search key, and a handle to blur it — what a screen needs to show
+   * suggestions while the shopper types and put them away afterwards.
+   */
+  onFocus?: () => void;
+  onBlur?: () => void;
+  onSubmitEditing?: () => void;
+  inputRef?: RefObject<TextInput | null>;
 }
 
 /**
@@ -32,6 +42,10 @@ export function SearchField({
   activeFilterCount = 0,
   onPress,
   placeholder,
+  onFocus,
+  onBlur,
+  onSubmitEditing,
+  inputRef,
 }: SearchFieldProps) {
   const t = useT();
   // See `CitySelect` — resolved inside, so the placeholder follows the language.
@@ -48,11 +62,15 @@ export function SearchField({
     >
       <Search size={20} color={colors.mutedForeground} strokeWidth={2} />
       <TextInput
+        ref={inputRef}
         className="flex-1 text-base text-foreground font-sans-medium"
         placeholder={resolvedPlaceholder}
         placeholderTextColor={colors.mutedForeground}
         value={value}
         onChangeText={onChangeText}
+        onFocus={onFocus}
+        onBlur={onBlur}
+        onSubmitEditing={onSubmitEditing}
         // In hand-off mode the input must not steal the tap or raise a keyboard.
         editable={!readOnly}
         pointerEvents={readOnly ? 'none' : 'auto'}

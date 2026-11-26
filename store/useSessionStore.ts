@@ -7,6 +7,7 @@ import { useCartStore } from './useCartStore';
 import { useDispatchStore } from './useDispatchStore';
 import { useFavoritesStore } from './useFavoritesStore';
 import { usePreferencesStore } from './usePreferencesStore';
+import { useRecentSearchesStore } from './useRecentSearchesStore';
 import * as authApi from '../data/api/auth';
 import { withdrawPushRegistration } from '../lib/push';
 
@@ -77,6 +78,7 @@ export const useSessionStore = create<SessionState>()(
         useCartStore.getState().clear();
         useFavoritesStore.getState().reset();
         usePreferencesStore.getState().reset();
+        useRecentSearchesStore.getState().clear();
         // A courier's online flag and their run must not follow the next
         // account that signs in on this device.
         useDispatchStore.getState().reset();

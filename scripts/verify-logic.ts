@@ -36,6 +36,13 @@ import {
   hasActiveFilters,
 } from '../lib/productFilters';
 import { DELIVERY_TIERS, deliveryFeeFor } from '../data/deliveryPricing';
+import {
+  MAX_RECENT_SEARCHES,
+  foldSearch,
+  matchByLabel,
+  matchRank,
+  withRecentSearch,
+} from '../lib/searchSuggestions';
 import { addressSchema } from '../lib/validation/profile';
 import { parseDayMonthYear, shopDocumentsSchema, shopPayoutSchema } from '../lib/validation/merchant';
 import { parseTags, productSchema } from '../lib/validation/product';
@@ -651,6 +658,43 @@ check('every filter set counts once', activeFilterCount({ sort: 'name', priceBan
     !shopPayoutSchema.safeParse({ payoutMethod: 'bank_document', bankDocument: null }).success);
   check('bank_document with the document parses',
     shopPayoutSchema.safeParse({ payoutMethod: 'bank_document', bankDocument: doc }).success);
+}
+
+// ── search suggestions ───────────────────────────────────────────────────────
+// The phone's half of the panel. The ranking has to agree with the database's
+// (`api/drizzle/0057_search_suggestions.sql`), or a category and a shop would
+// answer the same letters by different rules.
+{
+  check('accents and case fold away', foldSearch('  Épices   du SAHEL ') === 'epices du sahel');
+  check('œ is spelled out', foldSearch('Cœur de palmier') === 'coeur de palmier');
+
+  check('a prefix ranks first', matchRank('riz basmati', 'ri') === 0);
+  check('a later word ranks second', matchRank('le riad', 'ri') === 1);
+  check('a word after a hyphen counts', matchRank('ouest-africaine', 'afri') === 1);
+  check('a word after an apostrophe counts', matchRank("l'epicerie", 'epi') === 1);
+  check('two letters inside a word are noise', matchRank('epicerie', 'ri') === null);
+  check('three letters inside a word match, last', matchRank('epicerie', 'ice') === 2);
+  check('one letter matches nothing', matchRank('riz', 'r') === null);
+
+  const categories = [
+    { id: 'a', names: ['Fruits & Légumes', 'Fruits'] },
+    { id: 'b', names: ['Épices & Condiments', 'Épices'] },
+    { id: 'c', names: ['Épicerie salée', 'Salé'] },
+    { id: 'd', names: ['Plats préparés', 'Plats'] },
+  ];
+  const ids = (q: string, limit = 2) => matchByLabel(categories, (c) => c.names, q, limit).map((c) => c.id).join(',');
+  check('categories match without accents', ids('epic') === 'b,c', ids('epic'));
+  check('the best of a category\'s names ranks it', ids('sale') === 'c', ids('sale'));
+  check('a prefix beats a later word', ids('pla', 4) === 'd', ids('pla', 4));
+  check('the limit holds', ids('ep', 1) === 'b', ids('ep', 1));
+  check('a blank or one-letter query matches nothing', ids('') === '' && ids('e') === '');
+
+  let recent: string[] = [];
+  for (const term of ['riz', 'attiéké', ' Riz ', 'r', '']) recent = withRecentSearch(recent, term);
+  check('recent searches: newest first, no duplicate, too short ignored', recent.join('|') === 'Riz|attiéké', recent.join('|'));
+  let many: string[] = [];
+  for (let i = 0; i < MAX_RECENT_SEARCHES + 3; i++) many = withRecentSearch(many, `terme ${i}`);
+  check('recent searches are capped', many.length === MAX_RECENT_SEARCHES && many[0] === `terme ${MAX_RECENT_SEARCHES + 2}`);
 }
 
 console.log(failures === 0 ? '\nALL LOGIC CHECKS PASS' : `\n${failures} FAILURES`);

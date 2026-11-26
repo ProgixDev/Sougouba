@@ -19,6 +19,7 @@ export { ProductCard } from './ProductCard';
 export { ProfileHeader } from './ProfileHeader';
 export { ProductGrid, useCardWidth } from './ProductGrid';
 export { SearchField } from './SearchField';
+export { SearchSuggestions } from './SearchSuggestions';
 export { VendorCard } from './VendorCard';
 export { VerticalCard } from './VerticalCard';
 export { VendorSwitchDialog } from './VendorSwitchDialog';

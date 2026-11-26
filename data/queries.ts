@@ -1,8 +1,10 @@
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { DEFAULT_PLAN, type PlatformPlan } from '../lib/monetization';
+import { MIN_SUGGEST_LENGTH, foldSearch } from '../lib/searchSuggestions';
 
-import { categoriesApi, ordersApi, productsApi, vendorsApi } from './api';
+import { categoriesApi, ordersApi, productsApi, searchApi, vendorsApi } from './api';
+import type { SearchSuggestions } from './api/search';
 import type { Category, ID, Product, Vendor } from './types';
 
 /**
@@ -24,6 +26,8 @@ export const keys = {
   productsByIds: (ids: readonly ID[]) => ['products', 'ids', [...ids].sort().join(',')] as const,
   productSearch: (term: string) => ['products', 'search', term] as const,
   topProducts: (limit: number) => ['products', 'top', limit] as const,
+  /** Folded: « Épi » and « epi » are the same request, and the same answer. */
+  searchSuggestions: (term: string) => ['search', 'suggestions', foldSearch(term)] as const,
   platformPlan: ['platformPlan'] as const,
 };
 
@@ -76,6 +80,32 @@ export function useProductSearch(term: string): UseQueryResult<Product[]> {
     queryKey: keys.productSearch(trimmed),
     queryFn: () => productsApi.searchProducts(trimmed),
     enabled: trimmed.length > 0,
+  });
+}
+
+const SUGGESTIONS_STALE_MS = 5 * 60_000;
+
+/**
+ * Shops and search terms for the letters typed so far.
+ *
+ * Disabled under two letters, like the API. The previous letters' answer stays
+ * on screen while the next one loads — a panel that empties between keystrokes
+ * flickers — so a caller must ignore `data` once the term is too short. No
+ * retry: by the time one landed, the shopper has typed another letter.
+ *
+ * Kept five minutes rather than the catalogue's one: deleting a letter, or
+ * typing the same word again, should cost nothing, and what a few letters
+ * suggest does not change from one minute to the next.
+ */
+export function useSearchSuggestions(term: string): UseQueryResult<SearchSuggestions> {
+  const trimmed = term.trim();
+  return useQuery({
+    queryKey: keys.searchSuggestions(trimmed),
+    queryFn: () => searchApi.getSuggestions(trimmed),
+    enabled: foldSearch(trimmed).length >= MIN_SUGGEST_LENGTH,
+    placeholderData: keepPreviousData,
+    staleTime: SUGGESTIONS_STALE_MS,
+    retry: false,
   });
 }
 

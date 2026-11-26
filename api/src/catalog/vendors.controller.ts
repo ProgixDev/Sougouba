@@ -1,5 +1,6 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, UsePipes } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query, Res, UsePipes } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import type { FastifyReply } from 'fastify';
 
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import {
@@ -14,8 +15,10 @@ import {
   type ProductQuery,
   type ProductSearchQuery,
 } from './dto/product.dto.js';
+import { searchSuggestSchema, type SearchSuggestQuery } from './dto/search.dto.js';
 import { vendorQuerySchema, type VendorQuery } from './dto/vendor.dto.js';
 import { ProductsService } from './products.service.js';
+import { SearchSuggestionsService } from './search-suggestions.service.js';
 import { VendorsService } from './vendors.service.js';
 
 /**
@@ -28,7 +31,8 @@ import { VendorsService } from './vendors.service.js';
 export class CatalogController {
   constructor(
     private readonly vendors: VendorsService,
-    private readonly products: ProductsService
+    private readonly products: ProductsService,
+    private readonly suggestions: SearchSuggestionsService
   ) {}
 
   @Get('verticals')
@@ -110,5 +114,27 @@ export class CatalogController {
   @Get('products/:id')
   product(@Param('id', ParseUUIDPipe) id: string) {
     return this.products.byId(id);
+  }
+
+  /**
+   * What the search panel offers while the shopper types: shops whose name or
+   * specialty matches, and product names and tags to search for. Public, like
+   * the catalogue it is drawn from.
+   *
+   * The answer is the same for everyone and is already kept a minute by the
+   * service; the header lets a CDN or the phone's own HTTP cache keep it as
+   * long, so a repeated search need not reach this process at all. It is set
+   * once there is an answer and not by `@Header`, which would stamp a failure
+   * too — and a cached error is a minute of broken suggestions for everyone
+   * behind that cache.
+   */
+  @Get('search/suggestions')
+  async suggest(
+    @Query(new ZodValidationPipe(searchSuggestSchema)) query: SearchSuggestQuery,
+    @Res({ passthrough: true }) reply: FastifyReply
+  ) {
+    const suggestions = await this.suggestions.suggest(query.q);
+    reply.header('Cache-Control', 'public, max-age=60');
+    return suggestions;
   }
 }
