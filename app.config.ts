@@ -79,6 +79,7 @@ const config = {
     en: './lib/i18n/native/en.json',
   },
   plugins: [
+    './plugins/with-scene-lifecycle',
     'expo-router',
     // Sets `CFBundleAllowMixedLocalizations`, which is what lets the app present
     // English strings on a device whose region is fr_CA.
