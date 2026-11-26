@@ -18,12 +18,38 @@ import { uploadMediaImage, type MediaImageType } from './media';
  * step exists to prevent. `getVendorByOwnerId` is the deliberate exception.
  */
 
-/** The API paginates; the app's callers expect the whole list. 100 covers every served city today. */
-const ALL = 100;
+/** The API's own ceiling for one page (`MAX_PAGE_SIZE`); it refuses a bigger one rather than clamping. */
+const PAGE = 100;
+
+/** Twenty pages is two thousand shops — a stop for a loop that should never need one, not a limit anyone will meet. */
+const MAX_PAGES = 20;
+
+/**
+ * Every shop a list query matches, not the first hundred.
+ *
+ * The API paginates and the app's callers expect the whole list: product cards
+ * read the shop's name and whether it is open from it, and the filter sheet
+ * offers it as a picker. Asking for one page of 100 was "the whole list" while
+ * the platform had a dozen shops; past a hundred, every shop after it silently
+ * lost its name on its own products. So the pages are followed to the end.
+ */
+async function allVendors(query: Record<string, string | number>): Promise<Vendor[]> {
+  const vendors: Vendor[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const result = await api<Page<any>>('/vendors', {
+      anonymous: true,
+      query: { ...query, limit: PAGE, offset: page * PAGE },
+    });
+    vendors.push(...result.items.map(toVendor));
+    // The total is the API's count of everything matching. A short page ends
+    // the loop too, in case shops were removed between two requests.
+    if (vendors.length >= result.total || result.items.length < PAGE) break;
+  }
+  return vendors;
+}
 
 export async function getVendors(): Promise<Vendor[]> {
-  const page = await api<Page<any>>('/vendors', { anonymous: true, query: { limit: ALL } });
-  return page.items.map(toVendor);
+  return allVendors({});
 }
 
 export async function getVendorById(id: ID): Promise<Vendor | undefined> {
@@ -35,19 +61,11 @@ export async function getVendorBySlug(slug: string): Promise<Vendor | undefined>
 }
 
 export async function getVendorsByType(vendorType: VendorType): Promise<Vendor[]> {
-  const page = await api<Page<any>>('/vendors', {
-    anonymous: true,
-    query: { type: vendorType, limit: ALL },
-  });
-  return page.items.map(toVendor);
+  return allVendors({ type: vendorType });
 }
 
 export async function getVendorsByCategory(categoryId: ID): Promise<Vendor[]> {
-  const page = await api<Page<any>>('/vendors', {
-    anonymous: true,
-    query: { categoryId, limit: ALL },
-  });
-  return page.items.map(toVendor);
+  return allVendors({ categoryId });
 }
 
 /**

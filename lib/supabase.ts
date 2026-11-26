@@ -72,3 +72,30 @@ export async function currentAccessToken(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? null;
 }
+
+/**
+ * The access token as last seen, without waiting for anything — `null` until
+ * the stored session has been read, and when signed out.
+ *
+ * For the public reads. They deliberately do not wait on `getSession()` (the
+ * home screen's first paint should not queue behind AsyncStorage, or behind a
+ * token refresh), but they should still say whose they are when that is
+ * already known: the API counts requests per account when it is told the
+ * account and per IP address when it is not, and a mobile carrier puts
+ * thousands of phones behind one address. Sent without a token, a whole
+ * network's worth of shoppers would spend one budget between them.
+ *
+ * May be a few seconds stale around a refresh. That is fine for what it is
+ * used for: a public route ignores a token it cannot verify.
+ */
+let lastSeenAccessToken: string | null = null;
+
+// Fires once with the stored session at start-up, then on every sign-in,
+// refresh and sign-out. Nothing async in here, per Supabase's own warning.
+supabase.auth.onAuthStateChange((_event, session) => {
+  lastSeenAccessToken = session?.access_token ?? null;
+});
+
+export function knownAccessToken(): string | null {
+  return lastSeenAccessToken;
+}

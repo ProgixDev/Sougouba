@@ -1,4 +1,4 @@
-import { currentAccessToken } from '../lib/supabase';
+import { currentAccessToken, knownAccessToken } from '../lib/supabase';
 
 /**
  * The one place this app talks to the Sougouba API.
@@ -56,7 +56,11 @@ export class ApiError extends Error {
 type Options = {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
-  /** Skip the Authorization header for a genuinely public read, saving a session lookup. */
+  /**
+   * A genuinely public read: do not wait for the session before sending. The
+   * token still goes along when it is already in hand — see `knownAccessToken`
+   * for why a public request is better off saying whose it is.
+   */
   anonymous?: boolean;
   query?: Record<string, string | number | boolean | undefined | null>;
   /** Override `TIMEOUT_MS` for a call whose server side is known to be slow (e.g. one that sends mail). */
@@ -78,12 +82,10 @@ export async function api<T>(path: string, options: Options = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
-  if (!anonymous) {
-    const token = await currentAccessToken();
-    // No token is not an error here: signed-out browsing is a real state and
-    // the API answers 401 itself for anything that needs identity.
-    if (token) headers.Authorization = `Bearer ${token}`;
-  }
+  // No token is not an error in either case: signed-out browsing is a real
+  // state and the API answers 401 itself for anything that needs identity.
+  const token = anonymous ? knownAccessToken() : await currentAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);

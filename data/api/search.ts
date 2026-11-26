@@ -24,16 +24,10 @@ const NOTHING: SearchSuggestions = { vendors: [], terms: [] };
  * A 404 answers "nothing" rather than failing: an API deployed before this
  * route existed should cost the panel its shop and term rows, not put an error
  * under the search field. Recent searches and categories never needed it.
- *
- * Not `anonymous`, although the route is public. The API counts requests per
- * account when it is given a token and per IP address when it is not — and a
- * mobile carrier puts thousands of phones behind one address. This is the one
- * call the app makes several times a search; sent without a token, the people
- * of one network would spend a single budget between them, at every keystroke.
  */
 export async function getSuggestions(q: string): Promise<SearchSuggestions> {
   try {
-    const result = await api<Partial<SearchSuggestions>>('/search/suggestions', { query: { q } });
+    const result = await api<Partial<SearchSuggestions>>('/search/suggestions', { anonymous: true, query: { q } });
     return { vendors: result.vendors ?? [], terms: result.terms ?? [] };
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return NOTHING;
