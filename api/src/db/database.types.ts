@@ -1550,7 +1550,7 @@ export type Database = {
           nutrition_protein_g?: number | null
           nutrition_weight_g?: number | null
           price_cad: number
-          search_doc?: never
+          search_doc?: string | null
           section_id: string
           stock_qty?: number
           tags?: string[]
@@ -1574,7 +1574,7 @@ export type Database = {
           nutrition_protein_g?: number | null
           nutrition_weight_g?: number | null
           price_cad?: number
-          search_doc?: never
+          search_doc?: string | null
           section_id?: string
           stock_qty?: number
           tags?: string[]
