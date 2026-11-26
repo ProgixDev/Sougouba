@@ -184,6 +184,11 @@ export default function SearchScreen() {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
+            // A ScrollView grows to fill what is free. With a long list of
+            // results there is nothing free and the row keeps its own height;
+            // with one result it took half the gap, and pushed that result
+            // down the screen.
+            style={{ flexGrow: 0 }}
             contentContainerClassName="px-5 gap-2 pb-4"
             // Filters stay reachable while a keyboard is up.
             keyboardShouldPersistTaps="handled"
