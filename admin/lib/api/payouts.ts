@@ -171,3 +171,22 @@ export function listMerchantPayouts(page: PageQuery, vendorId?: ID): Promise<Pag
 export function runMerchantPayouts(): Promise<MerchantPayoutRunResult> {
   return apiPost<MerchantPayoutRunResult>('/admin/payouts/merchants/run');
 }
+
+/**
+ * Where one shop's Stripe account stands, asked of Stripe by the API.
+ * `unavailable`: Stripe could not be asked — not the same as "not linked".
+ */
+export type MerchantAccountState = 'not_started' | 'onboarding' | 'review' | 'active' | 'unavailable';
+
+export const MERCHANT_ACCOUNT_LABELS: Record<MerchantAccountState, string> = {
+  not_started: 'Compte bancaire non relié — le commerçant le fait depuis son espace',
+  onboarding: 'Formulaire Stripe commencé, non terminé',
+  review: 'Informations en cours de vérification par Stripe',
+  active: 'Compte Stripe actif — payé chaque vendredi',
+  unavailable: 'État Stripe indisponible pour le moment',
+};
+
+export async function getMerchantAccountState(vendorId: ID): Promise<MerchantAccountState> {
+  const { state } = await apiGet<{ state: MerchantAccountState }>(`/admin/payouts/merchants/${vendorId}/account`);
+  return state;
+}

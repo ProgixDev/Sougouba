@@ -12,6 +12,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
 import { getVendor, approveVendor, rejectVendor, suspendVendor } from '@/lib/api/vendors';
 import { getStatementUrl, listVendorStatements, statementMonth, type Statement } from '@/lib/api/statements';
+import { MERCHANT_ACCOUNT_LABELS, getMerchantAccountState, type MerchantAccountState } from '@/lib/api/payouts';
 import { vendorStatusMeta } from '@/lib/statusMeta';
 import { formatCad, formatDate } from '@/lib/format';
 import type { AdminVendorDetail } from '@/lib/types';
@@ -27,6 +28,8 @@ export default function MerchantDetailPage() {
   const [busy, setBusy] = useState(false);
   // Null while unread or unavailable: the card is simply not shown.
   const [statements, setStatements] = useState<Statement[] | null>(null);
+  /** `undefined` while it loads; `null` when the API could not be asked at all. */
+  const [payoutState, setPayoutState] = useState<MerchantAccountState | null | undefined>(undefined);
 
   async function openStatement(statement: Statement) {
     // Opened before the request, while this is still the click — see the order page.
@@ -60,6 +63,10 @@ export default function MerchantDetailPage() {
     listVendorStatements(id)
       .then(setStatements)
       .catch(() => setStatements(null));
+    // Likewise on its own: Stripe being slow must not hold up the shop's file.
+    getMerchantAccountState(id)
+      .then(setPayoutState)
+      .catch(() => setPayoutState(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -192,17 +199,15 @@ export default function MerchantDetailPage() {
                 )}
                 <Field label="Dirigeant autorisé" value={vendor.registration.contactName} icon={FileText} />
                 <Field label="Téléphone" value={vendor.registration.contactPhone} icon={Phone} />
-                {vendor.registration.payoutMethod && (
-                  <Field
-                    label="Versements"
-                    value={
-                      vendor.registration.payoutMethod === 'stripe'
-                        ? 'Stripe Connect — à configurer après approbation'
-                        : 'Document bancaire joint'
-                    }
-                    icon={Landmark}
-                  />
-                )}
+                {/* The account as Stripe sees it today — not what was ticked at sign-up. */}
+                <Field
+                  label="Versements"
+                  value={
+                    (payoutState === undefined ? '…' : MERCHANT_ACCOUNT_LABELS[payoutState ?? 'unavailable']) +
+                    (vendor.registration.payoutMethod && vendor.registration.payoutMethod !== 'stripe' ? ' · document bancaire joint au dossier' : '')
+                  }
+                  icon={Landmark}
+                />
                 {vendor.registration.submittedAt && <Field label="Soumis le" value={formatDate(vendor.registration.submittedAt)} icon={FileText} />}
               </dl>
 

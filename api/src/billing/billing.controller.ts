@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Redirect, ServiceUnavailableException, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Redirect, ServiceUnavailableException, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiExcludeController, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 
@@ -164,7 +164,8 @@ export class AdminPayoutsController {
   constructor(
     private readonly payouts: PayoutsService,
     private readonly merchantPayouts: MerchantPayoutsService,
-    private readonly payments: PaymentsService
+    private readonly payments: PaymentsService,
+    private readonly connect: ConnectService
   ) {}
 
   /** Owed, paid over 30 days, failures, the last run. */
@@ -219,6 +220,17 @@ export class AdminPayoutsController {
   @Get('merchants/owed')
   merchantsOwed() {
     return this.merchantPayouts.owed();
+  }
+
+  /**
+   * Whether one shop's Stripe account can be paid — shown on the shop's own
+   * file, so it asks for the permission that opens that file, not for the
+   * payouts one.
+   */
+  @RequirePermission('vendors.view')
+  @Get('merchants/:vendorId/account')
+  merchantAccount(@Param('vendorId', ParseUUIDPipe) vendorId: string) {
+    return this.connect.vendorPayoutState(vendorId);
   }
 
   /** Every payment to a shop, made or refused, newest first. `vendorId` narrows it to one shop. */

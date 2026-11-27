@@ -132,6 +132,33 @@ export class ConnectService {
     };
   }
 
+  /**
+   * Where a shop's Stripe account stands, for the back office — one word,
+   * asked of Stripe like `vendorStatus`.
+   *
+   * - `not_started` — the shop has never opened Stripe's form;
+   * - `onboarding` — it opened the form and has not finished it;
+   * - `review` — the form is done and Stripe is still verifying;
+   * - `active` — Stripe will pay the Friday transfer to its bank;
+   * - `unavailable` — Stripe could not be asked. Said as such rather than
+   *   guessed: on a shop's file, "not linked" and "we do not know" are
+   *   different things.
+   */
+  async vendorPayoutState(vendorId: string): Promise<{ state: 'not_started' | 'onboarding' | 'review' | 'active' | 'unavailable' }> {
+    const row = await unwrap<{ stripe_connect_account_id: string | null } | null>(
+      this.db.from('merchant_subscriptions').select('stripe_connect_account_id').eq('vendor_id', vendorId).maybeSingle()
+    );
+    if (!row?.stripe_connect_account_id) return { state: 'not_started' };
+    if (!this.payments.isConfigured) return { state: 'unavailable' };
+
+    try {
+      const live = await this.payments.getConnectAccount(row.stripe_connect_account_id);
+      return { state: live.payoutsEnabled ? 'active' : live.detailsSubmitted ? 'review' : 'onboarding' };
+    } catch {
+      return { state: 'unavailable' };
+    }
+  }
+
   // ── couriers ──────────────────────────────────────────────────────────────
 
   /** The courier half, same shape — and the reason no bank detail is stored here. */
