@@ -88,6 +88,7 @@ function draw(doc: Doc, view: StatementDocument): void {
     base: { font: BOLD, size: 10, label: COLOR.text, value: COLOR.text, height: 18, indent: 0 },
     minor: { font: REGULAR, size: 9.5, label: COLOR.muted, value: COLOR.muted, height: 15, indent: 12 },
     total: { font: BOLD, size: 10.5, label: COLOR.text, value: COLOR.text, height: 22, indent: 0 },
+    plus: { font: REGULAR, size: 10, label: COLOR.text, value: COLOR.text, height: 17, indent: 0 },
     minus: { font: REGULAR, size: 10, label: COLOR.text, value: COLOR.minus, height: 17, indent: 0 },
     balance: { font: BOLD, size: 13, label: COLOR.text, value: COLOR.brand, height: 26, indent: 0 },
   };
@@ -158,6 +159,16 @@ function draw(doc: Doc, view: StatementDocument): void {
     doc.font(BOLD).fontSize(10.5).fillColor(COLOR.text).text(pdfSafe(view.refunds.title), left, y, { width });
     y = doc.y + 8;
     table(view.refunds.columns, view.refunds.rows, [78, 150, 284]);
+  }
+  if (view.payouts) {
+    y += 14;
+    if (y + 50 > bottom()) {
+      doc.addPage();
+      y = MARGIN;
+    }
+    doc.font(BOLD).fontSize(10.5).fillColor(COLOR.text).text(pdfSafe(view.payouts.title), left, y, { width });
+    y = doc.y + 8;
+    table(view.payouts.columns, view.payouts.rows, [78, 150, 284]);
   }
 
   // ── footer, at the foot of the last page ──────────────────────────────────

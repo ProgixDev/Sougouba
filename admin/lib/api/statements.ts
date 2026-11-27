@@ -2,26 +2,31 @@ import { apiGet, apiUrl, merchantApiGet } from './client';
 import type { ID } from '../types';
 
 /**
- * Merchant statements: what a shop sold in a month, what Sougouba keeps, what
- * Stripe has already sent the shop and what is still owed to it. The figures
- * and the rules behind them are the API's (`api/src/billing/statements/`).
+ * Merchant statements: what a month's orders were worth to the shop, what was
+ * taken back in refunds, what was sent to it and what is still owed. The
+ * figures and the rule behind them are the API's
+ * (`api/src/billing/statements/`, `api/src/orders/split.ts`).
  */
 export interface StatementTotals {
   orderCount: number;
   goodsCad: number;
   gstCad: number;
   qstCad: number;
-  deliveryCad: number;
-  discountsCad: number;
-  /** Everything shoppers paid for the orders delivered in the month. */
-  collectedCad: number;
-  refundCount: number;
-  refundsCad: number;
+  /** The shop's own promo codes, which the shop pays for. */
+  couponsCad: number;
   commissionCad: number;
   commissionRate: number | null;
-  /** Already sent to the shop by Stripe. */
+  /** The shop's share of the month's orders: goods and taxes, less its promo codes and the commission. */
+  earnedCad: number;
+  refundCount: number;
+  /** The shop's part of the month's refunds. */
+  refundsCad: number;
+  /** Owed to the shop when the month began. */
+  openingCad: number;
+  payoutCount: number;
+  /** Sent to the shop's bank during the month. */
   paidCad: number;
-  /** Still owed to the shop — negative when the shop owes instead. */
+  /** Owed to the shop at the end of the month — negative when the shop owes instead. */
   balanceCad: number;
 }
 

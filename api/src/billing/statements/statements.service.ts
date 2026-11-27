@@ -4,11 +4,13 @@ import { ConfigService } from '@nestjs/config';
 import type { Env } from '../../config/env.js';
 import type { Db, Tables } from '../../db/client.js';
 import { DB } from '../../db/db.module.js';
-import { unwrap } from '../../db/unwrap.js';
+import { unwrap, unwrapRpc } from '../../db/unwrap.js';
 import { SettingsService } from '../../loyalty/settings.service.js';
 import { MailService } from '../../mail/mail.service.js';
 import type { Locale } from '../../notifications/messages.js';
 import { receiptLinkKey, signStatementLink, verifyStatementLink } from '../../orders/receipts/receipt-link.js';
+import { SettlementsService } from '../../orders/settlements.service.js';
+import { payoutsStart } from '../payouts-start.js';
 import { renderStatementEmail } from './statement-email.js';
 import { renderStatementPdf } from './statement-pdf.js';
 import {
@@ -18,11 +20,10 @@ import {
   isEmpty,
   periodWindow,
   statementFileName,
+  type LedgerRow,
   type PeriodWindow,
   type Statement,
   type StatementLines,
-  type StatementOrderRow,
-  type StatementRefundRow,
   type StatementTotals,
 } from './statement.js';
 
@@ -49,16 +50,15 @@ const UNIQUE_VIOLATION = '23505';
 /** PostgREST returns at most this many rows per request; a busy shop's month is read in pages of it. */
 const PAGE = 1000;
 
-const ORDER_COLUMNS =
-  'id, receipt_number, subtotal_cad, gst_cad, qst_cad, delivery_fee_cad, total_cad, points_discount_cad, coupon_discount_cad, commission_cad, merchant_paid_cad, history:order_status_history!inner(status, at)';
-
 /**
  * Merchant statements (CDC module 04, « facturation générée automatiquement »).
  *
- * On the 1st of each month, every shop that had an order delivered or a refund
- * issued the month before gets a statement: frozen in `merchant_statements`,
- * numbered, and emailed as a PDF. The figures and the rules behind them are in
- * `statement.ts`; this class reads the rows, stores the result and sends it.
+ * On the 1st of each month, every shop whose account moved the month before —
+ * an order delivered, a refund given, a payment sent — gets a statement: frozen
+ * in `merchant_statements`, numbered, and emailed as a PDF. The figures and the
+ * rules behind them are in `statement.ts`; this class reads the shop's account
+ * (`merchant_ledger`, the record the payouts pay from), stores the result and
+ * sends it.
  *
  * Until the month closes, the same sum is offered live as the "month so far",
  * so a merchant is not left looking at an empty screen for thirty days.
@@ -68,14 +68,18 @@ export class StatementsService {
   private readonly logger = new Logger(StatementsService.name);
   private readonly linkKey: Uint8Array;
   private readonly platform: Statement['platform'];
+  /** Where the shops' accounts start (`payoutsStart`) — null: from the first order. */
+  private readonly accountsFrom: string | undefined;
 
   constructor(
     @Inject(DB) private readonly db: Db,
     private readonly settings: SettingsService,
+    private readonly settlements: SettlementsService,
     private readonly mail: MailService,
     config: ConfigService<Env, true>
   ) {
     this.linkKey = receiptLinkKey(config.get('SUPABASE_SERVICE_ROLE_KEY', { infer: true }));
+    this.accountsFrom = payoutsStart(config.get('MERCHANT_PAYOUTS_FROM', { infer: true }))?.toISOString();
     const optional = (value: string | undefined) => value?.trim() || null;
     this.platform = {
       legalName: optional(config.get('PLATFORM_LEGAL_NAME', { infer: true })),
@@ -154,6 +158,10 @@ export class StatementsService {
     if (window.end.getTime() > Date.now()) {
       throw new BadRequestException(`Le mois ${window.period} n’est pas terminé : son relevé ne peut pas encore être émis`);
     }
+
+    // Every paid order has its share on the shops' accounts before a month is
+    // frozen from them — the same step a payout run starts with.
+    await this.settlements.reconcile();
 
     // Every shop, whatever its standing today: one suspended last week still
     // delivered orders this month and is still owed for them.
@@ -247,47 +255,33 @@ export class StatementsService {
   // ── reads ─────────────────────────────────────────────────────────────────
 
   /**
-   * A shop's month, added up from the orders delivered and the refunds issued
-   * in it. Only orders with a payment behind them — see `statement.ts`.
+   * A shop's month: the balance it opened on, and the lines of its account
+   * that fall inside it. Both come from `merchant_ledger`, so the month's
+   * closing balance is the next month's opening one by construction.
    */
   private async compute(vendorId: string, window: PeriodWindow): Promise<{ totals: StatementTotals; lines: StatementLines }> {
     const start = window.start.toISOString();
     const end = window.end.toISOString();
+    const account = { p_vendor_id: vendorId, p_from: this.accountsFrom };
 
-    const [delivered, refunds, { commissionRate }] = await Promise.all([
-      this.pages<StatementOrderRow & { history: { at: string }[] }>((from, to) =>
+    await this.settlements.reconcileIfStale();
+    const [openingCad, entries, { commissionRate }] = await Promise.all([
+      unwrapRpc<number | string>(this.db.rpc('merchant_balance_at', { ...account, p_at: start })),
+      this.pages<LedgerRow>((from, to) =>
         this.db
-          .from('orders')
-          .select(ORDER_COLUMNS)
-          .eq('vendor_id', vendorId)
-          .not('stripe_payment_intent_id', 'is', null)
-          // An inner embed filters the orders themselves: only those whose
-          // history holds a `delivered` step inside the window.
-          .eq('history.status', 'delivered')
-          .gte('history.at', start)
-          .lt('history.at', end)
-          .order('id', { ascending: true })
-          .range(from, to)
-      ),
-      this.pages<StatementRefundRow>((from, to) =>
-        this.db
-          .from('orders')
-          .select('id, receipt_number, refunded_at, refund_amount_cad, total_cad')
-          .eq('vendor_id', vendorId)
-          .not('stripe_payment_intent_id', 'is', null)
-          .gte('refunded_at', start)
-          .lt('refunded_at', end)
-          .order('id', { ascending: true })
+          .rpc('merchant_ledger', account)
+          .gte('at', start)
+          .lt('at', end)
+          // A fixed order, so that pages neither repeat a line nor skip one.
+          .order('at', { ascending: true })
+          .order('kind', { ascending: true })
+          .order('ref_id', { ascending: true })
           .range(from, to)
       ),
       this.settings.all(),
     ]);
 
-    return buildStatement({
-      orders: delivered.map(({ history, ...order }) => ({ ...order, deliveredAt: history[0]?.at ?? start })),
-      refunds,
-      commissionRate,
-    });
+    return buildStatement({ openingCad, entries, commissionRate });
   }
 
   /** Every row of a query, however many pages it takes. */

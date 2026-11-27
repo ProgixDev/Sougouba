@@ -4,6 +4,7 @@ export { DeliveryGrid } from './DeliveryGrid';
 export { DisputeCard } from './DisputeCard';
 export { DocumentField } from './DocumentField';
 export { OrderQueueCard } from './OrderQueueCard';
+export { MerchantPayoutCard } from './MerchantPayoutCard';
 export { PayoutSummary } from './PayoutSummary';
 export { PendingApproval } from './PendingApproval';
 export { ShopSignupForm } from './ShopSignupForm';

@@ -8,6 +8,7 @@ import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import { PaymentsService } from '../orders/payments.service.js';
 import { roundCad, toStripeAmount } from '../orders/pricing.js';
 import { SettlementsService } from '../orders/settlements.service.js';
+import { payoutsStart } from './payouts-start.js';
 import { PAYOUT_WEEKDAY } from './payouts.service.js';
 
 /** Why a shop with money owed was not paid this time. */
@@ -95,21 +96,9 @@ export class MerchantPayoutsService {
     private readonly config: ConfigService<Env, true>
   ) {}
 
-  /**
-   * The day paying shops starts — `MERCHANT_PAYOUTS_FROM` — or null while it
-   * has not been decided.
-   *
-   * A date, not a switch, because of what the database holds on the day real
-   * payments begin: every order delivered while Stripe was in test mode. Those
-   * were paid with test cards; a payout run that counted them would send real
-   * money for them. Orders delivered before this date are simply not owed
-   * through here.
-   */
+  /** The day paying shops starts, or null while it has not been decided (`payoutsStart`). */
   private get from(): Date | null {
-    const value = this.config.get('MERCHANT_PAYOUTS_FROM', { infer: true });
-    if (!value) return null;
-    const date = new Date(`${value}T00:00:00Z`);
-    return Number.isNaN(date.getTime()) ? null : date;
+    return payoutsStart(this.config.get('MERCHANT_PAYOUTS_FROM', { infer: true }));
   }
 
   // ── what each shop is owed ────────────────────────────────────────────────
@@ -118,7 +107,7 @@ export class MerchantPayoutsService {
   async owed(): Promise<{ enabled: boolean; from: string | null; shops: MerchantOwed[] }> {
     const from = this.from;
     if (!from) return { enabled: false, from: null, shops: [] };
-    await this.settlements.reconcile();
+    await this.settlements.reconcileIfStale();
     const rows = await unwrap<OwedRow[]>(this.db.rpc('merchant_payouts_owed', { p_from: from.toISOString() }));
     return { enabled: true, from: from.toISOString().slice(0, 10), shops: rows.map(toOwed) };
   }
@@ -153,7 +142,7 @@ export class MerchantPayoutsService {
     let pendingCad = 0;
     let orderCount = 0;
     if (from) {
-      await this.settlements.reconcile();
+      await this.settlements.reconcileIfStale();
       const [row] = await unwrap<OwedRow[]>(
         this.db.rpc('merchant_payouts_owed', { p_from: from.toISOString(), p_vendor_id: vendor.id })
       );

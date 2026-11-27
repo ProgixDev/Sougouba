@@ -5,14 +5,16 @@ import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/data/Skeleton';
+import { PayoutsCard } from '@/components/merchant/PayoutsCard';
 import { getMyStatementUrl, listMyStatements, statementMonth, type Statement, type StatementTotals } from '@/lib/api/statements';
 import { formatCad } from '@/lib/format';
 
 type Loaded = Awaited<ReturnType<typeof listMyStatements>>;
 
 /**
- * The shop's monthly statements, on the web: the month so far, then every one
- * issued, each downloadable as a PDF. The same figures the mobile app shows.
+ * The shop's money, on the web: when it is next paid and into which account,
+ * the month so far, then every statement issued, each downloadable as a PDF.
+ * The same figures the mobile app shows.
  */
 export default function MerchantStatementsPage() {
   const [data, setData] = useState<Loaded | null>(null);
@@ -45,12 +47,14 @@ export default function MerchantStatementsPage() {
     <div className="flex flex-col gap-6">
       <div>
         <Text as="h1" variant="display">
-          Relevés mensuels
+          Relevés et versements
         </Text>
         <Text variant="body" tone="muted" className="mt-1">
-          Vos ventes, la commission Sougouba et ce qui vous est dû. Un relevé est émis le 1er de chaque mois.
+          Votre part des ventes, ce qui vous a été versé et ce qui vous est dû. Un relevé est émis le 1er de chaque mois.
         </Text>
       </div>
+
+      <PayoutsCard />
 
       {failed ? (
         <Text variant="body" tone="destructive">
@@ -71,7 +75,7 @@ export default function MerchantStatementsPage() {
             </Text>
             <Figures totals={data.current.totals} />
             <Text variant="caption" tone="muted" className="mt-3">
-              Chiffres provisoires : seules les commandes payées en ligne et déjà livrées sont comptées.
+              Chiffres provisoires : seules les commandes payées en ligne et déjà livrées sont comptées. Les frais de livraison reviennent à Sougouba, qui rémunère le livreur.
             </Text>
           </Card>
 
@@ -126,15 +130,21 @@ export default function MerchantStatementsPage() {
   );
 }
 
-/** The month's money column: what came in, what comes off, what is left. */
+/** The month's money column: what the orders were worth to the shop, what came off, what was sent, what is left. */
 function Figures({ totals }: { totals: StatementTotals }) {
   const owed = totals.balanceCad < 0;
   return (
     <dl className="flex max-w-md flex-col gap-1.5 font-sans text-[0.875rem]">
-      <Line label={`${totals.orderCount} commande${totals.orderCount > 1 ? 's' : ''} livrée${totals.orderCount > 1 ? 's' : ''} — payé par les clients`} value={formatCad(totals.collectedCad)} />
-      {totals.refundCount > 0 && <Line label="Remboursements" value={formatCad(-totals.refundsCad)} />}
+      <Line
+        label={`${totals.orderCount} commande${totals.orderCount > 1 ? 's' : ''} livrée${totals.orderCount > 1 ? 's' : ''} — produits et taxes`}
+        value={formatCad(totals.goodsCad + totals.gstCad + totals.qstCad)}
+      />
+      {totals.couponsCad > 0 && <Line label="Vos codes promo" value={formatCad(-totals.couponsCad)} />}
       <Line label="Commission Sougouba" value={formatCad(-totals.commissionCad)} />
-      {totals.paidCad > 0 && <Line label="Déjà versé par Stripe" value={formatCad(-totals.paidCad)} />}
+      <Line label="Votre part des ventes" value={formatCad(totals.earnedCad)} />
+      {totals.refundCount > 0 && <Line label="Remboursements, votre part" value={formatCad(-totals.refundsCad)} />}
+      {totals.openingCad !== 0 && <Line label="Solde reporté du mois précédent" value={formatCad(totals.openingCad)} />}
+      {totals.payoutCount > 0 && <Line label="Versé sur votre compte" value={formatCad(-totals.paidCad)} />}
       <div className="mt-1.5 flex items-baseline justify-between gap-4 border-t border-border pt-2.5">
         <dt className="font-semibold">{owed ? 'Solde dû à Sougouba' : 'Solde à vous verser'}</dt>
         <dd className={`tabular text-[1.125rem] font-bold ${owed ? 'text-destructive' : 'text-primary'}`}>{formatCad(Math.abs(totals.balanceCad))}</dd>

@@ -1,5 +1,6 @@
 'use client';
 import { Suspense, useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Banknote, CalendarClock, CircleAlert, Search, Send, UserX } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -381,6 +382,9 @@ function Payouts() {
         description="Ce que la plateforme doit aux livreurs, et l’historique des virements."
         actions={
           <>
+            <Link href="/payouts/merchants" className="font-sans text-[0.8125rem] font-semibold text-muted-foreground hover:text-foreground">
+              Versements aux commerces
+            </Link>
             {tab === 'owed' ? (
               <ExportButton
                 name="virements-a-payer"

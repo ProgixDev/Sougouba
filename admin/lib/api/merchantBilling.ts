@@ -74,3 +74,52 @@ export async function openSubscriptionPortal(): Promise<string> {
   const { url } = await merchantApiPost<{ url: string }>('/vendors/me/subscription/portal', { returnUrl: backTo('done') });
   return url;
 }
+
+// ── payouts ─────────────────────────────────────────────────────────────────
+
+/** Where the shop stands with Stripe — asked of Stripe by the API each time. */
+export interface PayoutStatus {
+  /** The merchant finished Stripe's form. */
+  onboarded: boolean;
+  /** Stripe will actually send money to their bank. */
+  payoutsEnabled: boolean;
+}
+
+export const getMyPayoutStatus = () => merchantApiGet<PayoutStatus>('/vendors/me/stripe/status');
+
+export interface Payout {
+  id: ID;
+  amountCad: number;
+  orderCount: number;
+  /** `pending`: on its way. A payment Stripe refused is not listed — it went back into the balance. */
+  status: 'pending' | 'paid';
+  createdAt: string;
+  paidAt: string | null;
+}
+
+/** What the next weekly payment carries, and the last few payments. */
+export interface PayoutSummary {
+  /** False until Sougouba has opened payouts to shops: balances add up, nothing is sent yet. */
+  enabled: boolean;
+  pendingCad: number;
+  orderCount: number;
+  /** `2026-12-04` — the coming Friday. */
+  nextPayoutOn: string;
+  payouts: Payout[];
+}
+
+export const getMyPayouts = () => merchantApiGet<PayoutSummary>('/vendors/me/payouts');
+
+/**
+ * A link to Stripe's form, where the merchant gives the bank account their
+ * payments go to. Stripe sends the browser back to the statements page —
+ * `refresh` is where it sends a link that expired before it was finished.
+ */
+export async function startPayoutOnboarding(): Promise<string> {
+  const back = (state: 'done' | 'refresh') => `${window.location.origin}/merchant/statements?versements=${state}`;
+  const { url } = await merchantApiPost<{ url: string }>('/vendors/me/stripe/onboard', {
+    returnUrl: back('done'),
+    refreshUrl: back('refresh'),
+  });
+  return url;
+}

@@ -87,7 +87,7 @@ function harness(setup: {
   const payments = { transfer, findTransfer, getConnectAccount } as unknown as PaymentsService;
 
   const reconcile = vi.fn(async () => 0);
-  const settlements = { reconcile } as unknown as SettlementsService;
+  const settlements = { reconcile, reconcileIfStale: vi.fn(async () => undefined) } as unknown as SettlementsService;
   const from = setup.from === undefined ? '2026-12-01' : setup.from;
   const config = { get: () => from ?? undefined };
 
@@ -123,7 +123,8 @@ describe('paying the shops — the weekly run', () => {
     // Every paid order has its share before anyone is asked what is owed.
     expect(reconcile).toHaveBeenCalled();
     expect(rpcCalls('merchant_payout_claim')).toEqual([
-      { p_vendor_id: 'a', p_from: '2026-12-01T00:00:00.000Z', p_trigger: 'schedule', p_actor_id: undefined },
+      // Montréal midnight on the 1st, where December's statement starts too.
+      { p_vendor_id: 'a', p_from: '2026-12-01T05:00:00.000Z', p_trigger: 'schedule', p_actor_id: undefined },
     ]);
     // The key and the group are the payout itself: a retry is the same transfer, and it can be found again.
     expect(transfer).toHaveBeenCalledWith(

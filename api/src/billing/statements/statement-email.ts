@@ -29,6 +29,7 @@ const FIGURE_STYLE: Record<FigureKind, { label: string; value: string; row: stri
   base: { label: 'font-weight:700;', value: '', row: '' },
   minor: { label: `color:${COLOR.muted};font-size:13px;padding-left:12px;`, value: `color:${COLOR.muted};font-size:13px;`, row: '' },
   total: { label: 'font-weight:700;', value: 'font-weight:700;', row: `border-top:1px solid ${COLOR.border};` },
+  plus: { label: '', value: 'font-weight:600;', row: '' },
   minus: { label: '', value: 'font-weight:600;', row: '' },
   balance: { label: 'font-weight:700;font-size:16px;', value: `font-weight:700;font-size:18px;color:${COLOR.brand};`, row: `border-top:1px solid ${COLOR.border};` },
 };

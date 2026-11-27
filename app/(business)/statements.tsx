@@ -5,11 +5,13 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { MerchantPayoutCard } from '@/components/business';
 import { BackHeader, EmptyState, Skeleton, Text } from '@/components/ui';
 import { vendorsApi } from '@/data/api';
 import type { MerchantStatement, StatementTotals } from '@/data/api/vendors';
 import { ApiError } from '@/data/http';
 import { useThemeColors } from '@/hooks/useColorScheme';
+import { useMerchantPayouts } from '@/hooks/useMerchantPayouts';
 import { useOwnerVendor } from '@/hooks/useOwnerVendor';
 import { formatCad, formatMonthYear } from '@/lib/format';
 import { useT } from '@/lib/i18n/useT';
@@ -19,19 +21,22 @@ import { selectLocale, useLanguageStore } from '@/store/useLanguageStore';
 const monthOf = (period: string) => formatMonthYear(`${period}-15T12:00:00`);
 
 /**
- * The shop's monthly statements: what it sold, what Sougouba keeps, and what is
- * still owed to it (`api/src/billing/statements/`).
+ * The shop's money: when it is next paid and into which account, then its
+ * monthly statements — what its orders were worth to it, what was sent, and
+ * what is still owed (`api/src/billing/`).
  *
- * The month in progress is shown first, added up live — otherwise a new shop
- * would look at an empty screen until the 1st. Below it, every statement
- * issued; each opens as a PDF in the in-app browser, through a short-lived
- * link, exactly as an order's receipt does.
+ * The payout card comes first because it holds the one thing a merchant must
+ * do here: link a bank account. The month in progress follows, added up live —
+ * otherwise a new shop would look at an empty screen until the 1st. Below it,
+ * every statement issued; each opens as a PDF in the in-app browser, through a
+ * short-lived link, exactly as an order's receipt does.
  */
 export default function BusinessStatementsScreen() {
   const t = useT();
   const colors = useThemeColors();
   const locale = useLanguageStore(selectLocale);
   const { approved } = useOwnerVendor();
+  const payouts = useMerchantPayouts(approved);
   const [data, setData] = useState<Awaited<ReturnType<typeof vendorsApi.getMyStatements>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [openingId, setOpeningId] = useState<string | null>(null);
@@ -80,6 +85,8 @@ export default function BusinessStatementsScreen() {
           </View>
         ) : (
           <>
+            {approved ? <MerchantPayoutCard payouts={payouts} /> : null}
+
             {data ? (
               <View className="rounded-[20px] bg-card p-4 gap-3">
                 <View className="gap-0.5">
@@ -164,7 +171,7 @@ export default function BusinessStatementsScreen() {
   );
 }
 
-/** The month's money column: what came in, what comes off, what is left. */
+/** The month's money column: what the orders were worth to the shop, what came off, what was sent, what is left. */
 function Figures({ totals }: { totals: StatementTotals }) {
   const t = useT();
   const owed = totals.balanceCad < 0;
@@ -173,10 +180,13 @@ function Figures({ totals }: { totals: StatementTotals }) {
       <Text variant="caption" tone="muted">
         {t('business.statements.orders', { count: totals.orderCount })}
       </Text>
-      <Row label={t('business.statements.collected')} value={formatCad(totals.collectedCad)} />
-      {totals.refundCount > 0 ? <Row label={t('business.statements.refunds')} value={formatCad(-totals.refundsCad)} /> : null}
+      <Row label={t('business.statements.sales')} value={formatCad(totals.goodsCad + totals.gstCad + totals.qstCad)} />
+      {totals.couponsCad > 0 ? <Row label={t('business.statements.coupons')} value={formatCad(-totals.couponsCad)} /> : null}
       <Row label={t('business.statements.commission')} value={formatCad(-totals.commissionCad)} />
-      {totals.paidCad > 0 ? <Row label={t('business.statements.paid')} value={formatCad(-totals.paidCad)} /> : null}
+      <Row label={t('business.statements.earned')} value={formatCad(totals.earnedCad)} />
+      {totals.refundCount > 0 ? <Row label={t('business.statements.refunds')} value={formatCad(-totals.refundsCad)} /> : null}
+      {totals.openingCad !== 0 ? <Row label={t('business.statements.opening')} value={formatCad(totals.openingCad)} /> : null}
+      {totals.payoutCount > 0 ? <Row label={t('business.statements.paid')} value={formatCad(-totals.paidCad)} /> : null}
       <View className="h-px bg-border my-0.5" />
       <View className="flex-row items-baseline justify-between gap-3">
         <Text variant="caption" weight="bold">

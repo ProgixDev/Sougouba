@@ -2789,6 +2789,24 @@ export type Database = {
         }
         Returns: boolean
       }
+      merchant_balance_at: {
+        Args: { p_at: string; p_from?: string; p_vendor_id: string }
+        Returns: number
+      }
+      merchant_ledger: {
+        Args: { p_from?: string; p_vendor_id: string }
+        Returns: {
+          amount_cad: number
+          at: string
+          coupon_discount_cad: number
+          gst_cad: number
+          kind: string
+          qst_cad: number
+          receipt_number: number
+          ref_id: string
+          subtotal_cad: number
+        }[]
+      }
       merchant_payout_claim: {
         Args: {
           p_actor_id?: string

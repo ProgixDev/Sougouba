@@ -12,7 +12,7 @@ const NAV = [
   { href: '/merchant/orders', label: 'Commandes' },
   { href: '/merchant/products', label: 'Produits' },
   { href: '/merchant/coupons', label: 'Codes promo' },
-  { href: '/merchant/statements', label: 'Relevés' },
+  { href: '/merchant/statements', label: 'Relevés et versements' },
   { href: '/merchant/shop', label: 'Boutique' },
 ];
 

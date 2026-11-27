@@ -25,6 +25,8 @@ interface MissingSettlementRow {
 /** How many orders one pass fills in, and how many passes one call makes — ten thousand orders at most. */
 const PAGE = 500;
 const MAX_PASSES = 20;
+/** How old a completed `reconcile` may be before a screen asks for another. */
+const FRESH_MS = 5 * 60_000;
 
 /**
  * The shop's side of each order, as stored — `order_settlements`
@@ -43,6 +45,7 @@ const MAX_PASSES = 20;
 @Injectable()
 export class SettlementsService {
   private readonly logger = new Logger(SettlementsService.name);
+  private reconciledAt = 0;
 
   constructor(
     @Inject(DB) private readonly db: Db,
@@ -98,10 +101,12 @@ export class SettlementsService {
           order.commission_cad === null ? { rate: commissionRate } : { commissionCad: Number(order.commission_cad) }
         );
         // An order refunded before it ever had a settlement carries the shop's
-        // part of that refund from the start. A refund recorded without its
-        // amount is the whole order, as on a statement.
+        // part of that refund from the start — delivered yet or not, exactly as
+        // `refundRecorded` would have taken it; it only ever counts once the
+        // order is delivered. A refund recorded without its amount is the
+        // whole order.
         const refundCad =
-          order.refunded_at && order.status === 'delivered'
+          order.refunded_at
             ? refundShareOf(
                 { totalCad: money.totalCad, merchantShareCad },
                 order.refund_amount_cad === null ? money.totalCad : Number(order.refund_amount_cad)
@@ -115,7 +120,23 @@ export class SettlementsService {
       if (orders.length < PAGE) break;
     }
     if (written > 0) this.logger.log(`Recorded the shop's share on ${written} order(s) that had none`);
+    this.reconciledAt = Date.now();
     return written;
+  }
+
+  /**
+   * `reconcile`, unless one finished in the last few minutes.
+   *
+   * For the screens — a shop looking at its balance, a statement so far. The
+   * check behind `reconcile` reads every paid order, which is right once a
+   * week before money moves and wasteful on every screen opened. An order
+   * placed in the meantime has its share already (`record`); the few minutes
+   * only bound how long one that missed it can go unseen. A payout run and a
+   * month's closing call `reconcile` itself.
+   */
+  async reconcileIfStale(): Promise<void> {
+    if (Date.now() - this.reconciledAt < FRESH_MS) return;
+    await this.reconcile();
   }
 
   /**

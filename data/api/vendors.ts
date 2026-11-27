@@ -274,6 +274,70 @@ export async function openSubscriptionPortal(): Promise<string> {
   return url;
 }
 
+// ── payouts ─────────────────────────────────────────────────────────────────
+
+/**
+ * Where the shop stands with Stripe — asked of Stripe by the API, like a
+ * courier's: `payoutsEnabled` flips when Stripe finishes its own checks.
+ */
+export interface MerchantPayoutStatus {
+  /** The merchant finished Stripe's form (`details_submitted`). */
+  onboarded: boolean;
+  /** Stripe will actually send money to their bank. */
+  payoutsEnabled: boolean;
+}
+
+export async function getPayoutStatus(): Promise<MerchantPayoutStatus> {
+  return api<MerchantPayoutStatus>('/vendors/me/stripe/status');
+}
+
+export interface MerchantPayout {
+  id: ID;
+  amountCad: number;
+  orderCount: number;
+  /** `pending`: on its way. A payment Stripe refused is not listed — it went back into the balance. */
+  status: 'pending' | 'paid';
+  createdAt: string;
+  paidAt: string | null;
+}
+
+/**
+ * What the next weekly payment carries — orders delivered and not yet paid,
+ * less the shop's part of any refund — and the last few payments.
+ */
+export interface MerchantPayoutSummary {
+  /** False until Sougouba has opened payouts to shops: balances add up, nothing is sent yet. */
+  enabled: boolean;
+  pendingCad: number;
+  orderCount: number;
+  /** `2026-12-04` — the coming Friday. */
+  nextPayoutOn: string;
+  payouts: MerchantPayout[];
+}
+
+export async function getPayoutSummary(): Promise<MerchantPayoutSummary> {
+  return api<MerchantPayoutSummary>('/vendors/me/payouts');
+}
+
+/**
+ * The URL the in-app browser waits for — the same one a courier's onboarding
+ * returns to (`app/payouts-return.tsx`).
+ */
+export const PAYOUT_RETURN_URL = 'sougouba://payouts-return';
+
+/**
+ * A one-time Stripe onboarding link for the shop's Connect account. Stripe's
+ * form collects the banking; neither the app nor the API ever sees it.
+ */
+export async function startPayoutOnboarding(): Promise<string> {
+  const back = `${process.env.EXPO_PUBLIC_API_URL}/stripe/connect/return`;
+  const { url } = await api<{ url: string }>('/vendors/me/stripe/onboard', {
+    method: 'POST',
+    body: { returnUrl: `${back}?state=done`, refreshUrl: `${back}?state=refresh` },
+  });
+  return url;
+}
+
 // ── monthly statements ──────────────────────────────────────────────────────
 
 /** A month's figures, as the API adds them up — see `api/src/billing/statements/statement.ts`. */
@@ -282,17 +346,21 @@ export interface StatementTotals {
   goodsCad: number;
   gstCad: number;
   qstCad: number;
-  deliveryCad: number;
-  discountsCad: number;
-  /** Everything shoppers paid for the orders delivered in the month. */
-  collectedCad: number;
-  refundCount: number;
-  refundsCad: number;
+  /** The shop's own promo codes, which the shop pays for. */
+  couponsCad: number;
   commissionCad: number;
   commissionRate: number | null;
-  /** Already sent to the shop by Stripe. */
+  /** The shop's share of the month's orders: goods and taxes, less its promo codes and the commission. */
+  earnedCad: number;
+  refundCount: number;
+  /** The shop's part of the month's refunds. */
+  refundsCad: number;
+  /** Owed to the shop when the month began. */
+  openingCad: number;
+  payoutCount: number;
+  /** Sent to the shop's bank during the month. */
   paidCad: number;
-  /** Still owed to the shop — negative when the shop owes instead. */
+  /** Owed to the shop at the end of the month — negative when the shop owes instead. */
   balanceCad: number;
 }
 

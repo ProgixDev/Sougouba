@@ -3,30 +3,39 @@ import { money, orderReference, type Locale } from '../../notifications/messages
 import { roundCad } from '../../orders/pricing.js';
 
 /**
- * A merchant's monthly statement: what the shop sold, what Sougouba keeps, what
- * Stripe has already sent the shop, and what is still owed to it.
+ * A merchant's monthly statement: what the shop earned, what was taken back,
+ * what was sent to it, and what is still owed.
  *
  * Pure, like the receipt it sits beside. `buildStatement` adds up a month from
  * rows; `describeStatement` words the result. The PDF and the email render the
  * description and compute nothing.
  *
- * ── What counts ─────────────────────────────────────────────────────────────
+ * ── Where the figures come from ─────────────────────────────────────────────
+ *
+ * Not from the orders: from the shop's **account** — the ledger
+ * `merchant_ledger` returns (`drizzle/0059_merchant_payouts.sql`), one line per
+ * order delivered, refund given and payment sent. It is the record the weekly
+ * payout pays from, so a statement cannot disagree with what was paid, and the
+ * balance one month closes on is the balance the next opens on.
  *
  * - An order counts in the month it was **delivered** — a sale is a sale once
  *   the bag is handed over, and a delivered order cannot be cancelled later, so
  *   a statement never has to take one back.
- * - A refund counts in the month it was **issued**, whichever month its order
+ * - A refund counts in the month it was **given**, whichever month its order
  *   was delivered in. A statement already sent is never rewritten.
+ * - A payment counts in the month it was **sent**.
  * - Only orders with a real payment behind them. Seeded history moved no money.
  *
- * ── The rules it adds up under ──────────────────────────────────────────────
+ * ── The rule behind a share ─────────────────────────────────────────────────
  *
- * ⚠️ These are the rules the payment code applies today, not rules anyone has
- * signed off: the delivery fee and both taxes are the shop's, and so is the
- * cost of a points or promo discount (the shop receives what the shopper
- * actually paid, less the commission). Who keeps the delivery fee and who pays
- * for points are open questions with the client. When they are answered,
- * `balanceOf` is the one function to change.
+ * `orders/split.ts`, and only there: the shop's share of an order is its goods
+ * and the taxes on them, less its own promo code and the commission. The
+ * delivery fee is Sougouba's, and so is the cost of loyalty points — neither
+ * appears on a statement. A refund costs the shop the same fraction of its
+ * share that the shopper got back of their payment. ⚠️ Decided with the
+ * developer, not signed by the client. This file never works a share out: it
+ * prints the one the ledger holds, and derives the commission from it, so the
+ * lines of a statement always add up to the cent.
  *
  * It is a **statement, not a tax invoice**: no TPS/TVQ is shown on the
  * commission, because whether there should be is the accountant's to say.
@@ -78,30 +87,24 @@ export function currentPeriod(now: Date): Period {
 
 type Numeric = number | string;
 
-/** An order delivered in the month. `numeric` columns arrive as strings through PostgREST. */
-export interface StatementOrderRow {
-  id: string;
+/**
+ * One line of the shop's account, as `merchant_ledger` returns it. `numeric`
+ * columns arrive as strings through PostgREST.
+ */
+export interface LedgerRow {
+  kind: 'order' | 'refund' | 'payout';
+  /** When it counts: delivered, refunded, paid. */
+  at: string;
+  /** The order — or, for a payment, the payout. */
+  ref_id: string | null;
+  /** Signed: what it did to the balance. */
+  amount_cad: Numeric;
   receipt_number?: Numeric | null;
-  deliveredAt: string;
-  subtotal_cad: Numeric;
-  gst_cad: Numeric;
-  qst_cad: Numeric;
-  delivery_fee_cad: Numeric;
-  total_cad: Numeric;
-  points_discount_cad: Numeric | null;
-  coupon_discount_cad: Numeric | null;
-  /** Null on an order paid before these were recorded and never backfilled — see `commissionOf`. */
-  commission_cad: Numeric | null;
-  merchant_paid_cad: Numeric | null;
-}
-
-/** A refund issued in the month. */
-export interface StatementRefundRow {
-  id: string;
-  receipt_number?: Numeric | null;
-  refunded_at: string;
-  refund_amount_cad: Numeric | null;
-  total_cad: Numeric;
+  // The order's own figures — on an `order` line only.
+  subtotal_cad?: Numeric | null;
+  gst_cad?: Numeric | null;
+  qst_cad?: Numeric | null;
+  coupon_discount_cad?: Numeric | null;
 }
 
 // ── the statement ───────────────────────────────────────────────────────────
@@ -113,20 +116,25 @@ export interface StatementOrderLine {
   deliveredAt: string;
   goodsCad: number;
   taxesCad: number;
-  deliveryCad: number;
-  discountsCad: number;
-  /** What the shopper paid. */
-  collectedCad: number;
+  /** The shop's own promo code, which the shop pays for. */
+  couponCad: number;
   commissionCad: number;
-  /** What Stripe already sent the shop for this order. */
-  paidCad: number;
+  /** What the shop is owed for this order — the figure a payout pays. */
+  shareCad: number;
 }
 
 export interface StatementRefundLine {
-  orderId: string;
+  orderId: string | null;
   reference: string;
   receiptNumber: number | null;
   refundedAt: string;
+  /** The shop's part of the refund, not what the shopper got back. */
+  amountCad: number;
+}
+
+export interface StatementPayoutLine {
+  payoutId: string | null;
+  paidAt: string;
   amountCad: number;
 }
 
@@ -135,24 +143,29 @@ export interface StatementTotals {
   goodsCad: number;
   gstCad: number;
   qstCad: number;
-  deliveryCad: number;
-  discountsCad: number;
-  /** Everything shoppers paid for these orders. */
-  collectedCad: number;
-  refundCount: number;
-  refundsCad: number;
+  /** The shop's own promo codes. */
+  couponsCad: number;
   commissionCad: number;
   /** The rate behind `commissionCad`, when every order shares one; null on a month that straddles a rate change. */
   commissionRate: number | null;
-  /** Already sent to the shop by Stripe, at payment. */
+  /** The shop's share of the month's orders: goods and taxes, less its promo codes and the commission. */
+  earnedCad: number;
+  refundCount: number;
+  /** The shop's part of the month's refunds. */
+  refundsCad: number;
+  /** Owed to the shop when the month began — negative when the shop owed. */
+  openingCad: number;
+  payoutCount: number;
+  /** Sent to the shop during the month. */
   paidCad: number;
-  /** Still owed to the shop — or, when negative, owed by it. */
+  /** Owed to the shop when the month ended — or, when negative, owed by it. */
   balanceCad: number;
 }
 
 export interface StatementLines {
   orders: StatementOrderLine[];
   refunds: StatementRefundLine[];
+  payouts: StatementPayoutLine[];
 }
 
 const amount = (value: Numeric | null | undefined): number => (value === null || value === undefined ? 0 : Number(value));
@@ -163,58 +176,60 @@ const receiptNumber = (value: Numeric | null | undefined): number | null => {
 };
 
 /**
- * Sougouba's commission on an order: what was fixed at checkout, or — for an
- * order that somehow has no record — the current rate on the goods, which is
- * how every such order was priced.
+ * What is owed to the shop at the end of the month: what was owed when it
+ * began, plus what it earned, less its part of the refunds, less what it was
+ * sent.
  */
-function commissionOf(order: StatementOrderRow, fallbackRate: number): number {
-  return order.commission_cad === null ? roundCad(amount(order.subtotal_cad) * fallbackRate) : amount(order.commission_cad);
-}
-
-/**
- * What is still owed to the shop.
- *
- * Everything shoppers paid, less what was given back to them, less Sougouba's
- * commission, less what Stripe has already sent the shop. This is the one
- * place the open questions land — see the note at the top of the file.
- */
-export function balanceOf(totals: Pick<StatementTotals, 'collectedCad' | 'refundsCad' | 'commissionCad' | 'paidCad'>): number {
-  return roundCad(totals.collectedCad - totals.refundsCad - totals.commissionCad - totals.paidCad);
+export function balanceOf(totals: Pick<StatementTotals, 'openingCad' | 'earnedCad' | 'refundsCad' | 'paidCad'>): number {
+  return roundCad(totals.openingCad + totals.earnedCad - totals.refundsCad - totals.paidCad);
 }
 
 export function buildStatement(input: {
-  orders: StatementOrderRow[];
-  refunds: StatementRefundRow[];
-  /** The rate in force now, for an order with no recorded commission. */
+  /** The balance when the month began (`merchant_balance_at`). */
+  openingCad: Numeric;
+  /** The month's lines of the shop's account (`merchant_ledger`). */
+  entries: LedgerRow[];
+  /** The rate in force now — what an empty month is labelled with. */
   commissionRate: number;
 }): { totals: StatementTotals; lines: StatementLines } {
-  const orders: StatementOrderLine[] = [...input.orders]
-    .sort((a, b) => Date.parse(a.deliveredAt) - Date.parse(b.deliveredAt))
-    .map((order) => ({
-      orderId: order.id,
-      reference: orderReference(order.id),
-      receiptNumber: receiptNumber(order.receipt_number),
-      deliveredAt: order.deliveredAt,
-      goodsCad: amount(order.subtotal_cad),
-      taxesCad: roundCad(amount(order.gst_cad) + amount(order.qst_cad)),
-      deliveryCad: amount(order.delivery_fee_cad),
-      discountsCad: roundCad(amount(order.points_discount_cad) + amount(order.coupon_discount_cad)),
-      collectedCad: amount(order.total_cad),
-      commissionCad: commissionOf(order, input.commissionRate),
-      paidCad: amount(order.merchant_paid_cad),
-    }));
+  const inOrder = (kind: LedgerRow['kind']) =>
+    input.entries.filter((entry) => entry.kind === kind).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 
-  const refunds: StatementRefundLine[] = [...input.refunds]
-    .sort((a, b) => Date.parse(a.refunded_at) - Date.parse(b.refunded_at))
-    .map((refund) => ({
-      orderId: refund.id,
-      reference: orderReference(refund.id),
-      receiptNumber: receiptNumber(refund.receipt_number),
-      refundedAt: refund.refunded_at,
-      // A refund recorded without its amount is taken as the whole order —
-      // understating what went back would overstate what is owed.
-      amountCad: refund.refund_amount_cad === null ? amount(refund.total_cad) : amount(refund.refund_amount_cad),
-    }));
+  const orders: StatementOrderLine[] = inOrder('order').map((entry) => {
+    const goodsCad = amount(entry.subtotal_cad);
+    const taxesCad = roundCad(amount(entry.gst_cad) + amount(entry.qst_cad));
+    const couponCad = amount(entry.coupon_discount_cad);
+    const shareCad = amount(entry.amount_cad);
+    return {
+      orderId: entry.ref_id ?? '',
+      reference: orderReference(entry.ref_id ?? ''),
+      receiptNumber: receiptNumber(entry.receipt_number),
+      deliveredAt: entry.at,
+      goodsCad,
+      taxesCad,
+      couponCad,
+      // Whatever stands between the order's figures and the share — which is
+      // the commission, by the rule the share was worked out under. Derived
+      // rather than read, so the line always adds up.
+      commissionCad: roundCad(goodsCad + taxesCad - couponCad - shareCad),
+      shareCad,
+    };
+  });
+
+  const refunds: StatementRefundLine[] = inOrder('refund').map((entry) => ({
+    orderId: entry.ref_id,
+    // A refund whose order has since been deleted still counts; it just has no name.
+    reference: entry.ref_id ? orderReference(entry.ref_id) : '—',
+    receiptNumber: receiptNumber(entry.receipt_number),
+    refundedAt: entry.at,
+    amountCad: roundCad(-amount(entry.amount_cad)),
+  }));
+
+  const payouts: StatementPayoutLine[] = inOrder('payout').map((entry) => ({
+    payoutId: entry.ref_id,
+    paidAt: entry.at,
+    amountCad: roundCad(-amount(entry.amount_cad)),
+  }));
 
   const sum = <T>(rows: T[], pick: (row: T) => number) => roundCad(rows.reduce((total, row) => total + pick(row), 0));
 
@@ -226,31 +241,37 @@ export function buildStatement(input: {
   const commissionRate = rates.size === 1 ? [...rates][0] : orders.length === 0 ? input.commissionRate : null;
 
   const partial = {
-    collectedCad: sum(orders, (o) => o.collectedCad),
+    openingCad: roundCad(amount(input.openingCad)),
+    earnedCad: sum(orders, (o) => o.shareCad),
     refundsCad: sum(refunds, (r) => r.amountCad),
-    commissionCad,
-    paidCad: sum(orders, (o) => o.paidCad),
+    paidCad: sum(payouts, (p) => p.amountCad),
   };
 
   return {
     totals: {
       orderCount: orders.length,
       goodsCad,
-      gstCad: sum(input.orders, (o) => amount(o.gst_cad)),
-      qstCad: sum(input.orders, (o) => amount(o.qst_cad)),
-      deliveryCad: sum(orders, (o) => o.deliveryCad),
-      discountsCad: sum(orders, (o) => o.discountsCad),
-      refundCount: refunds.length,
+      gstCad: sum(inOrder('order'), (o) => amount(o.gst_cad)),
+      qstCad: sum(inOrder('order'), (o) => amount(o.qst_cad)),
+      couponsCad: sum(orders, (o) => o.couponCad),
+      commissionCad,
       commissionRate,
+      refundCount: refunds.length,
+      payoutCount: payouts.length,
       ...partial,
       balanceCad: balanceOf(partial),
     },
-    lines: { orders, refunds },
+    lines: { orders, refunds, payouts },
   };
 }
 
-/** A month with nothing delivered and nothing refunded is not sent — an empty statement is noise. */
-export const isEmpty = (totals: StatementTotals): boolean => totals.orderCount === 0 && totals.refundCount === 0;
+/**
+ * A month in which the shop's account did not move is not sent — an empty
+ * statement is noise. A month with only a payment in it is not empty: the shop
+ * should have a record of what it received.
+ */
+export const isEmpty = (totals: StatementTotals): boolean =>
+  totals.orderCount === 0 && totals.refundCount === 0 && totals.payoutCount === 0;
 
 /** `RM-000123` — « relevé mensuel ». Padding, not a ceiling, like the receipt number. */
 export function formatStatementNumber(value: Numeric | null | undefined): string | null {
@@ -271,7 +292,7 @@ export interface Statement {
   lines: StatementLines;
 }
 
-export type FigureKind = 'base' | 'minor' | 'minus' | 'total' | 'balance';
+export type FigureKind = 'base' | 'minor' | 'plus' | 'minus' | 'total' | 'balance';
 
 export interface StatementDocument {
   locale: Locale;
@@ -287,6 +308,7 @@ export interface StatementDocument {
   balanceNote: string;
   orders: { columns: string[]; rows: string[][] };
   refunds: { title: string; columns: string[]; rows: string[][] } | null;
+  payouts: { title: string; columns: string[]; rows: string[][] } | null;
   footer: string[];
 }
 
@@ -318,20 +340,24 @@ const COPY = {
     orders: (n: number) => (n > 1 ? `${n} commandes livrées` : `${n} commande livrée`),
     goods: 'Ventes de produits',
     taxes: 'TPS et TVQ perçues',
-    delivery: 'Frais de livraison',
-    discounts: 'Rabais accordés (points et codes promo)',
-    collected: 'Total payé par les clients',
-    refunds: (n: number) => (n > 1 ? `Remboursements (${n})` : 'Remboursement'),
+    coupons: 'Vos codes promo',
     commission: (rate: string | null) => (rate ? `Commission Sougouba (${rate})` : 'Commission Sougouba'),
-    paid: 'Déjà versé par Stripe',
+    earned: 'Votre part des ventes',
+    refunds: (n: number) => (n > 1 ? `Remboursements, votre part (${n})` : 'Remboursement, votre part'),
+    opening: 'Solde reporté du mois précédent',
+    paid: (n: number) => (n > 1 ? `Versé sur votre compte (${n} virements)` : 'Versé sur votre compte'),
     balance: 'Solde à vous verser',
     balanceOwedByShop: 'Solde dû à Sougouba',
     noteOwed: 'Ce montant vous est dû et n’a pas encore été versé.',
     noteSettled: 'Tout a été versé : aucun solde.',
-    noteOwedByShop: 'Les remboursements du mois dépassent ce qui vous restait dû.',
-    orderColumns: ['Livrée le', 'Commande', 'Payé par le client', 'Commission', 'Déjà versé'],
+    noteOwedByShop: 'Les remboursements dépassent ce qui vous restait dû : la différence sera retenue sur vos prochains versements.',
+    orderColumns: ['Livrée le', 'Commande', 'Produits et taxes', 'Commission', 'Votre part'],
     refundsTitle: 'Remboursements du mois',
-    refundColumns: ['Remboursé le', 'Commande', 'Montant'],
+    refundColumns: ['Remboursé le', 'Commande', 'Votre part'],
+    payoutsTitle: 'Versements du mois',
+    payoutColumns: ['Versé le', 'Mode', 'Montant'],
+    payoutMethod: 'Virement Stripe',
+    rule: 'Les frais de livraison reviennent à Sougouba, qui rémunère le livreur. Les points de fidélité utilisés par vos clients sont à la charge de Sougouba.',
     subscription: 'L’abonnement mensuel est facturé séparément par Stripe et ne figure pas sur ce relevé.',
     notInvoice: 'Ce relevé est un état de compte. Ce n’est pas une facture fiscale.',
     support: (email: string) => `Une question sur ce relevé ? ${email}`,
@@ -345,20 +371,24 @@ const COPY = {
     orders: (n: number) => (n > 1 ? `${n} orders delivered` : `${n} order delivered`),
     goods: 'Product sales',
     taxes: 'GST and QST collected',
-    delivery: 'Delivery fees',
-    discounts: 'Discounts given (points and promo codes)',
-    collected: 'Total paid by customers',
-    refunds: (n: number) => (n > 1 ? `Refunds (${n})` : 'Refund'),
+    coupons: 'Your promo codes',
     commission: (rate: string | null) => (rate ? `Sougouba commission (${rate})` : 'Sougouba commission'),
-    paid: 'Already paid out by Stripe',
+    earned: 'Your share of sales',
+    refunds: (n: number) => (n > 1 ? `Refunds, your part (${n})` : 'Refund, your part'),
+    opening: 'Balance carried over from last month',
+    paid: (n: number) => (n > 1 ? `Paid to your account (${n} transfers)` : 'Paid to your account'),
     balance: 'Balance owed to you',
     balanceOwedByShop: 'Balance owed to Sougouba',
     noteOwed: 'This amount is owed to you and has not been paid out yet.',
     noteSettled: 'Everything has been paid out: no balance.',
-    noteOwedByShop: 'This month’s refunds exceed what was still owed to you.',
-    orderColumns: ['Delivered', 'Order', 'Paid by customer', 'Commission', 'Already paid'],
+    noteOwedByShop: 'Refunds exceed what was still owed to you: the difference will be taken off your next payments.',
+    orderColumns: ['Delivered', 'Order', 'Goods and taxes', 'Commission', 'Your share'],
     refundsTitle: 'Refunds this month',
-    refundColumns: ['Refunded', 'Order', 'Amount'],
+    refundColumns: ['Refunded', 'Order', 'Your part'],
+    payoutsTitle: 'Payments this month',
+    payoutColumns: ['Paid', 'Method', 'Amount'],
+    payoutMethod: 'Stripe transfer',
+    rule: 'Delivery fees go to Sougouba, which pays the courier. Loyalty points used by your customers are paid for by Sougouba.',
     subscription: 'The monthly subscription is billed separately by Stripe and is not part of this statement.',
     notInvoice: 'This is an account statement. It is not a tax invoice.',
     support: (email: string) => `A question about this statement? ${email}`,
@@ -378,23 +408,23 @@ export function describeStatement(statement: Statement, locale: Locale): Stateme
     [shop.city, shop.postalCode].filter(Boolean).join(' ') || null,
   ].filter((line): line is string => Boolean(line));
 
-  // Built up the way the money actually moves: what came in, what it was made
-  // of, what comes off, what is left.
+  // Built up the way the shop's account moves: what the month's orders were
+  // worth to it, what came off, what was carried in, what was sent, what is left.
   const figures: StatementDocument['figures'] = [
     { kind: 'base', label: copy.orders(totals.orderCount), value: '' },
     { kind: 'minor', label: copy.goods, value: cad(totals.goodsCad) },
     { kind: 'minor', label: copy.taxes, value: cad(roundCad(totals.gstCad + totals.qstCad)) },
-    { kind: 'minor', label: copy.delivery, value: cad(totals.deliveryCad) },
   ];
-  if (totals.discountsCad > 0) figures.push({ kind: 'minor', label: copy.discounts, value: cad(-totals.discountsCad) });
-  figures.push({ kind: 'total', label: copy.collected, value: cad(totals.collectedCad) });
-  if (totals.refundCount > 0) figures.push({ kind: 'minus', label: copy.refunds(totals.refundCount), value: cad(-totals.refundsCad) });
+  if (totals.couponsCad > 0) figures.push({ kind: 'minor', label: copy.coupons, value: cad(-totals.couponsCad) });
   figures.push({
-    kind: 'minus',
+    kind: 'minor',
     label: copy.commission(totals.commissionRate === null ? null : percent(totals.commissionRate, locale)),
     value: cad(-totals.commissionCad),
   });
-  if (totals.paidCad > 0) figures.push({ kind: 'minus', label: copy.paid, value: cad(-totals.paidCad) });
+  figures.push({ kind: 'total', label: copy.earned, value: cad(totals.earnedCad) });
+  if (totals.refundCount > 0) figures.push({ kind: 'minus', label: copy.refunds(totals.refundCount), value: cad(-totals.refundsCad) });
+  if (totals.openingCad !== 0) figures.push({ kind: 'plus', label: copy.opening, value: cad(totals.openingCad) });
+  if (totals.payoutCount > 0) figures.push({ kind: 'minus', label: copy.paid(totals.payoutCount), value: cad(-totals.paidCad) });
 
   const owedByShop = totals.balanceCad < 0;
   figures.push({
@@ -420,7 +450,13 @@ export function describeStatement(statement: Statement, locale: Locale): Stateme
     balanceNote: owedByShop ? copy.noteOwedByShop : totals.balanceCad === 0 ? copy.noteSettled : copy.noteOwed,
     orders: {
       columns: [...copy.orderColumns],
-      rows: lines.orders.map((o) => [day(o.deliveredAt, locale), label(o), cad(o.collectedCad), cad(-o.commissionCad), cad(o.paidCad)]),
+      rows: lines.orders.map((o) => [
+        day(o.deliveredAt, locale),
+        label(o),
+        cad(roundCad(o.goodsCad + o.taxesCad - o.couponCad)),
+        cad(-o.commissionCad),
+        cad(o.shareCad),
+      ]),
     },
     refunds:
       lines.refunds.length === 0
@@ -430,7 +466,17 @@ export function describeStatement(statement: Statement, locale: Locale): Stateme
             columns: [...copy.refundColumns],
             rows: lines.refunds.map((r) => [day(r.refundedAt, locale), label(r), cad(-r.amountCad)]),
           },
+    // `?? []`: a statement frozen before payments were listed has no such lines.
+    payouts:
+      (lines.payouts ?? []).length === 0
+        ? null
+        : {
+            title: copy.payoutsTitle,
+            columns: [...copy.payoutColumns],
+            rows: lines.payouts.map((p) => [day(p.paidAt, locale), copy.payoutMethod, cad(p.amountCad)]),
+          },
     footer: [
+      copy.rule,
       copy.subscription,
       copy.notInvoice,
       platformIdentity ? `Sougouba — ${platformIdentity}` : null,

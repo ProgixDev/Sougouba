@@ -85,8 +85,8 @@ describe('filling in orders that have no share yet', () => {
           row({ id: 'half', refunded_at: '2026-12-02T10:00:00Z', refund_amount_cad: '21.18' }),
           // A refund recorded without its amount is the whole order.
           row({ id: 'whole', refunded_at: '2026-12-02T10:00:00Z', refund_amount_cad: null }),
-          // Refunded before it was ever delivered: there is no share to take from.
-          row({ id: 'early', status: 'preparing', refunded_at: '2026-12-02T10:00:00Z', refund_amount_cad: '42.36' }),
+          // Refunded while still being prepared: it comes off all the same, once delivered.
+          row({ id: 'early', status: 'preparing', refunded_at: '2026-12-02T10:00:00Z', refund_amount_cad: '21.18' }),
         ],
       ],
     });
@@ -95,7 +95,7 @@ describe('filling in orders that have no share yet', () => {
     expect((upserts[0] as { order_id: string; refund_cad: number }[]).map((r) => [r.order_id, r.refund_cad])).toEqual([
       ['half', 16.74],
       ['whole', 33.47],
-      ['early', 0],
+      ['early', 16.74],
     ]);
   });
 
@@ -104,6 +104,18 @@ describe('filling in orders that have no share yet', () => {
 
     await expect(service.reconcile()).resolves.toBe(0);
     expect(upserts).toEqual([]);
+  });
+
+  it('is not asked again by a screen opened minutes after it last ran', async () => {
+    const { service, rpc } = harness();
+
+    await service.reconcileIfStale();
+    await service.reconcileIfStale();
+    expect(rpc).toHaveBeenCalledTimes(1);
+
+    // A payout run does not take the screen's word for it.
+    await service.reconcile();
+    expect(rpc).toHaveBeenCalledTimes(2);
   });
 });
 

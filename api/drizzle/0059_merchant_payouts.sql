@@ -79,6 +79,9 @@ create index order_settlements_unpaid_idx on public.order_settlements (vendor_id
 --> statement-breakpoint
 create index order_settlements_payout_idx on public.order_settlements (payout_id) where payout_id is not null;
 --> statement-breakpoint
+-- A statement reads a shop's whole account, paid or not.
+create index order_settlements_vendor_idx on public.order_settlements (vendor_id);
+--> statement-breakpoint
 
 -- A refund on an order the shop was already paid for: owed back by the shop,
 -- taken off its next payment. Negative amounts.
@@ -93,6 +96,8 @@ create table public.merchant_adjustments (
 );
 --> statement-breakpoint
 create index merchant_adjustments_unsettled_idx on public.merchant_adjustments (vendor_id) where payout_id is null;
+--> statement-breakpoint
+create index merchant_adjustments_vendor_idx on public.merchant_adjustments (vendor_id, created_at);
 --> statement-breakpoint
 
 -- The API's only. Nothing here is for a shopper's or a shop's own token — a
@@ -131,6 +136,9 @@ as $function$
    -- Only orders a card actually paid for. Seeded history moved no money.
    where o.stripe_payment_intent_id is not null
      and o.status <> 'cancelled'
+     -- An order whose payment was split with the shop at checkout — the old
+     -- behaviour — was paid in full by Stripe then, and is owed nothing more.
+     and coalesce(o.merchant_paid_cad, 0) = 0
      and not exists (select 1 from public.order_settlements s where s.order_id = o.id)
    order by o.created_at, o.id
    limit least(greatest(p_limit, 1), 1000);
@@ -378,3 +386,82 @@ $function$;
 revoke execute on function public.order_settlement_refund(uuid, numeric) from public, anon, authenticated;
 --> statement-breakpoint
 grant execute on function public.order_settlement_refund(uuid, numeric) to service_role;
+--> statement-breakpoint
+
+-- A shop's account with Sougouba, one line per thing that moved it:
+--
+--   'order'   an order was delivered          + its share
+--   'refund'  a refund was given              − the shop's part of it
+--   'payout'  a payment was sent to the shop  − its amount
+--
+-- The monthly statement is these lines for one month, and the balance it
+-- opens and closes on is their sum up to a date — one definition for both, so
+-- a month's closing balance is by construction the next month's opening one,
+-- and both agree with what the payouts actually paid.
+--
+-- An order counts from `p_from` on, like a payout (null: from the beginning) —
+-- or whenever it has already been put in a payout, so that moving the start
+-- date later can never leave a payment on the account without its orders.
+--
+-- A refund is dated when it was given, and never before its order counts: one
+-- given while the order was still being prepared comes off on delivery.
+create function public.merchant_ledger(p_vendor_id uuid, p_from timestamptz default null)
+returns table (
+  kind text, at timestamptz, ref_id uuid, amount_cad numeric,
+  receipt_number bigint, subtotal_cad numeric, gst_cad numeric, qst_cad numeric, coupon_discount_cad numeric
+)
+language sql
+stable
+set search_path = ''
+as $function$
+  with settled as (
+    select s.order_id, s.share_cad, s.refund_cad, d.at as delivered_at, o.refunded_at,
+           o.receipt_number, o.subtotal_cad, o.gst_cad, o.qst_cad, o.coupon_discount_cad
+      from public.order_settlements s
+      join public.orders o on o.id = s.order_id
+      join lateral (
+        select min(h.at) as at from public.order_status_history h where h.order_id = o.id and h.status = 'delivered'
+      ) d on true
+     where s.vendor_id = p_vendor_id
+       and o.status = 'delivered'
+       and d.at is not null
+       and (p_from is null or d.at >= p_from or s.payout_id is not null)
+  )
+  select 'order', t.delivered_at, t.order_id, t.share_cad,
+         t.receipt_number::bigint, t.subtotal_cad, t.gst_cad, t.qst_cad, t.coupon_discount_cad
+    from settled t
+  union all
+  select 'refund', greatest(t.delivered_at, coalesce(t.refunded_at, t.delivered_at)), t.order_id, -t.refund_cad,
+         t.receipt_number::bigint, null, null, null, null
+    from settled t
+   where t.refund_cad > 0
+  union all
+  select 'refund', a.created_at, a.order_id, a.amount_cad,
+         o.receipt_number::bigint, null, null, null, null
+    from public.merchant_adjustments a
+    left join public.orders o on o.id = a.order_id
+   where a.vendor_id = p_vendor_id
+  union all
+  select 'payout', p.paid_at, p.id, -p.amount_cad, null, null, null, null, null
+    from public.merchant_payouts p
+   where p.vendor_id = p_vendor_id and p.status = 'paid' and p.paid_at is not null;
+$function$;
+--> statement-breakpoint
+revoke execute on function public.merchant_ledger(uuid, timestamptz) from public, anon, authenticated;
+--> statement-breakpoint
+grant execute on function public.merchant_ledger(uuid, timestamptz) to service_role;
+--> statement-breakpoint
+
+-- What Sougouba owed the shop at a given moment (negative: what the shop owed).
+create function public.merchant_balance_at(p_vendor_id uuid, p_at timestamptz, p_from timestamptz default null)
+returns numeric
+language sql
+stable
+set search_path = ''
+as $function$
+  select coalesce(sum(l.amount_cad), 0) from public.merchant_ledger(p_vendor_id, p_from) l where l.at < p_at;
+$function$;
+--> statement-breakpoint
+revoke execute on function public.merchant_balance_at(uuid, timestamptz, timestamptz) from public, anon, authenticated;
+--> statement-breakpoint
+grant execute on function public.merchant_balance_at(uuid, timestamptz, timestamptz) to service_role;
