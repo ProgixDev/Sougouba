@@ -4,7 +4,7 @@ import { X } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Text } from './ui/Text';
 import { cn } from '@/lib/cn';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -32,6 +32,7 @@ export function ConfirmDialog({
   onCancel,
   busy = false,
 }: ConfirmDialogProps) {
+  useLocale();
   const [reason, setReason] = useState('');
   const id = useId();
 

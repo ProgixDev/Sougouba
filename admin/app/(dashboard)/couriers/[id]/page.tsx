@@ -14,11 +14,12 @@ import { useToast } from '@/components/Toast';
 import { getCourier, approveCourier, rejectCourier, suspendCourier } from '@/lib/api/couriers';
 import { courierStatusMeta, VEHICLE_LABELS } from '@/lib/statusMeta';
 import { formatDate } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 import type { AdminCourierDetail } from '@/lib/types';
 import { useAdmin } from '@/lib/permissions';
 
 export default function CourierDetailPage() {
+  useLocale();
   const { id } = useParams<{ id: string }>();
   const { can } = useAdmin();
   const toast = useToast();
@@ -193,6 +194,7 @@ export default function CourierDetailPage() {
 }
 
 function Field({ label, value, icon: Icon }: { label: string; value: string; icon: typeof Phone }) {
+  useLocale();
   return (
     <div className="flex flex-wrap gap-2.5">
       <Icon size={15} className="mt-0.5 shrink-0 text-muted-foreground" />

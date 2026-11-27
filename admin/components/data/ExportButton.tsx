@@ -4,7 +4,7 @@ import { Download } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import type { Page, PageQuery } from '@/lib/api/client';
 import { formatNumber } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 import { downloadCsv, EXPORT_MAX_ROWS, exportFilename, fetchAll, toCsv, type CsvColumn } from '@/lib/csv';
 
 /**
@@ -26,6 +26,7 @@ export function ExportButton<T>({
   sort?: Pick<PageQuery, 'sort' | 'dir'>;
   label?: string;
 }) {
+  useLocale();
   const toast = useToast();
   const [progress, setProgress] = useState<{ loaded: number; total: number } | null>(null);
 

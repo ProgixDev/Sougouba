@@ -1,5 +1,5 @@
 import { apiGet } from './client';
-import { t } from '../i18n';
+import { t, lazy } from '../i18n';
 
 export interface SearchResult {
   type: 'vendor' | 'courier' | 'order' | 'user';
@@ -9,12 +9,12 @@ export interface SearchResult {
   href: string;
 }
 
-export const TYPE_LABELS: Record<SearchResult['type'], string> = {
+export const TYPE_LABELS: Record<SearchResult['type'], string> = lazy(() => ({
   vendor: t('nav.search.vendors'),
   courier: t('nav.search.couriers'),
   order: t('nav.search.orders'),
   user: t('nav.search.users'),
-};
+}));
 
 /**
  * Route for each result type.

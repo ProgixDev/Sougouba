@@ -13,19 +13,20 @@ import { getCourierInsights, shortDay, type CourierInsights } from '@/lib/api/in
 import { courierStatusMeta, VEHICLE_LABELS } from '@/lib/statusMeta';
 import { formatCad, formatDate, formatNumber } from '@/lib/format';
 // `translate`, not `t`: this page already names its loop variables `t`.
-import { t as translate } from '@/lib/i18n';
+import { t as translate, lazy, useLocale } from '@/lib/i18n';
 import type { AdminCourierListItem, AdminCourierStatus } from '@/lib/types';
 
-const TABS: { key: AdminCourierStatus; label: string }[] = [
+const TABS: { key: AdminCourierStatus; label: string }[] = lazy(() => ([
   { key: 'pending', label: translate('couriers.list.statuses.pending') },
   { key: 'approved', label: translate('couriers.list.statuses.approved') },
   { key: 'suspended', label: translate('couriers.list.statuses.suspended') },
   // Terminal in the API, and invisible in the mock, which folded it into
   // "suspended" — every refused application was hidden from the back office.
   { key: 'rejected', label: translate('couriers.list.statuses.rejected') },
-];
+]));
 
 export default function CouriersPage() {
+  useLocale();
   const router = useRouter();
   const [tab, setTab] = useState<AdminCourierStatus>('pending');
   const [search, setSearch] = useState('');

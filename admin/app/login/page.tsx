@@ -3,10 +3,10 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, LockKeyhole, LogIn, Mail } from 'lucide-react';
 import { signIn, getSession } from '@/lib/auth';
-import { t } from '@/lib/i18n';
+import { t, lazy, useLocale } from '@/lib/i18n';
 import { AUTH_INPUT, AuthField, AuthShell, AuthSwitch } from '@/components/auth/AuthShell';
 
-const SLIDES = [
+const SLIDES = lazy(() => ([
   {
     src: '/login/market.jpg',
     title: t('auth.slides.marketTitle'),
@@ -25,9 +25,10 @@ const SLIDES = [
     accent: t('auth.slides.courierAccent'),
     body: t('auth.slides.courierBody'),
   },
-] as const;
+] as const));
 
 export default function LoginPage() {
+  useLocale();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

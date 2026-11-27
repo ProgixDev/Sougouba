@@ -5,7 +5,7 @@ import { Banknote, LayoutDashboard, Package, ShoppingBasket, Store, TicketPercen
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { SidebarShell, type NavGroup } from '@/components/layout/SidebarShell';
 import { QueueBell, TopbarShell } from '@/components/layout/Topbar';
-import { t } from '@/lib/i18n';
+import { t, lazy, useLocale } from '@/lib/i18n';
 import { merchantSignOut, type MerchantSession } from '@/lib/merchantAuth';
 
 /**
@@ -58,6 +58,7 @@ export function MerchantSidebar({
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
 }) {
+  useLocale();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -77,11 +78,11 @@ export function MerchantSidebar({
 }
 
 /** A shop that is not taking orders says so on every page, not only on its settings. */
-const STATUS: Partial<Record<MerchantSession['vendorStatus'], { label: string; tone: 'warning' | 'destructive' }>> = {
+const STATUS: Partial<Record<MerchantSession['vendorStatus'], { label: string; tone: 'warning' | 'destructive' }>> = lazy(() => ({
   pending: { label: t('nav.merchant.statusPending'), tone: 'warning' },
   suspended: { label: t('nav.merchant.statusSuspended'), tone: 'destructive' },
   rejected: { label: t('nav.merchant.statusRejected'), tone: 'destructive' },
-};
+}));
 
 export function MerchantTopbar({
   session,
@@ -92,6 +93,7 @@ export function MerchantTopbar({
   counts: MerchantCounts;
   onOpenMenu?: () => void;
 }) {
+  useLocale();
   const pathname = usePathname();
   const groups = MERCHANT_NAV(counts);
   const group = groups.find((g) => g.items.some((i) => isMerchantPath(i.href, pathname)));

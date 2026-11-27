@@ -9,7 +9,7 @@ import { useToast } from '@/components/Toast';
 import { getMySubscription, openSubscriptionPortal, startSubscriptionCheckout, type Subscription } from '@/lib/api/merchantBilling';
 import { failureMessage } from '@/lib/merchantForm';
 import { formatCad, formatDate } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, lazy, useLocale } from '@/lib/i18n';
 
 /**
  * The shop's monthly subscription: where it stands, and the way to Stripe to
@@ -20,14 +20,15 @@ import { t } from '@/lib/i18n';
  * is read again rather than assumed from the address they came back to.
  */
 
-const STATUS: Record<Subscription['status'], { label: string; tone: Tone }> = {
+const STATUS: Record<Subscription['status'], { label: string; tone: Tone }> = lazy(() => ({
   inactive: { label: t('portalShop.subscription.status.inactive'), tone: 'neutral' },
   active: { label: t('portalShop.subscription.status.active'), tone: 'success' },
   past_due: { label: t('portalShop.subscription.status.pastDue'), tone: 'destructive' },
   canceled: { label: t('portalShop.subscription.status.canceled'), tone: 'neutral' },
-};
+}));
 
 export function SubscriptionCard({ reloadKey }: { reloadKey: number }) {
+  useLocale();
   const toast = useToast();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [failed, setFailed] = useState(false);

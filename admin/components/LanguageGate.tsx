@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useLocale } from '@/lib/i18n';
 
 /**
  * Renders the app only in the browser.
@@ -12,6 +13,7 @@ import { useEffect, useState } from 'react';
  * a sign-in already had.
  */
 export function LanguageGate({ children }: { children: React.ReactNode }) {
+  useLocale();
   const [inBrowser, setInBrowser] = useState(false);
   useEffect(() => setInBrowser(true), []);
   return inBrowser ? <>{children}</> : null;

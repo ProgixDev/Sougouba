@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useSyncExternalStore, type ReactNode } from 'react';
 import { en } from './locales/en';
 import { fr } from './locales/fr';
 import type { Paths, Plural } from './types';
@@ -6,23 +6,30 @@ import type { Paths, Plural } from './types';
 /**
  * The back office and the merchant portal, in French and in English.
  *
- * ── How it works, and why it is this simple ─────────────────────────────────
+ * ── How it works ────────────────────────────────────────────────────────────
  *
- * The language is decided **once, when the page loads** — the saved choice, or
- * else the browser's own language — and never changes while the page is open.
- * Switching (`setLocale`) saves the choice and reloads.
+ * `t()` is a plain function, not a hook: it reads the language in force at the
+ * moment it is called, so it can be used anywhere a string is needed — in a
+ * component, in an event handler, in a helper that is not a component at all.
  *
- * That is deliberate. Because the language is fixed for the life of the page,
- * `t()` is a plain function, not a hook: it can be called anywhere a string is
- * needed — in a component, in an event handler, in a label map at the top of a
- * file — and nothing has to subscribe to anything or re-render on a switch.
- * The alternative (a hook everywhere) breaks silently wherever a label is built
- * outside a component, and this code has many of those.
+ * Switching (`setLocale`) happens in place: no reload, no request, nothing the
+ * reader typed is lost. Two things make that work, and both are needed:
  *
- * The price is that nothing can be rendered on the server in the reader's
- * language, since the server does not know it. `LanguageGate` in the root
- * layout therefore renders the app only in the browser. Every page behind a
- * sign-in already worked that way.
+ * 1. **Components subscribe.** Every component calls `useLocale()` first
+ *    thing, which re-renders it when the language changes; its `t()` calls
+ *    then return the other language. A component that forgets keeps its old
+ *    labels until something else re-renders it — `npm run i18n:check` reports
+ *    those.
+ * 2. **Tables of labels are `lazy`.** A constant built when a file loads —
+ *    `const TABS = [{ label: t('…') }]` — would be frozen in the language of
+ *    that moment. Wrapped as `lazy(() => […])` it is rebuilt, in place, on
+ *    every switch, and the code that reads it does not change. A bare string
+ *    cannot be rebuilt in place, so never keep `t()`'s result in a top-level
+ *    `const`: call it where it is shown. The check reports those too.
+ *
+ * Nothing is rendered on the server in the reader's language, since the server
+ * does not know it: `LanguageGate` in the root layout renders the app only in
+ * the browser. Every page behind a sign-in already worked that way.
  *
  * ── Adding text ─────────────────────────────────────────────────────────────
  *
@@ -55,29 +62,92 @@ function detect(): Locale {
   return (window.navigator.language || '').toLowerCase().startsWith('en') ? 'en' : 'fr';
 }
 
-/** The language of this page load. */
-export const locale: Locale = detect();
+const toIntl = (value: Locale) => (value === 'fr' ? 'fr-CA' : 'en-CA');
+
+/**
+ * The language in force. A live binding: a module that imports it reads the
+ * current value each time, not the one at load — but only code that runs
+ * *after* a switch sees it, so read it inside functions, never to build a
+ * top-level constant.
+ */
+export let locale: Locale = detect();
 
 /** The same, as `Intl` wants it — Canadian conventions in both languages. */
-export const intlLocale = locale === 'fr' ? 'fr-CA' : 'en-CA';
+export let intlLocale: string = toIntl(locale);
 
-/** Save the choice and reload in it. */
+let dictionary: unknown = locale === 'fr' ? fr : en;
+let pluralRules = new Intl.PluralRules(intlLocale);
+
+/** Tables of labels to rebuild on a switch, in the order their files loaded — so one built from another follows it. */
+const rebuilders: (() => void)[] = [];
+const listeners = new Set<() => void>();
+
+/**
+ * A table of labels built when a file loads, kept in the reader's language.
+ *
+ *   const TABS = lazy(() => [{ key: 'open', label: t('disputes.tabs.open') }]);
+ *
+ * It returns the very array or object `make` built, and on every language
+ * switch empties it and refills it from a fresh call — same object, new
+ * contents — so everything that already holds it reads the new language.
+ * For arrays and plain objects only; a string has nothing to refill.
+ */
+export function lazy<T extends object>(make: () => T): T {
+  const value = make();
+  rebuilders.push(() => {
+    const fresh = make();
+    if (Array.isArray(value)) {
+      value.length = 0;
+      value.push(...(fresh as unknown as unknown[]));
+    } else {
+      const target = value as Record<string, unknown>;
+      for (const key of Object.keys(target)) delete target[key];
+      Object.assign(target, fresh);
+    }
+  });
+  return value;
+}
+
+/**
+ * Change language, here and now: every `lazy` table is rebuilt, every component
+ * that called `useLocale()` renders again, and the choice is remembered for the
+ * next visit. No reload and no request.
+ */
 export function setLocale(next: Locale): void {
   if (next === locale) return;
+  locale = next;
+  intlLocale = toIntl(next);
+  dictionary = next === 'fr' ? fr : en;
+  pluralRules = new Intl.PluralRules(intlLocale);
+
   try {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, next);
   } catch {
-    // Nowhere to keep it: the reload would come back in the same language.
-    return;
+    // Nowhere to keep it (private mode): it still applies until the page is closed.
   }
-  window.location.reload();
+  document.documentElement.lang = intlLocale;
+
+  for (const rebuild of rebuilders) rebuild();
+  for (const listener of listeners) listener();
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+const snapshot = () => locale;
+
+/**
+ * The language in force — and, more to the point, a subscription to it: the
+ * component that calls this renders again when the language changes. Called at
+ * the top of every component, whether or not it uses the value.
+ */
+export function useLocale(): Locale {
+  return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
 
 export type MessageKey = Paths<typeof fr>;
 export type MessageParams = Record<string, string | number>;
-
-const dictionary: unknown = locale === 'fr' ? fr : en;
-const pluralRules = new Intl.PluralRules(intlLocale);
 
 function lookup(key: string): string | Plural | undefined {
   let node: unknown = dictionary;

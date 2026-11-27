@@ -5,12 +5,14 @@ import { MerchantSidebar, MerchantTopbar, type MerchantCounts } from '@/componen
 import { ToastProvider } from '@/components/Toast';
 import { listMerchantOrders } from '@/lib/api/merchantOrders';
 import { getMerchantSession, type MerchantSession } from '@/lib/merchantAuth';
+import { useLocale } from '@/lib/i18n';
 
 /**
  * The merchant portal's frame: the same floating column and top bar as the
  * back office, with a shop's sections in them.
  */
 export default function MerchantPortalLayout({ children }: { children: React.ReactNode }) {
+  useLocale();
   const router = useRouter();
   const pathname = usePathname();
   const [session, setSession] = useState<MerchantSession | null | undefined>(undefined);

@@ -15,7 +15,7 @@ import { createCoupon, deactivateCoupon, listMyCoupons, type Coupon, type Coupon
 import { failureMessage, parseCount, parseMoney } from '@/lib/merchantForm';
 import { usePagedList } from '@/lib/usePagedList';
 import { formatCad, formatDate, formatPercent } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 
 type Errors = { code?: string; value?: string; usageLimit?: string; validDays?: string };
 
@@ -25,6 +25,7 @@ type Errors = { code?: string; value?: string; usageLimit?: string; validDays?: 
  * both.
  */
 export default function MerchantCouponsPage() {
+  useLocale();
   const toast = useToast();
   const [code, setCode] = useState('');
   const [discountType, setDiscountType] = useState<CouponInput['discountType']>('percentage');

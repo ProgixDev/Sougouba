@@ -5,7 +5,7 @@ import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 
 /**
  * The last line of defence for the back office.
@@ -21,6 +21,7 @@ import { t } from '@/lib/i18n';
  * Tuesday.
  */
 export default function DashboardError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  useLocale();
   useEffect(() => {
     // Nothing is wired to a reporter yet; the console is at least somewhere a
     // developer will look, and the digest is what correlates a production

@@ -21,7 +21,7 @@ import {
 } from '@/lib/api/admins';
 import type { AuditEntry } from '@/lib/api/audit';
 import { formatDate, formatDateTime } from '@/lib/format';
-import { t, tMaybe } from '@/lib/i18n';
+import { t, tMaybe, lazy, useLocale } from '@/lib/i18n';
 import { useAdmin } from '@/lib/permissions';
 import { supabase } from '@/lib/supabase';
 import { usePagedList } from '@/lib/usePagedList';
@@ -31,7 +31,7 @@ import { Pagination } from '@/components/data/Pagination';
 const MIN_LENGTH = 12;
 
 /** Same wording as the audit page (the `audit` dictionary). */
-const ACTION_LABELS: Record<string, string> = {
+const ACTION_LABELS: Record<string, string> = lazy(() => ({
   'vendor.approve': t('audit.actions.vendor_approve'),
   'vendor.reject': t('audit.actions.vendor_reject'),
   'vendor.suspend': t('audit.actions.vendor_suspend'),
@@ -59,7 +59,7 @@ const ACTION_LABELS: Record<string, string> = {
   'role.create': t('audit.actions.role_create'),
   'role.update': t('audit.actions.role_update'),
   'role.delete': t('audit.actions.role_delete'),
-};
+}));
 
 /**
  * The signed-in administrator's own page: who they are, what their role lets
@@ -70,6 +70,7 @@ const ACTION_LABELS: Record<string, string> = {
  * password. The name goes through the API's ordinary profile endpoint.
  */
 export default function AccountPage() {
+  useLocale();
   const { me } = useAdmin();
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
@@ -91,6 +92,7 @@ export default function AccountPage() {
 }
 
 function Header() {
+  useLocale();
   const { me } = useAdmin();
   return (
     <Card elevated className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center">
@@ -115,6 +117,7 @@ function Header() {
 }
 
 function Meta({ icon: Icon, text }: { icon: typeof Mail; text: string }) {
+  useLocale();
   return (
     <span className="flex items-center gap-1.5 font-sans text-[0.8125rem] text-muted-foreground">
       <Icon size={14} /> {text}
@@ -123,6 +126,7 @@ function Meta({ icon: Icon, text }: { icon: typeof Mail; text: string }) {
 }
 
 function RoleCard() {
+  useLocale();
   const { me } = useAdmin();
   const [catalogue, setCatalogue] = useState<PermissionGroup[] | null>(null);
   const held = useMemo(() => new Set(me.permissions), [me.permissions]);
@@ -199,6 +203,7 @@ function RoleCard() {
 }
 
 function Activity() {
+  useLocale();
   // Newest first, a page at a time from the audit log.
   const list = usePagedList<AuditEntry>(({ offset, limit }) => getMyActivity(offset, limit), 'me', { pageSize: 10 });
   const rows = list.rows;
@@ -247,6 +252,7 @@ function Activity() {
 }
 
 function NameCard() {
+  useLocale();
   const { me, reload } = useAdmin();
   const toast = useToast();
   const [name, setName] = useState(me.fullName);
@@ -288,6 +294,7 @@ function NameCard() {
  * left open on someone's desk must not be enough to take the account over.
  */
 function PasswordCard() {
+  useLocale();
   const { me } = useAdmin();
   const toast = useToast();
   const [current, setCurrent] = useState('');
@@ -363,6 +370,7 @@ function PasswordCard() {
 }
 
 function SessionsCard() {
+  useLocale();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
 
@@ -394,6 +402,7 @@ function SessionsCard() {
 }
 
 function AppearanceCard() {
+  useLocale();
   const [dark, setDark] = useState(false);
   useEffect(() => setDark(document.documentElement.classList.contains('dark')), []);
 

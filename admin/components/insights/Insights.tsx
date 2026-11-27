@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Skeleton } from '@/components/data/Skeleton';
 import { cn } from '@/lib/cn';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 import { mediaUrl } from '@/lib/media';
 
 /**
@@ -50,6 +50,7 @@ export function PageHeader({
   description: string;
   actions?: React.ReactNode;
 }) {
+  useLocale();
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div className="flex min-w-0 items-center gap-3 sm:gap-4">
@@ -72,6 +73,7 @@ export function PageHeader({
 
 /** A row of KPI cards — four on a wide screen, two on a tablet or a phone. */
 export function KpiGrid({ children }: { children: React.ReactNode }) {
+  useLocale();
   return <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">{children}</div>;
 }
 
@@ -90,6 +92,7 @@ export function KpiCard({
   tone?: Tone;
   loading?: boolean;
 }) {
+  useLocale();
   if (loading) return <Skeleton className="h-[132px] rounded-card" />;
   return (
     <Card className="flex min-w-0 flex-col gap-2 p-4 sm:p-5">
@@ -125,6 +128,7 @@ export function SectionCard({
   children: React.ReactNode;
   className?: string;
 }) {
+  useLocale();
   return (
     <Card className={cn('flex flex-col gap-4 p-5', className)}>
       <div>
@@ -152,6 +156,7 @@ export function BarSeries({
   color?: string;
   height?: number;
 }) {
+  useLocale();
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 6, right: 0, left: 0, bottom: 0 }}>
@@ -168,6 +173,7 @@ export function BarSeries({
 
 /** One stacked bar plus its legend — a distribution read at a glance. */
 export function Breakdown({ items }: { items: { label: string; value: number }[] }) {
+  useLocale();
   const total = items.reduce((s, i) => s + i.value, 0);
   if (total === 0) {
     return (
@@ -214,6 +220,7 @@ export function Ranking({
   items: { id: string; label: string; value: number; display: string; href?: string }[];
   empty?: string;
 }) {
+  useLocale();
   if (items.length === 0) {
     return (
       <Text variant="body" tone="muted">
@@ -258,6 +265,7 @@ const AVATAR_COLORS = [
  * rather than leaving a broken image.
  */
 export function Avatar({ name, src, size = 36 }: { name: string; src?: string | null; size?: number }) {
+  useLocale();
   const url = mediaUrl(src);
   const [failed, setFailed] = useState(false);
   // A row reused for another person (a list re-sorted) gets a fresh try.

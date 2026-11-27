@@ -16,10 +16,10 @@ import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { useToast } from '@/components/Toast';
 import { orderStatusMeta } from '@/lib/statusMeta';
 import { formatCad, formatDateTime, formatNumber } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, lazy, useLocale } from '@/lib/i18n';
 import type { AdminOrderListItem, OrderStatus } from '@/lib/types';
 
-const STATUS_OPTIONS: { value: OrderStatus | 'all'; label: string }[] = [
+const STATUS_OPTIONS: { value: OrderStatus | 'all'; label: string }[] = lazy(() => ([
   { value: 'all', label: t('orders.list.filters.allStatuses') },
   { value: 'pending', label: orderStatusMeta('pending').label },
   { value: 'confirmed', label: orderStatusMeta('confirmed').label },
@@ -28,9 +28,10 @@ const STATUS_OPTIONS: { value: OrderStatus | 'all'; label: string }[] = [
   { value: 'out_for_delivery', label: orderStatusMeta('out_for_delivery').label },
   { value: 'delivered', label: orderStatusMeta('delivered').label },
   { value: 'cancelled', label: orderStatusMeta('cancelled').label },
-];
+]));
 
 export default function OrdersPage() {
+  useLocale();
   const router = useRouter();
   const toast = useToast();
   const [status, setStatus] = useState<OrderStatus | 'all'>('all');

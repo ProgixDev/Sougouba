@@ -14,11 +14,12 @@ import { useToast } from '@/components/Toast';
 import { getCourierIssue, resolveCourierIssue } from '@/lib/api/courierIssues';
 import { courierIssueStatusMeta, COURIER_ISSUE_REASON_LABELS } from '@/lib/statusMeta';
 import { formatDateTime } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 import type { AdminCourierIssue } from '@/lib/types';
 import { useAdmin } from '@/lib/permissions';
 
 export default function CourierIssueDetailPage() {
+  useLocale();
   const { id } = useParams<{ id: string }>();
   const { can } = useAdmin();
   const toast = useToast();

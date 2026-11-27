@@ -17,11 +17,12 @@ import { getStatementUrl, listVendorStatements, statementMonth, type Statement }
 import { MERCHANT_ACCOUNT_LABELS, getMerchantAccountState, type MerchantAccountState } from '@/lib/api/payouts';
 import { vendorStatusMeta } from '@/lib/statusMeta';
 import { formatCad, formatDate } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, lazy, useLocale } from '@/lib/i18n';
 import type { AdminVendorDetail } from '@/lib/types';
 import { useAdmin } from '@/lib/permissions';
 
 export default function MerchantDetailPage() {
+  useLocale();
   const { id } = useParams<{ id: string }>();
   const { can } = useAdmin();
   const toast = useToast();
@@ -352,14 +353,15 @@ export default function MerchantDetailPage() {
   );
 }
 
-const DOCUMENT_LABELS: Record<'id' | 'business_number' | 'mapaq' | 'bank', string> = {
+const DOCUMENT_LABELS: Record<'id' | 'business_number' | 'mapaq' | 'bank', string> = lazy(() => ({
   id: t('merchants.detail.documents.id'),
   business_number: t('merchants.detail.documents.businessNumber'),
   mapaq: t('merchants.detail.documents.mapaq'),
   bank: t('merchants.detail.documents.bank'),
-};
+}));
 
 function Field({ label, value, icon: Icon }: { label: string; value: string; icon: typeof FileText }) {
+  useLocale();
   return (
     <div className="flex flex-wrap gap-2.5">
       <Icon size={15} className="mt-0.5 shrink-0 text-muted-foreground" />

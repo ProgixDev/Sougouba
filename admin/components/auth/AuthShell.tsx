@@ -5,7 +5,7 @@ import { ArrowRight, type LucideIcon } from 'lucide-react';
 import { LogoMark } from '@/components/layout/LogoMark';
 import { cn } from '@/lib/cn';
 import { LanguageSwitch } from '@/components/layout/LanguageSwitch';
-import { t as translate } from '@/lib/i18n';
+import { t as translate, useLocale } from '@/lib/i18n';
 
 export interface AuthSlide {
   src: string;
@@ -60,6 +60,7 @@ export function AuthShell({
   footer: React.ReactNode;
   children: React.ReactNode;
 }) {
+  useLocale();
   const [slide, setSlide] = useState(0);
   const t = TONES[tone];
 
@@ -176,6 +177,7 @@ export function AuthField({
   hint?: string;
   children: React.ReactNode;
 }) {
+  useLocale();
   return (
     <div className="flex flex-col gap-2">
       <label htmlFor={htmlFor} className="font-sans text-[0.875rem] font-semibold">
@@ -201,6 +203,7 @@ export const AUTH_INPUT =
 
 /** The link card under a form that leads to the other sign-in page. */
 export function AuthSwitch({ href, strong, rest, hoverTone }: { href: string; strong: string; rest: string; hoverTone: Tone }) {
+  useLocale();
   return (
     <Link
       href={href}

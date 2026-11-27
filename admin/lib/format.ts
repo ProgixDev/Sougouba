@@ -1,31 +1,43 @@
 import { intlLocale, t } from './i18n';
 
-// Built once, in the language of this page load (`lib/i18n`): a switch reloads.
-const currency = new Intl.NumberFormat(intlLocale, { style: 'currency', currency: 'CAD' });
-const compactNumber = new Intl.NumberFormat(intlLocale, { notation: 'compact', maximumFractionDigits: 1 });
-const plainNumber = new Intl.NumberFormat(intlLocale);
-const dateFmt = new Intl.DateTimeFormat(intlLocale, { day: 'numeric', month: 'short', year: 'numeric' });
-const dateTimeFmt = new Intl.DateTimeFormat(intlLocale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+/**
+ * A formatter in the language in force, built on first use and kept — one per
+ * language and kind. Read at call time, not when this file loads, so a switch
+ * of language (`lib/i18n`) reformats everything on the next render.
+ */
+const formatters = new Map<string, Intl.NumberFormat | Intl.DateTimeFormat>();
+function formatter<T extends Intl.NumberFormat | Intl.DateTimeFormat>(kind: string, make: (language: string) => T): T {
+  const key = `${intlLocale}:${kind}`;
+  let found = formatters.get(key) as T | undefined;
+  if (!found) {
+    found = make(intlLocale);
+    formatters.set(key, found);
+  }
+  return found;
+}
 
 export function formatCad(value: number): string {
-  return currency.format(value);
+  return formatter('cad', (l) => new Intl.NumberFormat(l, { style: 'currency', currency: 'CAD' })).format(value);
 }
 
 export function formatCompact(value: number): string {
-  return compactNumber.format(value);
+  return formatter('compact', (l) => new Intl.NumberFormat(l, { notation: 'compact', maximumFractionDigits: 1 })).format(value);
 }
 
 /** A count with the language's own thousands separator: « 12 480 » / "12,480". */
 export function formatNumber(value: number, options?: Intl.NumberFormatOptions): string {
-  return options ? new Intl.NumberFormat(intlLocale, options).format(value) : plainNumber.format(value);
+  return options ? new Intl.NumberFormat(intlLocale, options).format(value) : formatter('number', (l) => new Intl.NumberFormat(l)).format(value);
 }
 
 export function formatDate(iso: string): string {
-  return dateFmt.format(new Date(iso));
+  return formatter('date', (l) => new Intl.DateTimeFormat(l, { day: 'numeric', month: 'short', year: 'numeric' })).format(new Date(iso));
 }
 
 export function formatDateTime(iso: string): string {
-  return dateTimeFmt.format(new Date(iso));
+  return formatter(
+    'dateTime',
+    (l) => new Intl.DateTimeFormat(l, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  ).format(new Date(iso));
 }
 
 /** `0.12` → « 12 % » / "12%": the space before the sign is French, and `Intl` knows it. */

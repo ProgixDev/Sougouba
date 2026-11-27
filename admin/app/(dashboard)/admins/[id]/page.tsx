@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/data/Skeleton';
 import { listAdmins, listRoles, roleDescription, roleName, type AdminAccount, type AdminRole } from '@/lib/api/admins';
 import { listAudit, type AuditEntry } from '@/lib/api/audit';
 import { formatDate, formatDateTime } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 import { useAdmin } from '@/lib/permissions';
 
 /** Same wording as the audit page (the `audit` dictionary), for the handful of actions shown here. */
@@ -54,6 +54,7 @@ function actionLabel(action: string): string {
  * their access (added, role changed).
  */
 export default function AdminDetailPage() {
+  useLocale();
   const { id } = useParams<{ id: string }>();
   const { can } = useAdmin();
   const [admin, setAdmin] = useState<AdminAccount | null | undefined>(undefined);
@@ -171,6 +172,7 @@ export default function AdminDetailPage() {
 }
 
 function Timeline({ title, entries, empty }: { title: string; entries: AuditEntry[] | null; empty: string }) {
+  useLocale();
   return (
     <Card className="p-5">
       <Text variant="subtitle" className="mb-3">
@@ -212,6 +214,7 @@ function Timeline({ title, entries, empty }: { title: string; entries: AuditEntr
 }
 
 function Field({ icon: Icon, label, value }: { icon: typeof Mail; label: string; value: string }) {
+  useLocale();
   return (
     <div className="flex flex-wrap gap-2.5">
       <Icon size={15} className="mt-0.5 shrink-0 text-muted-foreground" />

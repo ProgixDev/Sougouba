@@ -8,14 +8,14 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/data/Skeleton';
 import { useToast } from '@/components/Toast';
 import { createSpecialty, listSpecialties, updateSpecialty, type AdminSpecialty } from '@/lib/api/specialties';
-import { locale, pick, t } from '@/lib/i18n';
+import { locale, pick, t, lazy, useLocale } from '@/lib/i18n';
 import { useAdmin } from '@/lib/permissions';
 import { KpiCard, KpiGrid, PageHeader } from '@/components/insights/Insights';
 
-const LISTS: { type: AdminSpecialty['vendorType']; title: string; hint: string }[] = [
+const LISTS: { type: AdminSpecialty['vendorType']; title: string; hint: string }[] = lazy(() => ([
   { type: 'grocery', title: t('specialties.lists.groceryTitle'), hint: t('specialties.lists.groceryHint') },
   { type: 'restaurant', title: t('specialties.lists.restaurantTitle'), hint: t('specialties.lists.restaurantHint') },
-];
+]));
 
 const INPUT =
   'w-full rounded-lg border border-border bg-background px-3 py-2 font-sans text-[0.875rem] text-foreground outline-none focus:border-forest-600';
@@ -29,6 +29,7 @@ const INPUT =
  * many that is before anyone edits it. Every change lands in the audit log.
  */
 export default function SpecialtiesPage() {
+  useLocale();
   const toast = useToast();
   const [rows, setRows] = useState<AdminSpecialty[] | null>(null);
 
@@ -127,6 +128,7 @@ function SpecialtyList({
   rows: AdminSpecialty[];
   onChanged: (row: AdminSpecialty) => void;
 }) {
+  useLocale();
   const toast = useToast();
   const { can } = useAdmin();
   const manage = can('specialties.manage');
@@ -296,6 +298,7 @@ function SpecialtyList({
 }
 
 function IconButton({ label, disabled, onClick, children }: { label: string; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
+  useLocale();
   return (
     <button
       type="button"

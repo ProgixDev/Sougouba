@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { LogOut, Moon, PanelLeftClose, PanelLeftOpen, Sun, X, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 import { LogoMark } from '@/components/layout/LogoMark';
 
 /**
@@ -53,6 +53,7 @@ const COLLAPSED_KEY = 'sougouba-admin-sidebar-collapsed';
  * container clips anything that pokes out of it.
  */
 function Tip({ label, show }: { label: string; show: boolean }) {
+  useLocale();
   const marker = useRef<HTMLSpanElement>(null);
   const [at, setAt] = useState<{ top: number; left: number } | null>(null);
 
@@ -105,6 +106,7 @@ function NavRow({
   collapsed: boolean;
   onNavigate?: () => void;
 }) {
+  useLocale();
   const Icon = item.icon;
   return (
     <Link
@@ -161,6 +163,7 @@ function NavList({
   collapsed: boolean;
   onNavigate?: () => void;
 }) {
+  useLocale();
   return (
     // Scrolls in both states so a short window never pushes the footer out of
     // the panel; the collapsed hover labels are portalled, so nothing clips them.
@@ -197,6 +200,7 @@ function Footer({
   collapsed: boolean;
   onNavigate?: () => void;
 }) {
+  useLocale();
   const [dark, setDark] = useState(false);
   useEffect(() => setDark(document.documentElement.classList.contains('dark')), []);
   const initials =
@@ -268,6 +272,7 @@ export function SidebarShell({
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
 }) {
+  useLocale();
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
     try {

@@ -3,12 +3,14 @@ import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianG
 import type { DailyPoint } from '@/lib/api/stats';
 import { ChartTooltip } from './ChartTooltip';
 import { formatCad, formatDate } from '@/lib/format';
+import { useLocale } from '@/lib/i18n';
 
 /** Translucent, so the grid stays quiet on the light and the dark theme alike. */
 const GRID = 'rgba(138, 129, 117, 0.22)';
 const AXIS = '#8A8175';
 
 export function TrendChart({ data }: { data: DailyPoint[] }) {
+  useLocale();
   return (
     <ResponsiveContainer width="100%" height={260}>
       <LineChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>

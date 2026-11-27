@@ -5,7 +5,7 @@ import { Search, Store, Bike, Package, User as UserIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Text } from '../ui/Text';
 import { searchAll, TYPE_LABELS, type SearchResult } from '@/lib/api/search';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 
 const ICONS: Record<SearchResult['type'], typeof Search> = {
   vendor: Store,
@@ -15,6 +15,7 @@ const ICONS: Record<SearchResult['type'], typeof Search> = {
 };
 
 export function GlobalSearch() {
+  useLocale();
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);

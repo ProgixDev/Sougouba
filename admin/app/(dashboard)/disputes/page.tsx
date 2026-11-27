@@ -10,21 +10,22 @@ import { Breakdown, KpiCard, KpiGrid, PageHeader, SectionCard } from '@/componen
 import { listDisputes } from '@/lib/api/disputes';
 import { formatHours, getDisputeInsights, type DisputeInsights } from '@/lib/api/insights';
 import { formatCad } from '@/lib/format';
-import { t as translate } from '@/lib/i18n';
+import { t as translate, lazy, useLocale } from '@/lib/i18n';
 import { disputeStatusMeta, DISPUTE_REASON_LABELS } from '@/lib/statusMeta';
 import { timeAgo } from '@/lib/format';
 import type { AdminDispute, AdminDisputeStatus } from '@/lib/types';
 import { usePagedList } from '@/lib/usePagedList';
 
-const TABS: { key: AdminDisputeStatus | 'all'; label: string }[] = [
+const TABS: { key: AdminDisputeStatus | 'all'; label: string }[] = lazy(() => ([
   { key: 'open', label: translate('disputes.list.tabs.open') },
   { key: 'answered', label: translate('disputes.list.tabs.answered') },
   { key: 'resolved', label: translate('disputes.list.tabs.resolved') },
   { key: 'rejected', label: translate('disputes.list.tabs.rejected') },
   { key: 'all', label: translate('disputes.list.tabs.all') },
-];
+]));
 
 export default function DisputesPage() {
+  useLocale();
   const router = useRouter();
   const [tab, setTab] = useState<AdminDisputeStatus | 'all'>('open');
 

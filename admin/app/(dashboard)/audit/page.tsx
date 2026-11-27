@@ -11,10 +11,10 @@ import { listAudit, type AuditEntry, type AuditSubject } from '@/lib/api/audit';
 import { usePagedList } from '@/lib/usePagedList';
 import { formatDateTime } from '@/lib/format';
 // `t` is already the name of a tab in the list below.
-import { t as translate } from '@/lib/i18n';
+import { t as translate, lazy, useLocale } from '@/lib/i18n';
 import { PageHeader } from '@/components/insights/Insights';
 
-const SUBJECT_TABS: { key: AuditSubject | 'all'; label: string }[] = [
+const SUBJECT_TABS: { key: AuditSubject | 'all'; label: string }[] = lazy(() => ([
   { key: 'all', label: translate('audit.tabs.all') },
   { key: 'vendor', label: translate('audit.tabs.vendor') },
   { key: 'courier', label: translate('audit.tabs.courier') },
@@ -30,13 +30,13 @@ const SUBJECT_TABS: { key: AuditSubject | 'all'; label: string }[] = [
   { key: 'specialty', label: translate('audit.tabs.specialty') },
   { key: 'payout', label: translate('audit.tabs.payout') },
   { key: 'settings', label: translate('audit.tabs.settings') },
-];
+]));
 
 /**
  * Every `AdminAction` the API audits, worded for a reader. An unknown one shows as written.
  * The words are in the `audit` dictionary, keyed by the action with its dot as an underscore.
  */
-const ACTION_LABELS: Record<string, { label: string; tone: Tone }> = {
+const ACTION_LABELS: Record<string, { label: string; tone: Tone }> = lazy(() => ({
   'vendor.approve': { label: translate('audit.actions.vendor_approve'), tone: 'success' },
   'vendor.reject': { label: translate('audit.actions.vendor_reject'), tone: 'destructive' },
   'vendor.suspend': { label: translate('audit.actions.vendor_suspend'), tone: 'destructive' },
@@ -67,7 +67,7 @@ const ACTION_LABELS: Record<string, { label: string; tone: Tone }> = {
   'role.delete': { label: translate('audit.actions.role_delete'), tone: 'destructive' },
   'payout.run': { label: translate('audit.actions.payout_run'), tone: 'warning' },
   'payout.pay_merchant': { label: translate('audit.actions.payout_pay_merchant'), tone: 'warning' },
-};
+}));
 
 /** Where each kind of subject lives in this dashboard. Disputes and courier issues are keyed by their order. */
 function subjectHref(entry: AuditEntry): string | null {
@@ -117,6 +117,7 @@ function show(value: unknown): string {
  * from the top, and its newest lines are the ones that matter.
  */
 export default function AuditLogPage() {
+  useLocale();
   const router = useRouter();
   const toast = useToast();
   const [subject, setSubject] = useState<AuditSubject | 'all'>('all');

@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { KeyRound, Mail, Store } from 'lucide-react';
 import { AUTH_INPUT, AuthField, AuthShell, AuthSwitch } from '@/components/auth/AuthShell';
-import { t } from '@/lib/i18n';
+import { t, lazy, useLocale } from '@/lib/i18n';
 import {
   getMerchantSession,
   MerchantAuthError,
@@ -12,15 +12,15 @@ import {
   type MerchantSignInError,
 } from '@/lib/merchantAuth';
 
-const ERRORS: Record<MerchantSignInError, string> = {
+const ERRORS: Record<MerchantSignInError, string> = lazy(() => ({
   code_invalid: t('merchantLogin.errors.codeInvalid'),
   code_expired: t('merchantLogin.errors.codeExpired'),
   cooldown: t('merchantLogin.errors.cooldown'),
   no_shop: t('merchantLogin.errors.noShop'),
   unreachable: t('merchantLogin.errors.unreachable'),
-};
+}));
 
-const SLIDES = [
+const SLIDES = lazy(() => ([
   {
     src: '/login/market.jpg',
     title: t('merchantLogin.slides.ordersTitle'),
@@ -39,7 +39,7 @@ const SLIDES = [
     accent: t('merchantLogin.slides.courierAccent'),
     body: t('merchantLogin.slides.courierBody'),
   },
-] as const;
+] as const));
 
 const BUTTON =
   'mt-1 inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-terracotta-600 font-sans text-[0.9375rem] font-semibold text-white shadow-[0_10px_24px_-12px_rgba(191,81,34,0.9)] transition-colors hover:bg-terracotta-700 disabled:cursor-not-allowed disabled:opacity-60';
@@ -49,6 +49,7 @@ const BUTTON =
  * 6-digit code sent to it. No password exists for a merchant account.
  */
 export default function MerchantLoginPage() {
+  useLocale();
   const router = useRouter();
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');

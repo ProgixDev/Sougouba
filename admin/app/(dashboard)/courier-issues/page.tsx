@@ -11,17 +11,18 @@ import { listCourierIssues } from '@/lib/api/courierIssues';
 import { formatHours, getCourierIssueInsights, type CourierIssueInsights } from '@/lib/api/insights';
 import { courierIssueStatusMeta, COURIER_ISSUE_REASON_LABELS } from '@/lib/statusMeta';
 import { timeAgo } from '@/lib/format';
-import { t as translate } from '@/lib/i18n';
+import { t as translate, lazy, useLocale } from '@/lib/i18n';
 import type { AdminCourierIssue, CourierIssueStatus } from '@/lib/types';
 import { usePagedList } from '@/lib/usePagedList';
 
-const TABS: { key: CourierIssueStatus | 'all'; label: string }[] = [
+const TABS: { key: CourierIssueStatus | 'all'; label: string }[] = lazy(() => ([
   { key: 'open', label: translate('courierIssues.list.tabs.open') },
   { key: 'resolved', label: translate('courierIssues.list.tabs.resolved') },
   { key: 'all', label: translate('courierIssues.list.tabs.all') },
-];
+]));
 
 export default function CourierIssuesPage() {
+  useLocale();
   const router = useRouter();
   const [tab, setTab] = useState<CourierIssueStatus | 'all'>('open');
 

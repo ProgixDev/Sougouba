@@ -23,7 +23,7 @@ import {
   type Shop,
 } from '@/lib/api/merchantCatalog';
 import { failureMessage, moneyText, parseCount, parseMoney } from '@/lib/merchantForm';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 
 /**
  * The product form of the merchant portal — one for "new" and for "edit".
@@ -188,6 +188,7 @@ function changesTo(product: Product, input: ProductInput): Partial<ProductInput>
 }
 
 export function ProductEditor({ product, shop, categories }: { product?: Product; shop: Shop; categories: Category[] }) {
+  useLocale();
   const router = useRouter();
   const toast = useToast();
   const [form, setForm] = useState<Form>(() => initialForm(product, shop));

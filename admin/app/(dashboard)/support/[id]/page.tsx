@@ -15,7 +15,7 @@ import { StatusBadge } from '@/components/data/StatusBadge';
 import { getSupportConversation, replySupport, resolveSupport, type SupportConversationDetail } from '@/lib/api/support';
 import { orderStatusMeta } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 import type { OrderStatus } from '@/lib/types';
 import { useAdmin } from '@/lib/permissions';
 
@@ -28,6 +28,7 @@ import { useAdmin } from '@/lib/permissions';
  * closes it; a later message from the customer starts a new conversation.
  */
 export default function SupportConversationPage() {
+  useLocale();
   const { id } = useParams<{ id: string }>();
   const { can } = useAdmin();
   const toast = useToast();
@@ -244,6 +245,7 @@ function Message({
   message: SupportConversationDetail['messages'][number];
   customerName: string;
 }) {
+  useLocale();
   const fromCustomer = message.role === 'user';
   const author =
     message.role === 'user'

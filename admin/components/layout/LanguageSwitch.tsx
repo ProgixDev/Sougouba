@@ -1,19 +1,21 @@
 'use client';
 import { cn } from '@/lib/cn';
-import { locale, setLocale, t, type Locale } from '@/lib/i18n';
+import { locale, setLocale, t, type Locale, lazy, useLocale } from '@/lib/i18n';
 
-const LANGUAGES: { value: Locale; short: string; name: string }[] = [
+const LANGUAGES: { value: Locale; short: string; name: string }[] = lazy(() => ([
   { value: 'fr', short: 'FR', name: t('common.language.french') },
   { value: 'en', short: 'EN', name: t('common.language.english') },
-];
+]));
 
 /**
  * French or English — the same two-way pill as the period selectors. Choosing
- * the other one saves it and reloads the page in that language (`setLocale`).
+ * the other one changes every text on the page where it stands, with no reload
+ * and no request, and remembers the choice (`setLocale`).
  *
  * `onDark` is for the sign-in pages' dark panel; the default sits on a page.
  */
 export function LanguageSwitch({ onDark = false, className }: { onDark?: boolean; className?: string }) {
+  useLocale();
   return (
     <div
       role="group"

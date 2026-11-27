@@ -14,7 +14,7 @@ import { getMyShop, listMyProducts, mediaUrl, updateProduct, type Product, type 
 import { failureMessage } from '@/lib/merchantForm';
 import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { formatCad } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 
 /**
  * The shop's catalogue, on the web: every product, searchable, by shelf. A
@@ -22,6 +22,7 @@ import { t } from '@/lib/i18n';
  * opens the editor.
  */
 export default function MerchantProductsPage() {
+  useLocale();
   const router = useRouter();
   const toast = useToast();
   const [shop, setShop] = useState<Shop | null>(null);

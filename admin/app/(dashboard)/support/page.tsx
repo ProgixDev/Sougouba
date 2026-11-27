@@ -13,20 +13,20 @@ import { listSupport, type SupportInboxItem } from '@/lib/api/support';
 import { usePagedList } from '@/lib/usePagedList';
 import { formatDateTime, formatPercent } from '@/lib/format';
 // `translate`, not `t`: the tab loop below already calls its item `t`.
-import { t as translate } from '@/lib/i18n';
+import { t as translate, lazy, useLocale } from '@/lib/i18n';
 
-const TABS: { key: 'escalated' | 'closed' | 'all'; label: string }[] = [
+const TABS: { key: 'escalated' | 'closed' | 'all'; label: string }[] = lazy(() => ([
   { key: 'escalated', label: translate('support.list.tabs.escalated') },
   { key: 'closed', label: translate('support.list.tabs.closed') },
   { key: 'all', label: translate('support.list.tabs.all') },
-];
+]));
 
-const ROLE_PREFIX: Record<string, string> = {
+const ROLE_PREFIX: Record<string, string> = lazy(() => ({
   user: translate('support.list.roles.user'),
   assistant: translate('support.list.roles.assistant'),
   agent: translate('support.list.roles.agent'),
   system: '',
-};
+}));
 
 /**
  * Conversations customers handed from the support assistant to the team.
@@ -36,6 +36,7 @@ const ROLE_PREFIX: Record<string, string> = {
  * never appear here: nobody asked for a person.
  */
 export default function SupportInboxPage() {
+  useLocale();
   const router = useRouter();
   const toast = useToast();
   const [tab, setTab] = useState<(typeof TABS)[number]['key']>('escalated');

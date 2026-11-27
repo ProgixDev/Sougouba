@@ -2,7 +2,7 @@
 import { useId, useRef, useState, type ReactNode } from 'react';
 import { ImagePlus, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 import { mediaUrl } from '@/lib/api/merchantCatalog';
 
 /**
@@ -18,6 +18,7 @@ const shell = (focused: boolean, error?: string) =>
   );
 
 function Caption({ id, error, helper }: { id: string; error?: string; helper?: string }) {
+  useLocale();
   if (error) {
     return (
       <p id={`${id}-err`} role="alert" className="mt-1.5 font-sans text-[0.75rem] text-destructive">
@@ -49,6 +50,7 @@ export function SelectField({
   helper?: string;
   required?: boolean;
 }) {
+  useLocale();
   const id = useId();
   const [focused, setFocused] = useState(false);
   return (
@@ -101,6 +103,7 @@ export function TextArea({
   required?: boolean;
   maxLength?: number;
 }) {
+  useLocale();
   const id = useId();
   const [focused, setFocused] = useState(false);
   return (
@@ -143,6 +146,7 @@ export function Switch({
   /** Read out by a screen reader when no visible `<label htmlFor>` names the switch. */
   label?: string;
 }) {
+  useLocale();
   return (
     <button
       id={id}
@@ -177,6 +181,7 @@ export function Toggle({
   onChange: (checked: boolean) => void;
   disabled?: boolean;
 }) {
+  useLocale();
   const id = useId();
   return (
     <div className="flex items-start justify-between gap-4">
@@ -209,6 +214,7 @@ export function ImageField({
   helper?: ReactNode;
   aspect?: string;
 }) {
+  useLocale();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();

@@ -7,11 +7,12 @@ import { ToastProvider } from '@/components/Toast';
 import { Text } from '@/components/ui/Text';
 import { getCurrentAdmin, roleName, type CurrentAdmin } from '@/lib/api/admins';
 import { getSession, signOut, type AdminSession } from '@/lib/auth';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 import { getQueueCounts } from '@/lib/api/stats';
 import { AdminProvider, permissionForPath } from '@/lib/permissions';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  useLocale();
   const router = useRouter();
   const pathname = usePathname();
   const [session, setSession] = useState<AdminSession | null | undefined>(undefined);

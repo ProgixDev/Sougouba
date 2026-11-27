@@ -21,15 +21,15 @@ import {
   type OwedMerchant,
 } from '@/lib/api/payouts';
 import { formatCad, formatDate, formatDateTime } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, lazy, useLocale } from '@/lib/i18n';
 import { useAdmin } from '@/lib/permissions';
 import { usePagedList } from '@/lib/usePagedList';
 
-const PAYOUT_STATUS: Record<MerchantPayout['status'], { label: string; tone: 'success' | 'warning' | 'destructive' }> = {
+const PAYOUT_STATUS: Record<MerchantPayout['status'], { label: string; tone: 'success' | 'warning' | 'destructive' }> = lazy(() => ({
   paid: { label: t('payouts.merchants.status.paid'), tone: 'success' },
   pending: { label: t('payouts.merchants.status.pending'), tone: 'warning' },
   failed: { label: t('payouts.merchants.status.failed'), tone: 'destructive' },
-};
+}));
 
 /**
  * What the platform owes its shops, and every payment made to them.
@@ -41,6 +41,7 @@ const PAYOUT_STATUS: Record<MerchantPayout['status'], { label: string; tone: 'su
  * after it links one. An administrator with `payouts.run` can start a run now.
  */
 export default function MerchantPayoutsPage() {
+  useLocale();
   const router = useRouter();
   const toast = useToast();
   const { can } = useAdmin();

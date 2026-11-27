@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowUp, ArrowDown, ChevronsUpDown, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 import { TableSkeleton } from './Skeleton';
 import { Pagination } from './Pagination';
 import type { SortState } from '@/lib/usePagedList';
@@ -62,6 +62,7 @@ export function DataTable<T>({
   pageSize = 20,
   server,
 }: DataTableProps<T>) {
+  useLocale();
   const [localSort, setLocalSort] = useState<SortState>(null);
   const [page, setPage] = useState(1);
   const sort = server ? server.sort : localSort;

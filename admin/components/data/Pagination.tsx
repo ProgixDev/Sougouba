@@ -2,7 +2,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { formatNumber } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 
 export const PAGE_SIZES = [10, 20, 50, 100] as const;
 
@@ -39,6 +39,7 @@ export function Pagination({
   onPage: (page: number) => void;
   onPageSize?: (size: number) => void;
 }) {
+  useLocale();
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const last = Math.min(total, page * pageSize);

@@ -1,6 +1,7 @@
 'use client';
 import { createContext, useContext, useMemo } from 'react';
 import type { CurrentAdmin } from './api/admins';
+import { useLocale } from './i18n';
 
 /**
  * Which section of the dashboard needs which permission — the sidebar hides
@@ -51,6 +52,8 @@ export function AdminProvider({
   reload: () => Promise<void>;
   children: React.ReactNode;
 }) {
+  // Nothing of its own to translate; subscribed like every component, so the rule has no exceptions.
+  useLocale();
   // Stable across renders, so pages can list `can` in an effect's dependencies
   // without refetching every time the layout re-renders.
   const value = useMemo(

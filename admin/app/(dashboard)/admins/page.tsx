@@ -31,7 +31,7 @@ import {
 } from '@/lib/api/admins';
 import { formatDate, formatDateTime } from '@/lib/format';
 // `t` is already the name of a tab in the lists below.
-import { t as translate } from '@/lib/i18n';
+import { t as translate, useLocale } from '@/lib/i18n';
 import { useAdmin } from '@/lib/permissions';
 import { KpiCard, KpiGrid, PageHeader } from '@/components/insights/Insights';
 
@@ -48,6 +48,7 @@ const SELECT =
  * refuses anything that would leave nobody able to manage administrators.
  */
 export default function AdminsPage() {
+  useLocale();
   return (
     <Suspense fallback={<Skeleton className="mx-auto h-96 max-w-content rounded-card" />}>
       <Admins />
@@ -56,6 +57,7 @@ export default function AdminsPage() {
 }
 
 function Admins() {
+  useLocale();
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -176,6 +178,7 @@ function Members({
   manage: boolean;
   onChanged: () => void;
 }) {
+  useLocale();
   const toast = useToast();
   const { me } = useAdmin();
   const [dialog, setDialog] = useState<AdminAccount | 'new' | null>(null);
@@ -392,6 +395,7 @@ function AccessDialog({
   onClose: () => void;
   onDone: (result: { created?: { email: string; password: string; role: string } }) => void;
 }) {
+  useLocale();
   const toast = useToast();
   const [fullName, setFullName] = useState(admin?.fullName ?? '');
   const [email, setEmail] = useState('');
@@ -604,6 +608,7 @@ function Roles({
   manage: boolean;
   onChanged: () => void;
 }) {
+  useLocale();
   const toast = useToast();
   const [editing, setEditing] = useState<AdminRole | 'new' | null>(null);
   const [deleting, setDeleting] = useState<AdminRole | null>(null);
@@ -715,6 +720,7 @@ function RoleEditor({
   onCancel: () => void;
   onSaved: () => void;
 }) {
+  useLocale();
   const toast = useToast();
   const [name, setName] = useState(role?.name ?? '');
   const [description, setDescription] = useState(role?.description ?? '');
@@ -832,6 +838,7 @@ function RoleEditor({
 
 /** Area by area: what the role can see, and what it can do there. */
 function PermissionSummary({ permissions, catalogue }: { permissions: string[]; catalogue: PermissionGroup[] }) {
+  useLocale();
   const held = useMemo(() => new Set(permissions), [permissions]);
   return (
     <ul className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">

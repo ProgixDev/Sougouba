@@ -11,10 +11,10 @@ import { listMerchantOrders } from '@/lib/api/merchantOrders';
 import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { orderStatusMeta } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, lazy, useLocale } from '@/lib/i18n';
 import type { Order, OrderStatus } from '@/lib/types';
 
-const STATUS_OPTIONS: { value: OrderStatus | 'all'; label: string }[] = [
+const STATUS_OPTIONS: { value: OrderStatus | 'all'; label: string }[] = lazy(() => ([
   { value: 'all', label: t('portal.orders.list.allStatuses') },
   { value: 'pending', label: orderStatusMeta('pending').label },
   { value: 'confirmed', label: orderStatusMeta('confirmed').label },
@@ -23,9 +23,10 @@ const STATUS_OPTIONS: { value: OrderStatus | 'all'; label: string }[] = [
   { value: 'out_for_delivery', label: orderStatusMeta('out_for_delivery').label },
   { value: 'delivered', label: orderStatusMeta('delivered').label },
   { value: 'cancelled', label: orderStatusMeta('cancelled').label },
-];
+]));
 
 export default function MerchantOrdersPage() {
+  useLocale();
   const router = useRouter();
   const [status, setStatus] = useState<OrderStatus | 'all'>('all');
   const [search, setSearch] = useState('');

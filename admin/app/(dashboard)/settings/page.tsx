@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/data/Skeleton';
 import { useToast } from '@/components/Toast';
 import { getSettings, updateSettings } from '@/lib/api/settings';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 import type { PlatformSettings } from '@/lib/types';
 import { useAdmin } from '@/lib/permissions';
 import { PageHeader } from '@/components/insights/Insights';
@@ -83,6 +83,7 @@ function toPatch(f: FieldState, doublePointsActive: boolean): PlatformSettings {
 }
 
 export default function SettingsPage() {
+  useLocale();
   const toast = useToast();
   const { can } = useAdmin();
   const [loaded, setLoaded] = useState(false);

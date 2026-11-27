@@ -1,6 +1,7 @@
 'use client';
 import { useId, useState } from 'react';
 import { cn } from '@/lib/cn';
+import { useLocale } from '@/lib/i18n';
 
 /** Floating label, ported from the brand's Input. Validation on blur, never on keystroke. */
 export function Input({
@@ -17,6 +18,7 @@ export function Input({
   error?: string;
   helper?: string;
 } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'placeholder'>) {
+  useLocale();
   const id = useId();
   const [focused, setFocused] = useState(false);
   const [filled, setFilled] = useState(!!rest.value || !!rest.defaultValue);

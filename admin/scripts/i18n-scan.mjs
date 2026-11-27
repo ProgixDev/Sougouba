@@ -5,6 +5,12 @@
 //   node scripts/i18n-scan.mjs app/login       → only what is under the given paths
 //   node scripts/i18n-scan.mjs --count         → one line per file, with a count
 //
+// It also reports what would keep its old language after a switch — the language
+// changes in place, with no reload (lib/i18n):
+//   · a table of labels built when a file loads and not wrapped in `lazy(() => …)`;
+//   · the language read at the top level of a file (`intlLocale`, `locale`);
+//   · a component that does not call `useLocale()`, and so does not render again.
+//
 // It reads the syntax tree, so comments, imports, class names, object keys and
 // the dictionaries themselves are never reported. What it reports is a
 // candidate, not a verdict: a string with a space, an accent or a capital in a
@@ -49,6 +55,9 @@ function machineText(s) {
   if (/^\(function\(\)/.test(s)) return true; // the inline scripts in the root layout
   return false;
 }
+
+/** Calls whose result depends on the language in force. */
+const LANGUAGE_CALLS = /^(t|translate|tx|tMaybe|pick|formatCad|formatNumber|formatPercent|formatDate|formatDateTime|formatCompact|timeAgo|\w+StatusMeta|statementMonth|formatHours|shortDay)$/;
 
 /** Does this look like something written for a person? */
 function readable(text) {
@@ -116,6 +125,65 @@ for (const file of roots.flatMap((r) => files(join(root, r)))) {
     ts.forEachChild(node, visit);
   };
   visit(source);
+
+  // ── what would not follow a switch of language ─────────────────────────────
+  const isFunction = (n) => ts.isFunctionDeclaration(n) || ts.isFunctionExpression(n) || ts.isArrowFunction(n) || ts.isMethodDeclaration(n) || ts.isGetAccessor(n);
+  const usesLanguage = (node) => {
+    let hit = null;
+    const walk = (n) => {
+      if (hit || isFunction(n)) return; // inside a function it runs later, in the language of that moment
+      if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && LANGUAGE_CALLS.test(n.expression.text)) hit = `${n.expression.text}()`;
+      else if (ts.isIdentifier(n) && (n.text === 'intlLocale' || n.text === 'locale') && !ts.isPropertyAssignment(n.parent) && !ts.isPropertyAccessExpression(n.parent)) hit = n.text;
+      ts.forEachChild(n, walk);
+    };
+    walk(node);
+    return hit;
+  };
+  const isClient = source.statements.some((st) => ts.isExpressionStatement(st) && ts.isStringLiteral(st.expression) && st.expression.text === 'use client');
+  const hasJsx = (node) => {
+    let jsx = false;
+    const walk = (n) => {
+      if (jsx) return;
+      if (ts.isJsxElement(n) || ts.isJsxSelfClosingElement(n) || ts.isJsxFragment(n)) jsx = true;
+      else ts.forEachChild(n, walk);
+    };
+    walk(node);
+    return jsx;
+  };
+  const subscribes = (node) => {
+    let yes = false;
+    const walk = (n) => {
+      if (yes) return;
+      if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'useLocale') yes = true;
+      else ts.forEachChild(n, walk);
+    };
+    walk(node);
+    return yes;
+  };
+  const component = (fn, name, at) => {
+    if (!isClient || !/^[A-Z]/.test(name) || !fn.body || !hasJsx(fn.body) || subscribes(fn.body)) return;
+    report(at, `${name}: a component that does not call useLocale() — it would keep its old language after a switch`);
+  };
+  if (!/lib\/i18n\//.test(rel) && rel !== 'app/layout.tsx') {
+    for (const statement of source.statements) {
+      if (ts.isFunctionDeclaration(statement)) component(statement, statement.name?.text ?? 'Default', statement);
+      if (!ts.isVariableStatement(statement)) continue;
+      for (const declaration of statement.declarationList.declarations) {
+        let init = declaration.initializer;
+        if (!init) continue;
+        const name = declaration.name.getText();
+        if (ts.isCallExpression(init) && /^(forwardRef|memo|React\.forwardRef|React\.memo)$/.test(init.expression.getText()) && init.arguments[0]) init = init.arguments[0];
+        if (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) {
+          component(init, name, declaration);
+          continue;
+        }
+        if (ts.isCallExpression(init) && ts.isIdentifier(init.expression) && init.expression.text === 'lazy') continue;
+        const hit = usesLanguage(init);
+        if (hit) report(declaration, `${name}: built once when the file loads, from ${hit} — wrap it in lazy(() => …) or build it where it is used`);
+      }
+    }
+  }
+
   if (found.length === 0) continue;
   total += found.length;
   console.log(countOnly ? `${String(found.length).padStart(4)} ${rel}` : found.join('\n'));

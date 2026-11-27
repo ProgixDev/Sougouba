@@ -8,17 +8,18 @@ import { StatCard } from '@/components/data/StatCard';
 import { Skeleton } from '@/components/data/Skeleton';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { CompareBarChart } from '@/components/charts/CompareBarChart';
-import { getOverviewStats, type OverviewStats } from '@/lib/api/stats';
+import { getOverviewStats, verticalLabel, type OverviewStats } from '@/lib/api/stats';
 import { formatCad } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, lazy, useLocale } from '@/lib/i18n';
 
-const RANGES = [
+const RANGES = lazy(() => ([
   { label: t('overview.rangeDays', { count: 7 }), value: 7 as const },
   { label: t('overview.rangeDays', { count: 30 }), value: 30 as const },
   { label: t('overview.rangeDays', { count: 90 }), value: 90 as const },
-];
+]));
 
 export default function OverviewPage() {
+  useLocale();
   const [range, setRange] = useState<7 | 30 | 90>(30);
   const [stats, setStats] = useState<OverviewStats | null>(null);
 
@@ -128,7 +129,7 @@ export default function OverviewPage() {
                       {v.orders}
                     </Text>
                     <Text variant="caption" tone="muted">
-                      {v.vertical}
+                      {verticalLabel(v.vertical)}
                     </Text>
                   </div>
                 ))}

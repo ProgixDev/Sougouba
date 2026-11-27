@@ -9,7 +9,7 @@ import { useToast } from '@/components/Toast';
 import { getMyPayoutStatus, getMyPayouts, startPayoutOnboarding, type PayoutStatus, type PayoutSummary } from '@/lib/api/merchantBilling';
 import { failureMessage } from '@/lib/merchantForm';
 import { formatCad, formatDate } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, lazy, useLocale } from '@/lib/i18n';
 
 /**
  * When the shop is paid, how much, and into which account — the web twin of
@@ -22,7 +22,7 @@ import { t } from '@/lib/i18n';
 
 type State = 'unavailable' | 'setup' | 'review' | 'active';
 
-const STATE: Record<State, { label: string; tone: Tone; body: string }> = {
+const STATE: Record<State, { label: string; tone: Tone; body: string }> = lazy(() => ({
   active: { label: t('portalShop.payouts.state.active.label'), tone: 'success', body: t('portalShop.payouts.state.active.body') },
   review: {
     label: t('portalShop.payouts.state.review.label'),
@@ -39,7 +39,7 @@ const STATE: Record<State, { label: string; tone: Tone; body: string }> = {
     tone: 'neutral',
     body: t('portalShop.payouts.state.unavailable.body'),
   },
-};
+}));
 
 const toState = (status: PayoutStatus): State => (status.payoutsEnabled ? 'active' : status.onboarded ? 'review' : 'setup');
 
@@ -47,6 +47,7 @@ const toState = (status: PayoutStatus): State => (status.payoutsEnabled ? 'activ
 const day = (date: string) => formatDate(`${date.slice(0, 10)}T12:00:00`);
 
 export function PayoutsCard() {
+  useLocale();
   const toast = useToast();
   const [state, setState] = useState<State | null>(null);
   const [summary, setSummary] = useState<PayoutSummary | null>(null);

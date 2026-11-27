@@ -29,18 +29,18 @@ import {
 import { KpiCard, KpiGrid, PageHeader } from '@/components/insights/Insights';
 import { getModerationInsights, type ModerationInsights } from '@/lib/api/insights';
 import { formatCad, formatDate, formatDateTime, formatNumber } from '@/lib/format';
-import { t as translate } from '@/lib/i18n';
+import { t as translate, lazy, useLocale } from '@/lib/i18n';
 import { useAdmin } from '@/lib/permissions';
 import type { Page } from '@/lib/api/client';
 import { usePagedList } from '@/lib/usePagedList';
 import { Pagination } from '@/components/data/Pagination';
 
 
-const TABS = [
+const TABS = lazy(() => ([
   { key: 'reviews', label: translate('moderation.tabs.reviews'), icon: Star },
   { key: 'coupons', label: translate('moderation.tabs.coupons'), icon: TicketPercent },
   { key: 'products', label: translate('moderation.tabs.products'), icon: Package },
-] as const;
+] as const));
 type TabKey = (typeof TABS)[number]['key'];
 
 /** A reason, asked for in a dialog, before an action that needs one. */
@@ -59,6 +59,7 @@ interface PendingAction {
  * one from every shopper read). Every action is in the audit log.
  */
 export default function ModerationPage() {
+  useLocale();
   return (
     <Suspense fallback={<Skeleton className="mx-auto h-96 max-w-content rounded-card" />}>
       <Moderation />
@@ -67,6 +68,7 @@ export default function ModerationPage() {
 }
 
 function Moderation() {
+  useLocale();
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -194,6 +196,7 @@ function serverOf<T>(list: ReturnType<typeof usePagedList<T>>) {
 }
 
 function Chips<K extends string>({ value, options, onChange }: { value: K; options: { key: K; label: string }[]; onChange: (k: K) => void }) {
+  useLocale();
   return (
     <div className="flex flex-wrap gap-1.5">
       {options.map((o) => (
@@ -212,6 +215,7 @@ function Chips<K extends string>({ value, options, onChange }: { value: K; optio
 }
 
 function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  useLocale();
   return (
     <div className="flex w-full items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-muted-foreground sm:w-auto">
       <Search size={15} />
@@ -237,15 +241,16 @@ function useDebounced(value: string) {
 
 // ── reviews ─────────────────────────────────────────────────────────────────
 
-const REVIEW_FILTERS: { key: ReviewFilter; label: string }[] = [
+const REVIEW_FILTERS: { key: ReviewFilter; label: string }[] = lazy(() => ([
   { key: 'all', label: translate('moderation.reviews.filters.all') },
   { key: 'with_comment', label: translate('moderation.reviews.filters.withComment') },
   { key: 'low', label: translate('moderation.reviews.filters.low') },
   { key: 'hidden', label: translate('moderation.reviews.filters.hidden') },
   { key: 'removed', label: translate('moderation.reviews.filters.removed') },
-];
+]));
 
 function ReviewsTab({ ask }: { ask: (a: PendingAction) => void }) {
+  useLocale();
   const toast = useToast();
   const canAct = useAdmin().can('moderation.act');
   const [filter, setFilter] = useState<ReviewFilter>('all');
@@ -366,13 +371,14 @@ function ReviewsTab({ ask }: { ask: (a: PendingAction) => void }) {
 
 // ── coupons ─────────────────────────────────────────────────────────────────
 
-const COUPON_STATUS: { key: 'all' | 'active' | 'ended'; label: string }[] = [
+const COUPON_STATUS: { key: 'all' | 'active' | 'ended'; label: string }[] = lazy(() => ([
   { key: 'all', label: translate('moderation.coupons.filters.all') },
   { key: 'active', label: translate('moderation.coupons.filters.active') },
   { key: 'ended', label: translate('moderation.coupons.filters.ended') },
-];
+]));
 
 function CouponsTab({ ask }: { ask: (a: PendingAction) => void }) {
+  useLocale();
   const toast = useToast();
   const canAct = useAdmin().can('moderation.act');
   const [status, setStatus] = useState<'all' | 'active' | 'ended'>('all');
@@ -482,6 +488,7 @@ function CouponsTab({ ask }: { ask: (a: PendingAction) => void }) {
 // ── products ────────────────────────────────────────────────────────────────
 
 function ProductsTab({ ask }: { ask: (a: PendingAction) => void }) {
+  useLocale();
   const toast = useToast();
   const canAct = useAdmin().can('moderation.act');
   const [hiddenOnly, setHiddenOnly] = useState<'all' | 'only'>('all');

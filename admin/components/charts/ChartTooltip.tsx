@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from '@/lib/i18n';
 
 /**
  * The tooltip every chart uses, drawn with the theme's own colours.
@@ -23,6 +24,7 @@ export function ChartTooltip({
   /** One series' name, e.g. "Commandes"; several series use their own names. */
   name?: (seriesName?: string) => string;
 }) {
+  useLocale();
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-xl border border-border bg-card px-3 py-2 shadow-card">

@@ -9,7 +9,7 @@ import { PageHeader } from '@/components/insights/Insights';
 import { PayoutsCard } from '@/components/merchant/PayoutsCard';
 import { getMyStatementUrl, listMyStatements, statementMonth, type Statement, type StatementTotals } from '@/lib/api/statements';
 import { formatCad } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 
 type Loaded = Awaited<ReturnType<typeof listMyStatements>>;
 
@@ -19,6 +19,7 @@ type Loaded = Awaited<ReturnType<typeof listMyStatements>>;
  * The same figures the mobile app shows.
  */
 export default function MerchantStatementsPage() {
+  useLocale();
   const [data, setData] = useState<Loaded | null>(null);
   const [failed, setFailed] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
@@ -131,6 +132,7 @@ export default function MerchantStatementsPage() {
 
 /** The month's money column: what the orders were worth to the shop, what came off, what was sent, what is left. */
 function Figures({ totals }: { totals: StatementTotals }) {
+  useLocale();
   const owed = totals.balanceCad < 0;
   return (
     <dl className="flex max-w-md flex-col gap-1.5 font-sans text-[0.875rem]">
@@ -153,6 +155,7 @@ function Figures({ totals }: { totals: StatementTotals }) {
 }
 
 function Line({ label, value }: { label: string; value: string }) {
+  useLocale();
   return (
     <div className="flex items-baseline justify-between gap-4">
       <dt className="text-muted-foreground">{label}</dt>

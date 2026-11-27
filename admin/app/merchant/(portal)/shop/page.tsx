@@ -8,13 +8,13 @@ import { useToast } from '@/components/Toast';
 import { ShopHoursCard, ShopInfoCard, ShopSectionsCard } from '@/components/merchant/ShopSettings';
 import { SubscriptionCard } from '@/components/merchant/SubscriptionCard';
 import { getMyShop, type Shop } from '@/lib/api/merchantCatalog';
-import { t } from '@/lib/i18n';
+import { t, lazy, useLocale } from '@/lib/i18n';
 
-const STATUS_NOTE: Partial<Record<Shop['status'], string>> = {
+const STATUS_NOTE: Partial<Record<Shop['status'], string>> = lazy(() => ({
   pending: t('portal.shop.statusNote.pending'),
   suspended: t('portal.shop.statusNote.suspended'),
   rejected: t('portal.shop.statusNote.rejected'),
-};
+}));
 
 /**
  * The shop's own settings, on the web: its page, its hours, its shelves and
@@ -22,6 +22,7 @@ const STATUS_NOTE: Partial<Record<Shop['status'], string>> = {
  * room for a keyboard.
  */
 export default function MerchantShopPage() {
+  useLocale();
   const toast = useToast();
   const [shop, setShop] = useState<Shop | null>(null);
   const [failed, setFailed] = useState(false);

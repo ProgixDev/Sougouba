@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 import { CheckCircle2, XCircle, Info } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { useLocale } from '@/lib/i18n';
 
 type ToastTone = 'success' | 'error' | 'info';
 interface ToastItem {
@@ -15,6 +16,7 @@ const ToastContext = createContext<{ push: (tone: ToastTone, message: string) =>
 let seq = 0;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  useLocale();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const push = useCallback((tone: ToastTone, message: string) => {

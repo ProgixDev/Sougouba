@@ -9,7 +9,7 @@ import { NAV_GROUPS, isActivePath, type SidebarCounts } from './Sidebar';
 import type { NavItem } from './SidebarShell';
 import { permissionForPath, useAdmin } from '@/lib/permissions';
 import type { AdminSession } from '@/lib/auth';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 
 /** Where the admin is: the section's group and name, read from the navigation itself. */
 function useSection(counts: SidebarCounts) {
@@ -39,6 +39,7 @@ export function QueueBell({
   pendingText: string;
   emptyText: string;
 }) {
+  useLocale();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
@@ -117,6 +118,7 @@ export function TopbarShell({
   onOpenMenu?: () => void;
   children?: React.ReactNode;
 }) {
+  useLocale();
   return (
     <header className="flex h-16 shrink-0 items-center gap-3 px-4 sm:h-[76px] sm:gap-4 sm:px-5 md:px-8">
       <button
@@ -153,6 +155,7 @@ export function Topbar({
   counts: SidebarCounts;
   onOpenMenu?: () => void;
 }) {
+  useLocale();
   const { can } = useAdmin();
   const section = useSection(counts);
   // The queues this administrator's role can open.

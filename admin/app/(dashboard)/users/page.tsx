@@ -11,27 +11,27 @@ import { getUserInsights, shortDay, type UserInsights } from '@/lib/api/insights
 import { listUsers } from '@/lib/api/users';
 import { formatDate } from '@/lib/format';
 // `translate`, not `t`: this page already names a loop variable `t`.
-import { t as translate } from '@/lib/i18n';
+import { t as translate, lazy, useLocale } from '@/lib/i18n';
 import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { ExportButton } from '@/components/data/ExportButton';
 import { csvDate, type CsvColumn } from '@/lib/csv';
 import { useToast } from '@/components/Toast';
 import type { AdminUserListItem, UserRole } from '@/lib/types';
 
-const ROLE_LABELS: Record<string, string> = {
+const ROLE_LABELS: Record<string, string> = lazy(() => ({
   customer: translate('users.roles.customer'),
   business: translate('users.roles.business'),
   courier: translate('users.roles.courier'),
   admin: translate('users.roles.admin'),
-};
-const ROLE_TABS: { key: UserRole | 'all'; label: string }[] = [
+}));
+const ROLE_TABS: { key: UserRole | 'all'; label: string }[] = lazy(() => ([
   { key: 'all', label: translate('users.list.allTab') },
   { key: 'customer', label: translate('users.roleGroups.customer') },
   { key: 'business', label: translate('users.roleGroups.business') },
   { key: 'courier', label: translate('users.roleGroups.courier') },
-];
+]));
 
-const USER_CSV: CsvColumn<AdminUserListItem>[] = [
+const USER_CSV: CsvColumn<AdminUserListItem>[] = lazy(() => ([
   { header: translate('users.list.csv.id'), value: (u) => u.id },
   { header: translate('users.fields.name'), value: (u) => u.fullName },
   { header: translate('users.fields.email'), value: (u) => u.email },
@@ -40,9 +40,10 @@ const USER_CSV: CsvColumn<AdminUserListItem>[] = [
   { header: translate('users.fields.lastSignIn'), value: (u) => csvDate(u.lastSignInAt) },
   { header: translate('users.list.csv.linkedShop'), value: (u) => u.vendorId },
   { header: translate('users.list.csv.linkedCourier'), value: (u) => u.courierId },
-];
+]));
 
 export default function UsersPage() {
+  useLocale();
   const router = useRouter();
   const toast = useToast();
   const [role, setRole] = useState<UserRole | 'all'>('all');

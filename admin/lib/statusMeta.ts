@@ -1,5 +1,5 @@
 import type { BadgeTone } from '@/components/ui';
-import { t } from './i18n';
+import { t, lazy } from './i18n';
 import type { AdminVendorStatus, AdminCourierStatus, OrderStatus, AdminDisputeStatus, CourierIssueStatus } from './types';
 
 /**
@@ -70,25 +70,25 @@ export function courierIssueStatusMeta(status: CourierIssueStatus): { label: str
   }
 }
 
-export const DISPUTE_REASON_LABELS: Record<string, string> = {
+export const DISPUTE_REASON_LABELS: Record<string, string> = lazy(() => ({
   missing_items: t('status.disputeReason.missing_items'),
   wrong_order: t('status.disputeReason.wrong_order'),
   quality: t('status.disputeReason.quality'),
   late: t('status.disputeReason.late'),
   other: t('status.disputeReason.other'),
-};
+}));
 
 /** Who cancelled an order. `unknown` is an order cancelled before the app recorded it. */
-export const CANCELLED_BY_LABELS: Record<'customer' | 'merchant' | 'admin' | 'system' | 'unknown', string> = {
+export const CANCELLED_BY_LABELS: Record<'customer' | 'merchant' | 'admin' | 'system' | 'unknown', string> = lazy(() => ({
   customer: t('status.cancelledBy.customer'),
   merchant: t('status.cancelledBy.merchant'),
   admin: t('status.cancelledBy.admin'),
   system: t('status.cancelledBy.system'),
   unknown: t('status.cancelledBy.unknown'),
-};
+}));
 
 /** The shopper's reasons, plus the system's. An unknown code is shown as it is. */
-export const CANCEL_REASON_LABELS: Record<string, string> = {
+export const CANCEL_REASON_LABELS: Record<string, string> = lazy(() => ({
   changed_mind: t('status.cancelReason.changed_mind'),
   ordered_by_mistake: t('status.cancelReason.ordered_by_mistake'),
   wrong_address: t('status.cancelReason.wrong_address'),
@@ -97,10 +97,10 @@ export const CANCEL_REASON_LABELS: Record<string, string> = {
   other: t('status.cancelReason.other'),
   no_courier: t('status.cancelReason.no_courier'),
   shop_no_response: t('status.cancelReason.shop_no_response'),
-};
+}));
 
 /** Why a courier no longer has an order. `order_cancelled` is written by a cancellation, not chosen. */
-export const RELEASE_REASON_LABELS: Record<string, string> = {
+export const RELEASE_REASON_LABELS: Record<string, string> = lazy(() => ({
   vehicle_problem: t('status.releaseReason.vehicle_problem'),
   too_far: t('status.releaseReason.too_far'),
   shop_delay: t('status.releaseReason.shop_delay'),
@@ -108,19 +108,19 @@ export const RELEASE_REASON_LABELS: Record<string, string> = {
   other: t('status.releaseReason.other'),
   order_cancelled: t('status.releaseReason.order_cancelled'),
   no_show: t('status.releaseReason.no_show'),
-};
+}));
 
-export const COURIER_ISSUE_REASON_LABELS: Record<string, string> = {
+export const COURIER_ISSUE_REASON_LABELS: Record<string, string> = lazy(() => ({
   customer_absent: t('status.courierIssueReason.customer_absent'),
   wrong_address: t('status.courierIssueReason.wrong_address'),
   access_problem: t('status.courierIssueReason.access_problem'),
   shop_not_ready: t('status.courierIssueReason.shop_not_ready'),
   order_incomplete: t('status.courierIssueReason.order_incomplete'),
   other: t('status.courierIssueReason.other'),
-};
+}));
 
-export const VEHICLE_LABELS: Record<string, string> = {
+export const VEHICLE_LABELS: Record<string, string> = lazy(() => ({
   bike: t('status.vehicle.bike'),
   scooter: t('status.vehicle.scooter'),
   car: t('status.vehicle.car'),
-};
+}));

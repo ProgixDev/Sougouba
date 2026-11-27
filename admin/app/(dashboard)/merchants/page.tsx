@@ -12,21 +12,22 @@ import { listVendors } from '@/lib/api/vendors';
 import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { formatCad, formatNumber } from '@/lib/format';
 // `translate`, not `t`: this page already names its loop variables `t`.
-import { t as translate } from '@/lib/i18n';
+import { t as translate, lazy, useLocale } from '@/lib/i18n';
 import { vendorStatusMeta } from '@/lib/statusMeta';
 import { formatDate } from '@/lib/format';
 import type { AdminVendorListItem, AdminVendorStatus } from '@/lib/types';
 
-const TABS: { key: AdminVendorStatus; label: string }[] = [
+const TABS: { key: AdminVendorStatus; label: string }[] = lazy(() => ([
   { key: 'pending', label: translate('merchants.list.statuses.pending') },
   { key: 'approved', label: translate('merchants.list.statuses.approved') },
   { key: 'suspended', label: translate('merchants.list.statuses.suspended') },
   // `rejected` is its own terminal state in the API — the mock folded it into
   // "suspended", which hid every refused application from the back office.
   { key: 'rejected', label: translate('merchants.list.statuses.rejected') },
-];
+]));
 
 export default function MerchantsPage() {
+  useLocale();
   const router = useRouter();
   const [tab, setTab] = useState<AdminVendorStatus>('pending');
   const [search, setSearch] = useState('');

@@ -2,6 +2,7 @@
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Cell } from 'recharts';
 import { formatCad } from '@/lib/format';
 import { ChartTooltip } from './ChartTooltip';
+import { useLocale } from '@/lib/i18n';
 
 const AXIS = '#8A8175';
 /** Translucent, so the grid stays quiet on the light and the dark theme alike. */
@@ -9,6 +10,7 @@ const GRID = 'rgba(138, 129, 117, 0.22)';
 const COLORS = ['#246B47', '#BF5122', '#D89A1E', '#82BE9C', '#E67D48', '#F4DD8C'];
 
 export function CompareBarChart({ data }: { data: { name: string; revenueCad: number }[] }) {
+  useLocale();
   return (
     <ResponsiveContainer width="100%" height={260}>
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 4 }}>

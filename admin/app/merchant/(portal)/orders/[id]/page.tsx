@@ -16,10 +16,11 @@ import {
   DISPUTE_REASON_LABELS,
 } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 import type { Order } from '@/lib/types';
 
 export default function MerchantOrderDetailPage() {
+  useLocale();
   const { id } = useParams<{ id: string }>();
   const [order, setOrder] = useState<Order | null | undefined>(undefined);
 
@@ -179,6 +180,7 @@ function cancellationLine(who: string, reason: string | null, note: string | nul
 }
 
 function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  useLocale();
   return (
     <div className="flex items-center justify-between">
       <Text variant="body" tone={strong ? 'default' : 'muted'} className={strong ? 'font-semibold' : ''}>
@@ -192,6 +194,7 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
 }
 
 function ThreadMessage({ author, at, message, muted }: { author: string; at: string; message: string; muted?: boolean }) {
+  useLocale();
   return (
     <div className={`rounded-lg p-3 ${muted ? 'bg-muted' : 'bg-destructive/5'}`}>
       <div className="mb-1 flex items-center justify-between">

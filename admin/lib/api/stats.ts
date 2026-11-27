@@ -1,5 +1,5 @@
 import { apiGet, merchantApiGet } from './client';
-import { t } from '../i18n';
+import { t, lazy } from '../i18n';
 
 export interface DailyPoint {
   date: string; // yyyy-mm-dd
@@ -29,7 +29,8 @@ export interface OverviewStats {
   openCourierIssues: number;
   series: DailyPoint[];
   topVendors: TopVendor[];
-  ordersByVertical: { vertical: string; orders: number }[];
+  /** The raw kind of shop; `verticalLabel` names it. */
+  ordersByVertical: { vertical: 'grocery' | 'restaurant'; orders: number }[];
 }
 
 /** The `GET /admin/stats/overview` payload, before it is reshaped for this app. */
@@ -70,10 +71,13 @@ interface ApiOverview {
  * `statusMeta.ts`. The mock baked them into the payload, which is what made
  * the API look like it should too.
  */
-const VERTICAL_LABELS: Record<'grocery' | 'restaurant', string> = {
+const VERTICAL_LABELS: Record<'grocery' | 'restaurant', string> = lazy(() => ({
   grocery: t('common.vendorType.grocery'),
   restaurant: t('common.vendorType.restaurant'),
-};
+}));
+
+/** « Épicerie » / "Grocery" — named when it is shown, not when it is fetched, so it follows the language. */
+export const verticalLabel = (vertical: 'grocery' | 'restaurant'): string => VERTICAL_LABELS[vertical] ?? vertical;
 
 export async function getOverviewStats(rangeDays: 7 | 30 | 90 = 30): Promise<OverviewStats> {
   const data = await apiGet<ApiOverview>('/admin/stats/overview', { range: rangeDays });
@@ -94,7 +98,7 @@ export async function getOverviewStats(rangeDays: 7 | 30 | 90 = 30): Promise<Ove
     openCourierIssues: data.queues.courierIssuesOpen,
     series: data.series,
     topVendors: data.topVendors,
-    ordersByVertical: data.ordersByVertical.map((v) => ({ vertical: VERTICAL_LABELS[v.vertical], orders: v.orders })),
+    ordersByVertical: data.ordersByVertical.map((v) => ({ vertical: v.vertical, orders: v.orders })),
   };
 }
 

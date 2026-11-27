@@ -28,20 +28,20 @@ import {
 } from '@/lib/api/payouts';
 import { formatCad, formatDate, formatDateTime, timeAgo } from '@/lib/format';
 // `translate`, not `t`: the tab loops below already call their item `t`.
-import { t as translate, tx } from '@/lib/i18n';
+import { t as translate, tx, lazy, useLocale } from '@/lib/i18n';
 import { useAdmin } from '@/lib/permissions';
 import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { ExportButton } from '@/components/data/ExportButton';
 import { csvDate, type CsvColumn } from '@/lib/csv';
 
-const ATTEMPT_STATUS_LABELS: Record<PayoutAttemptStatus, string> = {
+const ATTEMPT_STATUS_LABELS: Record<PayoutAttemptStatus, string> = lazy(() => ({
   paid: translate('payouts.attemptStatus.paid'),
   skipped: translate('payouts.attemptStatus.skipped'),
   failed: translate('payouts.attemptStatus.failed'),
-};
+}));
 
 /** Who is owed — the "À payer" tab, as filtered. */
-const OWED_CSV: CsvColumn<OwedCourier>[] = [
+const OWED_CSV: CsvColumn<OwedCourier>[] = lazy(() => ([
   { header: translate('payouts.csv.courier'), value: (c) => c.courierName },
   { header: translate('payouts.csv.courierId'), value: (c) => c.courierId },
   { header: translate('payouts.csv.amountOwed'), value: (c) => c.pendingCad },
@@ -51,10 +51,10 @@ const OWED_CSV: CsvColumn<OwedCourier>[] = [
   { header: translate('payouts.csv.lastAttempt'), value: (c) => (c.lastAttempt ? ATTEMPT_STATUS_LABELS[c.lastAttempt.status] : '') },
   { header: translate('payouts.csv.reason'), value: (c) => (c.lastAttempt?.reason ? FAILURE_REASON_LABELS[c.lastAttempt.reason] : '') },
   { header: translate('payouts.csv.attemptDate'), value: (c) => csvDate(c.lastAttempt?.at) },
-];
+]));
 
 /** One courier line of one run — the "Échecs" and "Payés" tabs. */
-const ATTEMPT_CSV: CsvColumn<PayoutAttempt>[] = [
+const ATTEMPT_CSV: CsvColumn<PayoutAttempt>[] = lazy(() => ([
   { header: translate('payouts.csv.date'), value: (a) => csvDate(a.createdAt) },
   { header: translate('payouts.csv.courier'), value: (a) => a.courierName },
   { header: translate('payouts.csv.courierId'), value: (a) => a.courierId },
@@ -69,10 +69,10 @@ const ATTEMPT_CSV: CsvColumn<PayoutAttempt>[] = [
     value: (a) => (a.trigger === 'admin' ? translate('payouts.trigger.admin') : translate('payouts.trigger.schedule')),
   },
   { header: translate('payouts.csv.batch'), value: (a) => a.runId },
-];
+]));
 
 /** Every run — the "Historique" tab. */
-const RUN_CSV: CsvColumn<PayoutRun>[] = [
+const RUN_CSV: CsvColumn<PayoutRun>[] = lazy(() => ([
   { header: translate('payouts.csv.start'), value: (r) => csvDate(r.startedAt) },
   { header: translate('payouts.csv.end'), value: (r) => csvDate(r.finishedAt) },
   {
@@ -94,27 +94,27 @@ const RUN_CSV: CsvColumn<PayoutRun>[] = [
   { header: translate('payouts.csv.amountPaid'), value: (r) => r.paidCad },
   { header: translate('payouts.csv.error'), value: (r) => r.error },
   { header: translate('payouts.csv.batch'), value: (r) => r.id },
-];
+]));
 
-const TABS = [
+const TABS = lazy(() => ([
   { key: 'owed', label: translate('payouts.tabs.owed') },
   { key: 'failures', label: translate('payouts.tabs.failures') },
   { key: 'paid', label: translate('payouts.tabs.paid') },
   { key: 'history', label: translate('payouts.tabs.history') },
-] as const;
+] as const));
 type TabKey = (typeof TABS)[number]['key'];
 
-const OWED_FILTERS: { value: PayoutOwedFilter; label: string }[] = [
+const OWED_FILTERS: { value: PayoutOwedFilter; label: string }[] = lazy(() => ([
   { value: 'all', label: translate('payouts.filters.all') },
   { value: 'no_account', label: translate('payouts.filters.noAccount') },
   { value: 'failed', label: translate('payouts.filters.failed') },
-];
+]));
 
-const RUN_STATUS: Record<PayoutRun['status'], { label: string; tone: 'success' | 'warning' | 'destructive' }> = {
+const RUN_STATUS: Record<PayoutRun['status'], { label: string; tone: 'success' | 'warning' | 'destructive' }> = lazy(() => ({
   done: { label: translate('payouts.runStatus.done'), tone: 'success' },
   running: { label: translate('payouts.runStatus.running'), tone: 'warning' },
   failed: { label: translate('payouts.runStatus.failed'), tone: 'destructive' },
-};
+}));
 
 function attemptBadge(a: { status: PayoutAttempt['status']; reason: PayoutAttempt['reason'] }) {
   if (a.status === 'paid') return <StatusBadge label={translate('payouts.attemptStatus.paid')} tone="success" />;
@@ -134,6 +134,7 @@ function attemptBadge(a: { status: PayoutAttempt['status']; reason: PayoutAttemp
  * every run, and lets an administrator with `payouts.run` start a run now.
  */
 export default function PayoutsPage() {
+  useLocale();
   return (
     <Suspense fallback={<Skeleton className="mx-auto h-96 max-w-content rounded-card" />}>
       <Payouts />
@@ -142,6 +143,7 @@ export default function PayoutsPage() {
 }
 
 function Payouts() {
+  useLocale();
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();

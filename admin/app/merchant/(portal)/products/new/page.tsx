@@ -3,9 +3,10 @@ import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { Text } from '@/components/ui/Text';
 import { Skeleton } from '@/components/data/Skeleton';
 import { ProductEditor, useProductEditorData } from '@/components/merchant/ProductEditor';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 
 export default function MerchantNewProductPage() {
+  useLocale();
   const { shop, categories, failed } = useProductEditorData();
 
   return (

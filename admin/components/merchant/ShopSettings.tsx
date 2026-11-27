@@ -22,7 +22,7 @@ import {
 } from '@/lib/api/merchantCatalog';
 import { ApiError } from '@/lib/api/client';
 import { failureMessage, parseCount } from '@/lib/merchantForm';
-import { intlLocale, t } from '@/lib/i18n';
+import { intlLocale, t, useLocale } from '@/lib/i18n';
 
 /**
  * The three things a shop owner sets about the shop itself: what customers
@@ -33,6 +33,7 @@ import { intlLocale, t } from '@/lib/i18n';
 // ── what customers read ─────────────────────────────────────────────────────
 
 export function ShopInfoCard({ shop, onSaved }: { shop: Shop; onSaved: (shop: Shop) => void }) {
+  useLocale();
   const toast = useToast();
   const [name, setName] = useState(shop.name);
   const [specialty, setSpecialty] = useState(shop.specialtyFr);
@@ -130,9 +131,10 @@ export function ShopInfoCard({ shop, onSaved }: { shop: Shop; onSaved: (shop: Sh
 
 // ── opening hours ───────────────────────────────────────────────────────────
 
-const weekday = new Intl.DateTimeFormat(intlLocale, { weekday: 'long', timeZone: 'UTC' });
 /** « Lundi », "Monday": the day's name in the reader's language, with the capital a row's heading takes. */
 function dayName(day: number): string {
+  // Built at each call, in the language in force — a formatter kept from load time would not follow a switch.
+  const weekday = new Intl.DateTimeFormat(intlLocale, { weekday: 'long', timeZone: 'UTC' });
   // 7 January 2024 was a Sunday, so that week's dates fall on `Date.getDay()`'s numbers.
   const name = weekday.format(new Date(Date.UTC(2024, 0, 7 + day)));
   return name.charAt(0).toUpperCase() + name.slice(1);
@@ -163,6 +165,7 @@ function fullWeek(hours: ShopHours[]): ShopHours[] {
 }
 
 export function ShopHoursCard({ shop, onSaved }: { shop: Shop; onSaved: (shop: Shop) => void }) {
+  useLocale();
   const toast = useToast();
   const [week, setWeek] = useState<ShopHours[]>(() => fullWeek(shop.hours));
   const [badDays, setBadDays] = useState<number[]>([]);
@@ -268,6 +271,7 @@ export function ShopHoursCard({ shop, onSaved }: { shop: Shop; onSaved: (shop: S
 // ── shelves ─────────────────────────────────────────────────────────────────
 
 export function ShopSectionsCard({ shop, onChanged }: { shop: Shop; onChanged: (sections: ShopSection[]) => void }) {
+  useLocale();
   const toast = useToast();
   const restaurant = shop.vendorType === 'restaurant';
   const [adding, setAdding] = useState('');
@@ -421,6 +425,7 @@ export function ShopSectionsCard({ shop, onChanged }: { shop: Shop; onChanged: (
 }
 
 function IconButton({ label, children, ...rest }: { label: string; children: React.ReactNode } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  useLocale();
   return (
     <button
       type="button"

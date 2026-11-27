@@ -6,9 +6,10 @@ import { Text } from '@/components/ui/Text';
 import { Skeleton } from '@/components/data/Skeleton';
 import { ProductEditor, useProductEditorData } from '@/components/merchant/ProductEditor';
 import { getMyProduct, type Product } from '@/lib/api/merchantCatalog';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 
 export default function MerchantEditProductPage() {
+  useLocale();
   const { id } = useParams<{ id: string }>();
   const { shop, categories, failed } = useProductEditorData();
   // undefined while loading; null for a product that is not this shop's.

@@ -14,18 +14,19 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/data/Skeleton';
 import { blockUser, getUser, unblockUser } from '@/lib/api/users';
 import { formatDate } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, lazy, useLocale } from '@/lib/i18n';
 import type { AdminUserDetail } from '@/lib/types';
 import { useAdmin } from '@/lib/permissions';
 
-const ROLE_LABELS: Record<string, string> = {
+const ROLE_LABELS: Record<string, string> = lazy(() => ({
   customer: t('users.roles.customer'),
   business: t('users.roles.business'),
   courier: t('users.roles.courier'),
   admin: t('users.roles.admin'),
-};
+}));
 
 export default function UserDetailPage() {
+  useLocale();
   const { id } = useParams<{ id: string }>();
   const { can } = useAdmin();
   const toast = useToast();
@@ -168,6 +169,7 @@ export default function UserDetailPage() {
 }
 
 function Field({ label, value, icon: Icon }: { label: string; value: string; icon: typeof Mail }) {
+  useLocale();
   return (
     <div className="flex flex-wrap gap-2.5">
       <Icon size={15} className="mt-0.5 shrink-0 text-muted-foreground" />

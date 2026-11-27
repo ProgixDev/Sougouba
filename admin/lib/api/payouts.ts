@@ -1,6 +1,6 @@
 import { apiGet, apiPost, type Page, type PageQuery } from './client';
 import type { ID } from '../types';
-import { t } from '../i18n';
+import { t, lazy } from '../i18n';
 
 export type PayoutAttemptStatus = 'paid' | 'skipped' | 'failed';
 export type PayoutFailureReason = 'no_account' | 'stripe_error' | 'record_error';
@@ -103,11 +103,11 @@ export function runPayouts(): Promise<PayoutRunResult> {
   return apiPost<PayoutRunResult>('/admin/payouts/run');
 }
 
-export const FAILURE_REASON_LABELS: Record<PayoutFailureReason, string> = {
+export const FAILURE_REASON_LABELS: Record<PayoutFailureReason, string> = lazy(() => ({
   no_account: t('payouts.failureReason.no_account'),
   stripe_error: t('payouts.failureReason.stripe_error'),
   record_error: t('payouts.failureReason.record_error'),
-};
+}));
 
 // ── the shops ───────────────────────────────────────────────────────────────
 
@@ -179,13 +179,13 @@ export function runMerchantPayouts(): Promise<MerchantPayoutRunResult> {
  */
 export type MerchantAccountState = 'not_started' | 'onboarding' | 'review' | 'active' | 'unavailable';
 
-export const MERCHANT_ACCOUNT_LABELS: Record<MerchantAccountState, string> = {
+export const MERCHANT_ACCOUNT_LABELS: Record<MerchantAccountState, string> = lazy(() => ({
   not_started: t('payouts.merchantAccount.not_started'),
   onboarding: t('payouts.merchantAccount.onboarding'),
   review: t('payouts.merchantAccount.review'),
   active: t('payouts.merchantAccount.active'),
   unavailable: t('payouts.merchantAccount.unavailable'),
-};
+}));
 
 export async function getMerchantAccountState(vendorId: ID): Promise<MerchantAccountState> {
   const { state } = await apiGet<{ state: MerchantAccountState }>(`/admin/payouts/merchants/${vendorId}/account`);

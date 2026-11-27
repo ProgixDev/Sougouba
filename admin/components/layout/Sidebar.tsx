@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { roleName } from '@/lib/api/admins';
 import { signOut } from '@/lib/auth';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 import { permissionForPath, useAdmin } from '@/lib/permissions';
 import { SidebarShell, type NavGroup, type NavItem } from '@/components/layout/SidebarShell';
 
@@ -93,6 +93,7 @@ export function Sidebar({
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
 }) {
+  useLocale();
   const { can, me } = useAdmin();
   const pathname = usePathname();
   const router = useRouter();

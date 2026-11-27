@@ -1,9 +1,10 @@
 'use client';
 import { Moon, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 
 export function ThemeToggle() {
+  useLocale();
   const [dark, setDark] = useState(false);
   useEffect(() => setDark(document.documentElement.classList.contains('dark')), []);
   return (

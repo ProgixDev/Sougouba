@@ -14,11 +14,12 @@ import { useToast } from '@/components/Toast';
 import { getDispute, resolveDispute } from '@/lib/api/disputes';
 import { disputeStatusMeta, DISPUTE_REASON_LABELS } from '@/lib/statusMeta';
 import { formatDateTime } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, useLocale } from '@/lib/i18n';
 import type { AdminDispute } from '@/lib/types';
 import { useAdmin } from '@/lib/permissions';
 
 export default function DisputeDetailPage() {
+  useLocale();
   const { id } = useParams<{ id: string }>();
   const { can } = useAdmin();
   const toast = useToast();
@@ -124,6 +125,7 @@ export default function DisputeDetailPage() {
 }
 
 function ThreadMessage({ author, at, message, muted, accent }: { author: string; at: string; message: string; muted?: boolean; accent?: boolean }) {
+  useLocale();
   return (
     <div className={`rounded-lg p-3 ${accent ? 'bg-forest-50 dark:bg-forest-950' : muted ? 'bg-muted' : 'bg-destructive/5'}`}>
       <div className="mb-1 flex items-center justify-between">

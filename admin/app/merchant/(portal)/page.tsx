@@ -13,20 +13,21 @@ import { getVendorOverview, type VendorOverviewStats } from '@/lib/api/stats';
 import { listMerchantOrders } from '@/lib/api/merchantOrders';
 import { orderStatusMeta } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, lazy, useLocale } from '@/lib/i18n';
 import type { Order } from '@/lib/types';
 
-const RANGES = [
+const RANGES = lazy(() => ([
   { label: t('portal.overview.rangeDays', { count: 7 }), value: 7 as const },
   { label: t('portal.overview.rangeDays', { count: 30 }), value: 30 as const },
   { label: t('portal.overview.rangeDays', { count: 90 }), value: 90 as const },
-];
+]));
 
 /**
  * The shop at a glance — laid out like the back office's own overview: the
  * period, the figures, the trend, then what came in last.
  */
 export default function MerchantOverviewPage() {
+  useLocale();
   const router = useRouter();
   const [range, setRange] = useState<7 | 30 | 90>(30);
   const [stats, setStats] = useState<VendorOverviewStats | null>(null);
