@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { KeyRound, Mail, Store } from 'lucide-react';
 import { AUTH_INPUT, AuthField, AuthShell, AuthSwitch } from '@/components/auth/AuthShell';
+import { t } from '@/lib/i18n';
 import {
   getMerchantSession,
   MerchantAuthError,
@@ -12,31 +13,31 @@ import {
 } from '@/lib/merchantAuth';
 
 const ERRORS: Record<MerchantSignInError, string> = {
-  code_invalid: 'Code incorrect. Vérifiez-le et réessayez.',
-  code_expired: 'Ce code a expiré. Demandez-en un nouveau.',
-  cooldown: 'Patientez une minute avant de demander un autre code.',
-  no_shop: 'Aucune boutique n’est liée à ce compte. Inscrivez votre commerce depuis l’application Sougouba.',
-  unreachable: 'Impossible de joindre le serveur. Réessayez dans un instant.',
+  code_invalid: t('merchantLogin.errors.codeInvalid'),
+  code_expired: t('merchantLogin.errors.codeExpired'),
+  cooldown: t('merchantLogin.errors.cooldown'),
+  no_shop: t('merchantLogin.errors.noShop'),
+  unreachable: t('merchantLogin.errors.unreachable'),
 };
 
 const SLIDES = [
   {
     src: '/login/market.jpg',
-    title: 'Vos commandes,',
-    accent: 'dès qu’elles tombent',
-    body: 'Suivez chaque commande de votre boutique, de l’acceptation à la livraison.',
+    title: t('merchantLogin.slides.ordersTitle'),
+    accent: t('merchantLogin.slides.ordersAccent'),
+    body: t('merchantLogin.slides.ordersBody'),
   },
   {
     src: '/login/dish.jpg',
-    title: 'Ce que vos clients',
-    accent: 'pensent de vous',
-    body: 'Notes, avis et signalements, au même endroit que vos ventes.',
+    title: t('merchantLogin.slides.reviewsTitle'),
+    accent: t('merchantLogin.slides.reviewsAccent'),
+    body: t('merchantLogin.slides.reviewsBody'),
   },
   {
     src: '/login/courier.jpg',
-    title: 'Un livreur Sougouba',
-    accent: 'pour chaque commande',
-    body: 'Vous préparez, nous livrons : le suivi de la course est sous vos yeux.',
+    title: t('merchantLogin.slides.courierTitle'),
+    accent: t('merchantLogin.slides.courierAccent'),
+    body: t('merchantLogin.slides.courierBody'),
   },
 ] as const;
 
@@ -64,7 +65,7 @@ export default function MerchantLoginPage() {
   }, [router]);
 
   function messageFor(caught: unknown): string {
-    return caught instanceof MerchantAuthError ? ERRORS[caught.code] : 'Connexion impossible. Réessayez.';
+    return caught instanceof MerchantAuthError ? ERRORS[caught.code] : t('merchantLogin.errors.generic');
   }
 
   async function sendCode(e?: FormEvent) {
@@ -104,26 +105,26 @@ export default function MerchantLoginPage() {
     <AuthShell
       tone="terracotta"
       icon={step === 'email' ? Store : KeyRound}
-      title={step === 'email' ? 'Espace commerçant' : 'Vérifiez vos courriels'}
+      title={step === 'email' ? t('merchantLogin.title') : t('merchantLogin.codeTitle')}
       subtitle={
         step === 'email'
-          ? 'Connectez-vous avec le courriel de votre compte Sougouba : nous vous envoyons un code.'
-          : `Entrez le code à 6 chiffres envoyé à ${email.trim()}.`
+          ? t('merchantLogin.subtitle')
+          : t('merchantLogin.codeSubtitle', { email: email.trim() })
       }
-      badge="Espace commerçant"
+      badge={t('merchantLogin.badge')}
       slides={SLIDES}
-      footer={<AuthSwitch href="/login" strong="Vous êtes administrateur ?" rest="Accédez à la console." hoverTone="forest" />}
+      footer={<AuthSwitch href="/login" strong={t('merchantLogin.adminQuestion')} rest={t('merchantLogin.adminLink')} hoverTone="forest" />}
     >
       {step === 'email' ? (
         <form onSubmit={sendCode} className="flex flex-col gap-5" noValidate>
-          <AuthField label="Courriel" htmlFor="email" invalid={!!error} hint="Le courriel de votre compte dans l’application Sougouba.">
+          <AuthField label={t('merchantLogin.email')} htmlFor="email" invalid={!!error} hint={t('merchantLogin.emailHint')}>
             <Mail size={17} className="shrink-0 text-muted-foreground" />
             <input
               id="email"
               type="email"
               required
               autoComplete="email"
-              placeholder="vous@exemple.ca"
+              placeholder={t('merchantLogin.emailPlaceholder')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               aria-invalid={!!error}
@@ -133,12 +134,12 @@ export default function MerchantLoginPage() {
           </AuthField>
           {errorLine}
           <button type="submit" disabled={busy || !email.trim()} className={BUTTON}>
-            {busy ? 'Envoi…' : 'Recevoir un code'}
+            {busy ? t('merchantLogin.sending') : t('merchantLogin.getCode')}
           </button>
         </form>
       ) : (
         <form onSubmit={verify} className="flex flex-col gap-5" noValidate>
-          <AuthField label="Code" htmlFor="code" invalid={!!error}>
+          <AuthField label={t('merchantLogin.code')} htmlFor="code" invalid={!!error}>
             <KeyRound size={17} className="shrink-0 text-muted-foreground" />
             <input
               id="code"
@@ -157,7 +158,7 @@ export default function MerchantLoginPage() {
           </AuthField>
           {errorLine}
           <button type="submit" disabled={busy || code.length !== 6} className={BUTTON}>
-            {busy ? 'Connexion…' : 'Se connecter'}
+            {busy ? t('merchantLogin.signingIn') : t('merchantLogin.signIn')}
           </button>
           <div className="flex items-center justify-center gap-4 font-sans text-[0.8125rem]">
             <button
@@ -169,7 +170,7 @@ export default function MerchantLoginPage() {
               }}
               className="cursor-pointer font-medium text-muted-foreground hover:text-foreground hover:underline"
             >
-              Changer de courriel
+              {t('merchantLogin.changeEmail')}
             </button>
             <span className="text-border">·</span>
             <button
@@ -178,7 +179,7 @@ export default function MerchantLoginPage() {
               onClick={() => void sendCode()}
               className="cursor-pointer font-medium text-muted-foreground hover:text-foreground hover:underline disabled:opacity-50"
             >
-              Renvoyer le code
+              {t('merchantLogin.resend')}
             </button>
           </div>
         </form>

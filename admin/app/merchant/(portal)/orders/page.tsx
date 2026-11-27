@@ -11,17 +11,18 @@ import { listMerchantOrders } from '@/lib/api/merchantOrders';
 import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { orderStatusMeta } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import type { Order, OrderStatus } from '@/lib/types';
 
 const STATUS_OPTIONS: { value: OrderStatus | 'all'; label: string }[] = [
-  { value: 'all', label: 'Tous les statuts' },
-  { value: 'pending', label: 'En attente' },
-  { value: 'confirmed', label: 'Confirmée' },
-  { value: 'preparing', label: 'En préparation' },
-  { value: 'ready', label: 'Prête' },
-  { value: 'out_for_delivery', label: 'En livraison' },
-  { value: 'delivered', label: 'Livrée' },
-  { value: 'cancelled', label: 'Annulée' },
+  { value: 'all', label: t('portal.orders.list.allStatuses') },
+  { value: 'pending', label: orderStatusMeta('pending').label },
+  { value: 'confirmed', label: orderStatusMeta('confirmed').label },
+  { value: 'preparing', label: orderStatusMeta('preparing').label },
+  { value: 'ready', label: orderStatusMeta('ready').label },
+  { value: 'out_for_delivery', label: orderStatusMeta('out_for_delivery').label },
+  { value: 'delivered', label: orderStatusMeta('delivered').label },
+  { value: 'cancelled', label: orderStatusMeta('cancelled').label },
 ];
 
 export default function MerchantOrdersPage() {
@@ -38,11 +39,11 @@ export default function MerchantOrdersPage() {
   );
 
   const columns: Column<Order>[] = [
-    { key: 'id', header: 'Commande', render: (o) => <Text variant="body" className="font-semibold">#{o.id.slice(0, 8)}</Text> },
-    { key: 'customer', header: 'Client', render: (o) => <Text variant="body">{o.customerName ?? '—'}</Text> },
+    { key: 'id', header: t('portal.orders.list.columns.order'), render: (o) => <Text variant="body" className="font-semibold">#{o.id.slice(0, 8)}</Text> },
+    { key: 'customer', header: t('portal.orders.list.columns.customer'), render: (o) => <Text variant="body">{o.customerName ?? '—'}</Text> },
     {
       key: 'createdAt',
-      header: 'Date',
+      header: t('portal.orders.list.columns.date'),
       render: (o) => (
         <Text variant="body" tone="muted">
           {formatDateTime(o.createdAt)}
@@ -51,7 +52,7 @@ export default function MerchantOrdersPage() {
     },
     {
       key: 'total',
-      header: 'Total',
+      header: t('portal.orders.list.columns.total'),
       className: 'text-right',
       render: (o) => (
         <Text variant="body" className="tabular text-right font-semibold">
@@ -61,7 +62,7 @@ export default function MerchantOrdersPage() {
     },
     {
       key: 'status',
-      header: 'Statut',
+      header: t('portal.orders.list.columns.status'),
       render: (o) => {
         const meta = orderStatusMeta(o.status);
         return <StatusBadge label={meta.label} tone={meta.tone} />;
@@ -71,7 +72,7 @@ export default function MerchantOrdersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader icon={Package} title="Commandes" description="Toutes les commandes reçues par votre boutique." />
+      <PageHeader icon={Package} title={t('nav.merchant.orders')} description={t('portal.orders.list.description')} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <select
@@ -90,7 +91,7 @@ export default function MerchantOrdersPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher un client…"
+            placeholder={t('portal.orders.list.searchPlaceholder')}
             className="w-full min-w-0 bg-transparent font-sans sm:w-56 text-[0.8125rem] text-foreground outline-none placeholder:text-muted-foreground"
           />
         </div>
@@ -113,8 +114,8 @@ export default function MerchantOrdersPage() {
             onSort: list.setSort,
           }}
           emptyIcon={Package}
-          emptyTitle="Aucune commande"
-          emptyDescription="Aucune commande ne correspond à ce filtre pour le moment."
+          emptyTitle={t('portal.orders.list.emptyTitle')}
+          emptyDescription={t('portal.orders.list.emptyDescription')}
         />
       </Card>
     </div>

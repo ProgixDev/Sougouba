@@ -10,11 +10,12 @@ import { TrendChart } from '@/components/charts/TrendChart';
 import { CompareBarChart } from '@/components/charts/CompareBarChart';
 import { getOverviewStats, type OverviewStats } from '@/lib/api/stats';
 import { formatCad } from '@/lib/format';
+import { t } from '@/lib/i18n';
 
 const RANGES = [
-  { label: '7 jours', value: 7 as const },
-  { label: '30 jours', value: 30 as const },
-  { label: '90 jours', value: 90 as const },
+  { label: t('overview.rangeDays', { count: 7 }), value: 7 as const },
+  { label: t('overview.rangeDays', { count: 30 }), value: 30 as const },
+  { label: t('overview.rangeDays', { count: 90 }), value: 90 as const },
 ];
 
 export default function OverviewPage() {
@@ -37,8 +38,8 @@ export default function OverviewPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <PageHeader
           icon={LayoutDashboard}
-          title="Aperçu de la plateforme"
-          description="L’activité, les revenus et les files d’attente, en un coup d’œil."
+          title={t('overview.title')}
+          description={t('overview.description')}
         />
         <div className="flex gap-1.5 rounded-full border border-border bg-card p-1">
           {RANGES.map((r) => (
@@ -64,13 +65,13 @@ export default function OverviewPage() {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <StatCard label="GMV" value={formatCad(stats.gmvCad)} icon={DollarSign} deltaPct={stats.gmvDeltaPct} tint="forest" />
-            <StatCard label="Commandes" value={String(stats.orderCount)} icon={Package} deltaPct={stats.orderDeltaPct} tint="terracotta" />
-            <StatCard label="Revenu de commission" value={formatCad(stats.commissionRevenueCad)} icon={TrendingUp} tint="mustard" />
-            <StatCard label="Commerçants approuvés" value={String(stats.activeMerchants)} icon={Store} tint="forest" />
-            <StatCard label="Livreurs approuvés" value={String(stats.activeCouriers)} icon={Bike} tint="terracotta" />
+            <StatCard label={t('overview.stats.gmv')} value={formatCad(stats.gmvCad)} icon={DollarSign} deltaPct={stats.gmvDeltaPct} tint="forest" />
+            <StatCard label={t('overview.stats.orders')} value={String(stats.orderCount)} icon={Package} deltaPct={stats.orderDeltaPct} tint="terracotta" />
+            <StatCard label={t('overview.stats.commissionRevenue')} value={formatCad(stats.commissionRevenueCad)} icon={TrendingUp} tint="mustard" />
+            <StatCard label={t('overview.stats.approvedMerchants')} value={String(stats.activeMerchants)} icon={Store} tint="forest" />
+            <StatCard label={t('overview.stats.approvedCouriers')} value={String(stats.activeCouriers)} icon={Bike} tint="terracotta" />
             <StatCard
-              label="En attente d'approbation"
+              label={t('overview.stats.pendingApproval')}
               value={String(stats.pendingMerchants + stats.pendingCouriers)}
               icon={AlertCircle}
               tint="mustard"
@@ -80,13 +81,13 @@ export default function OverviewPage() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
             <Card className="p-5 lg:col-span-3">
               <Text variant="subtitle" className="mb-4">
-                GMV dans le temps
+                {t('overview.charts.gmvOverTime')}
               </Text>
               <TrendChart data={stats.series} />
             </Card>
             <Card className="p-5 lg:col-span-2">
               <Text variant="subtitle" className="mb-4">
-                Meilleurs commerçants (revenu)
+                {t('overview.charts.topMerchants')}
               </Text>
               <CompareBarChart data={stats.topVendors.map((v) => ({ name: v.name, revenueCad: v.revenueCad }))} />
             </Card>
@@ -95,7 +96,7 @@ export default function OverviewPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Card className="p-5">
               <Text variant="subtitle" className="mb-3">
-                Litiges &amp; incidents ouverts
+                {t('overview.queues.title')}
               </Text>
               <div className="flex gap-6">
                 <div>
@@ -103,7 +104,7 @@ export default function OverviewPage() {
                     {stats.openDisputes}
                   </Text>
                   <Text variant="caption" tone="muted">
-                    Litiges clients
+                    {t('overview.queues.disputes')}
                   </Text>
                 </div>
                 <div>
@@ -111,14 +112,14 @@ export default function OverviewPage() {
                     {stats.openCourierIssues}
                   </Text>
                   <Text variant="caption" tone="muted">
-                    Incidents livreurs
+                    {t('overview.queues.courierIssues')}
                   </Text>
                 </div>
               </div>
             </Card>
             <Card className="p-5">
               <Text variant="subtitle" className="mb-3">
-                Commandes par secteur
+                {t('overview.ordersByVertical')}
               </Text>
               <div className="flex gap-6">
                 {stats.ordersByVertical.map((v) => (

@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/insights/Insights';
 import { PayoutsCard } from '@/components/merchant/PayoutsCard';
 import { getMyStatementUrl, listMyStatements, statementMonth, type Statement, type StatementTotals } from '@/lib/api/statements';
 import { formatCad } from '@/lib/format';
+import { t } from '@/lib/i18n';
 
 type Loaded = Awaited<ReturnType<typeof listMyStatements>>;
 
@@ -48,15 +49,15 @@ export default function MerchantStatementsPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         icon={Banknote}
-        title="Relevés et versements"
-        description="Votre part des ventes, ce qui vous a été versé et ce qui vous est dû. Un relevé est émis le 1er de chaque mois."
+        title={t('portal.statements.title')}
+        description={t('portal.statements.description')}
       />
 
       <PayoutsCard />
 
       {failed ? (
         <Text variant="body" tone="destructive">
-          Impossible de charger vos relevés. Vérifiez votre connexion et rechargez la page.
+          {t('portal.statements.loadFailed')}
         </Text>
       ) : null}
 
@@ -66,24 +67,24 @@ export default function MerchantStatementsPage() {
         <>
           <Card className="p-5">
             <Text variant="label" tone="muted">
-              Mois en cours
+              {t('portal.statements.currentMonth')}
             </Text>
             <Text variant="subtitle" className="mb-4 mt-0.5 capitalize">
               {statementMonth(data.current.period)}
             </Text>
             <Figures totals={data.current.totals} />
             <Text variant="caption" tone="muted" className="mt-3">
-              Chiffres provisoires : seules les commandes payées en ligne et déjà livrées sont comptées. Les frais de livraison reviennent à Sougouba, qui rémunère le livreur.
+              {t('portal.statements.provisional')}
             </Text>
           </Card>
 
           <Card className="p-5">
             <Text variant="subtitle" className="mb-3">
-              Relevés émis
+              {t('portal.statements.issued')}
             </Text>
             {data.statements.length === 0 ? (
               <Text variant="body" tone="muted">
-                Aucun relevé pour l’instant. Le premier sera émis le 1er du mois qui suit votre première commande livrée.
+                {t('portal.statements.empty')}
               </Text>
             ) : (
               <ul className="flex flex-col">
@@ -96,7 +97,7 @@ export default function MerchantStatementsPage() {
                           {statementMonth(statement.period)}
                         </Text>
                         <Text variant="caption" tone="muted">
-                          {statement.number} · {statement.totals.orderCount} commande{statement.totals.orderCount > 1 ? 's' : ''}
+                          {statement.number} · {t('portal.statements.orderCount', { count: statement.totals.orderCount })}
                         </Text>
                       </div>
                     </div>
@@ -106,11 +107,11 @@ export default function MerchantStatementsPage() {
                           {formatCad(Math.abs(statement.totals.balanceCad))}
                         </Text>
                         <Text variant="caption" tone="muted">
-                          {statement.totals.balanceCad < 0 ? 'dû à Sougouba' : 'à vous verser'}
+                          {statement.totals.balanceCad < 0 ? t('portal.statements.owedToSougouba') : t('portal.statements.owedToYou')}
                         </Text>
                       </div>
                       <Button variant="outline" size="sm" onClick={() => open(statement)} disabled={openingId === statement.id}>
-                        PDF
+                        {t('portal.statements.pdf')}
                       </Button>
                     </div>
                   </li>
@@ -120,7 +121,7 @@ export default function MerchantStatementsPage() {
           </Card>
 
           <Text variant="caption" tone="muted">
-            Un relevé est un état de compte, pas une facture fiscale. L’abonnement mensuel est facturé séparément par Stripe.
+            {t('portal.statements.notInvoice')}
           </Text>
         </>
       )}
@@ -134,17 +135,17 @@ function Figures({ totals }: { totals: StatementTotals }) {
   return (
     <dl className="flex max-w-md flex-col gap-1.5 font-sans text-[0.875rem]">
       <Line
-        label={`${totals.orderCount} commande${totals.orderCount > 1 ? 's' : ''} livrée${totals.orderCount > 1 ? 's' : ''} — produits et taxes`}
+        label={t('portal.statements.lines.delivered', { count: totals.orderCount })}
         value={formatCad(totals.goodsCad + totals.gstCad + totals.qstCad)}
       />
-      {totals.couponsCad > 0 && <Line label="Vos codes promo" value={formatCad(-totals.couponsCad)} />}
-      <Line label="Commission Sougouba" value={formatCad(-totals.commissionCad)} />
-      <Line label="Votre part des ventes" value={formatCad(totals.earnedCad)} />
-      {totals.refundCount > 0 && <Line label="Remboursements, votre part" value={formatCad(-totals.refundsCad)} />}
-      {totals.openingCad !== 0 && <Line label="Solde reporté du mois précédent" value={formatCad(totals.openingCad)} />}
-      {totals.payoutCount > 0 && <Line label="Versé sur votre compte" value={formatCad(-totals.paidCad)} />}
+      {totals.couponsCad > 0 && <Line label={t('portal.statements.lines.coupons')} value={formatCad(-totals.couponsCad)} />}
+      <Line label={t('portal.statements.lines.commission')} value={formatCad(-totals.commissionCad)} />
+      <Line label={t('portal.statements.lines.earned')} value={formatCad(totals.earnedCad)} />
+      {totals.refundCount > 0 && <Line label={t('portal.statements.lines.refunds')} value={formatCad(-totals.refundsCad)} />}
+      {totals.openingCad !== 0 && <Line label={t('portal.statements.lines.opening')} value={formatCad(totals.openingCad)} />}
+      {totals.payoutCount > 0 && <Line label={t('portal.statements.lines.paid')} value={formatCad(-totals.paidCad)} />}
       <div className="mt-1.5 flex items-baseline justify-between gap-4 border-t border-border pt-2.5">
-        <dt className="font-semibold">{owed ? 'Solde dû à Sougouba' : 'Solde à vous verser'}</dt>
+        <dt className="font-semibold">{owed ? t('portal.statements.lines.balanceOwed') : t('portal.statements.lines.balance')}</dt>
         <dd className={`tabular text-[1.125rem] font-bold ${owed ? 'text-destructive' : 'text-primary'}`}>{formatCad(Math.abs(totals.balanceCad))}</dd>
       </div>
     </dl>

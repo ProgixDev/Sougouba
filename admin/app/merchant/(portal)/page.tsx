@@ -13,12 +13,13 @@ import { getVendorOverview, type VendorOverviewStats } from '@/lib/api/stats';
 import { listMerchantOrders } from '@/lib/api/merchantOrders';
 import { orderStatusMeta } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import type { Order } from '@/lib/types';
 
 const RANGES = [
-  { label: '7 jours', value: 7 as const },
-  { label: '30 jours', value: 30 as const },
-  { label: '90 jours', value: 90 as const },
+  { label: t('portal.overview.rangeDays', { count: 7 }), value: 7 as const },
+  { label: t('portal.overview.rangeDays', { count: 30 }), value: 30 as const },
+  { label: t('portal.overview.rangeDays', { count: 90 }), value: 90 as const },
 ];
 
 /**
@@ -53,7 +54,7 @@ export default function MerchantOverviewPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <PageHeader icon={LayoutDashboard} title="Aperçu de votre boutique" description="Vos ventes et vos commandes, en un coup d’œil." />
+        <PageHeader icon={LayoutDashboard} title={t('portal.overview.title')} description={t('portal.overview.description')} />
         <div className="flex gap-1.5 rounded-full border border-border bg-card p-1">
           {RANGES.map((r) => (
             <button
@@ -72,7 +73,7 @@ export default function MerchantOverviewPage() {
 
       {failed ? (
         <Text variant="body" tone="destructive">
-          Impossible de charger vos données. Vérifiez votre connexion et rechargez la page.
+          {t('portal.overview.loadFailed')}
         </Text>
       ) : null}
 
@@ -80,33 +81,33 @@ export default function MerchantOverviewPage() {
         <KpiCard
           loading={!stats}
           icon={DollarSign}
-          label="Ventes de produits"
+          label={t('portal.overview.kpi.sales')}
           value={formatCad(stats?.revenueCad ?? 0)}
-          hint="Hors taxes et frais de livraison"
+          hint={t('portal.overview.kpi.salesHint')}
         />
         <KpiCard
           loading={!stats}
           icon={Package}
           tone="terracotta"
-          label="Commandes"
+          label={t('portal.overview.kpi.orders')}
           value={String(stats?.orderCount ?? 0)}
-          hint={`Sur ${range} jours, annulées exclues`}
+          hint={t('portal.overview.kpi.ordersHint', { days: range })}
         />
         <KpiCard
           loading={!stats}
           icon={ShoppingBag}
           tone="neutral"
-          label="Panier moyen"
+          label={t('portal.overview.kpi.basket')}
           value={formatCad(stats && stats.orderCount > 0 ? stats.revenueCad / stats.orderCount : 0)}
-          hint="Produits par commande"
+          hint={t('portal.overview.kpi.basketHint')}
         />
         <KpiCard
           loading={!stats}
           icon={Clock}
           tone="mustard"
-          label="En cours"
+          label={t('portal.overview.kpi.active')}
           value={String(stats?.activeCount ?? 0)}
-          hint="À préparer ou en livraison"
+          hint={t('portal.overview.kpi.activeHint')}
         />
       </KpiGrid>
 
@@ -116,7 +117,7 @@ export default function MerchantOverviewPage() {
         <>
           <Card className="p-5">
             <Text variant="subtitle" className="mb-4">
-              Ventes dans le temps
+              {t('portal.overview.trendTitle')}
             </Text>
             <TrendChart data={stats.series} />
           </Card>
@@ -125,12 +126,12 @@ export default function MerchantOverviewPage() {
 
       <Card elevated>
         <div className="flex items-center justify-between gap-3 border-b border-border p-5">
-          <Text variant="subtitle">Commandes récentes</Text>
+          <Text variant="subtitle">{t('portal.overview.recent.title')}</Text>
           <Link
             href="/merchant/orders"
             className="inline-flex items-center gap-1 font-sans text-[0.8125rem] font-semibold text-muted-foreground hover:text-foreground"
           >
-            Toutes les commandes <ChevronRight size={14} />
+            {t('portal.overview.recent.all')} <ChevronRight size={14} />
           </Link>
         </div>
         {recent === null ? (
@@ -139,7 +140,7 @@ export default function MerchantOverviewPage() {
           </div>
         ) : recent.length === 0 ? (
           <Text variant="body" tone="muted" className="p-5">
-            Aucune commande pour le moment. Les nouvelles commandes s’afficheront ici.
+            {t('portal.overview.recent.empty')}
           </Text>
         ) : (
           <div className="flex flex-col">

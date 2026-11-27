@@ -6,6 +6,7 @@ import { Text } from '@/components/ui/Text';
 import { Skeleton } from '@/components/data/Skeleton';
 import { ProductEditor, useProductEditorData } from '@/components/merchant/ProductEditor';
 import { getMyProduct, type Product } from '@/lib/api/merchantCatalog';
+import { t } from '@/lib/i18n';
 
 export default function MerchantEditProductPage() {
   const { id } = useParams<{ id: string }>();
@@ -21,17 +22,17 @@ export default function MerchantEditProductPage() {
 
   return (
     <div className="flex flex-col gap-2">
-      <Breadcrumbs items={[{ label: 'Produits', href: '/merchant/products' }, { label: product?.name ?? 'Produit' }]} />
+      <Breadcrumbs items={[{ label: t('nav.merchant.products'), href: '/merchant/products' }, { label: product?.name ?? t('portal.products.editor.fallbackTitle') }]} />
       <Text as="h1" variant="display" className="mb-4">
-        {product?.name ?? 'Produit'}
+        {product?.name ?? t('portal.products.editor.fallbackTitle')}
       </Text>
       {failed || loadFailed ? (
         <Text variant="body" tone="destructive">
-          Impossible de charger ce produit. Vérifiez votre connexion et rechargez la page.
+          {t('portal.products.editor.loadFailed')}
         </Text>
       ) : product === null ? (
         <Text variant="body" tone="muted">
-          Ce produit est introuvable. Il a peut-être été supprimé.
+          {t('portal.products.editor.notFound')}
         </Text>
       ) : shop && categories && product ? (
         // Keyed so that opening another product starts from that product's values.

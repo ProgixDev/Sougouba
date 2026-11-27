@@ -16,7 +16,9 @@ import {
   ShieldAlert,
   Tags,
 } from 'lucide-react';
+import { roleName } from '@/lib/api/admins';
 import { signOut } from '@/lib/auth';
+import { t } from '@/lib/i18n';
 import { permissionForPath, useAdmin } from '@/lib/permissions';
 import { SidebarShell, type NavGroup, type NavItem } from '@/components/layout/SidebarShell';
 
@@ -37,39 +39,39 @@ export interface SidebarCounts {
  */
 export const NAV_GROUPS = (counts: SidebarCounts): NavGroup[] => [
   {
-    title: 'Pilotage',
+    title: t('nav.groups.steering'),
     boxed: false,
-    items: [{ href: '/', label: 'Aperçu', icon: LayoutDashboard, count: 0 }],
+    items: [{ href: '/', label: t('nav.admin.overview'), icon: LayoutDashboard, count: 0 }],
   },
   {
-    title: 'Activité',
+    title: t('nav.groups.activity'),
     boxed: true,
     items: [
-      { href: '/orders', label: 'Commandes', icon: Package, count: 0 },
-      { href: '/merchants', label: 'Commerçants', icon: Store, count: counts.pendingMerchants },
-      { href: '/couriers', label: 'Livreurs', icon: Bike, count: counts.pendingCouriers },
-      { href: '/users', label: 'Utilisateurs', icon: Users, count: 0 },
-      { href: '/payouts', label: 'Virements', icon: Banknote, count: 0 },
+      { href: '/orders', label: t('nav.admin.orders'), icon: Package, count: 0 },
+      { href: '/merchants', label: t('nav.admin.merchants'), icon: Store, count: counts.pendingMerchants },
+      { href: '/couriers', label: t('nav.admin.couriers'), icon: Bike, count: counts.pendingCouriers },
+      { href: '/users', label: t('nav.admin.users'), icon: Users, count: 0 },
+      { href: '/payouts', label: t('nav.admin.payouts'), icon: Banknote, count: 0 },
     ],
   },
   {
-    title: 'À traiter',
+    title: t('nav.groups.toHandle'),
     boxed: true,
     items: [
-      { href: '/disputes', label: 'Litiges', icon: MessageCircleWarning, count: counts.openDisputes },
-      { href: '/courier-issues', label: 'Incidents livreurs', icon: TriangleAlert, count: counts.openCourierIssues },
-      { href: '/support', label: 'Support', icon: Headset, count: counts.supportWaiting },
-      { href: '/moderation', label: 'Modération', icon: ShieldAlert, count: 0 },
+      { href: '/disputes', label: t('nav.admin.disputes'), icon: MessageCircleWarning, count: counts.openDisputes },
+      { href: '/courier-issues', label: t('nav.admin.courierIssues'), icon: TriangleAlert, count: counts.openCourierIssues },
+      { href: '/support', label: t('nav.admin.support'), icon: Headset, count: counts.supportWaiting },
+      { href: '/moderation', label: t('nav.admin.moderation'), icon: ShieldAlert, count: 0 },
     ],
   },
   {
-    title: 'Configuration',
+    title: t('nav.groups.setup'),
     boxed: false,
     items: [
-      { href: '/specialties', label: 'Spécialités', icon: Tags, count: 0 },
-      { href: '/admins', label: 'Administrateurs', icon: UserCog, count: 0 },
-      { href: '/audit', label: 'Journal d’audit', icon: ScrollText, count: 0 },
-      { href: '/settings', label: 'Paramètres', icon: Settings, count: 0 },
+      { href: '/specialties', label: t('nav.admin.specialties'), icon: Tags, count: 0 },
+      { href: '/admins', label: t('nav.admin.admins'), icon: UserCog, count: 0 },
+      { href: '/audit', label: t('nav.admin.audit'), icon: ScrollText, count: 0 },
+      { href: '/settings', label: t('nav.admin.settings'), icon: Settings, count: 0 },
     ],
   },
 ];
@@ -111,10 +113,10 @@ export function Sidebar({
       groups={groups}
       isActive={(href) => isActivePath(href, pathname)}
       account={{
-        name: me.fullName || 'Administrateur',
-        caption: me.role?.name ?? 'Sans rôle',
+        name: me.fullName || t('nav.admin.administrator'),
+        caption: me.role ? roleName(me.role) : t('nav.admin.noRole'),
         href: '/account',
-        hrefLabel: 'Mon compte',
+        hrefLabel: t('nav.admin.myAccount'),
       }}
       onSignOut={async () => {
         // Awaited so the token is actually revoked before we navigate —

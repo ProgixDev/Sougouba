@@ -1,4 +1,5 @@
 import { cn } from '@/lib/cn';
+import { t } from '@/lib/i18n';
 
 /**
  * The Sougouba basket, on a light round tile so it reads on both themes.
@@ -11,7 +12,7 @@ export function LogoMark({ size = 36, className }: { size?: number; className?: 
       style={{ width: size, height: size }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element -- a static 256px PNG; next/image buys nothing here */}
-      <img src="/logo-mark.png" alt="Sougouba" width={size * 0.74} height={size * 0.74} className="object-contain" />
+      <img src="/logo-mark.png" alt={t('common.brand')} width={size * 0.74} height={size * 0.74} className="object-contain" />
     </div>
   );
 }

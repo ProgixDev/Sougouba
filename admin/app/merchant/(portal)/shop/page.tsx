@@ -8,11 +8,12 @@ import { useToast } from '@/components/Toast';
 import { ShopHoursCard, ShopInfoCard, ShopSectionsCard } from '@/components/merchant/ShopSettings';
 import { SubscriptionCard } from '@/components/merchant/SubscriptionCard';
 import { getMyShop, type Shop } from '@/lib/api/merchantCatalog';
+import { t } from '@/lib/i18n';
 
 const STATUS_NOTE: Partial<Record<Shop['status'], string>> = {
-  pending: 'Votre boutique est en cours de vérification. Vous pouvez déjà préparer votre catalogue ; elle sera visible des clients une fois approuvée.',
-  suspended: 'Votre boutique est suspendue : les clients ne la voient plus. Contactez le soutien Sougouba pour en savoir plus.',
-  rejected: 'Votre demande d’inscription n’a pas été retenue. Contactez le soutien Sougouba pour en savoir plus.',
+  pending: t('portal.shop.statusNote.pending'),
+  suspended: t('portal.shop.statusNote.suspended'),
+  rejected: t('portal.shop.statusNote.rejected'),
 };
 
 /**
@@ -39,17 +40,17 @@ export default function MerchantShopPage() {
     const state = params.get('abonnement');
     if (!state) return;
     window.history.replaceState(null, '', window.location.pathname);
-    if (state === 'cancel') toast('info', 'Abonnement non modifié.');
+    if (state === 'cancel') toast('info', t('portal.shop.subscriptionUnchanged'));
     else setSubscriptionKey((key) => key + 1);
   }, [toast]);
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader icon={Store} title="Boutique" description="Votre page, vos horaires, vos rayons et votre abonnement." />
+      <PageHeader icon={Store} title={t('nav.merchant.shop')} description={t('portal.shop.description')} />
 
       {failed ? (
         <Text variant="body" tone="destructive">
-          Impossible de charger votre boutique. Vérifiez votre connexion et rechargez la page.
+          {t('portal.shop.loadFailed')}
         </Text>
       ) : !shop ? (
         <Skeleton className="h-96 rounded-card" />

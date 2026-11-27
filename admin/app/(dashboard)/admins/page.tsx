@@ -18,7 +18,11 @@ import {
   getPermissionCatalogue,
   listAdmins,
   listRoles,
+  permissionAreaLabel,
+  permissionLabel,
   revokeAdmin,
+  roleDescription,
+  roleName,
   setAdminRole,
   updateRole,
   type AdminAccount,
@@ -26,6 +30,8 @@ import {
   type PermissionGroup,
 } from '@/lib/api/admins';
 import { formatDate, formatDateTime } from '@/lib/format';
+// `t` is already the name of a tab in the lists below.
+import { t as translate } from '@/lib/i18n';
 import { useAdmin } from '@/lib/permissions';
 import { KpiCard, KpiGrid, PageHeader } from '@/components/insights/Insights';
 
@@ -72,7 +78,7 @@ function Admins() {
       .catch((error: unknown) => {
         setAdmins([]);
         setRoles([]);
-        toast('error', error instanceof Error ? error.message : 'Chargement impossible.');
+        toast('error', error instanceof Error ? error.message : translate('common.errors.loadFailed'));
       });
   }, [toast]);
 
@@ -82,44 +88,55 @@ function Admins() {
     <div className="mx-auto flex max-w-content flex-col gap-6">
       <PageHeader
         icon={UserCog}
-        title="Administrateurs"
-        description="Qui peut ouvrir ce tableau de bord, et ce que chacun peut y faire. Chaque changement est inscrit au journal d’audit."
+        title={translate('admins.title')}
+        description={translate('admins.description')}
       />
 
       <KpiGrid>
-        <KpiCard loading={admins === null} icon={Users} label="Membres de l’équipe" value={String(admins?.length ?? 0)} hint="Avec un accès au tableau de bord" />
+        <KpiCard loading={admins === null} icon={Users} label={translate('admins.kpis.team')} value={String(admins?.length ?? 0)} hint={translate('admins.kpis.teamHint')} />
         <KpiCard
           loading={roles === null}
           icon={ShieldCheck}
           tone="forest"
-          label="Rôles"
+          label={translate('admins.kpis.roles')}
           value={String(roles?.length ?? 0)}
-          hint={`${roles?.filter((r) => !r.isSystem).length ?? 0} personnalisés · ${roles?.filter((r) => r.isSystem).length ?? 0} prédéfinis`}
+          hint={translate('admins.kpis.rolesHint', {
+            custom: roles?.filter((r) => !r.isSystem).length ?? 0,
+            system: roles?.filter((r) => r.isSystem).length ?? 0,
+          })}
         />
         <KpiCard
           loading={admins === null}
           icon={KeyRound}
           tone="mustard"
-          label="Peuvent gérer les accès"
+          label={translate('admins.kpis.canManage')}
           value={String(
             admins?.filter((a) => roles?.find((r) => r.id === a.role?.id)?.permissions.includes('admins.manage')).length ?? 0
           )}
-          hint="Toujours au moins un"
+          hint={translate('admins.kpis.canManageHint')}
         />
         <KpiCard
           loading={admins === null}
           icon={Clock}
           tone="neutral"
-          label="Jamais connectés"
+          label={translate('admins.kpis.neverSignedIn')}
           value={String(admins?.filter((a) => !a.lastSignInAt).length ?? 0)}
-          hint="Mot de passe temporaire pas encore utilisé"
+          hint={translate('admins.kpis.neverSignedInHint')}
         />
       </KpiGrid>
 
       <div className="flex max-w-full gap-1.5 self-start overflow-x-auto rounded-full border border-border bg-card p-1 [scrollbar-width:none]">
         {[
-          { key: 'members', label: `Membres${admins ? ` · ${admins.length}` : ''}`, icon: Users },
-          { key: 'roles', label: `Rôles${roles ? ` · ${roles.length}` : ''}`, icon: ShieldCheck },
+          {
+            key: 'members',
+            label: admins ? translate('admins.tabs.membersCount', { count: admins.length }) : translate('admins.tabs.members'),
+            icon: Users,
+          },
+          {
+            key: 'roles',
+            label: roles ? translate('admins.tabs.rolesCount', { count: roles.length }) : translate('admins.tabs.roles'),
+            icon: ShieldCheck,
+          },
         ].map((t) => (
           <button
             key={t.key}
@@ -171,10 +188,10 @@ function Members({
     setBusy(true);
     try {
       const updated = await setAdminRole(admin.id, roleId);
-      toast('success', `${admin.fullName} est maintenant « ${updated.role?.name ?? '—'} ».`);
+      toast('success', translate('admins.members.roleChanged', { name: admin.fullName, role: updated.role ? roleName(updated.role) : '—' }));
       onChanged();
     } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'Changement impossible.');
+      toast('error', error instanceof Error ? error.message : translate('admins.members.roleChangeFailed'));
     }
     setBusy(false);
   }
@@ -184,10 +201,10 @@ function Members({
     setBusy(true);
     try {
       await revokeAdmin(revoking.id, reason);
-      toast('success', `${revoking.fullName} n’a plus accès au tableau de bord.`);
+      toast('success', translate('admins.members.revoked', { name: revoking.fullName }));
       onChanged();
     } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'Action impossible.');
+      toast('error', error instanceof Error ? error.message : translate('admins.members.revokeFailed'));
     }
     setBusy(false);
     setRevoking(null);
@@ -200,12 +217,11 @@ function Members({
           <div className="flex items-center gap-2">
             <KeyRound size={17} className="text-primary" />
             <Text variant="subtitle">
-              Accès créé pour {created.email} — {created.role}
+              {translate('admins.members.created.title', { email: created.email, role: created.role })}
             </Text>
           </div>
           <Text variant="body">
-            Mot de passe temporaire, affiché une seule fois. Transmettez-le en privé ; la personne le change dans « Mon
-            compte » après sa première connexion.
+            {translate('admins.members.created.body')}
           </Text>
           <div className="flex flex-wrap items-center gap-2">
             <code className="rounded-lg bg-card px-3 py-2 font-mono text-[0.9375rem] tracking-wide">{created.password}</code>
@@ -215,14 +231,14 @@ function Members({
               onClick={() =>
                 navigator.clipboard
                   .writeText(created.password)
-                  .then(() => toast('success', 'Mot de passe copié.'))
-                  .catch(() => toast('error', 'Copie impossible — sélectionnez-le à la main.'))
+                  .then(() => toast('success', translate('admins.members.created.copied')))
+                  .catch(() => toast('error', translate('admins.members.created.copyFailed')))
               }
             >
-              <Copy size={14} /> Copier
+              <Copy size={14} /> {translate('admins.members.created.copy')}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setCreated(null)}>
-              J’ai transmis le mot de passe
+              {translate('admins.members.created.dismiss')}
             </Button>
           </div>
         </Card>
@@ -230,7 +246,7 @@ function Members({
 
       {manage && (
         <Button className="self-start" onClick={() => setDialog('new')}>
-          <UserPlus size={15} /> Ajouter un administrateur
+          <UserPlus size={15} /> {translate('admins.members.add')}
         </Button>
       )}
       {dialog !== null && (
@@ -251,7 +267,13 @@ function Members({
         <table className="w-full min-w-[720px] border-collapse">
           <thead>
             <tr className="border-b border-border text-left">
-              {['Administrateur', 'Rôle', 'Dernière connexion', 'Membre depuis', ''].map((h) => (
+              {[
+                translate('admins.members.columns.admin'),
+                translate('admins.shared.role'),
+                translate('admins.shared.lastSignIn'),
+                translate('admins.shared.memberSince'),
+                '',
+              ].map((h) => (
                 <th key={h} className="px-5 py-3 font-sans text-[0.75rem] font-semibold uppercase tracking-wide text-muted-foreground">
                   {h}
                 </th>
@@ -273,7 +295,7 @@ function Members({
                           <Text variant="body" className="font-semibold">
                             {a.fullName || '—'}
                           </Text>
-                          {isMe && <Badge tone="primary">Vous</Badge>}
+                          {isMe && <Badge tone="primary">{translate('admins.members.you')}</Badge>}
                         </div>
                         <Text variant="caption" tone="muted">
                           {a.email ?? '—'}
@@ -292,22 +314,22 @@ function Members({
                           e.target.value === CUSTOM ? setDialog(a) : changeRole(a, e.target.value)
                         }
                         className={`${SELECT} max-w-[220px]`}
-                        aria-label={`Rôle de ${a.fullName}`}
+                        aria-label={translate('admins.members.roleOf', { name: a.fullName })}
                       >
                         {roles.map((r) => (
                           <option key={r.id} value={r.id}>
-                            {r.name}
+                            {roleName(r)}
                           </option>
                         ))}
-                        <option value={CUSTOM}>Personnaliser…</option>
+                        <option value={CUSTOM}>{translate('admins.members.customize')}</option>
                       </select>
                     ) : (
-                      <Badge tone={a.role?.slug === 'owner' ? 'secondary' : 'neutral'}>{a.role?.name ?? '—'}</Badge>
+                      <Badge tone={a.role?.slug === 'owner' ? 'secondary' : 'neutral'}>{a.role ? roleName(a.role) : '—'}</Badge>
                     )}
                   </td>
                   <td className="px-5 py-3.5">
                     <Text variant="body" tone="muted">
-                      {a.lastSignInAt ? formatDateTime(a.lastSignInAt) : 'Jamais connecté'}
+                      {a.lastSignInAt ? formatDateTime(a.lastSignInAt) : translate('admins.shared.neverSignedIn')}
                     </Text>
                   </td>
                   <td className="px-5 py-3.5">
@@ -318,7 +340,7 @@ function Members({
                   <td className="px-5 py-3.5 text-right">
                     {manage && !isMe && (
                       <Button size="sm" variant="ghost" onClick={() => setRevoking(a)} disabled={busy}>
-                        <UserMinus size={14} /> Retirer
+                        <UserMinus size={14} /> {translate('admins.members.revoke')}
                       </Button>
                     )}
                   </td>
@@ -331,9 +353,9 @@ function Members({
 
       <ConfirmDialog
         open={revoking !== null}
-        title={`Retirer l’accès de ${revoking?.fullName ?? ''} ?`}
-        description="La personne ne peut plus ouvrir le tableau de bord, dès maintenant, et son compte est bloqué. Le motif (facultatif) est inscrit au journal d’audit."
-        confirmLabel="Retirer l’accès"
+        title={translate('admins.members.revokeConfirm.title', { name: revoking?.fullName ?? '' })}
+        description={translate('admins.members.revokeConfirm.description')}
+        confirmLabel={translate('admins.members.revokeConfirm.confirm')}
         tone="destructive"
         busy={busy}
         onConfirm={revoke}
@@ -429,10 +451,10 @@ function AccessDialog({
 
   async function resolveRoleId(): Promise<{ id: string; name: string }> {
     const existing = roles.find((r) => r.id === roleId) ?? matchingRole(selected);
-    if (existing) return { id: existing.id, name: existing.name };
-    const base = `Personnalisé — ${fullName.trim()}`.slice(0, 40);
+    if (existing) return { id: existing.id, name: roleName(existing) };
+    const base = translate('admins.access.customRoleName', { name: fullName.trim() }).slice(0, 40);
     const input = {
-      description: `Accès sur mesure pour ${fullName.trim()}.`,
+      description: translate('admins.access.customRoleDescription', { name: fullName.trim() }),
       permissions: [...selected],
     };
     try {
@@ -452,14 +474,14 @@ function AccessDialog({
       const role = await resolveRoleId();
       if (admin) {
         await setAdminRole(admin.id, role.id);
-        toast('success', `Accès de ${admin.fullName} mis à jour — ${role.name}.`);
+        toast('success', translate('admins.access.updated', { name: admin.fullName, role: role.name }));
         onDone({});
       } else {
         const result = await createAdmin({ email: email.trim(), fullName: fullName.trim(), roleId: role.id });
         onDone({ created: { email: result.admin.email ?? email.trim(), password: result.temporaryPassword, role: role.name } });
       }
     } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'Enregistrement impossible.');
+      toast('error', error instanceof Error ? error.message : translate('admins.shared.saveFailed'));
     }
     setBusy(false);
   }
@@ -470,50 +492,49 @@ function AccessDialog({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={admin ? `Accès de ${admin.fullName}` : 'Ajouter un administrateur'}
+      aria-label={admin ? translate('admins.access.titleFor', { name: admin.fullName }) : translate('admins.access.titleNew')}
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <form onSubmit={submit} className="my-6 flex w-full max-w-2xl flex-col gap-5 rounded-card bg-card p-6 shadow-xl sm:p-8">
-        <Text variant="title">{admin ? `Accès de ${admin.fullName}` : 'Ajouter un administrateur'}</Text>
+        <Text variant="title">{admin ? translate('admins.access.titleFor', { name: admin.fullName }) : translate('admins.access.titleNew')}</Text>
 
         {!admin && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Input label="Nom et prénom" required value={fullName} onChange={(e) => setFullName(e.target.value)} />
+            <Input label={translate('admins.access.fullName')} required value={fullName} onChange={(e) => setFullName(e.target.value)} />
             <Input
-              label="Courriel professionnel"
+              label={translate('admins.access.email')}
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              helper="Une adresse réservée à l’administration."
+              helper={translate('admins.access.emailHelper')}
             />
           </div>
         )}
 
         <label className="flex flex-col gap-1.5">
-          <span className="font-sans text-[0.8125rem] font-semibold">Rôle</span>
+          <span className="font-sans text-[0.8125rem] font-semibold">{translate('admins.shared.role')}</span>
           <select value={roleId} onChange={(e) => pickRole(e.target.value)} className={SELECT}>
             {roles.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.name}
-                {r.isSystem ? '' : ' (personnalisé)'}
+                {r.isSystem ? roleName(r) : translate('admins.access.customOption', { name: r.name })}
               </option>
             ))}
             <option value={CUSTOM} disabled={roleId !== CUSTOM}>
-              Personnalisé — selon les modules cochés
+              {translate('admins.access.customChoice')}
             </option>
           </select>
           <span className="font-sans text-[0.75rem] text-muted-foreground">
             {roleId === CUSTOM
-              ? 'Un rôle sur mesure sera créé pour cette personne, visible dans l’onglet Rôles.'
-              : roles.find((r) => r.id === roleId)?.description}
+              ? translate('admins.access.customHint')
+              : roles.filter((r) => r.id === roleId).map(roleDescription)[0]}
           </span>
         </label>
 
         <div className="flex flex-col gap-2.5">
           <Text variant="label">
-            Modules autorisés ({modulesOn} / {catalogue.length})
+            {translate('admins.access.modules', { on: modulesOn, total: catalogue.length })}
           </Text>
           <div className="grid grid-cols-1 gap-2 rounded-lg bg-muted/40 p-3 sm:grid-cols-2">
             {catalogue.map((group) => {
@@ -533,7 +554,7 @@ function AccessDialog({
                       onChange={() => toggleModule(group)}
                       className="h-4 w-4 cursor-pointer accent-forest-600"
                     />
-                    <span className="font-sans text-[0.875rem] font-semibold">{group.area}</span>
+                    <span className="font-sans text-[0.875rem] font-semibold">{permissionAreaLabel(group)}</span>
                   </label>
                   {actions.map((action) => (
                     <label key={action.key} className="ml-6 flex cursor-pointer items-center gap-2">
@@ -543,7 +564,7 @@ function AccessDialog({
                         onChange={() => toggleAction(group, action.key)}
                         className="h-3.5 w-3.5 cursor-pointer accent-forest-600"
                       />
-                      <span className="font-sans text-[0.75rem] text-muted-foreground">{action.label}</span>
+                      <span className="font-sans text-[0.75rem] text-muted-foreground">{permissionLabel(action)}</span>
                     </label>
                   ))}
                 </div>
@@ -552,17 +573,17 @@ function AccessDialog({
           </div>
           {selected.has('admins.manage') && (
             <Text variant="caption" tone="accent">
-              « Administrateurs » permet d’ajouter, retirer et changer les accès de tous — le droit le plus étendu.
+              {translate('admins.access.adminsWarning')}
             </Text>
           )}
         </div>
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
-            Annuler
+            {translate('common.actions.cancel')}
           </Button>
           <Button type="submit" disabled={busy || !canSubmit}>
-            <ShieldCheck size={15} /> {busy ? 'Enregistrement…' : admin ? 'Enregistrer l’accès' : 'Créer l’accès'}
+            <ShieldCheck size={15} /> {busy ? translate('admins.shared.saving') : admin ? translate('admins.access.save') : translate('admins.access.create')}
           </Button>
         </div>
       </form>
@@ -593,10 +614,10 @@ function Roles({
     setBusy(true);
     try {
       await deleteRole(deleting.id);
-      toast('success', `Rôle « ${deleting.name} » supprimé.`);
+      toast('success', translate('admins.roles.deleted', { name: deleting.name }));
       onChanged();
     } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'Suppression impossible.');
+      toast('error', error instanceof Error ? error.message : translate('admins.roles.deleteFailed'));
     }
     setBusy(false);
     setDeleting(null);
@@ -606,7 +627,7 @@ function Roles({
     <div className="flex flex-col gap-4">
       {manage && editing === null && (
         <Button className="self-start" onClick={() => setEditing('new')}>
-          <Plus size={15} /> Nouveau rôle
+          <Plus size={15} /> {translate('admins.roles.new')}
         </Button>
       )}
       {editing !== null && (
@@ -628,38 +649,38 @@ function Roles({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <Text variant="subtitle">{r.name}</Text>
+                  <Text variant="subtitle">{roleName(r)}</Text>
                   {r.isSystem ? (
                     <Badge tone="neutral">
                       <Lock size={11} className="mr-1 inline" />
-                      Prédéfini
+                      {translate('admins.roles.system')}
                     </Badge>
                   ) : (
-                    <Badge tone="primary">Personnalisé</Badge>
+                    <Badge tone="primary">{translate('admins.roles.custom')}</Badge>
                   )}
                 </div>
                 <Text variant="caption" tone="muted">
-                  {r.description || '—'}
+                  {roleDescription(r) || '—'}
                 </Text>
               </div>
               <Text variant="caption" tone="muted" className="whitespace-nowrap">
-                {r.adminCount} membre{r.adminCount > 1 ? 's' : ''}
+                {translate('admins.roles.memberCount', { count: r.adminCount })}
               </Text>
             </div>
             <PermissionSummary permissions={r.permissions} catalogue={catalogue} />
             {manage && !r.isSystem && (
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={() => setEditing(r)}>
-                  <Pencil size={14} /> Modifier
+                  <Pencil size={14} /> {translate('common.actions.edit')}
                 </Button>
                 <Button
                   size="sm"
                   variant="ghost"
                   disabled={r.adminCount > 0}
-                  title={r.adminCount > 0 ? 'Attribué à des administrateurs — changez d’abord leur rôle.' : undefined}
+                  title={r.adminCount > 0 ? translate('admins.roles.deleteBlocked') : undefined}
                   onClick={() => setDeleting(r)}
                 >
-                  <Trash2 size={14} /> Supprimer
+                  <Trash2 size={14} /> {translate('common.actions.delete')}
                 </Button>
               </div>
             )}
@@ -669,9 +690,9 @@ function Roles({
 
       <ConfirmDialog
         open={deleting !== null}
-        title={`Supprimer le rôle « ${deleting?.name ?? ''} » ?`}
-        description="Aucun administrateur n’a ce rôle. La suppression est inscrite au journal d’audit."
-        confirmLabel="Supprimer"
+        title={translate('admins.roles.deleteConfirm.title', { name: deleting?.name ?? '' })}
+        description={translate('admins.roles.deleteConfirm.description')}
+        confirmLabel={translate('common.actions.delete')}
         tone="destructive"
         busy={busy}
         onConfirm={remove}
@@ -722,10 +743,10 @@ function RoleEditor({
       const input = { name: name.trim(), description: description.trim(), permissions: [...selected] };
       if (role) await updateRole(role.id, input);
       else await createRole(input);
-      toast('success', role ? 'Rôle mis à jour.' : `Rôle « ${input.name} » créé.`);
+      toast('success', role ? translate('admins.roles.editor.updated') : translate('admins.roles.editor.created', { name: input.name }));
       onSaved();
     } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'Enregistrement impossible.');
+      toast('error', error instanceof Error ? error.message : translate('admins.shared.saveFailed'));
     }
     setBusy(false);
   }
@@ -734,10 +755,10 @@ function RoleEditor({
     <Card className="p-5">
       <form onSubmit={save} className="flex flex-col gap-5">
         <div className="flex items-center justify-between gap-3">
-          <Text variant="subtitle">{role ? `Modifier « ${role.name} »` : 'Nouveau rôle'}</Text>
+          <Text variant="subtitle">{role ? translate('admins.roles.editor.editTitle', { name: role.name }) : translate('admins.roles.new')}</Text>
           {!role && (
             <label className="flex items-center gap-2">
-              <span className="font-sans text-[0.8125rem] text-muted-foreground">Partir de</span>
+              <span className="font-sans text-[0.8125rem] text-muted-foreground">{translate('admins.roles.editor.startFrom')}</span>
               <select
                 className={`${SELECT} w-auto`}
                 defaultValue=""
@@ -746,10 +767,10 @@ function RoleEditor({
                   if (base) setSelected(new Set(base.permissions));
                 }}
               >
-                <option value="">— rien —</option>
+                <option value="">{translate('admins.roles.editor.startFromNothing')}</option>
                 {roles.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.name}
+                    {roleName(r)}
                   </option>
                 ))}
               </select>
@@ -757,13 +778,13 @@ function RoleEditor({
           )}
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Input label="Nom du rôle" required maxLength={40} value={name} onChange={(e) => setName(e.target.value)} />
+          <Input label={translate('admins.roles.editor.name')} required maxLength={40} value={name} onChange={(e) => setName(e.target.value)} />
           <Input
-            label="Description"
+            label={translate('admins.roles.editor.description')}
             maxLength={300}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            helper="Ce que fait une personne avec ce rôle."
+            helper={translate('admins.roles.editor.descriptionHelper')}
           />
         </div>
 
@@ -771,7 +792,7 @@ function RoleEditor({
           {catalogue.map((group) => (
             <div key={group.area} className="rounded-lg border border-border p-3">
               <Text variant="label" className="mb-2 block">
-                {group.area}
+                {permissionAreaLabel(group)}
               </Text>
               <div className="flex flex-col gap-1.5">
                 {group.permissions.map((p) => (
@@ -782,7 +803,7 @@ function RoleEditor({
                       onChange={() => toggle(p.key)}
                       className="h-4 w-4 cursor-pointer accent-forest-600"
                     />
-                    <span className="font-sans text-[0.8125rem]">{p.label}</span>
+                    <span className="font-sans text-[0.8125rem]">{permissionLabel(p)}</span>
                   </label>
                 ))}
               </div>
@@ -792,16 +813,16 @@ function RoleEditor({
 
         {selected.has('admins.manage') && (
           <Text variant="caption" tone="accent">
-            Ce rôle peut ajouter et retirer des administrateurs, et modifier les rôles — c’est le droit le plus étendu.
+            {translate('admins.roles.editor.adminsWarning')}
           </Text>
         )}
 
         <div className="flex gap-2">
           <Button type="submit" disabled={busy || name.trim().length < 2 || selected.size === 0}>
-            {busy ? 'Enregistrement…' : role ? 'Enregistrer' : 'Créer le rôle'}
+            {busy ? translate('admins.shared.saving') : role ? translate('common.actions.save') : translate('admins.roles.editor.create')}
           </Button>
           <Button type="button" variant="ghost" onClick={onCancel}>
-            Annuler
+            {translate('common.actions.cancel')}
           </Button>
         </div>
       </form>
@@ -825,9 +846,9 @@ function PermissionSummary({ permissions, catalogue }: { permissions: string[]; 
               <Check size={14} className={`mt-0.5 shrink-0 ${all ? 'text-primary' : 'text-mustard-600'}`} />
             )}
             <span className="font-sans text-[0.8125rem]">
-              {group.area}
+              {permissionAreaLabel(group)}
               {has.length > 0 && !all && (
-                <span className="text-muted-foreground"> · {has.map((p) => p.label.toLowerCase()).join(', ')}</span>
+                <span className="text-muted-foreground"> · {has.map((p) => permissionLabel(p).toLowerCase()).join(', ')}</span>
               )}
             </span>
           </li>

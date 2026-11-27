@@ -1,3 +1,4 @@
+import { tMaybe } from '../i18n';
 import type { AuditEntry } from './audit';
 import { apiDelete, apiGet, apiPatch, apiPost, type Page } from './client';
 
@@ -27,6 +28,33 @@ export interface AdminRole extends AdminRoleSummary {
 export interface PermissionGroup {
   area: string;
   permissions: readonly { key: string; label: string }[];
+}
+
+/*
+ * The API words the permission catalogue and the built-in roles in French.
+ * Both are fixed sets of codes, so their wording is also in the `admins`
+ * dictionary, in both languages, and read from there by code. Whatever is not
+ * listed — a permission added tomorrow, a custom role — shows as the API sent it.
+ */
+
+/** A group's name. It carries no code of its own: its permissions all start with one (`orders.view`, `orders.refund`). */
+export function permissionAreaLabel(group: PermissionGroup): string {
+  return tMaybe(`admins.permissionGroups.${group.permissions[0]?.key.split('.')[0]}`, group.area);
+}
+
+/** A permission's label: `payouts.run` is the message `admins.permissions.payouts_run`. */
+export function permissionLabel(permission: { key: string; label: string }): string {
+  return tMaybe(`admins.permissions.${permission.key.replace(/\./g, '_')}`, permission.label);
+}
+
+/** A role's name: translated for the five built-in ones (by slug), as it was typed for a custom one. */
+export function roleName(role: { slug: string; name: string }): string {
+  return tMaybe(`admins.systemRoles.${role.slug}.name`, role.name);
+}
+
+/** The same, for its description. */
+export function roleDescription(role: { slug: string; description: string }): string {
+  return tMaybe(`admins.systemRoles.${role.slug}.description`, role.description);
 }
 
 /** Whoever is signed in — what the dashboard draws its sidebar and buttons from. */

@@ -14,6 +14,7 @@ import { useToast } from '@/components/Toast';
 import { getCourierIssue, resolveCourierIssue } from '@/lib/api/courierIssues';
 import { courierIssueStatusMeta, COURIER_ISSUE_REASON_LABELS } from '@/lib/statusMeta';
 import { formatDateTime } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import type { AdminCourierIssue } from '@/lib/types';
 import { useAdmin } from '@/lib/permissions';
 
@@ -45,7 +46,7 @@ export default function CourierIssueDetailPage() {
   if (issue === null) {
     return (
       <div className="mx-auto max-w-content">
-        <Text variant="title">Incident introuvable</Text>
+        <Text variant="title">{t('courierIssues.detail.notFound')}</Text>
       </div>
     );
   }
@@ -60,43 +61,43 @@ export default function CourierIssueDetailPage() {
     await resolveCourierIssue(issue!.orderId, note ?? '');
     setBusy(false);
     setDialog(false);
-    toast('success', 'Incident marqué comme résolu.');
+    toast('success', t('courierIssues.detail.resolved'));
     load();
   }
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <Breadcrumbs items={[{ label: 'Incidents livreurs', href: '/courier-issues' }, { label: `#${issue.orderId.slice(0, 8)}` }]} />
+      <Breadcrumbs items={[{ label: t('courierIssues.list.title'), href: '/courier-issues' }, { label: `#${issue.orderId.slice(0, 8)}` }]} />
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <Text as="h1" variant="display">
-              Incident — {COURIER_ISSUE_REASON_LABELS[issue.reason]}
+              {t('courierIssues.detail.title', { reason: COURIER_ISSUE_REASON_LABELS[issue.reason] ?? issue.reason })}
             </Text>
             <StatusBadge label={meta.label} tone={meta.tone} />
           </div>
           <Text variant="body" tone="muted" className="mt-1">
-            {issue.courierName ?? 'Livreur non assigné'} · {issue.vendorName} ·{' '}
+            {issue.courierName ?? t('courierIssues.detail.unassignedCourier')} · {issue.vendorName} ·{' '}
             <Link href={`/orders/${issue.orderId}`} className="text-primary hover:underline">
-              Commande #{issue.orderId.slice(0, 8)}
+              {t('courierIssues.detail.orderLink', { id: issue.orderId.slice(0, 8) })}
             </Link>
           </Text>
         </div>
         {issue.status === 'open' && can('courier_issues.resolve') && (
           <Button variant="primary" onClick={() => setDialog(true)} disabled={busy}>
-            <CheckCircle2 size={16} /> Marquer résolu
+            <CheckCircle2 size={16} /> {t('courierIssues.detail.markResolved')}
           </Button>
         )}
       </div>
 
       <Card className="p-5">
         <Text variant="subtitle" className="mb-3">
-          Rapport du livreur
+          {t('courierIssues.detail.report')}
         </Text>
         <div className="rounded-lg bg-destructive/5 p-3">
           <div className="mb-1 flex items-center justify-between">
-            <Text variant="label">{issue.courierName ?? 'Livreur non assigné'}</Text>
+            <Text variant="label">{issue.courierName ?? t('courierIssues.detail.unassignedCourier')}</Text>
             <Text variant="caption" tone="muted">
               {formatDateTime(issue.at)}
             </Text>
@@ -105,18 +106,18 @@ export default function CourierIssueDetailPage() {
         </div>
         {issue.status === 'resolved' && issue.resolvedAt && (
           <Text variant="caption" tone="muted" className="mt-3">
-            Résolu le {formatDateTime(issue.resolvedAt)}
+            {t('courierIssues.detail.resolvedOn', { date: formatDateTime(issue.resolvedAt) })}
           </Text>
         )}
       </Card>
       <ConfirmDialog
         open={dialog}
-        title="Marquer cet incident comme résolu ?"
-        description="Expliquez ce qui a été fait — la note est ajoutée au rapport et reste consultable."
-        confirmLabel="Marquer résolu"
+        title={t('courierIssues.detail.confirm.title')}
+        description={t('courierIssues.detail.confirm.description')}
+        confirmLabel={t('courierIssues.detail.markResolved')}
         tone="primary"
         requireReason
-        reasonLabel="Note de résolution"
+        reasonLabel={t('courierIssues.detail.confirm.noteLabel')}
         busy={busy}
         onConfirm={handleResolve}
         onCancel={() => setDialog(false)}

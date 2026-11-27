@@ -15,18 +15,19 @@ import { listLatePickups, listOrders, listOrdersAwaitingShop, listOrdersWaitingF
 import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { useToast } from '@/components/Toast';
 import { orderStatusMeta } from '@/lib/statusMeta';
-import { formatCad, formatDateTime } from '@/lib/format';
+import { formatCad, formatDateTime, formatNumber } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import type { AdminOrderListItem, OrderStatus } from '@/lib/types';
 
 const STATUS_OPTIONS: { value: OrderStatus | 'all'; label: string }[] = [
-  { value: 'all', label: 'Tous les statuts' },
-  { value: 'pending', label: 'En attente' },
-  { value: 'confirmed', label: 'Confirmée' },
-  { value: 'preparing', label: 'En préparation' },
-  { value: 'ready', label: 'Prête' },
-  { value: 'out_for_delivery', label: 'En livraison' },
-  { value: 'delivered', label: 'Livrée' },
-  { value: 'cancelled', label: 'Annulée' },
+  { value: 'all', label: t('orders.list.filters.allStatuses') },
+  { value: 'pending', label: orderStatusMeta('pending').label },
+  { value: 'confirmed', label: orderStatusMeta('confirmed').label },
+  { value: 'preparing', label: orderStatusMeta('preparing').label },
+  { value: 'ready', label: orderStatusMeta('ready').label },
+  { value: 'out_for_delivery', label: orderStatusMeta('out_for_delivery').label },
+  { value: 'delivered', label: orderStatusMeta('delivered').label },
+  { value: 'cancelled', label: orderStatusMeta('cancelled').label },
 ];
 
 export default function OrdersPage() {
@@ -76,17 +77,17 @@ export default function OrdersPage() {
   }, [list.error, toast]);
 
   const columns: Column<AdminOrderListItem>[] = [
-    { key: 'id', header: 'Commande', render: (o) => <Text variant="body" className="font-semibold">#{o.id.slice(0, 8)}</Text> },
-    { key: 'customer', header: 'Client', sortable: true, render: (o) => (
+    { key: 'id', header: t('orders.list.columns.order'), render: (o) => <Text variant="body" className="font-semibold">#{o.id.slice(0, 8)}</Text> },
+    { key: 'customer', header: t('orders.list.columns.customer'), sortable: true, render: (o) => (
         <div className="flex items-center gap-2.5">
           <Avatar name={o.customerName ?? '?'} size={30} />
           <Text variant="body">{o.customerName ?? '—'}</Text>
         </div>
       ) },
-    { key: 'vendor', header: 'Commerce', render: (o) => <Text variant="body">{o.vendorName}</Text> },
+    { key: 'vendor', header: t('orders.list.columns.shop'), render: (o) => <Text variant="body">{o.vendorName}</Text> },
     {
       key: 'created_at',
-      header: 'Date',
+      header: t('orders.list.columns.date'),
       sortable: true,
       render: (o) => (
         <Text variant="body" tone="muted">
@@ -96,7 +97,7 @@ export default function OrdersPage() {
     },
     {
       key: 'total',
-      header: 'Total',
+      header: t('orders.list.columns.total'),
       sortable: true,
       className: 'text-right',
       render: (o) => (
@@ -107,7 +108,7 @@ export default function OrdersPage() {
     },
     {
       key: 'status',
-      header: 'Statut',
+      header: t('orders.list.columns.status'),
       render: (o) => {
         const meta = orderStatusMeta(o.status);
         return <StatusBadge label={meta.label} tone={meta.tone} />;
@@ -116,27 +117,27 @@ export default function OrdersPage() {
   ];
 
   const csvColumns: CsvColumn<AdminOrderListItem>[] = [
-    { header: 'Commande', value: (o) => o.id },
-    { header: 'Date', value: (o) => csvDate(o.createdAt) },
-    { header: 'Statut', value: (o) => orderStatusMeta(o.status).label },
-    { header: 'Client', value: (o) => o.customerName },
-    { header: 'Commerce', value: (o) => o.vendorName },
-    { header: 'Type', value: (o) => (o.vendorType === 'restaurant' ? 'Restaurant' : 'Épicerie') },
-    { header: 'Livreur', value: (o) => o.courierName },
-    { header: 'Sous-total ($)', value: (o) => o.subtotalCad },
-    { header: 'Total ($)', value: (o) => o.totalCad },
-    { header: 'Remboursé le', value: (o) => csvDate(o.refundedAt) },
-    { header: 'Montant remboursé ($)', value: (o) => o.refundAmountCad },
-    { header: 'Litige', value: (o) => o.hasDispute },
-    { header: 'Incident livreur', value: (o) => o.hasCourierIssue },
+    { header: t('orders.list.columns.order'), value: (o) => o.id },
+    { header: t('orders.list.columns.date'), value: (o) => csvDate(o.createdAt) },
+    { header: t('orders.list.columns.status'), value: (o) => orderStatusMeta(o.status).label },
+    { header: t('orders.list.columns.customer'), value: (o) => o.customerName },
+    { header: t('orders.list.columns.shop'), value: (o) => o.vendorName },
+    { header: t('orders.list.csv.type'), value: (o) => (o.vendorType === 'restaurant' ? t('common.vendorType.restaurant') : t('common.vendorType.grocery')) },
+    { header: t('orders.list.csv.courier'), value: (o) => o.courierName },
+    { header: t('orders.list.csv.subtotal'), value: (o) => o.subtotalCad },
+    { header: t('orders.list.csv.total'), value: (o) => o.totalCad },
+    { header: t('orders.list.csv.refundedOn'), value: (o) => csvDate(o.refundedAt) },
+    { header: t('orders.list.csv.refundAmount'), value: (o) => o.refundAmountCad },
+    { header: t('orders.list.csv.dispute'), value: (o) => o.hasDispute },
+    { header: t('orders.list.csv.courierIssue'), value: (o) => o.hasCourierIssue },
   ];
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
       <PageHeader
         icon={Package}
-        title="Commandes"
-        description="Toutes les commandes de la plateforme, et leur tendance."
+        title={t('orders.list.title')}
+        description={t('orders.list.description')}
         actions={
           <ExportButton
             name="commandes"
@@ -151,16 +152,12 @@ export default function OrdersPage() {
         <Card className="border border-destructive/40 p-5" elevated={false}>
           <div className="mb-1 flex items-center gap-2">
             <Store size={17} className="text-destructive" />
-            <Text variant="subtitle">
-              {unanswered.orders.length === 1
-                ? '1 commande sans réponse du commerce'
-                : `${unanswered.orders.length} commandes sans réponse du commerce`}
-            </Text>
+            <Text variant="subtitle">{t('orders.list.unanswered.title', { count: unanswered.orders.length })}</Text>
           </div>
           <Text variant="caption" tone="muted" className="mb-3">
             {unanswered.cancelAfterMin > 0
-              ? `Une commande sans réponse est annulée et remboursée automatiquement après ${unanswered.cancelAfterMin} min. Celles-ci attendent depuis plus d’un jour : elles restent à annuler à la main.`
-              : 'L’annulation automatique est désactivée : c’est à vous de décider.'}
+              ? t('orders.list.unanswered.autoCancel', { minutes: unanswered.cancelAfterMin })
+              : t('orders.list.autoCancelOff')}
           </Text>
           <ul className="flex flex-col">
             {unanswered.orders.map((o) => (
@@ -171,7 +168,7 @@ export default function OrdersPage() {
                       #{o.orderId.slice(0, 8)} · {o.vendorName}
                     </Text>
                     <Text variant="caption" tone="muted">
-                      {o.customerName ?? 'Client'} · {formatCad(o.totalCad)}
+                      {o.customerName ?? t('orders.roles.customer')} · {formatCad(o.totalCad)}
                     </Text>
                   </div>
                   <Text variant="body" className="tabular font-semibold text-destructive">
@@ -188,16 +185,12 @@ export default function OrdersPage() {
         <Card className="border border-destructive/40 p-5" elevated={false}>
           <div className="mb-1 flex items-center gap-2">
             <Clock size={17} className="text-destructive" />
-            <Text variant="subtitle">
-              {latePickups.pickups.length === 1
-                ? '1 commande acceptée par un livreur qui ne vient pas'
-                : `${latePickups.pickups.length} commandes acceptées par un livreur qui ne vient pas`}
-            </Text>
+            <Text variant="subtitle">{t('orders.list.latePickups.title', { count: latePickups.pickups.length })}</Text>
           </div>
           <Text variant="caption" tone="muted" className="mb-3">
             {latePickups.releaseAfterMin > 0
-              ? `Un livreur en retard de ${latePickups.releaseAfterMin} min perd la course, qui repart vers un autre. Celles-ci n’ont pas été reprises : retard de plus d’un jour, ou un incident a été signalé dessus.`
-              : 'Le retrait automatique est désactivé : c’est à vous de décider.'}
+              ? t('orders.list.latePickups.autoRelease', { minutes: latePickups.releaseAfterMin })
+              : t('orders.list.latePickups.autoReleaseOff')}
           </Text>
           <ul className="flex flex-col">
             {latePickups.pickups.map((p) => (
@@ -208,12 +201,12 @@ export default function OrdersPage() {
                       #{p.orderId.slice(0, 8)} · {p.vendorName}
                     </Text>
                     <Text variant="caption" tone="muted">
-                      Livreur : {p.courierName} · {formatCad(p.totalCad)}
-                      {p.hasOpenIssue ? ' · incident signalé' : ''}
+                      {t('orders.list.latePickups.courier', { name: p.courierName })} · {formatCad(p.totalCad)}
+                      {p.hasOpenIssue ? ` · ${t('orders.list.latePickups.issueReported')}` : ''}
                     </Text>
                   </div>
                   <Text variant="body" className="tabular font-semibold text-destructive">
-                    {waitingLabel(p.lateMin)} de retard
+                    {t('orders.list.latePickups.late', { duration: waitingLabel(p.lateMin) })}
                   </Text>
                 </Link>
               </li>
@@ -226,15 +219,13 @@ export default function OrdersPage() {
         <Card className="border border-destructive/40 p-5" elevated={false}>
           <div className="mb-1 flex items-center gap-2">
             <Truck size={17} className="text-destructive" />
-            <Text variant="subtitle">
-              {waiting.orders.length === 1 ? '1 commande prête sans livreur' : `${waiting.orders.length} commandes prêtes sans livreur`}
-            </Text>
+            <Text variant="subtitle">{t('orders.list.waiting.title', { count: waiting.orders.length })}</Text>
           </div>
           <Text variant="caption" tone="muted" className="mb-3">
-            Prêtes depuis plus de {waiting.alertAfterMin} min, aucun livreur ne les a prises.{' '}
+            {t('orders.list.waiting.intro', { minutes: waiting.alertAfterMin })}{' '}
             {waiting.cancelAfterMin > 0
-              ? `Elles sont annulées et remboursées automatiquement après ${waiting.cancelAfterMin} min — sauf celles qui attendent depuis plus d’un jour, qui restent à traiter à la main.`
-              : 'L’annulation automatique est désactivée : c’est à vous de décider.'}
+              ? t('orders.list.waiting.autoCancel', { minutes: waiting.cancelAfterMin })
+              : t('orders.list.autoCancelOff')}
           </Text>
           <ul className="flex flex-col">
             {waiting.orders.map((o) => (
@@ -245,8 +236,8 @@ export default function OrdersPage() {
                       #{o.orderId.slice(0, 8)} · {o.vendorName}
                     </Text>
                     <Text variant="caption" tone="muted">
-                      {o.customerName ?? 'Client'} · {formatCad(o.totalCad)} ·{' '}
-                      {o.offers === 0 ? 'aucun livreur à portée' : `${o.offers} livreur${o.offers > 1 ? 's' : ''} sollicité${o.offers > 1 ? 's' : ''}`}
+                      {o.customerName ?? t('orders.roles.customer')} · {formatCad(o.totalCad)} ·{' '}
+                      {o.offers === 0 ? t('orders.list.waiting.noCourierInRange') : t('orders.list.waiting.couriersAsked', { count: o.offers })}
                     </Text>
                   </div>
                   <Text variant="body" className="tabular font-semibold text-destructive">
@@ -263,39 +254,40 @@ export default function OrdersPage() {
         <KpiCard
           loading={!insights}
           icon={ShoppingCart}
-          label="Commandes · 30 j"
+          label={t('orders.list.kpis.orders30')}
           value={String(insights?.orders30 ?? 0)}
-          hint={`${insights?.today ?? 0} aujourd’hui · ${insights?.active ?? 0} en cours`}
+          hint={t('orders.list.kpis.ordersHint', { today: insights?.today ?? 0, active: insights?.active ?? 0 })}
         />
         <KpiCard
           loading={!insights}
           icon={Wallet}
           tone="forest"
-          label="Volume d’affaires · 30 j"
+          label={t('orders.list.kpis.gmv30')}
           value={formatCad(insights?.gmv30 ?? 0)}
-          hint={`Panier moyen ${insights?.avgBasket ? formatCad(insights.avgBasket) : '—'}`}
+          hint={t('orders.list.kpis.avgBasket', { amount: insights?.avgBasket ? formatCad(insights.avgBasket) : '—' })}
         />
         <KpiCard
           loading={!insights}
           icon={AlertCircle}
           tone="mustard"
-          label="Sans livreur"
+          label={t('orders.list.kpis.unassigned')}
           value={String(insights?.unassigned ?? 0)}
-          hint="Commandes prêtes ou en préparation, en attente d’un livreur"
+          hint={t('orders.list.kpis.unassignedHint')}
         />
         <KpiCard
           loading={!insights}
           icon={Ban}
           tone="terracotta"
-          label="Taux d’annulation · 30 j"
-          value={insights?.cancelRate !== null && insights?.cancelRate !== undefined ? `${insights.cancelRate.toLocaleString('fr-CA')} %` : '—'}
-          hint={`${formatCad(insights?.refunded30 ?? 0)} remboursés`}
+          label={t('orders.list.kpis.cancelRate30')}
+          // The API sends a percentage with one decimal (« 4.2 »); `Intl` wants the fraction.
+          value={insights?.cancelRate !== null && insights?.cancelRate !== undefined ? formatNumber(insights.cancelRate / 100, { style: 'percent', maximumFractionDigits: 1 }) : '—'}
+          hint={t('orders.list.kpis.refunded', { amount: formatCad(insights?.refunded30 ?? 0) })}
         />
       </KpiGrid>
 
       {insights && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <SectionCard title="Volume d’affaires par jour" subtitle="Total des commandes, hors annulées, 30 jours" className="lg:col-span-2">
+          <SectionCard title={t('orders.list.charts.gmvByDay')} subtitle={t('orders.list.charts.gmvByDayHint')} className="lg:col-span-2">
             <BarSeries
               data={insights.byDay.map((d) => ({ label: shortDay(d.date), value: Number(d.gmv) }))}
               format={(v) => formatCad(v)}
@@ -303,16 +295,16 @@ export default function OrdersPage() {
               height={200}
             />
           </SectionCard>
-          <SectionCard title="Par statut" subtitle="Commandes des 30 derniers jours">
+          <SectionCard title={t('orders.list.charts.byStatus')} subtitle={t('orders.list.charts.byStatusHint')}>
             <Breakdown
               items={[
-                { label: 'Livrées', value: insights.byStatus.delivered ?? 0 },
-                { label: 'En livraison', value: insights.byStatus.out_for_delivery ?? 0 },
+                { label: t('orders.list.charts.delivered'), value: insights.byStatus.delivered ?? 0 },
+                { label: t('orders.list.charts.outForDelivery'), value: insights.byStatus.out_for_delivery ?? 0 },
                 {
-                  label: 'En préparation',
+                  label: t('orders.list.charts.preparing'),
                   value: (insights.byStatus.pending ?? 0) + (insights.byStatus.confirmed ?? 0) + (insights.byStatus.preparing ?? 0) + (insights.byStatus.ready ?? 0),
                 },
-                { label: 'Annulées', value: insights.byStatus.cancelled ?? 0 },
+                { label: t('orders.list.charts.cancelled'), value: insights.byStatus.cancelled ?? 0 },
               ]}
             />
           </SectionCard>
@@ -336,7 +328,7 @@ export default function OrdersPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher un numéro ou un client…"
+            placeholder={t('orders.list.filters.searchPlaceholder')}
             className="w-full min-w-0 bg-transparent font-sans sm:w-56 text-[0.8125rem] text-foreground outline-none placeholder:text-muted-foreground"
           />
         </div>
@@ -359,8 +351,8 @@ export default function OrdersPage() {
             onSort: list.setSort,
           }}
           emptyIcon={Package}
-          emptyTitle="Aucune commande"
-          emptyDescription="Aucune commande ne correspond à ce filtre pour le moment."
+          emptyTitle={t('orders.list.empty.title')}
+          emptyDescription={t('orders.list.empty.description')}
         />
       </Card>
     </div>
@@ -369,7 +361,7 @@ export default function OrdersPage() {
 
 /** « 25 min », « 3 h 10 », « 4 j » — how long an order has been waiting, at the size that matters. */
 function waitingLabel(minutes: number): string {
-  if (minutes < 60) return `${minutes} min`;
-  if (minutes < 24 * 60) return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}`;
-  return `${Math.floor(minutes / (24 * 60))} j`;
+  if (minutes < 60) return t('common.time.minutes', { count: minutes });
+  if (minutes < 24 * 60) return t('orders.list.waitHours', { hours: Math.floor(minutes / 60), minutes: String(minutes % 60).padStart(2, '0') });
+  return t('common.time.days', { count: Math.floor(minutes / (24 * 60)) });
 }

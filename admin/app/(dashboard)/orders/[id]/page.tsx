@@ -23,6 +23,7 @@ import {
   RELEASE_REASON_LABELS,
 } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import type { AdminOrderDetail } from '@/lib/types';
 
 export default function OrderDetailPage() {
@@ -47,7 +48,7 @@ export default function OrderDetailPage() {
       else window.location.href = url;
     } catch (error) {
       tab?.close();
-      toast('error', error instanceof Error ? error.message : 'Le reçu n’a pas pu être ouvert.');
+      toast('error', error instanceof Error ? error.message : t('orders.detail.receipt.openFailed'));
     } finally {
       setOpeningReceipt(false);
     }
@@ -60,9 +61,9 @@ export default function OrderDetailPage() {
       setOrder((current) =>
         current ? { ...current, receipt: { number: current.receipt?.number ?? null, emailedAt: sentAt } } : current
       );
-      toast('success', 'Reçu renvoyé au client par courriel.');
+      toast('success', t('orders.detail.receipt.resent'));
     } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'Le reçu n’a pas pu être envoyé.');
+      toast('error', error instanceof Error ? error.message : t('orders.detail.receipt.sendFailed'));
     } finally {
       setResending(false);
     }
@@ -79,14 +80,14 @@ export default function OrderDetailPage() {
     try {
       const outcome = await cancelOrder(id, reason);
       if (outcome.refund === 'failed') {
-        toast('error', 'Commande annulée, mais le remboursement n’est pas parti. Remboursez le client depuis Stripe.');
+        toast('error', t('orders.detail.cancel.refundFailed'));
       } else if (outcome.refund === 'refunded') {
-        toast('success', `Commande annulée. ${formatCad(outcome.refundAmountCad ?? 0)} remboursés au client.`);
+        toast('success', t('orders.detail.cancel.refunded', { amount: formatCad(outcome.refundAmountCad ?? 0) }));
       } else {
-        toast('success', 'Commande annulée. Aucun paiement à rembourser.');
+        toast('success', t('orders.detail.cancel.noRefund'));
       }
     } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'La commande n’a pas pu être annulée.');
+      toast('error', error instanceof Error ? error.message : t('orders.detail.cancel.failed'));
     } finally {
       setConfirmingCancel(false);
       setCancelling(false);
@@ -119,7 +120,7 @@ export default function OrderDetailPage() {
   if (order === null) {
     return (
       <div className="mx-auto max-w-content">
-        <Text variant="title">Commande introuvable</Text>
+        <Text variant="title">{t('orders.detail.notFound')}</Text>
       </div>
     );
   }
@@ -131,45 +132,45 @@ export default function OrderDetailPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <Breadcrumbs items={[{ label: 'Commandes', href: '/orders' }, { label: `#${order.id.slice(0, 8)}` }]} />
+      <Breadcrumbs items={[{ label: t('orders.list.title'), href: '/orders' }, { label: `#${order.id.slice(0, 8)}` }]} />
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <Text as="h1" variant="display">
-              Commande #{order.id.slice(0, 8)}
+              {t('orders.detail.title', { id: order.id.slice(0, 8) })}
             </Text>
             <StatusBadge label={meta.label} tone={meta.tone} />
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            <Avatar name={order.customerName ?? 'Client'} src={order.customer?.avatarUrl} size={26} />
+            <Avatar name={order.customerName ?? t('orders.roles.customer')} src={order.customer?.avatarUrl} size={26} />
             <Text variant="body" tone="muted">
-              {order.customerName ?? 'Client'} · {order.vendor.name} · {formatDateTime(order.createdAt)}
+              {order.customerName ?? t('orders.roles.customer')} · {order.vendor.name} · {formatDateTime(order.createdAt)}
             </Text>
           </div>
           {/* Absent against an API that predates receipts; the buttons still work without it. */}
           {order.receipt && (
             <Text variant="caption" tone="muted" className="mt-1">
-              {order.receipt.number ? `Reçu ${order.receipt.number}` : 'Reçu'} ·{' '}
+              {order.receipt.number ? t('orders.detail.receipt.numbered', { number: order.receipt.number }) : t('orders.detail.receipt.label')} ·{' '}
               {order.receipt.emailedAt
-                ? `envoyé au client le ${formatDateTime(order.receipt.emailedAt)}`
-                : 'pas encore envoyé par courriel'}
+                ? t('orders.detail.receipt.emailedOn', { date: formatDateTime(order.receipt.emailedAt) })
+                : t('orders.detail.receipt.notEmailed')}
             </Text>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={openReceipt} disabled={openingReceipt}>
             <ReceiptText size={15} />
-            Reçu (PDF)
+            {t('orders.detail.receipt.pdf')}
           </Button>
           <Button variant="outline" size="sm" onClick={resend} disabled={resending}>
             <Send size={15} />
-            {resending ? 'Envoi…' : 'Renvoyer le reçu'}
+            {resending ? t('orders.detail.receipt.sending') : t('orders.detail.receipt.resend')}
           </Button>
           {cancellable && can('orders.refund') && (
             <Button variant="outline" size="sm" className="border-destructive/50 text-destructive" onClick={() => setConfirmingCancel(true)}>
               <Ban size={15} />
-              Annuler la commande
+              {t('orders.detail.cancel.action')}
             </Button>
           )}
         </div>
@@ -184,7 +185,7 @@ export default function OrderDetailPage() {
           <dl className="flex flex-col gap-1.5 font-sans text-[0.875rem]">
             {order.cancellation?.at && (
               <div className="flex flex-wrap gap-x-2">
-                <dt className="text-muted-foreground">Le</dt>
+                <dt className="text-muted-foreground">{t('orders.detail.cancellation.on')}</dt>
                 <dd>
                   {formatDateTime(order.cancellation.at)}
                   {order.cancellation.byName ? ` · ${order.cancellation.byName}` : ''}
@@ -193,24 +194,24 @@ export default function OrderDetailPage() {
             )}
             {order.cancellation?.reason && (
               <div className="flex flex-wrap gap-x-2">
-                <dt className="text-muted-foreground">Motif</dt>
+                <dt className="text-muted-foreground">{t('orders.detail.cancellation.reason')}</dt>
                 <dd>{CANCEL_REASON_LABELS[order.cancellation.reason] ?? order.cancellation.reason}</dd>
               </div>
             )}
             {order.cancellation?.note && (
               <div className="flex flex-col gap-0.5">
-                <dt className="text-muted-foreground">{order.cancellation.by === 'admin' ? 'Motif' : 'Précisions du client'}</dt>
+                <dt className="text-muted-foreground">{order.cancellation.by === 'admin' ? t('orders.detail.cancellation.reason') : t('orders.detail.cancellation.customerNote')}</dt>
                 <dd className="whitespace-pre-wrap">{order.cancellation.note}</dd>
               </div>
             )}
             <div className="flex flex-wrap gap-x-2">
-              <dt className="text-muted-foreground">Remboursement</dt>
+              <dt className="text-muted-foreground">{t('orders.detail.cancellation.refund')}</dt>
               <dd>
                 {order.refund
-                  ? `${formatCad(order.refund.refundAmountCad ?? 0)} le ${formatDateTime(order.refund.refundedAt)}`
+                  ? t('orders.detail.cancellation.refundedOn', { amount: formatCad(order.refund.refundAmountCad ?? 0), date: formatDateTime(order.refund.refundedAt) })
                   : order.stripePaymentIntentId
-                    ? 'Pas encore envoyé — à faire depuis Stripe'
-                    : 'Aucun paiement par carte sur cette commande'}
+                    ? t('orders.detail.cancellation.refundPending')
+                    : t('orders.detail.cancellation.noCardPayment')}
               </dd>
             </div>
           </dl>
@@ -220,7 +221,7 @@ export default function OrderDetailPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="p-5 lg:col-span-2">
           <Text variant="subtitle" className="mb-4">
-            Articles
+            {t('orders.detail.items.title')}
           </Text>
           <div className="flex flex-col gap-3">
             {order.items.map((item, i) => (
@@ -230,7 +231,7 @@ export default function OrderDetailPage() {
                     {item.name}
                   </Text>
                   <Text variant="caption" tone="muted">
-                    Qté {item.qty} × {formatCad(item.unitPriceCad)}
+                    {t('orders.detail.items.qtyPrice', { qty: item.qty, price: formatCad(item.unitPriceCad) })}
                   </Text>
                 </div>
                 <Text variant="body" className="tabular font-semibold">
@@ -240,18 +241,18 @@ export default function OrderDetailPage() {
             ))}
           </div>
           <div className="mt-4 flex flex-col gap-1.5 border-t border-border pt-4">
-            <Row label="Sous-total" value={formatCad(order.totals.subtotalCad)} />
-            <Row label="TPS" value={formatCad(order.totals.gstCad)} />
-            <Row label="TVQ" value={formatCad(order.totals.qstCad)} />
-            <Row label="Livraison" value={formatCad(order.totals.deliveryFeeCad)} />
-            <Row label="Total" value={formatCad(order.totals.totalCad)} strong />
+            <Row label={t('orders.detail.items.subtotal')} value={formatCad(order.totals.subtotalCad)} />
+            <Row label={t('orders.detail.items.gst')} value={formatCad(order.totals.gstCad)} />
+            <Row label={t('orders.detail.items.qst')} value={formatCad(order.totals.qstCad)} />
+            <Row label={t('orders.detail.items.delivery')} value={formatCad(order.totals.deliveryFeeCad)} />
+            <Row label={t('orders.detail.items.total')} value={formatCad(order.totals.totalCad)} strong />
           </div>
         </Card>
 
         <div className="flex flex-col gap-4">
           <Card className="p-5">
             <Text variant="subtitle" className="mb-3">
-              Livraison
+              {t('orders.detail.delivery.title')}
             </Text>
             <div className="flex items-start gap-2.5">
               <MapPin size={15} className="mt-0.5 shrink-0 text-muted-foreground" />
@@ -262,24 +263,24 @@ export default function OrderDetailPage() {
             {order.deliveryInstructions && (
               <dl className="mt-3 flex flex-col gap-1.5 border-t border-border pt-3 font-sans text-[0.8125rem]">
                 <div className="flex justify-between gap-3">
-                  <dt className="text-muted-foreground">Remise</dt>
-                  <dd className="font-semibold">{order.deliveryInstructions.dropoff === 'door' ? 'Laisser à la porte' : 'En main propre'}</dd>
+                  <dt className="text-muted-foreground">{t('orders.detail.delivery.dropoff')}</dt>
+                  <dd className="font-semibold">{order.deliveryInstructions.dropoff === 'door' ? t('orders.detail.delivery.leaveAtDoor') : t('orders.detail.delivery.inPerson')}</dd>
                 </div>
                 {order.deliveryInstructions.unit && (
                   <div className="flex justify-between gap-3">
-                    <dt className="text-muted-foreground">Appartement</dt>
+                    <dt className="text-muted-foreground">{t('orders.detail.delivery.unit')}</dt>
                     <dd className="text-right">{order.deliveryInstructions.unit}</dd>
                   </div>
                 )}
                 {order.deliveryInstructions.doorCode && (
                   <div className="flex justify-between gap-3">
-                    <dt className="text-muted-foreground">Code de porte</dt>
+                    <dt className="text-muted-foreground">{t('orders.detail.delivery.doorCode')}</dt>
                     <dd className="font-semibold tabular">{order.deliveryInstructions.doorCode}</dd>
                   </div>
                 )}
                 {order.deliveryInstructions.notes && (
                   <div className="flex flex-col gap-0.5">
-                    <dt className="text-muted-foreground">Instructions</dt>
+                    <dt className="text-muted-foreground">{t('orders.detail.delivery.instructions')}</dt>
                     <dd className="whitespace-pre-wrap">{order.deliveryInstructions.notes}</dd>
                   </div>
                 )}
@@ -289,7 +290,7 @@ export default function OrderDetailPage() {
 
           <Card className="p-5">
             <Text variant="subtitle" className="mb-3">
-              Historique du statut
+              {t('orders.detail.statusHistory')}
             </Text>
             <ol className="flex flex-col gap-3">
               {order.statusHistory.map((event, i) => {
@@ -312,7 +313,7 @@ export default function OrderDetailPage() {
         <Card className="p-5">
           <div className="mb-3 flex items-center gap-2">
             <Undo2 size={17} className="text-muted-foreground" />
-            <Text variant="subtitle">Livreurs qui ont eu cette commande</Text>
+            <Text variant="subtitle">{t('orders.detail.releases.title')}</Text>
           </div>
           <ul className="flex flex-col">
             {order.releases.map((release, i) => (
@@ -324,18 +325,13 @@ export default function OrderDetailPage() {
                         {release.courier.fullName}
                       </Link>
                     ) : (
-                      'Livreur supprimé'
+                      t('orders.detail.releases.deletedCourier')
                     )}
                   </Text>
                   <Text variant="caption" tone="muted">
-                    {release.reason === 'order_cancelled'
-                      ? release.pickedUpAt
-                        ? 'Avait récupéré la commande quand elle a été annulée'
-                        : 'En route vers le commerce quand la commande a été annulée'
-                      : release.reason === 'no_show'
-                        ? 'Course retirée automatiquement : commande non récupérée à temps'
-                        : `A rendu la course — ${RELEASE_REASON_LABELS[release.reason] ?? release.reason}`}
-                    {release.note ? ` : ${release.note}` : ''}
+                    {release.note
+                      ? t('orders.detail.releases.withNote', { summary: releaseSummary(release), note: release.note })
+                      : releaseSummary(release)}
                   </Text>
                 </div>
                 <Text variant="caption" tone="muted">
@@ -351,16 +347,16 @@ export default function OrderDetailPage() {
         <Card className="p-5">
           <div className="mb-3 flex items-center gap-2">
             <MessageCircleWarning size={17} className="text-destructive" />
-            <Text variant="subtitle">Litige — {DISPUTE_REASON_LABELS[order.dispute.reason]}</Text>
+            <Text variant="subtitle">{t('orders.detail.dispute.title', { reason: DISPUTE_REASON_LABELS[order.dispute.reason] ?? order.dispute.reason })}</Text>
           </div>
           <div className="flex flex-col gap-3">
-            <ThreadMessage author="Client" at={order.dispute.openedAt} message={order.dispute.message} />
+            <ThreadMessage author={t('orders.roles.customer')} at={order.dispute.openedAt} message={order.dispute.message} />
             {order.dispute.merchantReply && (
-              <ThreadMessage author="Commerçant" at={order.dispute.answeredAt!} message={order.dispute.merchantReply} muted />
+              <ThreadMessage author={t('orders.roles.merchant')} at={order.dispute.answeredAt!} message={order.dispute.merchantReply} muted />
             )}
           </div>
           <Link href={`/disputes/dp_${order.id}`} className="mt-3 inline-block font-sans text-[0.8125rem] font-semibold text-primary hover:underline">
-            Voir dans la file des litiges →
+            {t('orders.detail.dispute.link')}
           </Link>
         </Card>
       )}
@@ -369,39 +365,50 @@ export default function OrderDetailPage() {
         <Card className="p-5">
           <div className="mb-3 flex items-center gap-2">
             <TriangleAlert size={17} className="text-destructive" />
-            <Text variant="subtitle">Incident livreur — {COURIER_ISSUE_REASON_LABELS[order.courierIssue.reason]}</Text>
+            <Text variant="subtitle">{t('orders.detail.courierIssue.title', { reason: COURIER_ISSUE_REASON_LABELS[order.courierIssue.reason] ?? order.courierIssue.reason })}</Text>
           </div>
-          <ThreadMessage author="Livreur" at={order.courierIssue.at} message={order.courierIssue.message} />
+          <ThreadMessage author={t('orders.roles.courier')} at={order.courierIssue.at} message={order.courierIssue.message} />
           <Link href={`/courier-issues/ci_${order.id}`} className="mt-3 inline-block font-sans text-[0.8125rem] font-semibold text-primary hover:underline">
-            Voir dans la file des incidents →
+            {t('orders.detail.courierIssue.link')}
           </Link>
         </Card>
       )}
 
       <ConfirmDialog
         open={confirmingCancel}
-        title="Annuler cette commande ?"
+        title={t('orders.detail.cancel.confirmTitle')}
         description={
           (order.stripePaymentIntentId
-            ? `Le client sera remboursé de ${formatCad(order.totals.totalCad)}, le stock et ses points lui reviennent.`
-            : 'Le stock et les points du client lui reviennent. Aucun paiement par carte à rembourser.') +
+            ? t('orders.detail.cancel.willRefund', { amount: formatCad(order.totals.totalCad) })
+            : t('orders.detail.cancel.nothingToRefund')) +
           (onTheRoad
-            ? ' Attention : un livreur a déjà récupéré cette commande. Il sera libéré et ne sera pas payé pour cette course.'
+            ? ` ${t('orders.detail.cancel.courierCarrying')}`
             : order.delivery
-              ? ' Le livreur assigné sera libéré.'
+              ? ` ${t('orders.detail.cancel.courierAssigned')}`
               : '') +
-          ' Le client, le commerçant et le livreur sont prévenus. Cette action est définitive.'
+          ` ${t('orders.detail.cancel.final')}`
         }
-        confirmLabel="Annuler la commande"
+        confirmLabel={t('orders.detail.cancel.action')}
         tone="destructive"
         requireReason
-        reasonLabel="Motif (visible dans le journal d’audit)"
+        reasonLabel={t('orders.detail.cancel.reasonLabel')}
         busy={cancelling}
         onConfirm={cancel}
         onCancel={() => setConfirmingCancel(false)}
       />
     </div>
   );
+}
+
+/** What became of one courier's run — the sentence the note, if any, is attached to. */
+function releaseSummary(release: NonNullable<AdminOrderDetail['releases']>[number]): string {
+  return release.reason === 'order_cancelled'
+    ? release.pickedUpAt
+      ? t('orders.detail.releases.cancelledAfterPickup')
+      : t('orders.detail.releases.cancelledEnRoute')
+    : release.reason === 'no_show'
+      ? t('orders.detail.releases.noShow')
+      : t('orders.detail.releases.gaveBack', { reason: RELEASE_REASON_LABELS[release.reason] ?? release.reason });
 }
 
 function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {

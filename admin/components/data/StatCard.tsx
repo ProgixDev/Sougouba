@@ -2,6 +2,8 @@ import { ArrowUpRight, ArrowDownRight, type LucideIcon } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Text } from '../ui/Text';
 import { cn } from '@/lib/cn';
+import { formatNumber } from '@/lib/format';
+import { t } from '@/lib/i18n';
 
 export function StatCard({
   label,
@@ -43,7 +45,7 @@ export function StatCard({
           )}
         >
           {deltaPct >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-          {Math.abs(deltaPct).toLocaleString('fr-CA', { maximumFractionDigits: 1 })} % vs période précédente
+          {t('common.stats.vsPrevious', { value: formatNumber(Math.abs(deltaPct), { maximumFractionDigits: 1 }) })}
         </div>
       )}
     </Card>

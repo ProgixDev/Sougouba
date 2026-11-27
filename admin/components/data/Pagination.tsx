@@ -1,6 +1,8 @@
 'use client';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { formatNumber } from '@/lib/format';
+import { t } from '@/lib/i18n';
 
 export const PAGE_SIZES = [10, 20, 50, 100] as const;
 
@@ -45,11 +47,11 @@ export function Pagination({
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 md:px-5">
       <div className="flex items-center gap-4">
         <span className="font-sans text-[0.8125rem] tabular text-muted-foreground">
-          {first}–{last} sur {total.toLocaleString('fr-CA')}
+          {t('common.table.range', { first, last, total: formatNumber(total) })}
         </span>
         {onPageSize && (
           <label className="hidden items-center gap-2 font-sans text-[0.8125rem] text-muted-foreground sm:flex">
-            Lignes
+            {t('common.table.rows')}
             <select
               value={pageSize}
               onChange={(e) => onPageSize(Number(e.target.value))}
@@ -66,8 +68,8 @@ export function Pagination({
       </div>
 
       {pageCount > 1 && (
-        <nav aria-label="Pagination" className="flex items-center gap-1">
-          <button type="button" aria-label="Page précédente" disabled={page <= 1} onClick={() => onPage(page - 1)} className={cn(BUTTON, 'hover:bg-muted')}>
+        <nav aria-label={t('common.table.pagination')} className="flex items-center gap-1">
+          <button type="button" aria-label={t('common.table.previousPage')} disabled={page <= 1} onClick={() => onPage(page - 1)} className={cn(BUTTON, 'hover:bg-muted')}>
             <ChevronLeft size={16} />
           </button>
           {/* A phone gets "3 / 12" rather than a row of numbers it has no room for. */}
@@ -93,7 +95,7 @@ export function Pagination({
           )}
           <button
             type="button"
-            aria-label="Page suivante"
+            aria-label={t('common.table.nextPage')}
             disabled={page >= pageCount}
             onClick={() => onPage(page + 1)}
             className={cn(BUTTON, 'hover:bg-muted')}

@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Skeleton } from '@/components/data/Skeleton';
 import { cn } from '@/lib/cn';
+import { t } from '@/lib/i18n';
 import { mediaUrl } from '@/lib/media';
 
 /**
@@ -171,7 +172,7 @@ export function Breakdown({ items }: { items: { label: string; value: number }[]
   if (total === 0) {
     return (
       <Text variant="body" tone="muted">
-        Pas encore de données.
+        {t('common.insights.noData')}
       </Text>
     );
   }
@@ -208,7 +209,7 @@ export function Breakdown({ items }: { items: { label: string; value: number }[]
 /** A top five — the bar behind each line is its share of the leader. */
 export function Ranking({
   items,
-  empty = 'Pas encore de données sur la période.',
+  empty = t('common.insights.noDataPeriod'),
 }: {
   items: { id: string; label: string; value: number; display: string; href?: string }[];
   empty?: string;

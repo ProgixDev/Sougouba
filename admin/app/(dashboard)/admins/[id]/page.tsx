@@ -8,41 +8,42 @@ import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/data/Skeleton';
-import { listAdmins, listRoles, type AdminAccount, type AdminRole } from '@/lib/api/admins';
+import { listAdmins, listRoles, roleDescription, roleName, type AdminAccount, type AdminRole } from '@/lib/api/admins';
 import { listAudit, type AuditEntry } from '@/lib/api/audit';
 import { formatDate, formatDateTime } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import { useAdmin } from '@/lib/permissions';
 
-/** Same wording as the audit page, for the handful of actions shown here. */
+/** Same wording as the audit page (the `audit` dictionary), for the handful of actions shown here. */
 function actionLabel(action: string): string {
   const labels: Record<string, string> = {
-    'vendor.approve': 'Commerce approuvé',
-    'vendor.reject': 'Commerce refusé',
-    'vendor.suspend': 'Commerce suspendu',
-    'courier.approve': 'Livreur approuvé',
-    'courier.reject': 'Livreur refusé',
-    'courier.suspend': 'Livreur suspendu',
-    'user.block': 'Compte bloqué',
-    'user.unblock': 'Compte débloqué',
-    'dispute.resolve': 'Litige résolu',
-    'courier_issue.resolve': 'Incident résolu',
-    'order.refund': 'Commande remboursée',
-    'order.receipt_resend': 'Reçu renvoyé',
-    'settings.update': 'Paramètres modifiés',
-    'specialty.create': 'Spécialité ajoutée',
-    'specialty.update': 'Spécialité modifiée',
-    'support.reply': 'Réponse au support',
-    'support.resolve': 'Support résolu',
-    'review.moderate': 'Avis modéré',
-    'coupon.deactivate': 'Code promo désactivé',
-    'product.hide': 'Produit masqué',
-    'product.unhide': 'Produit réaffiché',
-    'admin.create': 'Administrateur ajouté',
-    'admin.revoke': 'Administrateur retiré',
-    'admin.role_change': 'Rôle changé',
-    'role.create': 'Rôle créé',
-    'role.update': 'Rôle modifié',
-    'role.delete': 'Rôle supprimé',
+    'vendor.approve': t('audit.actions.vendor_approve'),
+    'vendor.reject': t('audit.actions.vendor_reject'),
+    'vendor.suspend': t('audit.actions.vendor_suspend'),
+    'courier.approve': t('audit.actions.courier_approve'),
+    'courier.reject': t('audit.actions.courier_reject'),
+    'courier.suspend': t('audit.actions.courier_suspend'),
+    'user.block': t('audit.actions.user_block'),
+    'user.unblock': t('audit.actions.user_unblock'),
+    'dispute.resolve': t('audit.actions.dispute_resolve'),
+    'courier_issue.resolve': t('audit.actions.courier_issue_resolve'),
+    'order.refund': t('audit.actions.order_refund'),
+    'order.receipt_resend': t('audit.actions.order_receipt_resend'),
+    'settings.update': t('audit.actions.settings_update'),
+    'specialty.create': t('audit.actions.specialty_create'),
+    'specialty.update': t('audit.actions.specialty_update'),
+    'support.reply': t('audit.actions.support_reply'),
+    'support.resolve': t('audit.actions.support_resolve'),
+    'review.moderate': t('audit.actions.review_moderate'),
+    'coupon.deactivate': t('audit.actions.coupon_deactivate'),
+    'product.hide': t('audit.actions.product_hide'),
+    'product.unhide': t('audit.actions.product_unhide'),
+    'admin.create': t('audit.actions.admin_create'),
+    'admin.revoke': t('audit.actions.admin_revoke'),
+    'admin.role_change': t('audit.actions.admin_role_change'),
+    'role.create': t('audit.actions.role_create'),
+    'role.update': t('audit.actions.role_update'),
+    'role.delete': t('audit.actions.role_delete'),
   };
   return labels[action] ?? action;
 }
@@ -90,9 +91,9 @@ export default function AdminDetailPage() {
   if (admin === null) {
     return (
       <div className="mx-auto max-w-content">
-        <Text variant="title">Administrateur introuvable</Text>
+        <Text variant="title">{t('admins.detail.notFoundTitle')}</Text>
         <Text variant="body" tone="muted" className="mt-1">
-          Cette personne n’a peut-être plus accès au tableau de bord.
+          {t('admins.detail.notFoundBody')}
         </Text>
       </div>
     );
@@ -100,7 +101,7 @@ export default function AdminDetailPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <Breadcrumbs items={[{ label: 'Administrateurs', href: '/admins' }, { label: admin.fullName }]} />
+      <Breadcrumbs items={[{ label: t('admins.title'), href: '/admins' }, { label: admin.fullName }]} />
 
       <div className="flex items-center gap-3">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-forest-100 font-display text-[1.1rem] font-bold text-forest-700 dark:bg-forest-900 dark:text-forest-200">
@@ -110,27 +111,31 @@ export default function AdminDetailPage() {
           <Text as="h1" variant="title">
             {admin.fullName}
           </Text>
-          <Badge tone={admin.role?.slug === 'owner' ? 'secondary' : 'neutral'}>{admin.role?.name ?? '—'}</Badge>
+          <Badge tone={admin.role?.slug === 'owner' ? 'secondary' : 'neutral'}>{admin.role ? roleName(admin.role) : '—'}</Badge>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="flex flex-col gap-3 p-5">
-          <Text variant="subtitle">Compte</Text>
-          <Field icon={Mail} label="Courriel" value={admin.email ?? '—'} />
-          <Field icon={Clock} label="Dernière connexion" value={admin.lastSignInAt ? formatDateTime(admin.lastSignInAt) : 'Jamais connecté'} />
-          <Field icon={Star} label="Membre depuis" value={admin.memberSince ? formatDate(admin.memberSince) : '—'} />
+          <Text variant="subtitle">{t('admins.detail.account')}</Text>
+          <Field icon={Mail} label={t('admins.detail.email')} value={admin.email ?? '—'} />
+          <Field
+            icon={Clock}
+            label={t('admins.shared.lastSignIn')}
+            value={admin.lastSignInAt ? formatDateTime(admin.lastSignInAt) : t('admins.shared.neverSignedIn')}
+          />
+          <Field icon={Star} label={t('admins.shared.memberSince')} value={admin.memberSince ? formatDate(admin.memberSince) : '—'} />
         </Card>
 
         <Card className="flex flex-col gap-3 p-5 lg:col-span-2">
           <div className="flex items-center gap-2">
             <ShieldCheck size={17} className="text-primary" />
-            <Text variant="subtitle">Rôle : {admin.role?.name ?? '—'}</Text>
+            <Text variant="subtitle">{t('admins.detail.roleTitle', { role: admin.role ? roleName(admin.role) : '—' })}</Text>
           </div>
           {role ? (
             <>
               <Text variant="caption" tone="muted">
-                {role.description}
+                {roleDescription(role)}
               </Text>
               <div className="flex flex-wrap gap-1.5">
                 {role.permissions.map((p) => (
@@ -140,7 +145,7 @@ export default function AdminDetailPage() {
                 ))}
               </div>
               <Link href="/admins?tab=roles" className="font-sans text-[0.8125rem] font-semibold text-primary hover:underline">
-                Voir tous les rôles →
+                {t('admins.detail.allRoles')}
               </Link>
             </>
           ) : (
@@ -153,12 +158,12 @@ export default function AdminDetailPage() {
 
       {can('audit.view') ? (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Timeline title="Actions récentes" entries={done} empty="Aucune action enregistrée." />
-          <Timeline title="Historique de l’accès" entries={history} empty="Aucun changement enregistré." />
+          <Timeline title={t('admins.detail.recentActions')} entries={done} empty={t('admins.detail.noActions')} />
+          <Timeline title={t('admins.detail.accessHistory')} entries={history} empty={t('admins.detail.noHistory')} />
         </div>
       ) : (
         <Text variant="caption" tone="muted">
-          L’activité de cette personne est visible avec la permission « Consulter le journal ».
+          {t('admins.detail.activityHidden')}
         </Text>
       )}
     </div>
@@ -186,7 +191,11 @@ function Timeline({ title, entries, empty }: { title: string; entries: AuditEntr
                   {actionLabel(e.action)}
                 </Text>
                 <Text variant="caption" tone="muted" className="line-clamp-1">
-                  {[e.subjectLabel, e.reason ? `« ${e.reason} »` : null, title === 'Historique de l’accès' ? `par ${e.actorName}` : null]
+                  {[
+                    e.subjectLabel,
+                    e.reason ? t('admins.detail.quotedReason', { reason: e.reason }) : null,
+                    title === t('admins.detail.accessHistory') ? t('admins.detail.byActor', { name: e.actorName }) : null,
+                  ]
                     .filter(Boolean)
                     .join(' · ')}
                 </Text>

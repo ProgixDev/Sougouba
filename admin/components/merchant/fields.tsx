@@ -2,6 +2,7 @@
 import { useId, useRef, useState, type ReactNode } from 'react';
 import { ImagePlus, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { t } from '@/lib/i18n';
 import { mediaUrl } from '@/lib/api/merchantCatalog';
 
 /**
@@ -220,7 +221,7 @@ export function ImageField({
     try {
       onChange(await upload(file));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Envoi de la photo impossible.');
+      setError(cause instanceof Error ? cause.message : t('portalShop.fields.image.uploadFailed'));
     } finally {
       setBusy(false);
       // So choosing the same file again after an error fires `change` again.
@@ -261,7 +262,7 @@ export function ImageField({
             onClick={() => input.current?.click()}
             className="inline-flex h-9 cursor-pointer items-center rounded-full border-[1.5px] border-border-strong px-4 font-sans text-[0.8125rem] font-semibold text-foreground transition-[filter] hover:brightness-95 disabled:pointer-events-none disabled:opacity-50"
           >
-            {busy ? 'Envoi…' : src ? 'Remplacer la photo' : 'Choisir une photo'}
+            {busy ? t('portalShop.fields.image.uploading') : src ? t('portalShop.fields.image.replace') : t('portalShop.fields.image.choose')}
           </button>
           {src && !busy && (
             <button
@@ -269,10 +270,10 @@ export function ImageField({
               onClick={() => onChange('')}
               className="cursor-pointer font-sans text-[0.75rem] font-medium text-muted-foreground underline-offset-2 hover:underline"
             >
-              Retirer la photo
+              {t('portalShop.fields.image.remove')}
             </button>
           )}
-          <p className="max-w-xs font-sans text-[0.75rem] text-muted-foreground">{helper ?? 'JPEG, PNG ou WebP, 8 Mo au maximum.'}</p>
+          <p className="max-w-xs font-sans text-[0.75rem] text-muted-foreground">{helper ?? t('portalShop.fields.image.formats')}</p>
           {error && (
             <p role="alert" className="font-sans text-[0.75rem] text-destructive">
               {error}

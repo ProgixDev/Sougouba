@@ -9,6 +9,7 @@ import {
 } from './client';
 import type { ID } from '../types';
 import { mediaUrl } from '../media';
+import { t } from '../i18n';
 
 /**
  * The merchant portal's shop and catalogue: everything a shop owner can change
@@ -39,17 +40,17 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
  */
 async function uploadImage(endpoint: string, file: File): Promise<string> {
   const contentType = IMAGE_TYPES.find((type) => type === file.type);
-  if (!contentType) throw new ApiError(400, 'Format accepté : JPEG, PNG ou WebP.');
-  if (file.size > MAX_IMAGE_BYTES) throw new ApiError(400, 'Image trop lourde : 8 Mo au maximum.');
+  if (!contentType) throw new ApiError(400, t('common.upload.format'));
+  if (file.size > MAX_IMAGE_BYTES) throw new ApiError(400, t('common.upload.tooLarge'));
 
   const { path, uploadUrl } = await merchantApiPost<{ path: string; uploadUrl: string }>(endpoint, { contentType });
   let response: Response;
   try {
     response = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: file });
   } catch {
-    throw new ApiError(0, 'Envoi de la photo impossible. Vérifiez votre connexion et réessayez.');
+    throw new ApiError(0, t('common.upload.network'));
   }
-  if (!response.ok) throw new ApiError(response.status, 'Envoi de la photo impossible. Veuillez réessayer.');
+  if (!response.ok) throw new ApiError(response.status, t('common.upload.failed'));
   return path;
 }
 

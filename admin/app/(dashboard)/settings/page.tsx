@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/data/Skeleton';
 import { useToast } from '@/components/Toast';
 import { getSettings, updateSettings } from '@/lib/api/settings';
+import { t } from '@/lib/i18n';
 import type { PlatformSettings } from '@/lib/types';
 import { useAdmin } from '@/lib/permissions';
 import { PageHeader } from '@/components/insights/Insights';
@@ -120,11 +121,11 @@ export default function SettingsPage() {
       const saved = await updateSettings(toPatch(fields, doublePointsActive));
       setFields(toFields(saved));
       setDoublePointsActive(saved.doublePointsActive);
-      toast('success', 'Paramètres enregistrés.');
+      toast('success', t('settings.saved'));
     } catch (error) {
       // A refused value — a cancellation delay shorter than the alert delay,
       // say — used to leave the button spinning for good.
-      toast('error', error instanceof Error ? error.message : 'Les paramètres n’ont pas pu être enregistrés.');
+      toast('error', error instanceof Error ? error.message : t('settings.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -134,16 +135,16 @@ export default function SettingsPage() {
     <div className="mx-auto flex max-w-content flex-col gap-6">
       <PageHeader
         icon={Settings}
-        title="Paramètres de la plateforme"
-        description="Monétisation et règles du programme de fidélité, appliquées à toute la plateforme."
+        title={t('settings.title')}
+        description={t('settings.description')}
         actions={
           can('settings.manage') ? (
             <Button variant="primary" onClick={handleSave} disabled={saving}>
-              <Save size={16} /> {saving ? 'Enregistrement…' : 'Enregistrer'}
+              <Save size={16} /> {saving ? t('settings.saving') : t('common.actions.save')}
             </Button>
           ) : (
             <Text variant="caption" tone="muted">
-              Lecture seule — votre rôle ne permet pas de modifier les paramètres.
+              {t('settings.readOnly')}
             </Text>
           )
         }
@@ -151,39 +152,39 @@ export default function SettingsPage() {
 
       <Card className="p-6">
         <Text variant="subtitle" className="mb-1">
-          Monétisation
+          {t('settings.monetization.title')}
         </Text>
         <Text variant="caption" tone="muted" className="mb-4">
-          Appliquées simultanément à chaque commerçant — commission par vente et abonnement mensuel.
+          {t('settings.monetization.intro')}
         </Text>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input
-            label="Taux de commission (%)"
+            label={t('settings.monetization.commissionRate')}
             type="number"
             step="0.1"
             min={0}
             max={100}
             {...field('commissionPct')}
-            helper="Calculé sur le sous-total des ventes, hors taxes et livraison."
+            helper={t('settings.monetization.commissionHelper')}
           />
-          <Input label="Abonnement mensuel (CAD)" type="number" step="1" min={0} {...field('monthlySubscriptionCad')} />
+          <Input label={t('settings.monetization.monthlySubscription')} type="number" step="1" min={0} {...field('monthlySubscriptionCad')} />
         </div>
       </Card>
 
       <Card className="p-6">
         <Text variant="subtitle" className="mb-1">
-          Points Sougouba (fidélité)
+          {t('settings.loyalty.title')}
         </Text>
         <Text variant="caption" tone="muted" className="mb-4">
-          Règles du programme de points, coupons et parrainage.
+          {t('settings.loyalty.intro')}
         </Text>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Input label="Points gagnés par $ dépensé" type="number" step="0.1" min={0} {...field('pointsPerCad')} />
-          <Input label="Points requis pour 1 $ de rabais" type="number" step="1" min={1} {...field('pointsPerCadRedeemed')} />
-          <Input label="Plafond de rachat (% du sous-total)" type="number" step="1" min={0} max={100} {...field('redemptionPct')} />
-          <Input label="Expiration des points (mois)" type="number" step="1" min={1} {...field('pointsExpiryMonths')} />
-          <Input label="Points de parrainage (chaque partie)" type="number" step="1" min={0} {...field('referralRewardPoints')} />
-          <Input label="1re commande min. pour parrainage (CAD)" type="number" step="1" min={0} {...field('referralMinFirstOrderCad')} />
+          <Input label={t('settings.loyalty.pointsPerCad')} type="number" step="0.1" min={0} {...field('pointsPerCad')} />
+          <Input label={t('settings.loyalty.pointsPerCadRedeemed')} type="number" step="1" min={1} {...field('pointsPerCadRedeemed')} />
+          <Input label={t('settings.loyalty.redemptionCap')} type="number" step="1" min={0} max={100} {...field('redemptionPct')} />
+          <Input label={t('settings.loyalty.pointsExpiry')} type="number" step="1" min={1} {...field('pointsExpiryMonths')} />
+          <Input label={t('settings.loyalty.referralPoints')} type="number" step="1" min={0} {...field('referralRewardPoints')} />
+          <Input label={t('settings.loyalty.referralMinFirstOrder')} type="number" step="1" min={0} {...field('referralMinFirstOrderCad')} />
         </div>
         <label className="mt-5 flex cursor-pointer items-center gap-3">
           <input
@@ -194,10 +195,10 @@ export default function SettingsPage() {
           />
           <div>
             <Text variant="body" className="font-medium">
-              Journées points doublés
+              {t('settings.loyalty.doublePointsTitle')}
             </Text>
             <Text variant="caption" tone="muted">
-              Double temporairement les points gagnés sur chaque commande livrée.
+              {t('settings.loyalty.doublePointsBody')}
             </Text>
           </div>
         </label>
@@ -206,29 +207,28 @@ export default function SettingsPage() {
       {fields.shopConfirmRemindMin !== '' && (
         <Card className="p-6">
           <Text variant="subtitle" className="mb-1">
-            Commande sans réponse du commerce
+            {t('settings.shopConfirm.title')}
           </Text>
           <Text variant="caption" tone="muted" className="mb-4">
-            Le client paie en commandant. Si le commerce n’accepte pas la commande, il reçoit un rappel, puis elle est annulée
-            et le client remboursé en totalité. Le délai compte à partir de la commande.
+            {t('settings.shopConfirm.intro')}
           </Text>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input
-              label="Rappeler le commerce après (minutes)"
+              label={t('settings.shopConfirm.remindAfter')}
               type="number"
               step="1"
               min={0}
               max={120}
-              helper="Une notification sur son téléphone, une seule fois. 0 = pas de rappel."
+              helper={t('settings.shopConfirm.remindHelper')}
               {...field('shopConfirmRemindMin')}
             />
             <Input
-              label="Annuler et rembourser après (minutes)"
+              label={t('settings.shopConfirm.cancelAfter')}
               type="number"
               step="1"
               min={0}
               max={1440}
-              helper="Doit être plus long que le délai de rappel. 0 = jamais automatiquement."
+              helper={t('settings.shopConfirm.cancelHelper')}
               {...field('shopConfirmCancelMin')}
             />
           </div>
@@ -238,30 +238,28 @@ export default function SettingsPage() {
       {fields.courierLateRemindMin !== '' && (
         <Card className="p-6">
           <Text variant="subtitle" className="mb-1">
-            Livreur qui ne vient pas chercher la commande
+            {t('settings.courierLate.title')}
           </Text>
           <Text variant="caption" tone="muted" className="mb-4">
-            Un livreur qui accepte une course la bloque pour les autres. Le retard se compte à partir de l’heure d’arrivée
-            estimée quand il a accepté (selon sa distance et son véhicule). La course retirée repart vers un autre livreur ; une
-            course sur laquelle le livreur a signalé un incident n’est jamais retirée automatiquement.
+            {t('settings.courierLate.intro')}
           </Text>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input
-              label="Rappeler le livreur après (minutes de retard)"
+              label={t('settings.courierLate.remindAfter')}
               type="number"
               step="1"
               min={0}
               max={240}
-              helper="Une notification, une seule fois. 0 = pas de rappel."
+              helper={t('settings.courierLate.remindHelper')}
               {...field('courierLateRemindMin')}
             />
             <Input
-              label="Retirer la course après (minutes de retard)"
+              label={t('settings.courierLate.releaseAfter')}
               type="number"
               step="1"
               min={0}
               max={1440}
-              helper="Doit être plus long que le délai de rappel. 0 = jamais automatiquement."
+              helper={t('settings.courierLate.releaseHelper')}
               {...field('courierLateReleaseMin')}
             />
           </div>
@@ -271,29 +269,28 @@ export default function SettingsPage() {
       {fields.noCourierAlertMin !== '' && (
         <Card className="p-6">
           <Text variant="subtitle" className="mb-1">
-            Commande prête, sans livreur
+            {t('settings.noCourier.title')}
           </Text>
           <Text variant="caption" tone="muted" className="mb-4">
-            Ce qui arrive quand une commande est prête et qu’aucun livreur ne la prend. Le délai compte à partir du moment où
-            elle est prête — ou du moment où un livreur l’a rendue.
+            {t('settings.noCourier.intro')}
           </Text>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input
-              label="Prévenir l’équipe après (minutes)"
+              label={t('settings.noCourier.alertAfter')}
               type="number"
               step="1"
               min={1}
               max={1440}
-              helper="Un courriel à l’équipe, et la commande s’affiche en haut de la page Commandes."
+              helper={t('settings.noCourier.alertHelper')}
               {...field('noCourierAlertMin')}
             />
             <Input
-              label="Annuler et rembourser après (minutes)"
+              label={t('settings.noCourier.cancelAfter')}
               type="number"
               step="1"
               min={0}
               max={1440}
-              helper="Doit être plus long que le délai d’alerte. 0 = jamais automatiquement : l’équipe décide."
+              helper={t('settings.noCourier.cancelHelper')}
               {...field('noCourierCancelMin')}
             />
           </div>

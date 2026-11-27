@@ -23,6 +23,7 @@ import {
   type Shop,
 } from '@/lib/api/merchantCatalog';
 import { failureMessage, moneyText, parseCount, parseMoney } from '@/lib/merchantForm';
+import { t } from '@/lib/i18n';
 
 /**
  * The product form of the merchant portal — one for "new" and for "edit".
@@ -94,38 +95,38 @@ function read(form: Form, editing: boolean): { input: ProductInput } | { errors:
   const errors: Errors = {};
 
   const name = form.name.trim();
-  if (name.length < 2) errors.name = 'Nom du produit requis';
+  if (name.length < 2) errors.name = t('portalProduct.errors.name');
   const description = form.description.trim();
-  if (description.length < 10) errors.description = 'Décrivez le produit en quelques mots (10 caractères au moins)';
-  if (!form.sectionId) errors.sectionId = 'Choisissez un rayon';
-  if (!form.categoryId) errors.categoryId = 'Choisissez une catégorie';
+  if (description.length < 10) errors.description = t('portalProduct.errors.description');
+  if (!form.sectionId) errors.sectionId = t('portalProduct.errors.section');
+  if (!form.categoryId) errors.categoryId = t('portalProduct.errors.category');
 
   const price = parseMoney(form.price);
-  if (price === null || price <= 0) errors.price = 'Prix requis, par exemple 4,99';
+  if (price === null || price <= 0) errors.price = t('portalProduct.errors.price');
 
   let compareAt: number | null = null;
   if (form.compareAt.trim()) {
     compareAt = parseMoney(form.compareAt);
-    if (compareAt === null || compareAt <= 0) errors.compareAt = 'Montant invalide';
-    else if (price !== null && compareAt <= price) errors.compareAt = 'Le prix barré doit être supérieur au prix de vente';
+    if (compareAt === null || compareAt <= 0) errors.compareAt = t('portalProduct.errors.compareAtInvalid');
+    else if (price !== null && compareAt <= price) errors.compareAt = t('portalProduct.errors.compareAtTooLow');
   }
 
   const stock = parseCount(form.stock);
-  if (stock === null) errors.stock = 'Quantité en stock requise (0 si épuisé)';
+  if (stock === null) errors.stock = t('portalProduct.errors.stock');
 
   const tags = form.tags
     .split(',')
     .map((tag) => tag.trim())
     .filter(Boolean);
-  if (tags.length > 20) errors.tags = 'Vingt étiquettes au maximum';
+  if (tags.length > 20) errors.tags = t('portalProduct.errors.tags');
 
   let nutrition: ProductInput['nutrition'];
   if (form.hasNutrition) {
     const calories = parseCount(form.calories);
-    if (calories === null) errors.calories = 'Nombre entier requis';
+    if (calories === null) errors.calories = t('portalProduct.errors.calories');
     const grams = (key: 'proteinG' | 'fatG' | 'weightG') => {
       const value = parseMoney(form[key]);
-      if (value === null) errors[key] = 'Valeur requise, par exemple 12,5';
+      if (value === null) errors[key] = t('portalProduct.errors.grams');
       return value ?? 0;
     };
     nutrition = { calories: calories ?? 0, proteinG: grams('proteinG'), fatG: grams('fatG'), weightG: grams('weightG') };
@@ -195,7 +196,7 @@ export function ProductEditor({ product, shop, categories }: { product?: Product
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const shelf = shop.vendorType === 'restaurant' ? 'Section du menu' : 'Rayon';
+  const shelf = shop.vendorType === 'restaurant' ? t('portalProduct.shelf.restaurant') : t('portalProduct.shelf.grocery');
 
   function set<K extends keyof Form>(key: K, value: Form[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -207,12 +208,12 @@ export function ProductEditor({ product, shop, categories }: { product?: Product
     const result = read(form, Boolean(product));
     if ('errors' in result) {
       setErrors(result.errors);
-      toast('error', 'Corrigez les champs indiqués avant d’enregistrer.');
+      toast('error', t('portalProduct.toast.fixFields'));
       return;
     }
     const patch = product ? changesTo(product, result.input) : null;
     if (patch && Object.keys(patch).length === 0) {
-      toast('info', 'Aucune modification à enregistrer');
+      toast('info', t('portalProduct.toast.noChanges'));
       router.push('/merchant/products');
       return;
     }
@@ -220,10 +221,10 @@ export function ProductEditor({ product, shop, categories }: { product?: Product
     try {
       if (product && patch) await updateProduct(product.id, patch);
       else await createProduct(result.input);
-      toast('success', product ? 'Produit enregistré' : 'Produit ajouté');
+      toast('success', product ? t('portalProduct.toast.saved') : t('portalProduct.toast.added'));
       router.push('/merchant/products');
     } catch (error) {
-      toast('error', failureMessage(error, 'Enregistrement impossible. Veuillez réessayer.'));
+      toast('error', failureMessage(error, t('portalProduct.toast.saveFailed')));
       setSaving(false);
     }
   }
@@ -233,10 +234,10 @@ export function ProductEditor({ product, shop, categories }: { product?: Product
     setDeleting(true);
     try {
       await removeProduct(product.id);
-      toast('success', 'Produit supprimé');
+      toast('success', t('portalProduct.toast.removed'));
       router.push('/merchant/products');
     } catch (error) {
-      toast('error', failureMessage(error, 'Suppression impossible. Veuillez réessayer.'));
+      toast('error', failureMessage(error, t('portalProduct.toast.removeFailed')));
       setDeleting(false);
       setConfirmingDelete(false);
     }
@@ -245,16 +246,15 @@ export function ProductEditor({ product, shop, categories }: { product?: Product
   if (shop.sections.length === 0) {
     return (
       <Card className="p-6">
-        <Text variant="subtitle">Créez d’abord un rayon</Text>
+        <Text variant="subtitle">{t('portalProduct.noSections.title')}</Text>
         <Text variant="body" tone="muted" className="mt-1 max-w-xl">
-          Chaque produit est rangé dans un rayon de votre boutique (« Épices », « Boissons »…). Ajoutez-en au moins un, puis revenez
-          ajouter vos produits.
+          {t('portalProduct.noSections.body')}
         </Text>
         <Link
           href="/merchant/shop"
           className="mt-4 inline-flex h-11 items-center rounded-full bg-primary px-5 font-sans text-[0.875rem] font-semibold text-primary-foreground shadow-cta-primary"
         >
-          Gérer mes rayons
+          {t('portalProduct.noSections.link')}
         </Link>
       </Card>
     );
@@ -267,11 +267,13 @@ export function ProductEditor({ product, shop, categories }: { product?: Product
           <EyeOff size={18} className="mt-0.5 shrink-0 text-destructive" />
           <div>
             <Text variant="body" className="font-semibold">
-              Ce produit a été masqué par l’équipe Sougouba
+              {t('portalProduct.hidden.title')}
             </Text>
             <Text variant="body" tone="muted" className="mt-0.5">
-              {product.hiddenByAdmin.reason ? `Motif : ${product.hiddenByAdmin.reason.replace(/[.\s]+$/, '')}.` : 'Les clients ne le voient plus.'}{' '}
-              Corrigez-le puis contactez le soutien pour le faire réafficher.
+              {product.hiddenByAdmin.reason
+                ? t('portalProduct.hidden.reason', { reason: product.hiddenByAdmin.reason.replace(/[.\s]+$/, '') })
+                : t('portalProduct.hidden.noReason')}{' '}
+              {t('portalProduct.hidden.fix')}
             </Text>
           </div>
         </div>
@@ -279,14 +281,14 @@ export function ProductEditor({ product, shop, categories }: { product?: Product
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <Card className="flex flex-col gap-5 p-5 sm:p-6">
-          <Text variant="subtitle">Le produit</Text>
-          <Input label="Nom du produit" required value={form.name} error={errors.name} onChange={(e) => set('name', e.target.value)} />
+          <Text variant="subtitle">{t('portalProduct.details.title')}</Text>
+          <Input label={t('portalProduct.details.name')} required value={form.name} error={errors.name} onChange={(e) => set('name', e.target.value)} />
           <TextArea
-            label="Description"
+            label={t('portalProduct.details.description')}
             required
             value={form.description}
             error={errors.description}
-            helper="Ce que c’est, d’où ça vient, comment on s’en sert."
+            helper={t('portalProduct.details.descriptionHelper')}
             onChange={(value) => set('description', value)}
           />
           <div className="grid gap-5 sm:grid-cols-2">
@@ -295,40 +297,40 @@ export function ProductEditor({ product, shop, categories }: { product?: Product
               required
               value={form.sectionId}
               error={errors.sectionId}
-              placeholder="Choisir…"
+              placeholder={t('portalProduct.details.choose')}
               options={shop.sections.map((section) => ({ value: section.id, label: section.nameFr }))}
               onChange={(value) => set('sectionId', value)}
             />
             <SelectField
-              label="Catégorie Sougouba"
+              label={t('portalProduct.details.category')}
               required
               value={form.categoryId}
               error={errors.categoryId}
-              helper="Là où les clients trouvent le produit en parcourant l’application."
-              placeholder="Choisir…"
+              helper={t('portalProduct.details.categoryHelper')}
+              placeholder={t('portalProduct.details.choose')}
               options={categories.map((category) => ({ value: category.id, label: category.nameFr }))}
               onChange={(value) => set('categoryId', value)}
             />
           </div>
           <Input
-            label="Étiquettes"
+            label={t('portalProduct.details.tags')}
             value={form.tags}
             error={errors.tags}
-            helper="Séparées par des virgules : halal, bio, sans gluten…"
+            helper={t('portalProduct.details.tagsHelper')}
             onChange={(e) => set('tags', e.target.value)}
           />
         </Card>
 
         <div className="flex flex-col gap-6">
           <Card className="p-5 sm:p-6">
-            <ImageField label="Photo" value={form.imageUrl} upload={uploadProductImage} onChange={(path) => set('imageUrl', path)} />
+            <ImageField label={t('portalProduct.photo')} value={form.imageUrl} upload={uploadProductImage} onChange={(path) => set('imageUrl', path)} />
           </Card>
 
           <Card className="flex flex-col gap-5 p-5 sm:p-6">
-            <Text variant="subtitle">Prix et stock</Text>
+            <Text variant="subtitle">{t('portalProduct.pricing.title')}</Text>
             <div className="grid grid-cols-2 gap-4">
               <Input
-                label="Prix ($)"
+                label={t('portalProduct.pricing.price')}
                 required
                 inputMode="decimal"
                 value={form.price}
@@ -336,16 +338,16 @@ export function ProductEditor({ product, shop, categories }: { product?: Product
                 onChange={(e) => set('price', e.target.value)}
               />
               <Input
-                label="Prix barré ($)"
+                label={t('portalProduct.pricing.compareAt')}
                 inputMode="decimal"
                 value={form.compareAt}
                 error={errors.compareAt}
-                helper="L’ancien prix, pour une promotion."
+                helper={t('portalProduct.pricing.compareAtHelper')}
                 onChange={(e) => set('compareAt', e.target.value)}
               />
             </div>
             <Input
-              label="Quantité en stock"
+              label={t('portalProduct.pricing.stock')}
               required
               inputMode="numeric"
               value={form.stock}
@@ -353,8 +355,8 @@ export function ProductEditor({ product, shop, categories }: { product?: Product
               onChange={(e) => set('stock', e.target.value)}
             />
             <Toggle
-              label="En vente"
-              hint="Désactivé, le produit reste dans votre catalogue mais les clients ne le voient pas."
+              label={t('portalProduct.pricing.available')}
+              hint={t('portalProduct.pricing.availableHint')}
               checked={form.isAvailable}
               onChange={(checked) => set('isAvailable', checked)}
             />
@@ -364,17 +366,17 @@ export function ProductEditor({ product, shop, categories }: { product?: Product
 
       <Card className="flex flex-col gap-5 p-5 sm:p-6">
         <Toggle
-          label="Valeurs nutritionnelles"
-          hint="Facultatif. Affichées sur la fiche du produit."
+          label={t('portalProduct.nutrition.title')}
+          hint={t('portalProduct.nutrition.hint')}
           checked={form.hasNutrition}
           onChange={(checked) => set('hasNutrition', checked)}
         />
         {form.hasNutrition && (
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <Input label="Calories" inputMode="numeric" value={form.calories} error={errors.calories} onChange={(e) => set('calories', e.target.value)} />
-            <Input label="Protéines (g)" inputMode="decimal" value={form.proteinG} error={errors.proteinG} onChange={(e) => set('proteinG', e.target.value)} />
-            <Input label="Lipides (g)" inputMode="decimal" value={form.fatG} error={errors.fatG} onChange={(e) => set('fatG', e.target.value)} />
-            <Input label="Poids (g)" inputMode="decimal" value={form.weightG} error={errors.weightG} onChange={(e) => set('weightG', e.target.value)} />
+            <Input label={t('portalProduct.nutrition.calories')} inputMode="numeric" value={form.calories} error={errors.calories} onChange={(e) => set('calories', e.target.value)} />
+            <Input label={t('portalProduct.nutrition.protein')} inputMode="decimal" value={form.proteinG} error={errors.proteinG} onChange={(e) => set('proteinG', e.target.value)} />
+            <Input label={t('portalProduct.nutrition.fat')} inputMode="decimal" value={form.fatG} error={errors.fatG} onChange={(e) => set('fatG', e.target.value)} />
+            <Input label={t('portalProduct.nutrition.weight')} inputMode="decimal" value={form.weightG} error={errors.weightG} onChange={(e) => set('weightG', e.target.value)} />
           </div>
         )}
       </Card>
@@ -382,24 +384,24 @@ export function ProductEditor({ product, shop, categories }: { product?: Product
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={saving || deleting}>
-            {saving ? 'Enregistrement…' : product ? 'Enregistrer' : 'Ajouter le produit'}
+            {saving ? t('portalProduct.actions.saving') : product ? t('common.actions.save') : t('portalProduct.actions.add')}
           </Button>
           <Button variant="ghost" onClick={() => router.push('/merchant/products')} disabled={saving || deleting}>
-            Annuler
+            {t('common.actions.cancel')}
           </Button>
         </div>
         {product && (
           <Button variant="outline" className="border-destructive/50 text-destructive" onClick={() => setConfirmingDelete(true)} disabled={saving || deleting}>
-            Supprimer le produit
+            {t('portalProduct.actions.remove')}
           </Button>
         )}
       </div>
 
       <ConfirmDialog
         open={confirmingDelete}
-        title="Supprimer ce produit ?"
-        description={`« ${product?.name ?? ''} » sera retiré de votre catalogue. Les commandes déjà passées ne changent pas.`}
-        confirmLabel="Supprimer"
+        title={t('portalProduct.remove.title')}
+        description={t('portalProduct.remove.body', { name: product?.name ?? '' })}
+        confirmLabel={t('common.actions.delete')}
         tone="destructive"
         busy={deleting}
         onConfirm={remove}

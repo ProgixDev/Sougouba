@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { ArrowRight, type LucideIcon } from 'lucide-react';
 import { LogoMark } from '@/components/layout/LogoMark';
 import { cn } from '@/lib/cn';
+import { LanguageSwitch } from '@/components/layout/LanguageSwitch';
+import { t as translate } from '@/lib/i18n';
 
 export interface AuthSlide {
   src: string;
@@ -70,9 +72,13 @@ export function AuthShell({
     <main className="min-h-dvh bg-background p-0 lg:p-4">
       <div className="mx-auto grid min-h-dvh max-w-[1440px] lg:min-h-[calc(100dvh-2rem)] lg:grid-cols-2 lg:gap-4">
         <section className="flex flex-col px-5 py-6 sm:px-10 lg:py-8">
-          <div className="flex items-center gap-2.5">
-            <LogoMark size={40} />
-            <span className="font-display text-[1.1875rem] font-bold tracking-tight">Sougouba</span>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <LogoMark size={40} />
+              <span className="font-display text-[1.1875rem] font-bold tracking-tight">{translate('common.brand')}</span>
+            </div>
+            {/* Before signing in is exactly when someone needs to pick their language. */}
+            <LanguageSwitch />
           </div>
 
           <div className="mx-auto flex w-full max-w-[420px] flex-1 flex-col justify-center py-10">
@@ -95,7 +101,7 @@ export function AuthShell({
           </div>
 
           <p className="font-sans text-[0.75rem] text-muted-foreground">
-            © {new Date().getFullYear()} Sougouba
+            {translate('auth.copyright', { year: new Date().getFullYear() })}
           </p>
         </section>
 

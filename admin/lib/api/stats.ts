@@ -1,4 +1,5 @@
 import { apiGet, merchantApiGet } from './client';
+import { t } from '../i18n';
 
 export interface DailyPoint {
   date: string; // yyyy-mm-dd
@@ -70,8 +71,8 @@ interface ApiOverview {
  * the API look like it should too.
  */
 const VERTICAL_LABELS: Record<'grocery' | 'restaurant', string> = {
-  grocery: 'Épicerie',
-  restaurant: 'Restaurant',
+  grocery: t('common.vendorType.grocery'),
+  restaurant: t('common.vendorType.restaurant'),
 };
 
 export async function getOverviewStats(rangeDays: 7 | 30 | 90 = 30): Promise<OverviewStats> {

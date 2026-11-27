@@ -3,10 +3,12 @@ import { useState } from 'react';
 import { Download } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import type { Page, PageQuery } from '@/lib/api/client';
+import { formatNumber } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import { downloadCsv, EXPORT_MAX_ROWS, exportFilename, fetchAll, toCsv, type CsvColumn } from '@/lib/csv';
 
 /**
- * "Exporter (CSV)": every row of the list as it is filtered on screen, not
+ * « Exporter (CSV) »: every row of the list as it is filtered on screen, not
  * just the page shown. `fetchPage` is the list's own fetcher with its current
  * filters bound, so the file and the table can never disagree.
  */
@@ -15,7 +17,7 @@ export function ExportButton<T>({
   fetchPage,
   columns,
   sort,
-  label = 'Exporter (CSV)',
+  label = t('common.export.button'),
 }: {
   /** The file's name before the date, e.g. `commandes`. */
   name: string;
@@ -33,18 +35,19 @@ export function ExportButton<T>({
     try {
       const rows = await fetchAll(fetchPage, (loaded, total) => setProgress({ loaded, total }), sort);
       if (rows.length === 0) {
-        toast('info', 'Rien à exporter avec ces filtres.');
+        toast('info', t('common.export.nothing'));
         return;
       }
       downloadCsv(exportFilename(name), toCsv(rows, columns));
       toast(
         'success',
         rows.length >= EXPORT_MAX_ROWS
-          ? `${rows.length.toLocaleString('fr-CA')} lignes exportées (limite atteinte : affinez les filtres pour le reste).`
-          : `${rows.length.toLocaleString('fr-CA')} ligne${rows.length > 1 ? 's' : ''} exportée${rows.length > 1 ? 's' : ''}.`
+          ? t('common.export.limited', { count: formatNumber(rows.length) })
+          // `count` picks singular or plural; `n` is the figure as it is written.
+          : t('common.export.done', { count: rows.length, n: formatNumber(rows.length) })
       );
     } catch {
-      toast('error', 'L’export a échoué. Réessayez.');
+      toast('error', t('common.export.failed'));
     } finally {
       setProgress(null);
     }
@@ -60,8 +63,8 @@ export function ExportButton<T>({
       <Download size={15} />
       {progress
         ? progress.total > 0
-          ? `Export… ${progress.loaded.toLocaleString('fr-CA')} / ${progress.total.toLocaleString('fr-CA')}`
-          : 'Export…'
+          ? t('common.export.progress', { loaded: formatNumber(progress.loaded), total: formatNumber(progress.total) })
+          : t('common.export.starting')
         : label}
     </button>
   );

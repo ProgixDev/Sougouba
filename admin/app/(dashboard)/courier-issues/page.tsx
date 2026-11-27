@@ -11,13 +11,14 @@ import { listCourierIssues } from '@/lib/api/courierIssues';
 import { formatHours, getCourierIssueInsights, type CourierIssueInsights } from '@/lib/api/insights';
 import { courierIssueStatusMeta, COURIER_ISSUE_REASON_LABELS } from '@/lib/statusMeta';
 import { timeAgo } from '@/lib/format';
+import { t as translate } from '@/lib/i18n';
 import type { AdminCourierIssue, CourierIssueStatus } from '@/lib/types';
 import { usePagedList } from '@/lib/usePagedList';
 
 const TABS: { key: CourierIssueStatus | 'all'; label: string }[] = [
-  { key: 'open', label: 'Ouverts' },
-  { key: 'resolved', label: 'Résolus' },
-  { key: 'all', label: 'Tous' },
+  { key: 'open', label: translate('courierIssues.list.tabs.open') },
+  { key: 'resolved', label: translate('courierIssues.list.tabs.resolved') },
+  { key: 'all', label: translate('courierIssues.list.tabs.all') },
 ];
 
 export default function CourierIssuesPage() {
@@ -40,13 +41,13 @@ export default function CourierIssuesPage() {
 
 
   const columns: Column<AdminCourierIssue>[] = [
-    { key: 'orderId', header: 'Commande', render: (i) => <Text variant="body" className="font-semibold">#{i.orderId}</Text> },
-    { key: 'courierName', header: 'Livreur', render: (i) => <Text variant="body">{i.courierName ?? '—'}</Text> },
-    { key: 'vendorName', header: 'Commerce', render: (i) => <Text variant="body">{i.vendorName}</Text> },
-    { key: 'reason', header: 'Motif', render: (i) => <Text variant="body">{COURIER_ISSUE_REASON_LABELS[i.reason]}</Text> },
+    { key: 'orderId', header: translate('courierIssues.list.columns.order'), render: (i) => <Text variant="body" className="font-semibold">#{i.orderId}</Text> },
+    { key: 'courierName', header: translate('courierIssues.list.columns.courier'), render: (i) => <Text variant="body">{i.courierName ?? '—'}</Text> },
+    { key: 'vendorName', header: translate('courierIssues.list.columns.shop'), render: (i) => <Text variant="body">{i.vendorName}</Text> },
+    { key: 'reason', header: translate('courierIssues.list.columns.reason'), render: (i) => <Text variant="body">{COURIER_ISSUE_REASON_LABELS[i.reason]}</Text> },
     {
       key: 'at',
-      header: 'Signalé',
+      header: translate('courierIssues.list.columns.reported'),
       sortable: true,
       render: (i) => (
         <Text variant="body" tone="muted">
@@ -56,7 +57,7 @@ export default function CourierIssuesPage() {
     },
     {
       key: 'status',
-      header: 'Statut',
+      header: translate('courierIssues.list.columns.status'),
       render: (i) => {
         const meta = courierIssueStatusMeta(i.status);
         return <StatusBadge label={meta.label} tone={meta.tone} />;
@@ -66,7 +67,7 @@ export default function CourierIssuesPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <PageHeader icon={TriangleAlert} title="Incidents livreurs" description="Problèmes signalés par les livreurs pendant une course." />
+      <PageHeader icon={TriangleAlert} title={translate('courierIssues.list.title')} description={translate('courierIssues.list.description')} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:col-span-2 lg:grid-cols-1 xl:grid-cols-3">
@@ -74,28 +75,28 @@ export default function CourierIssuesPage() {
             loading={!insights}
             icon={TriangleAlert}
             tone="terracotta"
-            label="Ouverts"
+            label={translate('courierIssues.list.kpis.open')}
             value={String(insights?.byStatus.open ?? 0)}
-            hint="Un livreur attend une décision"
+            hint={translate('courierIssues.list.kpis.openHint')}
           />
           <KpiCard
             loading={!insights}
             icon={CheckCircle2}
-            label="Résolus"
+            label={translate('courierIssues.list.kpis.resolved')}
             value={String(insights?.byStatus.resolved ?? 0)}
-            hint={`${insights?.reported30 ?? 0} signalés sur 30 jours`}
+            hint={translate('courierIssues.list.kpis.reported30', { count: insights?.reported30 ?? 0 })}
           />
           <KpiCard
             loading={!insights}
             icon={Clock}
             tone="mustard"
-            label="Délai moyen"
+            label={translate('courierIssues.list.kpis.avgTime')}
             value={formatHours(insights?.avgResolutionHours)}
-            hint="Du signalement à la résolution"
+            hint={translate('courierIssues.list.kpis.avgTimeHint')}
           />
         </div>
         {insights && (
-          <SectionCard title="Motifs" subtitle="Tous les incidents, par cause">
+          <SectionCard title={translate('courierIssues.list.reasons.title')} subtitle={translate('courierIssues.list.reasons.subtitle')}>
             <Breakdown
               items={Object.entries(insights.byReason)
                 .sort((a, b) => b[1] - a[1])
@@ -137,8 +138,8 @@ export default function CourierIssuesPage() {
             onSort: list.setSort,
           }}
           emptyIcon={TriangleAlert}
-          emptyTitle="Aucun incident"
-          emptyDescription="Aucun incident ne correspond à ce filtre pour le moment."
+          emptyTitle={translate('courierIssues.list.empty.title')}
+          emptyDescription={translate('courierIssues.list.empty.description')}
         />
       </Card>
     </div>

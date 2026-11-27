@@ -14,7 +14,8 @@ import { SelectField } from '@/components/merchant/fields';
 import { createCoupon, deactivateCoupon, listMyCoupons, type Coupon, type CouponInput } from '@/lib/api/merchantBilling';
 import { failureMessage, parseCount, parseMoney } from '@/lib/merchantForm';
 import { usePagedList } from '@/lib/usePagedList';
-import { formatCad, formatDate } from '@/lib/format';
+import { formatCad, formatDate, formatPercent } from '@/lib/format';
+import { t } from '@/lib/i18n';
 
 type Errors = { code?: string; value?: string; usageLimit?: string; validDays?: string };
 
@@ -43,21 +44,21 @@ export default function MerchantCouponsPage() {
     event.preventDefault();
     const next: Errors = {};
     const cleanCode = code.trim().toUpperCase();
-    if (!/^[A-Z0-9]{3,20}$/.test(cleanCode)) next.code = 'De 3 à 20 lettres ou chiffres, sans espace';
+    if (!/^[A-Z0-9]{3,20}$/.test(cleanCode)) next.code = t('portal.coupons.errors.code');
 
     let amount: number | null;
     if (discountType === 'percentage') {
       amount = parseCount(value);
-      if (amount === null || amount < 1 || amount > 90) next.value = 'Un nombre entier de 1 à 90';
+      if (amount === null || amount < 1 || amount > 90) next.value = t('portal.coupons.errors.percentage');
     } else {
       amount = parseMoney(value);
-      if (amount === null || amount <= 0 || amount > 500) next.value = 'Un montant de 0,01 $ à 500 $';
+      if (amount === null || amount <= 0 || amount > 500) next.value = t('portal.coupons.errors.amount');
     }
 
     const limit = usageLimit.trim() ? parseCount(usageLimit) : undefined;
-    if (limit === null || (limit !== undefined && (limit < 1 || limit > 100_000))) next.usageLimit = 'Au moins 1 utilisation';
+    if (limit === null || (limit !== undefined && (limit < 1 || limit > 100_000))) next.usageLimit = t('portal.coupons.errors.usageLimit');
     const days = validDays.trim() ? parseCount(validDays) : undefined;
-    if (days === null || (days !== undefined && (days < 1 || days > 365))) next.validDays = 'De 1 à 365 jours';
+    if (days === null || (days !== undefined && (days < 1 || days > 365))) next.validDays = t('portal.coupons.errors.validDays');
 
     setErrors(next);
     if (Object.keys(next).length > 0 || amount === null) return;
@@ -71,7 +72,7 @@ export default function MerchantCouponsPage() {
         ...(limit != null ? { usageLimit: limit } : {}),
         ...(days != null ? { validDays: days } : {}),
       });
-      toast('success', `Code ${cleanCode} créé`);
+      toast('success', t('portal.coupons.created', { code: cleanCode }));
       setCode('');
       setValue('');
       setUsageLimit('');
@@ -80,7 +81,7 @@ export default function MerchantCouponsPage() {
       list.setPage(1);
       list.reload();
     } catch (error) {
-      toast('error', failureMessage(error, 'Création impossible. Veuillez réessayer.'));
+      toast('error', failureMessage(error, t('portal.coupons.createFailed')));
     } finally {
       setSaving(false);
     }
@@ -91,10 +92,10 @@ export default function MerchantCouponsPage() {
     setEndingBusy(true);
     try {
       await deactivateCoupon(ending.id);
-      toast('success', `Code ${ending.code} terminé`);
+      toast('success', t('portal.coupons.ended', { code: ending.code }));
       list.reload();
     } catch (error) {
-      toast('error', failureMessage(error, 'Modification impossible. Veuillez réessayer.'));
+      toast('error', failureMessage(error, t('portal.coupons.endFailed')));
     } finally {
       setEndingBusy(false);
       setEnding(null);
@@ -104,7 +105,7 @@ export default function MerchantCouponsPage() {
   const columns: Column<Coupon>[] = [
     {
       key: 'code',
-      header: 'Code',
+      header: t('portal.coupons.columns.code'),
       render: (c) => (
         <Text variant="body" className="font-semibold tracking-wide">
           {c.code}
@@ -113,12 +114,12 @@ export default function MerchantCouponsPage() {
     },
     {
       key: 'discount',
-      header: 'Réduction',
-      render: (c) => <Text variant="body" className="tabular">{c.discountType === 'percentage' ? `${c.discountValue} %` : formatCad(c.discountValue)}</Text>,
+      header: t('portal.coupons.columns.discount'),
+      render: (c) => <Text variant="body" className="tabular">{c.discountType === 'percentage' ? formatPercent(c.discountValue / 100) : formatCad(c.discountValue)}</Text>,
     },
     {
       key: 'used',
-      header: 'Utilisations',
+      header: t('portal.coupons.columns.uses'),
       render: (c) => (
         <Text variant="body" className="tabular">
           {c.usedCount}
@@ -128,17 +129,17 @@ export default function MerchantCouponsPage() {
     },
     {
       key: 'endsAt',
-      header: 'Fin',
+      header: t('portal.coupons.columns.end'),
       render: (c) => (
         <Text variant="body" tone="muted">
-          {c.endsAt ? formatDate(c.endsAt) : 'Sans date de fin'}
+          {c.endsAt ? formatDate(c.endsAt) : t('portal.coupons.noEndDate')}
         </Text>
       ),
     },
     {
       key: 'status',
-      header: 'État',
-      render: (c) => <Badge tone={c.active ? 'success' : 'neutral'}>{c.active ? 'Actif' : 'Terminé'}</Badge>,
+      header: t('portal.coupons.columns.state'),
+      render: (c) => <Badge tone={c.active ? 'success' : 'neutral'}>{c.active ? t('portal.coupons.stateActive') : t('portal.coupons.stateEnded')}</Badge>,
     },
     {
       key: 'action',
@@ -147,7 +148,7 @@ export default function MerchantCouponsPage() {
       render: (c) =>
         c.active ? (
           <Button variant="outline" size="sm" onClick={() => setEnding(c)}>
-            Terminer
+            {t('portal.coupons.end')}
           </Button>
         ) : null,
     },
@@ -157,30 +158,30 @@ export default function MerchantCouponsPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         icon={TicketPercent}
-        title="Codes promo"
-        description="Une réduction sur les produits de votre boutique, que vos clients saisissent au moment de payer."
+        title={t('nav.merchant.coupons')}
+        description={t('portal.coupons.description')}
       />
 
       <Card as="section" className="p-5 sm:p-6">
         <form key={formKey} onSubmit={create} noValidate className="flex flex-col gap-5">
-          <Text variant="subtitle">Nouveau code</Text>
+          <Text variant="subtitle">{t('portal.coupons.form.title')}</Text>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             <Input
-              label="Code"
+              label={t('portal.coupons.form.code')}
               required
               maxLength={20}
               value={code}
               error={errors.code}
-              helper="Ce que le client tape : BIENVENUE10"
+              helper={t('portal.coupons.form.codeHelper')}
               autoCapitalize="characters"
               onChange={(e) => setCode(e.target.value.toUpperCase())}
             />
             <SelectField
-              label="Type de réduction"
+              label={t('portal.coupons.form.type')}
               value={discountType}
               options={[
-                { value: 'percentage', label: 'Pourcentage (%)' },
-                { value: 'fixed', label: 'Montant fixe ($)' },
+                { value: 'percentage', label: t('portal.coupons.form.typePercentage') },
+                { value: 'fixed', label: t('portal.coupons.form.typeFixed') },
               ]}
               onChange={(next) => {
                 setDiscountType(next as CouponInput['discountType']);
@@ -188,34 +189,34 @@ export default function MerchantCouponsPage() {
               }}
             />
             <Input
-              label={discountType === 'percentage' ? 'Pourcentage' : 'Montant ($)'}
+              label={discountType === 'percentage' ? t('portal.coupons.form.percentage') : t('portal.coupons.form.amount')}
               required
               inputMode={discountType === 'percentage' ? 'numeric' : 'decimal'}
               value={value}
               error={errors.value}
-              helper={discountType === 'percentage' ? 'De 1 à 90' : 'De 0,01 $ à 500 $'}
+              helper={discountType === 'percentage' ? t('portal.coupons.form.percentageHelper') : t('portal.coupons.form.amountHelper')}
               onChange={(e) => setValue(e.target.value)}
             />
             <Input
-              label="Nombre d’utilisations"
+              label={t('portal.coupons.form.usageLimit')}
               inputMode="numeric"
               value={usageLimit}
               error={errors.usageLimit}
-              helper="Facultatif. Vide : illimité."
+              helper={t('portal.coupons.form.usageLimitHelper')}
               onChange={(e) => setUsageLimit(e.target.value)}
             />
             <Input
-              label="Durée de validité (jours)"
+              label={t('portal.coupons.form.validDays')}
               inputMode="numeric"
               value={validDays}
               error={errors.validDays}
-              helper="Facultatif. Vide : sans date de fin."
+              helper={t('portal.coupons.form.validDaysHelper')}
               onChange={(e) => setValidDays(e.target.value)}
             />
           </div>
           <div>
             <Button type="submit" disabled={saving}>
-              {saving ? 'Création…' : 'Créer le code'}
+              {saving ? t('portal.coupons.form.creating') : t('portal.coupons.form.create')}
             </Button>
           </div>
         </form>
@@ -223,7 +224,7 @@ export default function MerchantCouponsPage() {
 
       {list.error && (
         <Text variant="body" tone="destructive">
-          Impossible de charger vos codes promo. Vérifiez votre connexion et rechargez la page.
+          {t('portal.coupons.loadFailed')}
         </Text>
       )}
 
@@ -234,8 +235,8 @@ export default function MerchantCouponsPage() {
           keyField={(c) => c.id}
           loading={list.rows === null && !list.error}
           emptyIcon={TicketPercent}
-          emptyTitle="Aucun code promo"
-          emptyDescription="Créez votre premier code ci-dessus."
+          emptyTitle={t('portal.coupons.emptyTitle')}
+          emptyDescription={t('portal.coupons.emptyDescription')}
           server={{
             page: list.page,
             pageSize: list.pageSize,
@@ -250,9 +251,9 @@ export default function MerchantCouponsPage() {
 
       <ConfirmDialog
         open={ending !== null}
-        title={`Terminer le code ${ending?.code ?? ''} ?`}
-        description="Il ne pourra plus être utilisé à partir de maintenant. Les commandes déjà passées gardent leur réduction."
-        confirmLabel="Terminer le code"
+        title={t('portal.coupons.confirmEnd.title', { code: ending?.code ?? '' })}
+        description={t('portal.coupons.confirmEnd.description')}
+        confirmLabel={t('portal.coupons.confirmEnd.confirmLabel')}
         tone="destructive"
         busy={endingBusy}
         onConfirm={end}

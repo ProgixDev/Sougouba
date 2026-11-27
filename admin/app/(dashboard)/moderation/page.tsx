@@ -28,7 +28,8 @@ import {
 } from '@/lib/api/moderation';
 import { KpiCard, KpiGrid, PageHeader } from '@/components/insights/Insights';
 import { getModerationInsights, type ModerationInsights } from '@/lib/api/insights';
-import { formatCad, formatDate, formatDateTime } from '@/lib/format';
+import { formatCad, formatDate, formatDateTime, formatNumber } from '@/lib/format';
+import { t as translate } from '@/lib/i18n';
 import { useAdmin } from '@/lib/permissions';
 import type { Page } from '@/lib/api/client';
 import { usePagedList } from '@/lib/usePagedList';
@@ -36,9 +37,9 @@ import { Pagination } from '@/components/data/Pagination';
 
 
 const TABS = [
-  { key: 'reviews', label: 'Avis', icon: Star },
-  { key: 'coupons', label: 'Codes promo', icon: TicketPercent },
-  { key: 'products', label: 'Produits', icon: Package },
+  { key: 'reviews', label: translate('moderation.tabs.reviews'), icon: Star },
+  { key: 'coupons', label: translate('moderation.tabs.coupons'), icon: TicketPercent },
+  { key: 'products', label: translate('moderation.tabs.products'), icon: Package },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
@@ -87,7 +88,7 @@ function Moderation() {
     try {
       await pending.run(reason);
     } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'Action impossible.');
+      toast('error', error instanceof Error ? error.message : translate('moderation.actionFailed'));
     }
     setBusy(false);
     setPending(null);
@@ -97,41 +98,41 @@ function Moderation() {
     <div className="mx-auto flex max-w-content flex-col gap-6">
       <PageHeader
         icon={ShieldAlert}
-        title="Modération"
-        description="Avis des clients, codes promo des commerçants et fiches produits. Chaque décision est inscrite au journal d’audit."
+        title={translate('moderation.title')}
+        description={translate('moderation.description')}
       />
 
       <KpiGrid>
         <KpiCard
           loading={!insights}
           icon={Star}
-          label="Avis publiés"
+          label={translate('moderation.kpi.reviewsPublished')}
           value={String(insights?.reviews ?? 0)}
-          hint={insights?.avgReview ? `Note moyenne ${insights.avgReview.toLocaleString('fr-CA')} / 5` : 'Pas encore d’avis'}
+          hint={insights?.avgReview ? translate('moderation.kpi.averageRating', { rating: formatNumber(insights.avgReview) }) : translate('moderation.kpi.noReviewsYet')}
         />
         <KpiCard
           loading={!insights}
           icon={Star}
           tone="terracotta"
-          label="Avis à 2 étoiles ou moins · 30 j"
+          label={translate('moderation.kpi.lowReviews')}
           value={String(insights?.lowReviews30 ?? 0)}
-          hint={`${insights?.commentsHidden ?? 0} commentaires masqués · ${insights?.reviewsRemoved ?? 0} avis retirés`}
+          hint={`${translate('moderation.kpi.commentsHidden', { count: insights?.commentsHidden ?? 0 })} · ${translate('moderation.kpi.reviewsRemoved', { count: insights?.reviewsRemoved ?? 0 })}`}
         />
         <KpiCard
           loading={!insights}
           icon={TicketPercent}
           tone="mustard"
-          label="Codes promo actifs"
+          label={translate('moderation.kpi.activeCoupons')}
           value={String(insights?.couponsActive ?? 0)}
-          hint={`${insights?.couponUses ?? 0} utilisations au total`}
+          hint={translate('moderation.kpi.couponUses', { count: insights?.couponUses ?? 0 })}
         />
         <KpiCard
           loading={!insights}
           icon={Package}
           tone="neutral"
-          label="Produits masqués"
+          label={translate('moderation.kpi.hiddenProducts')}
           value={String(insights?.productsHidden ?? 0)}
-          hint={`sur ${insights?.products ?? 0} produits au catalogue`}
+          hint={translate('moderation.kpi.ofProducts', { count: insights?.products ?? 0 })}
         />
       </KpiGrid>
 
@@ -160,7 +161,7 @@ function Moderation() {
         confirmLabel={pending?.confirmLabel ?? ''}
         tone="destructive"
         requireReason={pending?.requireReason}
-        reasonLabel="Motif"
+        reasonLabel={translate('common.confirm.reason')}
         busy={busy}
         onConfirm={confirm}
         onCancel={() => setPending(null)}
@@ -237,11 +238,11 @@ function useDebounced(value: string) {
 // ── reviews ─────────────────────────────────────────────────────────────────
 
 const REVIEW_FILTERS: { key: ReviewFilter; label: string }[] = [
-  { key: 'all', label: 'Tous' },
-  { key: 'with_comment', label: 'Avec commentaire' },
-  { key: 'low', label: '2 étoiles ou moins' },
-  { key: 'hidden', label: 'Commentaire masqué' },
-  { key: 'removed', label: 'Retirés' },
+  { key: 'all', label: translate('moderation.reviews.filters.all') },
+  { key: 'with_comment', label: translate('moderation.reviews.filters.withComment') },
+  { key: 'low', label: translate('moderation.reviews.filters.low') },
+  { key: 'hidden', label: translate('moderation.reviews.filters.hidden') },
+  { key: 'removed', label: translate('moderation.reviews.filters.removed') },
 ];
 
 function ReviewsTab({ ask }: { ask: (a: PendingAction) => void }) {
@@ -256,28 +257,27 @@ function ReviewsTab({ ask }: { ask: (a: PendingAction) => void }) {
   function act(review: AdminReview, action: ReviewAction) {
     const run = async (reason?: string) => {
       await moderateReview(review.orderId, action, reason);
-      toast('success', 'Avis mis à jour.');
+      toast('success', translate('moderation.reviews.updated'));
       reload();
     };
     if (action === 'hide_comment') {
       ask({
-        title: 'Masquer ce commentaire ?',
-        description: 'Le commerçant ne verra plus le texte. La note reste comptée dans la moyenne. Précisez le motif.',
-        confirmLabel: 'Masquer',
+        title: translate('moderation.reviews.hide.title'),
+        description: translate('moderation.reviews.hide.description'),
+        confirmLabel: translate('moderation.reviews.hide.confirm'),
         requireReason: true,
         run,
       });
     } else if (action === 'remove') {
       ask({
-        title: 'Retirer cet avis ?',
-        description:
-          'L’avis ne compte plus dans la note du commerce ni du livreur, qui sont recalculées, et le commerçant ne le voit plus. Précisez le motif.',
-        confirmLabel: 'Retirer',
+        title: translate('moderation.reviews.remove.title'),
+        description: translate('moderation.reviews.remove.description'),
+        confirmLabel: translate('moderation.reviews.remove.confirm'),
         requireReason: true,
         run,
       });
     } else {
-      void run().catch((error: unknown) => toast('error', error instanceof Error ? error.message : 'Action impossible.'));
+      void run().catch((error: unknown) => toast('error', error instanceof Error ? error.message : translate('moderation.actionFailed')));
     }
   }
 
@@ -288,7 +288,7 @@ function ReviewsTab({ ask }: { ask: (a: PendingAction) => void }) {
         <Skeleton className="h-64 rounded-card" />
       ) : rows.length === 0 ? (
         <Card>
-          <EmptyState icon={Star} title="Aucun avis" description="Aucun avis ne correspond à ce filtre." />
+          <EmptyState icon={Star} title={translate('moderation.reviews.emptyTitle')} description={translate('moderation.reviews.emptyDescription')} />
         </Card>
       ) : (
         <div className="flex flex-col gap-3">
@@ -298,33 +298,33 @@ function ReviewsTab({ ask }: { ask: (a: PendingAction) => void }) {
                 <div>
                   <Text variant="body" className="font-semibold">
                     {r.vendor?.name ?? '—'} · {r.vendorRating}/5
-                    {r.courierRating !== null ? ` · livreur ${r.courierRating}/5` : ''}
+                    {r.courierRating !== null ? ` · ${translate('moderation.reviews.courierRating', { rating: r.courierRating })}` : ''}
                   </Text>
                   <Text variant="caption" tone="muted">
-                    {r.customerName ?? 'Client'} · {formatDateTime(r.createdAt)} ·{' '}
+                    {r.customerName ?? translate('moderation.reviews.customerFallback')} · {formatDateTime(r.createdAt)} ·{' '}
                     <Link href={`/orders/${r.orderId}`} className="text-primary hover:underline">
-                      commande #{r.orderId.slice(0, 8)}
+                      {translate('moderation.reviews.orderLink', { id: r.orderId.slice(0, 8) })}
                     </Link>
                   </Text>
                 </div>
                 <div className="flex gap-2">
-                  {r.removedAt && <Badge tone="destructive">Retiré</Badge>}
-                  {r.commentHiddenAt && <Badge tone="warning">Commentaire masqué</Badge>}
+                  {r.removedAt && <Badge tone="destructive">{translate('moderation.reviews.removedBadge')}</Badge>}
+                  {r.commentHiddenAt && <Badge tone="warning">{translate('moderation.reviews.commentHiddenBadge')}</Badge>}
                 </div>
               </div>
 
               {r.comment ? (
                 <Text variant="body" className={r.commentHiddenAt ? 'text-muted-foreground line-through' : ''}>
-                  « {r.comment} »
+                  {translate('moderation.reviews.quotedComment', { comment: r.comment })}
                 </Text>
               ) : (
                 <Text variant="caption" tone="muted">
-                  Sans commentaire
+                  {translate('moderation.reviews.noComment')}
                 </Text>
               )}
               {r.moderationReason && (
                 <Text variant="caption" tone="muted">
-                  Motif : {r.moderationReason}
+                  {translate('moderation.reasonLine', { reason: r.moderationReason })}
                 </Text>
               )}
 
@@ -333,20 +333,20 @@ function ReviewsTab({ ask }: { ask: (a: PendingAction) => void }) {
                 {r.comment &&
                   (r.commentHiddenAt ? (
                     <Button size="sm" variant="ghost" onClick={() => act(r, 'show_comment')}>
-                      Réafficher le commentaire
+                      {translate('moderation.reviews.showComment')}
                     </Button>
                   ) : (
                     <Button size="sm" variant="ghost" onClick={() => act(r, 'hide_comment')}>
-                      <EyeOff size={14} /> Masquer le commentaire
+                      <EyeOff size={14} /> {translate('moderation.reviews.hideComment')}
                     </Button>
                   ))}
                 {r.removedAt ? (
                   <Button size="sm" variant="outline" onClick={() => act(r, 'restore')}>
-                    Rétablir l’avis
+                    {translate('moderation.reviews.restore')}
                   </Button>
                 ) : (
                   <Button size="sm" variant="destructive" onClick={() => act(r, 'remove')}>
-                    Retirer l’avis
+                    {translate('moderation.reviews.removeReview')}
                   </Button>
                 )}
               </div>
@@ -367,9 +367,9 @@ function ReviewsTab({ ask }: { ask: (a: PendingAction) => void }) {
 // ── coupons ─────────────────────────────────────────────────────────────────
 
 const COUPON_STATUS: { key: 'all' | 'active' | 'ended'; label: string }[] = [
-  { key: 'all', label: 'Tous' },
-  { key: 'active', label: 'En cours' },
-  { key: 'ended', label: 'Terminés' },
+  { key: 'all', label: translate('moderation.coupons.filters.all') },
+  { key: 'active', label: translate('moderation.coupons.filters.active') },
+  { key: 'ended', label: translate('moderation.coupons.filters.ended') },
 ];
 
 function CouponsTab({ ask }: { ask: (a: PendingAction) => void }) {
@@ -384,10 +384,10 @@ function CouponsTab({ ask }: { ask: (a: PendingAction) => void }) {
   const { rows, reload } = list;
 
   const columns: Column<AdminCoupon>[] = [
-    { key: 'code', header: 'Code', render: (c) => <Text variant="body" className="font-semibold tracking-wide">{c.code}</Text> },
+    { key: 'code', header: translate('moderation.coupons.columns.code'), render: (c) => <Text variant="body" className="font-semibold tracking-wide">{c.code}</Text> },
     {
       key: 'vendor',
-      header: 'Commerce',
+      header: translate('moderation.coupons.columns.vendor'),
       render: (c) =>
         c.vendor ? (
           <Link href={`/merchants/${c.vendor.id}`} className="font-sans text-[0.875rem] text-primary hover:underline">
@@ -395,18 +395,18 @@ function CouponsTab({ ask }: { ask: (a: PendingAction) => void }) {
           </Link>
         ) : (
           <Text variant="body" tone="muted">
-            Plateforme
+            {translate('moderation.coupons.platform')}
           </Text>
         ),
     },
     {
       key: 'value',
-      header: 'Remise',
-      render: (c) => <Text variant="body">{c.discountType === 'percentage' ? `${c.discountValue} %` : formatCad(c.discountValue)}</Text>,
+      header: translate('moderation.coupons.columns.discount'),
+      render: (c) => <Text variant="body">{c.discountType === 'percentage' ? formatNumber(c.discountValue / 100, { style: 'percent', maximumFractionDigits: 2 }) : formatCad(c.discountValue)}</Text>,
     },
     {
       key: 'used',
-      header: 'Utilisations',
+      header: translate('moderation.coupons.columns.uses'),
       render: (c) => (
         <Text variant="body" tone="muted">
           {c.usedCount}
@@ -416,17 +416,17 @@ function CouponsTab({ ask }: { ask: (a: PendingAction) => void }) {
     },
     {
       key: 'ends',
-      header: 'Fin',
+      header: translate('moderation.coupons.columns.ends'),
       render: (c) => (
         <Text variant="body" tone="muted">
-          {c.endsAt ? formatDate(c.endsAt) : 'Sans fin'}
+          {c.endsAt ? formatDate(c.endsAt) : translate('moderation.coupons.noEnd')}
         </Text>
       ),
     },
     {
       key: 'status',
-      header: 'Statut',
-      render: (c) => (c.active ? <Badge tone="success">Actif</Badge> : <Badge tone="neutral">Terminé</Badge>),
+      header: translate('moderation.coupons.columns.status'),
+      render: (c) => (c.active ? <Badge tone="success">{translate('moderation.coupons.active')}</Badge> : <Badge tone="neutral">{translate('moderation.coupons.ended')}</Badge>),
     },
     {
       key: 'action',
@@ -439,19 +439,19 @@ function CouponsTab({ ask }: { ask: (a: PendingAction) => void }) {
             onClick={(e) => {
               e.stopPropagation();
               ask({
-                title: `Désactiver le code ${c.code} ?`,
-                description: 'Le code ne pourra plus être utilisé au paiement. Le commerçant le verra comme terminé. Précisez le motif.',
-                confirmLabel: 'Désactiver',
+                title: translate('moderation.coupons.deactivate.title', { code: c.code }),
+                description: translate('moderation.coupons.deactivate.description'),
+                confirmLabel: translate('moderation.coupons.deactivate.button'),
                 requireReason: true,
                 run: async (reason) => {
                   await deactivateCoupon(c.id, reason ?? '');
-                  toast('success', `Code ${c.code} désactivé.`);
+                  toast('success', translate('moderation.coupons.deactivate.done', { code: c.code }));
                   reload();
                 },
               });
             }}
           >
-            Désactiver
+            {translate('moderation.coupons.deactivate.button')}
           </Button>
         ) : null,
     },
@@ -461,7 +461,7 @@ function CouponsTab({ ask }: { ask: (a: PendingAction) => void }) {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Chips value={status} options={COUPON_STATUS} onChange={setStatus} />
-        <SearchBox value={search} onChange={setSearch} placeholder="Rechercher un code…" />
+        <SearchBox value={search} onChange={setSearch} placeholder={translate('moderation.coupons.searchPlaceholder')} />
       </div>
       <Card elevated>
         <DataTable
@@ -471,8 +471,8 @@ function CouponsTab({ ask }: { ask: (a: PendingAction) => void }) {
           keyField={(c) => c.id}
           loading={rows === null}
           emptyIcon={TicketPercent}
-          emptyTitle="Aucun code promo"
-          emptyDescription="Aucun code ne correspond à ce filtre."
+          emptyTitle={translate('moderation.coupons.emptyTitle')}
+          emptyDescription={translate('moderation.coupons.emptyDescription')}
         />
       </Card>
     </div>
@@ -495,7 +495,7 @@ function ProductsTab({ ask }: { ask: (a: PendingAction) => void }) {
   const columns: Column<AdminProduct>[] = [
     {
       key: 'name',
-      header: 'Produit',
+      header: translate('moderation.products.columns.product'),
       render: (p) => (
         <div>
           <Text variant="body" className="font-semibold">
@@ -503,7 +503,7 @@ function ProductsTab({ ask }: { ask: (a: PendingAction) => void }) {
           </Text>
           {p.hiddenReason && (
             <Text variant="caption" tone="muted">
-              Motif : {p.hiddenReason}
+              {translate('moderation.reasonLine', { reason: p.hiddenReason })}
             </Text>
           )}
         </div>
@@ -511,7 +511,7 @@ function ProductsTab({ ask }: { ask: (a: PendingAction) => void }) {
     },
     {
       key: 'vendor',
-      header: 'Commerce',
+      header: translate('moderation.products.columns.vendor'),
       render: (p) =>
         p.vendor ? (
           <Link href={`/merchants/${p.vendor.id}`} className="font-sans text-[0.875rem] text-primary hover:underline">
@@ -521,17 +521,17 @@ function ProductsTab({ ask }: { ask: (a: PendingAction) => void }) {
           <Text variant="body">—</Text>
         ),
     },
-    { key: 'price', header: 'Prix', render: (p) => <Text variant="body">{formatCad(p.priceCad)}</Text> },
+    { key: 'price', header: translate('moderation.products.columns.price'), render: (p) => <Text variant="body">{formatCad(p.priceCad)}</Text> },
     {
       key: 'status',
-      header: 'Statut',
+      header: translate('moderation.products.columns.status'),
       render: (p) =>
         p.hiddenAt ? (
-          <Badge tone="destructive">Masqué</Badge>
+          <Badge tone="destructive">{translate('moderation.products.hidden')}</Badge>
         ) : p.isAvailable ? (
-          <Badge tone="success">Visible</Badge>
+          <Badge tone="success">{translate('moderation.products.visible')}</Badge>
         ) : (
-          <Badge tone="neutral">Hors vente</Badge>
+          <Badge tone="neutral">{translate('moderation.products.offSale')}</Badge>
         ),
     },
     {
@@ -546,14 +546,14 @@ function ProductsTab({ ask }: { ask: (a: PendingAction) => void }) {
               e.stopPropagation();
               try {
                 await unhideProduct(p.id);
-                toast('success', `« ${p.name} » est de nouveau visible.`);
+                toast('success', translate('moderation.products.shownAgain', { name: p.name }));
                 reload();
               } catch (error) {
-                toast('error', error instanceof Error ? error.message : 'Action impossible.');
+                toast('error', error instanceof Error ? error.message : translate('moderation.actionFailed'));
               }
             }}
           >
-            Réafficher
+            {translate('moderation.products.showAgain')}
           </Button>
         ) : (
           <Button
@@ -562,20 +562,19 @@ function ProductsTab({ ask }: { ask: (a: PendingAction) => void }) {
             onClick={(e) => {
               e.stopPropagation();
               ask({
-                title: `Masquer « ${p.name} » ?`,
-                description:
-                  'Le produit disparaît du catalogue, de la recherche, des paniers et du paiement. Le commerçant le voit marqué « Masqué par Sougouba », avec le motif.',
-                confirmLabel: 'Masquer',
+                title: translate('moderation.products.hide.title', { name: p.name }),
+                description: translate('moderation.products.hide.description'),
+                confirmLabel: translate('moderation.products.hide.button'),
                 requireReason: true,
                 run: async (reason) => {
                   await hideProduct(p.id, reason ?? '');
-                  toast('success', `« ${p.name} » est masqué.`);
+                  toast('success', translate('moderation.products.hide.done', { name: p.name }));
                   reload();
                 },
               });
             }}
           >
-            Masquer
+            {translate('moderation.products.hide.button')}
           </Button>
         ),
     },
@@ -587,12 +586,12 @@ function ProductsTab({ ask }: { ask: (a: PendingAction) => void }) {
         <Chips
           value={hiddenOnly}
           options={[
-            { key: 'all', label: 'Tous' },
-            { key: 'only', label: 'Masqués' },
+            { key: 'all', label: translate('moderation.products.filters.all') },
+            { key: 'only', label: translate('moderation.products.filters.hidden') },
           ]}
           onChange={setHiddenOnly}
         />
-        <SearchBox value={search} onChange={setSearch} placeholder="Rechercher un produit…" />
+        <SearchBox value={search} onChange={setSearch} placeholder={translate('moderation.products.searchPlaceholder')} />
       </div>
       <Card elevated>
         <DataTable
@@ -602,8 +601,8 @@ function ProductsTab({ ask }: { ask: (a: PendingAction) => void }) {
           keyField={(p) => p.id}
           loading={rows === null}
           emptyIcon={Package}
-          emptyTitle="Aucun produit"
-          emptyDescription="Aucun produit ne correspond à cette recherche."
+          emptyTitle={translate('moderation.products.emptyTitle')}
+          emptyDescription={translate('moderation.products.emptyDescription')}
         />
       </Card>
     </div>

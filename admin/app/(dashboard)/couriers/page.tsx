@@ -11,16 +11,18 @@ import { listCouriers } from '@/lib/api/couriers';
 import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { getCourierInsights, shortDay, type CourierInsights } from '@/lib/api/insights';
 import { courierStatusMeta, VEHICLE_LABELS } from '@/lib/statusMeta';
-import { formatCad, formatDate } from '@/lib/format';
+import { formatCad, formatDate, formatNumber } from '@/lib/format';
+// `translate`, not `t`: this page already names its loop variables `t`.
+import { t as translate } from '@/lib/i18n';
 import type { AdminCourierListItem, AdminCourierStatus } from '@/lib/types';
 
 const TABS: { key: AdminCourierStatus; label: string }[] = [
-  { key: 'pending', label: 'En attente' },
-  { key: 'approved', label: 'Approuvés' },
-  { key: 'suspended', label: 'Suspendus' },
+  { key: 'pending', label: translate('couriers.list.statuses.pending') },
+  { key: 'approved', label: translate('couriers.list.statuses.approved') },
+  { key: 'suspended', label: translate('couriers.list.statuses.suspended') },
   // Terminal in the API, and invisible in the mock, which folded it into
   // "suspended" — every refused application was hidden from the back office.
-  { key: 'rejected', label: 'Refusés' },
+  { key: 'rejected', label: translate('couriers.list.statuses.rejected') },
 ];
 
 export default function CouriersPage() {
@@ -49,7 +51,7 @@ export default function CouriersPage() {
   const columns: Column<AdminCourierListItem>[] = [
     {
       key: 'name',
-      header: 'Livreur',
+      header: translate('couriers.list.columns.courier'),
       sortable: true,
       render: (c) => (
         <div className="flex items-center gap-3">
@@ -60,11 +62,11 @@ export default function CouriersPage() {
         </div>
       ),
     },
-    { key: 'vehicle', header: 'Véhicule', render: (c) => <Text variant="body">{VEHICLE_LABELS[c.vehicle]}</Text> },
-    { key: 'city', header: 'Ville', sortable: true, render: (c) => <Text variant="body">{c.city}</Text> },
+    { key: 'vehicle', header: translate('couriers.list.columns.vehicle'), render: (c) => <Text variant="body">{VEHICLE_LABELS[c.vehicle]}</Text> },
+    { key: 'city', header: translate('couriers.list.columns.city'), sortable: true, render: (c) => <Text variant="body">{c.city}</Text> },
     {
       key: 'date',
-      header: 'Inscrit',
+      header: translate('couriers.list.columns.joined'),
       sortable: true,
       render: (c) => (
         <Text variant="body" tone="muted">
@@ -74,7 +76,7 @@ export default function CouriersPage() {
     },
     {
       key: 'status',
-      header: 'Statut',
+      header: translate('couriers.list.columns.status'),
       render: (c) => {
         const meta = courierStatusMeta(c.status);
         return <StatusBadge label={meta.label} tone={meta.tone} />;
@@ -84,63 +86,63 @@ export default function CouriersPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <PageHeader icon={Bike} title="Livreurs" description="File d’approbation, annuaire et activité de la flotte." />
+      <PageHeader icon={Bike} title={translate('couriers.list.title')} description={translate('couriers.list.description')} />
 
       <KpiGrid>
         <KpiCard
           loading={!insights}
           icon={Radio}
-          label="En ligne maintenant"
+          label={translate('couriers.list.kpi.online')}
           value={String(insights?.online ?? 0)}
-          hint={`sur ${insights?.byStatus.approved ?? 0} livreurs approuvés`}
+          hint={translate('couriers.list.kpi.onlineHint', { count: insights?.byStatus.approved ?? 0 })}
         />
         <KpiCard
           loading={!insights}
           icon={Bike}
           tone="forest"
-          label="Livraisons · 30 j"
+          label={translate('couriers.list.kpi.deliveries')}
           value={String(insights?.deliveries30 ?? 0)}
-          hint={`${formatCad(insights?.earnings30 ?? 0)} gagnés, pourboires compris`}
+          hint={translate('couriers.list.kpi.deliveriesHint', { amount: formatCad(insights?.earnings30 ?? 0) })}
         />
         <KpiCard
           loading={!insights}
           icon={Timer}
           tone="mustard"
-          label="Durée moyenne de livraison"
-          value={insights?.avgDeliveryMinutes ? `${Math.round(insights.avgDeliveryMinutes)} min` : '—'}
-          hint="De la récupération à la remise, 30 jours"
+          label={translate('couriers.list.kpi.deliveryTime')}
+          value={insights?.avgDeliveryMinutes ? translate('common.time.minutes', { count: Math.round(insights.avgDeliveryMinutes) }) : '—'}
+          hint={translate('couriers.list.kpi.deliveryTimeHint')}
         />
         <KpiCard
           loading={!insights}
           icon={Star}
           tone="terracotta"
-          label="Note moyenne"
-          value={insights?.avgRating ? `${insights.avgRating.toLocaleString('fr-CA')} / 5` : '—'}
-          hint={`${insights?.byStatus.pending ?? 0} dossiers en attente`}
+          label={translate('couriers.list.kpi.rating')}
+          value={insights?.avgRating ? `${formatNumber(insights.avgRating)} / 5` : '—'}
+          hint={translate('couriers.list.kpi.ratingHint', { count: insights?.byStatus.pending ?? 0 })}
         />
       </KpiGrid>
 
       {insights && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <SectionCard title="Livraisons par jour" subtitle="14 derniers jours">
+          <SectionCard title={translate('couriers.list.byDay.title')} subtitle={translate('couriers.list.byDay.subtitle')}>
             <BarSeries data={insights.deliveriesByDay.map((d) => ({ label: shortDay(d.date), value: d.count }))} />
           </SectionCard>
-          <SectionCard title="Flotte" subtitle="Livreurs approuvés par véhicule">
+          <SectionCard title={translate('couriers.list.fleet.title')} subtitle={translate('couriers.list.fleet.subtitle')}>
             <Breakdown
               items={[
-                { label: 'Vélo', value: insights.byVehicle.bike ?? 0 },
-                { label: 'Scooter', value: insights.byVehicle.scooter ?? 0 },
-                { label: 'Voiture', value: insights.byVehicle.car ?? 0 },
+                { label: translate('status.vehicle.bike'), value: insights.byVehicle.bike ?? 0 },
+                { label: translate('status.vehicle.scooter'), value: insights.byVehicle.scooter ?? 0 },
+                { label: translate('status.vehicle.car'), value: insights.byVehicle.car ?? 0 },
               ]}
             />
           </SectionCard>
-          <SectionCard title="Plus actifs · 30 j" subtitle="Livraisons effectuées">
+          <SectionCard title={translate('couriers.list.top.title')} subtitle={translate('couriers.list.top.subtitle')}>
             <Ranking
               items={insights.top.map((t) => ({
                 id: t.id,
                 label: t.name,
                 value: t.deliveries,
-                display: `${t.deliveries} livraison${t.deliveries > 1 ? 's' : ''}`,
+                display: translate('couriers.list.top.value', { count: t.deliveries }),
                 href: `/couriers/${t.id}`,
               }))}
             />
@@ -167,7 +169,7 @@ export default function CouriersPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher un livreur ou une ville…"
+            placeholder={translate('couriers.list.searchPlaceholder')}
             className="w-full min-w-0 bg-transparent font-sans sm:w-56 text-[0.8125rem] text-foreground outline-none placeholder:text-muted-foreground"
           />
         </div>
@@ -190,8 +192,8 @@ export default function CouriersPage() {
             onSort: list.setSort,
           }}
           emptyIcon={Bike}
-          emptyTitle="Aucun livreur"
-          emptyDescription="Aucun livreur ne correspond à ce filtre pour le moment."
+          emptyTitle={translate('couriers.list.emptyTitle')}
+          emptyDescription={translate('couriers.list.emptyDescription')}
         />
       </Card>
     </div>

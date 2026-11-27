@@ -4,15 +4,17 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Bell, ChevronRight, Menu, UserRound } from 'lucide-react';
 import { GlobalSearch } from './GlobalSearch';
+import { LanguageSwitch } from './LanguageSwitch';
 import { NAV_GROUPS, isActivePath, type SidebarCounts } from './Sidebar';
 import type { NavItem } from './SidebarShell';
 import { permissionForPath, useAdmin } from '@/lib/permissions';
 import type { AdminSession } from '@/lib/auth';
+import { t } from '@/lib/i18n';
 
 /** Where the admin is: the section's group and name, read from the navigation itself. */
 function useSection(counts: SidebarCounts) {
   const pathname = usePathname();
-  if (pathname.startsWith('/account')) return { group: 'Compte', label: 'Mon compte', icon: UserRound };
+  if (pathname.startsWith('/account')) return { group: t('nav.groups.account'), label: t('nav.admin.myAccount'), icon: UserRound };
   for (const group of NAV_GROUPS(counts)) {
     // Longest match first would only matter for nested routes; none overlap today.
     const item = group.items.find((i) => isActivePath(i.href, pathname));
@@ -56,7 +58,7 @@ export function QueueBell({
     <div ref={ref} className="relative">
       <button
         type="button"
-        aria-label={total > 0 ? `${total} éléments en attente` : 'Rien en attente'}
+        aria-label={total > 0 ? t('nav.bell.waiting', { count: total }) : t('nav.bell.nothingWaiting')}
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className="relative inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-border bg-card text-foreground transition-colors hover:bg-muted"
@@ -71,7 +73,7 @@ export function QueueBell({
       {open && (
         <div className="absolute right-0 top-[calc(100%+8px)] z-30 w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-card border border-border bg-card shadow-floating">
           <div className="border-b border-border px-4 py-3">
-            <p className="font-sans text-[0.875rem] font-semibold">En attente</p>
+            <p className="font-sans text-[0.875rem] font-semibold">{t('nav.bell.title')}</p>
             <p className="font-sans text-[0.75rem] text-muted-foreground">
               {total > 0 ? pendingText : emptyText}
             </p>
@@ -119,7 +121,7 @@ export function TopbarShell({
     <header className="flex h-16 shrink-0 items-center gap-3 px-4 sm:h-[76px] sm:gap-4 sm:px-5 md:px-8">
       <button
         type="button"
-        aria-label="Ouvrir la navigation"
+        aria-label={t('nav.sidebar.openNavigation')}
         onClick={onOpenMenu}
         className="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border text-foreground hover:bg-muted md:hidden"
       >
@@ -134,7 +136,11 @@ export function TopbarShell({
         </p>
       )}
 
-      <div className="flex min-w-0 flex-1 items-center justify-end gap-2.5 sm:ml-auto sm:flex-none">{children}</div>
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-2.5 sm:ml-auto sm:flex-none">
+        {children}
+        {/* On every page of both spaces, so the language is never more than one click away. */}
+        <LanguageSwitch />
+      </div>
     </header>
   );
 }
@@ -163,8 +169,8 @@ export function Topbar({
       <GlobalSearch />
       <QueueBell
         queues={queues}
-        pendingText="Ce qui attend une décision de l’équipe"
-        emptyText="Rien n’attend l’équipe pour le moment."
+        pendingText={t('nav.bell.adminPending')}
+        emptyText={t('nav.bell.adminEmpty')}
       />
     </TopbarShell>
   );

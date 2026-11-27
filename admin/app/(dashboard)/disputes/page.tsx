@@ -10,17 +10,18 @@ import { Breakdown, KpiCard, KpiGrid, PageHeader, SectionCard } from '@/componen
 import { listDisputes } from '@/lib/api/disputes';
 import { formatHours, getDisputeInsights, type DisputeInsights } from '@/lib/api/insights';
 import { formatCad } from '@/lib/format';
+import { t as translate } from '@/lib/i18n';
 import { disputeStatusMeta, DISPUTE_REASON_LABELS } from '@/lib/statusMeta';
 import { timeAgo } from '@/lib/format';
 import type { AdminDispute, AdminDisputeStatus } from '@/lib/types';
 import { usePagedList } from '@/lib/usePagedList';
 
 const TABS: { key: AdminDisputeStatus | 'all'; label: string }[] = [
-  { key: 'open', label: 'Ouverts' },
-  { key: 'answered', label: 'Répondus' },
-  { key: 'resolved', label: 'Résolus' },
-  { key: 'rejected', label: 'Rejetés' },
-  { key: 'all', label: 'Tous' },
+  { key: 'open', label: translate('disputes.list.tabs.open') },
+  { key: 'answered', label: translate('disputes.list.tabs.answered') },
+  { key: 'resolved', label: translate('disputes.list.tabs.resolved') },
+  { key: 'rejected', label: translate('disputes.list.tabs.rejected') },
+  { key: 'all', label: translate('disputes.list.tabs.all') },
 ];
 
 export default function DisputesPage() {
@@ -43,13 +44,13 @@ export default function DisputesPage() {
 
 
   const columns: Column<AdminDispute>[] = [
-    { key: 'orderId', header: 'Commande', render: (d) => <Text variant="body" className="font-semibold">#{d.orderId.slice(0, 8)}</Text> },
-    { key: 'customerName', header: 'Client', render: (d) => <Text variant="body">{d.customerName ?? '—'}</Text> },
-    { key: 'vendorName', header: 'Commerce', render: (d) => <Text variant="body">{d.vendorName}</Text> },
-    { key: 'reason', header: 'Motif', render: (d) => <Text variant="body">{DISPUTE_REASON_LABELS[d.reason]}</Text> },
+    { key: 'orderId', header: translate('disputes.list.columns.order'), render: (d) => <Text variant="body" className="font-semibold">#{d.orderId.slice(0, 8)}</Text> },
+    { key: 'customerName', header: translate('disputes.list.columns.customer'), render: (d) => <Text variant="body">{d.customerName ?? '—'}</Text> },
+    { key: 'vendorName', header: translate('disputes.list.columns.shop'), render: (d) => <Text variant="body">{d.vendorName}</Text> },
+    { key: 'reason', header: translate('disputes.list.columns.reason'), render: (d) => <Text variant="body">{DISPUTE_REASON_LABELS[d.reason]}</Text> },
     {
       key: 'openedAt',
-      header: 'Ouvert',
+      header: translate('disputes.list.columns.opened'),
       sortable: true,
       render: (d) => (
         <Text variant="body" tone="muted">
@@ -59,7 +60,7 @@ export default function DisputesPage() {
     },
     {
       key: 'status',
-      header: 'Statut',
+      header: translate('disputes.list.columns.status'),
       render: (d) => {
         const meta = disputeStatusMeta(d.status);
         return <StatusBadge label={meta.label} tone={meta.tone} />;
@@ -69,58 +70,58 @@ export default function DisputesPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <PageHeader icon={MessageCircleWarning} title="Litiges" description="Réclamations des clients à trier, trancher et rembourser." />
+      <PageHeader icon={MessageCircleWarning} title={translate('disputes.list.title')} description={translate('disputes.list.description')} />
 
       <KpiGrid>
         <KpiCard
           loading={!insights}
           icon={MessageCircleWarning}
           tone="terracotta"
-          label="À traiter"
+          label={translate('disputes.list.kpis.toHandle')}
           value={String((insights?.byStatus.open ?? 0) + (insights?.byStatus.answered ?? 0))}
-          hint={`${insights?.byStatus.answered ?? 0} avec une réponse du commerçant`}
+          hint={translate('disputes.list.kpis.toHandleHint', { count: insights?.byStatus.answered ?? 0 })}
         />
         <KpiCard
           loading={!insights}
           icon={CheckCircle2}
-          label="Tranchés"
+          label={translate('disputes.list.kpis.decided')}
           value={String((insights?.byStatus.resolved ?? 0) + (insights?.byStatus.rejected ?? 0))}
-          hint={`${insights?.byStatus.resolved ?? 0} donnés au client · ${insights?.byStatus.rejected ?? 0} rejetés`}
+          hint={translate('disputes.list.kpis.decidedHint', { resolved: insights?.byStatus.resolved ?? 0, rejected: insights?.byStatus.rejected ?? 0 })}
         />
         <KpiCard
           loading={!insights}
           icon={Clock}
           tone="mustard"
-          label="Délai moyen de décision"
+          label={translate('disputes.list.kpis.avgDecision')}
           value={formatHours(insights?.avgResolutionHours)}
-          hint={`${insights?.opened30 ?? 0} ouverts sur 30 jours`}
+          hint={translate('disputes.list.kpis.opened30', { count: insights?.opened30 ?? 0 })}
         />
         <KpiCard
           loading={!insights}
           icon={Undo2}
           tone="neutral"
-          label="Remboursé · 30 j"
+          label={translate('disputes.list.kpis.refunded30')}
           value={formatCad(insights?.refunded30 ?? 0)}
-          hint="Suite à un litige"
+          hint={translate('disputes.list.kpis.refundedHint')}
         />
       </KpiGrid>
 
       {insights && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <SectionCard title="Motifs" subtitle="Tous les litiges, par raison invoquée">
+          <SectionCard title={translate('disputes.list.reasons.title')} subtitle={translate('disputes.list.reasons.subtitle')}>
             <Breakdown
               items={Object.entries(insights.byReason)
                 .sort((a, b) => b[1] - a[1])
                 .map(([reason, n]) => ({ label: DISPUTE_REASON_LABELS[reason] ?? reason, value: n }))}
             />
           </SectionCard>
-          <SectionCard title="Issue" subtitle="Où en sont les litiges">
+          <SectionCard title={translate('disputes.list.outcome.title')} subtitle={translate('disputes.list.outcome.subtitle')}>
             <Breakdown
               items={[
-                { label: 'Ouverts', value: insights.byStatus.open ?? 0 },
-                { label: 'Réponse du commerçant', value: insights.byStatus.answered ?? 0 },
-                { label: 'Résolus', value: insights.byStatus.resolved ?? 0 },
-                { label: 'Rejetés', value: insights.byStatus.rejected ?? 0 },
+                { label: translate('disputes.list.tabs.open'), value: insights.byStatus.open ?? 0 },
+                { label: translate('disputes.list.outcome.merchantReplied'), value: insights.byStatus.answered ?? 0 },
+                { label: translate('disputes.list.tabs.resolved'), value: insights.byStatus.resolved ?? 0 },
+                { label: translate('disputes.list.tabs.rejected'), value: insights.byStatus.rejected ?? 0 },
               ]}
             />
           </SectionCard>
@@ -159,8 +160,8 @@ export default function DisputesPage() {
             onSort: list.setSort,
           }}
           emptyIcon={MessageCircleWarning}
-          emptyTitle="Aucun litige"
-          emptyDescription="Aucun litige ne correspond à ce filtre pour le moment."
+          emptyTitle={translate('disputes.list.empty.title')}
+          emptyDescription={translate('disputes.list.empty.description')}
         />
       </Card>
     </div>

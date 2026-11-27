@@ -1,4 +1,5 @@
 import { ApiError } from './api/client';
+import { t } from './i18n';
 
 /**
  * What the merchant portal's forms share: reading a number a person typed, and
@@ -33,7 +34,7 @@ export const moneyText = (value: number | undefined | null) => (value == null ? 
  */
 export function failureMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
-    if (error.status === 0) return 'Connexion impossible. Vérifiez votre réseau et réessayez.';
+    if (error.status === 0) return t('common.errors.network');
     return error.issues[0] ?? (error.message || fallback);
   }
   return fallback;

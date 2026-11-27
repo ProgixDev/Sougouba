@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { LogOut, Moon, PanelLeftClose, PanelLeftOpen, Sun, X, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { t } from '@/lib/i18n';
 import { LogoMark } from '@/components/layout/LogoMark';
 
 /**
@@ -225,7 +226,7 @@ function Footer({
       )}
       <button
         type="button"
-        aria-label={dark ? 'Passer au thème clair' : 'Passer au thème sombre'}
+        aria-label={dark ? t('common.theme.toLight') : t('common.theme.toDark')}
         onClick={() => {
           const next = !dark;
           setDark(next);
@@ -237,17 +238,18 @@ function Footer({
         className={ROUND}
       >
         {dark ? <Sun size={16} /> : <Moon size={16} />}
-        <Tip label={dark ? 'Thème clair' : 'Thème sombre'} show={collapsed} />
+        <Tip label={dark ? t('common.theme.light') : t('common.theme.dark')} show={collapsed} />
       </button>
-      <button type="button" aria-label="Se déconnecter" onClick={() => void onSignOut()} className={ROUND}>
+      <button type="button" aria-label={t('nav.sidebar.signOut')} onClick={() => void onSignOut()} className={ROUND}>
         <LogOut size={16} />
-        <Tip label="Se déconnecter" show={collapsed} />
+        <Tip label={t('nav.sidebar.signOut')} show={collapsed} />
       </button>
     </div>
   );
 }
 
 /** A dark green-black panel that floats off the page edge, in both themes. */
+// i18n-ignore: a class list.
 const PANEL = 'flex flex-col bg-[#101A16] text-white shadow-[0_24px_48px_-24px_rgba(10,32,24,0.55)]';
 
 export function SidebarShell({
@@ -292,21 +294,21 @@ export function SidebarShell({
       >
         <div className={cn('flex h-[84px] items-center gap-3', collapsed ? 'justify-center' : 'px-5')}>
           <LogoMark size={42} className="ring-white/10" />
-          {!collapsed && <span className="font-display text-[1.1875rem] font-bold tracking-tight">Sougouba</span>}
+          {!collapsed && <span className="font-display text-[1.1875rem] font-bold tracking-tight">{t('common.brand')}</span>}
         </div>
         <NavList groups={groups} isActive={isActive} collapsed={collapsed} />
         <div className="px-4 pt-2">
           <button
             type="button"
             onClick={toggle}
-            aria-label={collapsed ? 'Déplier le menu' : 'Réduire le menu'}
+            aria-label={collapsed ? t('nav.sidebar.expand') : t('nav.sidebar.collapse')}
             className="group relative flex w-full cursor-pointer items-center gap-1.5 text-white/50 hover:text-white"
           >
             <span className="flex h-10 w-10 shrink-0 items-center justify-center">
               {collapsed ? <PanelLeftOpen size={19} strokeWidth={1.8} /> : <PanelLeftClose size={19} strokeWidth={1.8} />}
             </span>
-            {!collapsed && <span className="px-3 font-sans text-[0.875rem] font-medium">Réduire le menu</span>}
-            <Tip label="Déplier le menu" show={collapsed} />
+            {!collapsed && <span className="px-3 font-sans text-[0.875rem] font-medium">{t('nav.sidebar.collapse')}</span>}
+            <Tip label={t('nav.sidebar.expand')} show={collapsed} />
           </button>
         </div>
         <Footer account={account} onSignOut={onSignOut} collapsed={collapsed} />
@@ -321,7 +323,7 @@ export function SidebarShell({
         <aside
           role="dialog"
           aria-modal="true"
-          aria-label="Navigation"
+          aria-label={t('nav.sidebar.navigation')}
           className={cn(
             'absolute inset-y-2 left-2 w-[272px] rounded-[26px] transition-transform duration-200 ease-out',
             PANEL,
@@ -331,11 +333,11 @@ export function SidebarShell({
           <div className="flex h-[84px] items-center justify-between pl-5 pr-3">
             <div className="flex items-center gap-3">
               <LogoMark size={42} className="ring-white/10" />
-              <span className="font-display text-[1.1875rem] font-bold tracking-tight">Sougouba</span>
+              <span className="font-display text-[1.1875rem] font-bold tracking-tight">{t('common.brand')}</span>
             </div>
             <button
               type="button"
-              aria-label="Fermer la navigation"
+              aria-label={t('nav.sidebar.closeNavigation')}
               onClick={onCloseMobile}
               className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-white/60 hover:bg-white/10 hover:text-white"
             >

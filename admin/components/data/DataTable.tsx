@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowUp, ArrowDown, ChevronsUpDown, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { t } from '@/lib/i18n';
 import { TableSkeleton } from './Skeleton';
 import { Pagination } from './Pagination';
 import type { SortState } from '@/lib/usePagedList';
@@ -103,7 +104,7 @@ export function DataTable<T>({
         {sortable.length > 0 && (
           <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
             <label className="flex flex-1 items-center gap-2 font-sans text-[0.8125rem] text-muted-foreground">
-              Trier par
+              {t('common.table.sortBy')}
               <select
                 value={sort ? `${sort.key}:${sort.dir}` : ''}
                 onChange={(e) => {
@@ -112,13 +113,13 @@ export function DataTable<T>({
                 }}
                 className="min-w-0 flex-1 cursor-pointer rounded-lg border border-border bg-card px-2 py-1.5 text-foreground outline-none"
               >
-                <option value="">Par défaut</option>
+                <option value="">{t('common.table.defaultSort')}</option>
                 {sortable.flatMap((c) => [
                   <option key={`${c.key}:asc`} value={`${c.key}:asc`}>
-                    {c.header} (croissant)
+                    {t('common.table.ascending', { column: c.header })}
                   </option>,
                   <option key={`${c.key}:desc`} value={`${c.key}:desc`}>
-                    {c.header} (décroissant)
+                    {t('common.table.descending', { column: c.header })}
                   </option>,
                 ])}
               </select>
@@ -205,12 +206,12 @@ export function DataTable<T>({
       {!server && pageCount > 1 && (
         <div className="flex items-center justify-between border-t border-border px-4 py-3 md:px-5">
           <span className="font-sans text-[0.75rem] text-muted-foreground">
-            {sorted.length} résultats · page {clampedPage} sur {pageCount}
+            {t('common.table.resultsPage', { total: sorted.length, page: clampedPage, pages: pageCount })}
           </span>
           <div className="flex gap-1.5">
             <button
               type="button"
-              aria-label="Page précédente"
+              aria-label={t('common.table.previousPage')}
               disabled={clampedPage <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
@@ -219,7 +220,7 @@ export function DataTable<T>({
             </button>
             <button
               type="button"
-              aria-label="Page suivante"
+              aria-label={t('common.table.nextPage')}
               disabled={clampedPage >= pageCount}
               onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
               className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"

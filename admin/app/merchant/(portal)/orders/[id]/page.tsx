@@ -16,6 +16,7 @@ import {
   DISPUTE_REASON_LABELS,
 } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import type { Order } from '@/lib/types';
 
 export default function MerchantOrderDetailPage() {
@@ -38,34 +39,36 @@ export default function MerchantOrderDetailPage() {
     );
   }
   if (order === null) {
-    return <Text variant="title">Commande introuvable</Text>;
+    return <Text variant="title">{t('portal.orders.detail.notFound')}</Text>;
   }
 
   const meta = orderStatusMeta(order.status);
 
   return (
     <div className="flex flex-col gap-6">
-      <Breadcrumbs items={[{ label: 'Commandes', href: '/merchant/orders' }, { label: `#${order.id.slice(0, 8)}` }]} />
+      <Breadcrumbs items={[{ label: t('nav.merchant.orders'), href: '/merchant/orders' }, { label: `#${order.id.slice(0, 8)}` }]} />
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <Text as="h1" variant="display">
-              Commande #{order.id.slice(0, 8)}
+              {t('portal.orders.detail.title', { id: order.id.slice(0, 8) })}
             </Text>
             <StatusBadge label={meta.label} tone={meta.tone} />
           </div>
           <Text variant="body" tone="muted" className="mt-1">
-            {order.customerName ?? 'Client'} · {formatDateTime(order.createdAt)}
+            {order.customerName ?? t('portal.orders.detail.customerFallback')} · {formatDateTime(order.createdAt)}
           </Text>
           {/* Who stopped the order and, when the customer did, why. */}
           {order.status === 'cancelled' && order.cancellation?.by && (
             <Text variant="body" className="mt-2 text-destructive">
-              {CANCELLED_BY_LABELS[order.cancellation.by]}
-              {(order.cancellation.by === 'customer' || order.cancellation.by === 'system') && order.cancellation.reason
-                ? ` — ${CANCEL_REASON_LABELS[order.cancellation.reason] ?? order.cancellation.reason}`
-                : ''}
-              {order.cancellation.note ? ` : ${order.cancellation.note}` : ''}
+              {cancellationLine(
+                CANCELLED_BY_LABELS[order.cancellation.by],
+                (order.cancellation.by === 'customer' || order.cancellation.by === 'system') && order.cancellation.reason
+                  ? CANCEL_REASON_LABELS[order.cancellation.reason] ?? order.cancellation.reason
+                  : null,
+                order.cancellation.note
+              )}
             </Text>
           )}
         </div>
@@ -74,7 +77,7 @@ export default function MerchantOrderDetailPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="p-5 lg:col-span-2">
           <Text variant="subtitle" className="mb-4">
-            Articles
+            {t('portal.orders.detail.items.title')}
           </Text>
           <div className="flex flex-col gap-3">
             {order.items.map((item, i) => (
@@ -84,7 +87,7 @@ export default function MerchantOrderDetailPage() {
                     {item.name}
                   </Text>
                   <Text variant="caption" tone="muted">
-                    Qté {item.qty} × {formatCad(item.unitPriceCad)}
+                    {t('portal.orders.detail.items.qtyLine', { qty: item.qty, price: formatCad(item.unitPriceCad) })}
                   </Text>
                 </div>
                 <Text variant="body" className="tabular font-semibold">
@@ -94,18 +97,18 @@ export default function MerchantOrderDetailPage() {
             ))}
           </div>
           <div className="mt-4 flex flex-col gap-1.5 border-t border-border pt-4">
-            <Row label="Sous-total" value={formatCad(order.subtotalCad)} />
-            <Row label="TPS" value={formatCad(order.gstCad)} />
-            <Row label="TVQ" value={formatCad(order.qstCad)} />
-            <Row label="Livraison" value={formatCad(order.deliveryFeeCad)} />
-            <Row label="Total" value={formatCad(order.totalCad)} strong />
+            <Row label={t('portal.orders.detail.totals.subtotal')} value={formatCad(order.subtotalCad)} />
+            <Row label={t('portal.orders.detail.totals.gst')} value={formatCad(order.gstCad)} />
+            <Row label={t('portal.orders.detail.totals.qst')} value={formatCad(order.qstCad)} />
+            <Row label={t('portal.orders.detail.totals.delivery')} value={formatCad(order.deliveryFeeCad)} />
+            <Row label={t('portal.orders.detail.totals.total')} value={formatCad(order.totalCad)} strong />
           </div>
         </Card>
 
         <div className="flex flex-col gap-4">
           <Card className="p-5">
             <Text variant="subtitle" className="mb-3">
-              Livraison
+              {t('portal.orders.detail.deliveryTitle')}
             </Text>
             <div className="flex items-start gap-2.5">
               <MapPin size={15} className="mt-0.5 shrink-0 text-muted-foreground" />
@@ -117,7 +120,7 @@ export default function MerchantOrderDetailPage() {
 
           <Card className="p-5">
             <Text variant="subtitle" className="mb-3">
-              Historique du statut
+              {t('portal.orders.detail.historyTitle')}
             </Text>
             <ol className="flex flex-col gap-3">
               {order.statusHistory.map((event, i) => {
@@ -140,16 +143,16 @@ export default function MerchantOrderDetailPage() {
         <Card className="p-5">
           <div className="mb-3 flex items-center gap-2">
             <MessageCircleWarning size={17} className="text-destructive" />
-            <Text variant="subtitle">Litige — {DISPUTE_REASON_LABELS[order.dispute.reason]}</Text>
+            <Text variant="subtitle">{t('portal.orders.detail.dispute.title', { reason: DISPUTE_REASON_LABELS[order.dispute.reason] })}</Text>
           </div>
           <div className="flex flex-col gap-3">
-            <ThreadMessage author="Client" at={order.dispute.openedAt} message={order.dispute.message} />
+            <ThreadMessage author={t('portal.orders.detail.dispute.customer')} at={order.dispute.openedAt} message={order.dispute.message} />
             {order.dispute.merchantReply && (
-              <ThreadMessage author="Vous" at={order.dispute.answeredAt!} message={order.dispute.merchantReply} muted />
+              <ThreadMessage author={t('portal.orders.detail.dispute.you')} at={order.dispute.answeredAt!} message={order.dispute.merchantReply} muted />
             )}
           </div>
           <Text variant="caption" tone="muted" className="mt-3">
-            Ce litige est suivi par l&apos;équipe Sougouba — vous serez contacté si une réponse est requise.
+            {t('portal.orders.detail.dispute.note')}
           </Text>
         </Card>
       )}
@@ -158,13 +161,21 @@ export default function MerchantOrderDetailPage() {
         <Card className="p-5">
           <div className="mb-3 flex items-center gap-2">
             <TriangleAlert size={17} className="text-destructive" />
-            <Text variant="subtitle">Incident livreur — {COURIER_ISSUE_REASON_LABELS[order.courierIssue.reason]}</Text>
+            <Text variant="subtitle">{t('portal.orders.detail.courierIssue.title', { reason: COURIER_ISSUE_REASON_LABELS[order.courierIssue.reason] })}</Text>
           </div>
-          <ThreadMessage author="Livreur" at={order.courierIssue.at} message={order.courierIssue.message} />
+          <ThreadMessage author={t('portal.orders.detail.courierIssue.courier')} at={order.courierIssue.at} message={order.courierIssue.message} />
         </Card>
       )}
     </div>
   );
+}
+
+/** Who cancelled, then why and the note when there are any — one message per case, so each language punctuates its own. */
+function cancellationLine(who: string, reason: string | null, note: string | null): string {
+  if (reason && note) return t('portal.orders.detail.cancelled.reasonNote', { who, reason, note });
+  if (reason) return t('portal.orders.detail.cancelled.reason', { who, reason });
+  if (note) return t('portal.orders.detail.cancelled.note', { who, note });
+  return who;
 }
 
 function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {

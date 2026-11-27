@@ -1,0 +1,41 @@
+import type { Shape } from '../../types';
+import type { merchantLogin as fr } from '../fr/merchantLogin';
+
+export const merchantLogin: Shape<typeof fr> = {
+  slides: {
+    ordersTitle: 'Your orders,',
+    ordersAccent: 'as soon as they come in',
+    ordersBody: 'Follow every order from your shop, from acceptance to delivery.',
+    reviewsTitle: 'What your customers',
+    reviewsAccent: 'think of you',
+    reviewsBody: 'Ratings, reviews and reports, in the same place as your sales.',
+    courierTitle: 'A Sougouba courier',
+    courierAccent: 'for every order',
+    courierBody: 'You prepare, we deliver: you can follow the run as it happens.',
+  },
+  title: 'Merchant portal',
+  subtitle: 'Sign in with the email of your Sougouba account: we’ll send you a code.',
+  codeTitle: 'Check your email',
+  codeSubtitle: 'Enter the 6-digit code sent to {email}.',
+  badge: 'Merchant portal',
+  adminQuestion: 'Are you an administrator?',
+  adminLink: 'Go to the console.',
+  email: 'Email',
+  emailHint: 'The email of your account in the Sougouba app.',
+  emailPlaceholder: 'you@example.ca',
+  sending: 'Sending…',
+  getCode: 'Get a code',
+  code: 'Code',
+  signingIn: 'Signing in…',
+  signIn: 'Sign in',
+  changeEmail: 'Change email',
+  resend: 'Resend the code',
+  errors: {
+    codeInvalid: 'Incorrect code. Check it and try again.',
+    codeExpired: 'This code has expired. Request a new one.',
+    cooldown: 'Wait a minute before requesting another code.',
+    noShop: 'No shop is linked to this account. Register your shop from the Sougouba app.',
+    unreachable: 'Could not reach the server. Try again in a moment.',
+    generic: 'Could not sign in. Try again.',
+  },
+};

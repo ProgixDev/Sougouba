@@ -14,6 +14,7 @@ import { useToast } from '@/components/Toast';
 import { getCourier, approveCourier, rejectCourier, suspendCourier } from '@/lib/api/couriers';
 import { courierStatusMeta, VEHICLE_LABELS } from '@/lib/statusMeta';
 import { formatDate } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import type { AdminCourierDetail } from '@/lib/types';
 import { useAdmin } from '@/lib/permissions';
 
@@ -52,7 +53,7 @@ export default function CourierDetailPage() {
   if (courier === null) {
     return (
       <div className="mx-auto max-w-content">
-        <Text variant="title">Livreur introuvable</Text>
+        <Text variant="title">{t('couriers.detail.notFound')}</Text>
       </div>
     );
   }
@@ -63,9 +64,9 @@ export default function CourierDetailPage() {
     setBusy(true);
     try {
       await approveCourier(courier!.id);
-      toast('success', `${courier!.fullName} a été approuvé.`);
+      toast('success', t('couriers.detail.toasts.approved', { name: courier!.fullName }));
     } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'Décision impossible.');
+      toast('error', error instanceof Error ? error.message : t('couriers.detail.toasts.failed'));
     }
     setBusy(false);
     load();
@@ -77,9 +78,9 @@ export default function CourierDetailPage() {
     setBusy(true);
     try {
       await (rejecting ? rejectCourier(courier!.id, reason ?? '') : suspendCourier(courier!.id, reason ?? ''));
-      toast('info', `${courier!.fullName} a été ${rejecting ? 'refusé' : 'suspendu'}.`);
+      toast('info', t(rejecting ? 'couriers.detail.toasts.rejected' : 'couriers.detail.toasts.suspended', { name: courier!.fullName }));
     } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'Décision impossible.');
+      toast('error', error instanceof Error ? error.message : t('couriers.detail.toasts.failed'));
     }
     setBusy(false);
     setDialog(null);
@@ -88,7 +89,7 @@ export default function CourierDetailPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <Breadcrumbs items={[{ label: 'Livreurs', href: '/couriers' }, { label: courier.fullName }]} />
+      <Breadcrumbs items={[{ label: t('couriers.list.title'), href: '/couriers' }, { label: courier.fullName }]} />
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -107,17 +108,17 @@ export default function CourierDetailPage() {
         <div className="flex flex-wrap gap-2.5">
           {courier.status !== 'approved' && courier.status !== 'rejected' && (
             <Button variant="primary" onClick={handleApprove} disabled={busy}>
-              <CheckCircle2 size={16} /> Approuver
+              <CheckCircle2 size={16} /> {t('couriers.detail.actions.approve')}
             </Button>
           )}
           {courier.status === 'pending' && (
             <Button variant="destructive" onClick={() => setDialog('reject')} disabled={busy}>
-              <XCircle size={16} /> Refuser
+              <XCircle size={16} /> {t('couriers.detail.actions.reject')}
             </Button>
           )}
           {courier.status === 'approved' && (
             <Button variant="destructive" onClick={() => setDialog('suspend')} disabled={busy}>
-              <Ban size={16} /> Suspendre
+              <Ban size={16} /> {t('couriers.detail.actions.suspend')}
             </Button>
           )}
         </div>
@@ -127,7 +128,7 @@ export default function CourierDetailPage() {
       {courier.statusReason && (
         <Card elevated={false} className="border-destructive/30 bg-destructive/5 p-4">
           <Text variant="label" tone="destructive">
-            Motif du refus / de la suspension
+            {t('couriers.detail.statusReason')}
           </Text>
           <Text variant="body" className="mt-1">
             {courier.statusReason}
@@ -138,33 +139,33 @@ export default function CourierDetailPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="p-5 lg:col-span-2">
           <Text variant="subtitle" className="mb-4">
-            Dossier du livreur
+            {t('couriers.detail.file.title')}
           </Text>
           <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Téléphone" value={courier.phone} icon={Phone} />
-            <Field label="Véhicule" value={`${VEHICLE_LABELS[courier.vehicle]}${courier.plate ? ` · ${courier.plate}` : ''}`} icon={Car} />
-            {courier.licenceNumber && <Field label="Numéro de permis" value={courier.licenceNumber} icon={ShieldCheck} />}
+            <Field label={t('couriers.detail.file.phone')} value={courier.phone} icon={Phone} />
+            <Field label={t('couriers.detail.file.vehicle')} value={`${VEHICLE_LABELS[courier.vehicle]}${courier.plate ? ` · ${courier.plate}` : ''}`} icon={Car} />
+            {courier.licenceNumber && <Field label={t('couriers.detail.file.licence')} value={courier.licenceNumber} icon={ShieldCheck} />}
             {courier.insurance && (
               <>
-                <Field label="Assureur" value={courier.insurance.insurerName} icon={ShieldCheck} />
-                <Field label="Police d'assurance" value={courier.insurance.policyNumber} icon={ShieldCheck} />
-                <Field label="Expiration" value={courier.insurance.expiry} icon={ShieldCheck} />
+                <Field label={t('couriers.detail.file.insurer')} value={courier.insurance.insurerName} icon={ShieldCheck} />
+                <Field label={t('couriers.detail.file.policy')} value={courier.insurance.policyNumber} icon={ShieldCheck} />
+                <Field label={t('couriers.detail.file.expiry')} value={courier.insurance.expiry} icon={ShieldCheck} />
               </>
             )}
-            <Field label="Inscrit le" value={formatDate(courier.joinedAt)} icon={ShieldCheck} />
+            <Field label={t('couriers.detail.file.joinedOn')} value={formatDate(courier.joinedAt)} icon={ShieldCheck} />
           </dl>
         </Card>
 
         <Card className="p-5">
           <Text variant="subtitle" className="mb-4">
-            Détails
+            {t('couriers.detail.details.title')}
           </Text>
           <dl className="flex flex-col gap-4">
-            <Field label="Secteur" value={courier.city} icon={MapPin} />
+            <Field label={t('couriers.detail.details.area')} value={courier.city} icon={MapPin} />
             {courier.status === 'approved' && (
               <>
-                <Field label="Note" value={courier.rating.toFixed(1)} icon={ShieldCheck} />
-                <Field label="Livraisons effectuées" value={String(courier.deliveryCount)} icon={ShieldCheck} />
+                <Field label={t('couriers.detail.details.rating')} value={courier.rating.toFixed(1)} icon={ShieldCheck} />
+                <Field label={t('couriers.detail.details.deliveries')} value={String(courier.deliveryCount)} icon={ShieldCheck} />
               </>
             )}
           </dl>
@@ -173,16 +174,16 @@ export default function CourierDetailPage() {
 
       <ConfirmDialog
         open={dialog !== null}
-        title={dialog === 'reject' ? 'Refuser ce livreur ?' : 'Suspendre ce livreur ?'}
+        title={dialog === 'reject' ? t('couriers.detail.dialog.rejectTitle') : t('couriers.detail.dialog.suspendTitle')}
         description={
           dialog === 'reject'
-            ? 'Le livreur ne pourra pas accepter de courses. Précisez le motif — il aide le livreur à corriger son dossier.'
-            : 'Le livreur sera retiré immédiatement de la plateforme. Précisez le motif de la suspension.'
+            ? t('couriers.detail.dialog.rejectDescription')
+            : t('couriers.detail.dialog.suspendDescription')
         }
-        confirmLabel={dialog === 'reject' ? 'Refuser' : 'Suspendre'}
+        confirmLabel={dialog === 'reject' ? t('couriers.detail.actions.reject') : t('couriers.detail.actions.suspend')}
         tone="destructive"
         requireReason
-        reasonLabel="Motif"
+        reasonLabel={t('common.confirm.reason')}
         busy={busy}
         onConfirm={handleDecision}
         onCancel={() => setDialog(null)}

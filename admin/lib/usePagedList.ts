@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Page } from '@/lib/api/client';
+import { t } from './i18n';
 
 export type SortState = { key: string; dir: 'asc' | 'desc' } | null;
 
@@ -64,7 +65,7 @@ export function usePagedList<T>(
         if (id !== requestId.current) return;
         setRows([]);
         setTotal(0);
-        setError(e instanceof Error ? e.message : 'Chargement impossible.');
+        setError(e instanceof Error ? e.message : t('common.errors.loadFailed'));
       });
   }, [page, pageSize, sort, filtersKey, reloadTick]);
 

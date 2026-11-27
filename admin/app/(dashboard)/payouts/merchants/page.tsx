@@ -21,13 +21,14 @@ import {
   type OwedMerchant,
 } from '@/lib/api/payouts';
 import { formatCad, formatDate, formatDateTime } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import { useAdmin } from '@/lib/permissions';
 import { usePagedList } from '@/lib/usePagedList';
 
 const PAYOUT_STATUS: Record<MerchantPayout['status'], { label: string; tone: 'success' | 'warning' | 'destructive' }> = {
-  paid: { label: 'Payé', tone: 'success' },
-  pending: { label: 'En cours', tone: 'warning' },
-  failed: { label: 'Échec', tone: 'destructive' },
+  paid: { label: t('payouts.merchants.status.paid'), tone: 'success' },
+  pending: { label: t('payouts.merchants.status.pending'), tone: 'warning' },
+  failed: { label: t('payouts.merchants.status.failed'), tone: 'destructive' },
 };
 
 /**
@@ -72,15 +73,25 @@ export default function MerchantPayoutsPage() {
     try {
       const result = await runMerchantPayouts();
       if (!result.enabled) {
-        toast('error', 'Les versements aux commerces ne sont pas ouverts sur ce serveur : rien n’a été envoyé.');
+        toast('error', t('payouts.merchants.run.notOpen'));
       } else {
-        const parts = [`${result.paid} payé${result.paid > 1 ? 's' : ''} (${formatCad(result.totalCad)})`];
-        if (result.skipped) parts.push(`${result.skipped} sans compte Stripe prêt`);
-        if (result.failed) parts.push(`${result.failed} en échec`);
-        toast(result.failed ? 'error' : 'success', `Versements terminés : ${parts.join(', ')}.`);
+        // One whole sentence per outcome: the shops skipped and the failures are named only when there are some.
+        toast(
+          result.failed ? 'error' : 'success',
+          t(
+            result.skipped
+              ? result.failed
+                ? 'payouts.merchants.run.doneSkippedFailed'
+                : 'payouts.merchants.run.doneSkipped'
+              : result.failed
+                ? 'payouts.merchants.run.doneFailed'
+                : 'payouts.merchants.run.done',
+            { count: result.paid, amount: formatCad(result.totalCad), skipped: result.skipped, failed: result.failed }
+          )
+        );
       }
     } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'Les versements n’ont pas pu être lancés.');
+      toast('error', error instanceof Error ? error.message : t('payouts.merchants.run.failed'));
     }
     setRunning(false);
     setConfirming(false);
@@ -91,7 +102,7 @@ export default function MerchantPayoutsPage() {
   const owedColumns: Column<OwedMerchant>[] = [
     {
       key: 'name',
-      header: 'Commerce',
+      header: t('payouts.merchants.columns.shop'),
       render: (s) => (
         <div className="flex items-center gap-3">
           <Avatar name={s.vendorName} size={32} />
@@ -103,17 +114,21 @@ export default function MerchantPayoutsPage() {
     },
     {
       key: 'amount',
-      header: 'Prochain versement',
+      header: t('payouts.merchants.columns.nextPayout'),
       render: (s) => (
         <Text variant="body" tone={s.pendingCad < 0 ? 'destructive' : undefined} className="font-semibold tabular-nums">
           {formatCad(s.pendingCad)}
         </Text>
       ),
     },
-    { key: 'orders', header: 'Commandes', render: (s) => <Text variant="body" className="tabular-nums">{s.orderCount}</Text> },
+    {
+      key: 'orders',
+      header: t('payouts.merchants.columns.orders'),
+      render: (s) => <Text variant="body" className="tabular-nums">{s.orderCount}</Text>,
+    },
     {
       key: 'adjustments',
-      header: 'Remboursements retenus',
+      header: t('payouts.merchants.columns.refundsWithheld'),
       render: (s) => (
         <Text variant="body" tone="muted" className="tabular-nums">
           {s.adjustmentsCad === 0 ? '—' : formatCad(s.adjustmentsCad)}
@@ -122,7 +137,7 @@ export default function MerchantPayoutsPage() {
     },
     {
       key: 'oldest',
-      header: 'Plus ancienne',
+      header: t('payouts.merchants.columns.oldest'),
       render: (s) => (
         <Text variant="body" tone="muted">
           {s.oldestAt ? formatDate(s.oldestAt) : '—'}
@@ -131,15 +146,20 @@ export default function MerchantPayoutsPage() {
     },
     {
       key: 'account',
-      header: 'Compte Stripe',
-      render: (s) => (s.hasStripeAccount ? <StatusBadge label="Relié" tone="success" /> : <StatusBadge label="À configurer" tone="warning" />),
+      header: t('payouts.merchants.columns.stripeAccount'),
+      render: (s) =>
+        s.hasStripeAccount ? (
+          <StatusBadge label={t('payouts.merchants.account.linked')} tone="success" />
+        ) : (
+          <StatusBadge label={t('payouts.merchants.account.toSetUp')} tone="warning" />
+        ),
     },
   ];
 
   const historyColumns: Column<MerchantPayout>[] = [
     {
       key: 'createdAt',
-      header: 'Date',
+      header: t('payouts.merchants.columns.date'),
       render: (p) => (
         <Text variant="body" tone="muted" className="whitespace-nowrap">
           {formatDateTime(p.paidAt ?? p.createdAt)}
@@ -148,7 +168,7 @@ export default function MerchantPayoutsPage() {
     },
     {
       key: 'vendor',
-      header: 'Commerce',
+      header: t('payouts.merchants.columns.shop'),
       render: (p) => (
         <Text variant="body" className="font-semibold">
           {p.vendor?.name ?? '—'}
@@ -157,17 +177,21 @@ export default function MerchantPayoutsPage() {
     },
     {
       key: 'amount',
-      header: 'Montant',
+      header: t('payouts.merchants.columns.amount'),
       render: (p) => (
         <Text variant="body" className="font-semibold tabular-nums">
           {formatCad(p.amountCad)}
         </Text>
       ),
     },
-    { key: 'orders', header: 'Commandes', render: (p) => <Text variant="body" className="tabular-nums">{p.orderCount}</Text> },
+    {
+      key: 'orders',
+      header: t('payouts.merchants.columns.orders'),
+      render: (p) => <Text variant="body" className="tabular-nums">{p.orderCount}</Text>,
+    },
     {
       key: 'status',
-      header: 'Statut',
+      header: t('payouts.merchants.columns.status'),
       render: (p) => (
         <div className="flex flex-col items-start gap-1">
           <StatusBadge
@@ -184,10 +208,10 @@ export default function MerchantPayoutsPage() {
     },
     {
       key: 'trigger',
-      header: 'Lancé par',
+      header: t('payouts.merchants.columns.startedBy'),
       render: (p) => (
         <Text variant="body" tone="muted">
-          {p.trigger === 'admin' ? 'Administrateur' : 'Planification'}
+          {p.trigger === 'admin' ? t('payouts.merchants.trigger.admin') : t('payouts.merchants.trigger.schedule')}
         </Text>
       ),
     },
@@ -197,17 +221,17 @@ export default function MerchantPayoutsPage() {
     <div className="mx-auto flex max-w-content flex-col gap-6">
       <PageHeader
         icon={Store}
-        title="Versements aux commerces"
-        description="Ce que la plateforme doit aux commerces pour les commandes livrées, et les versements effectués."
+        title={t('payouts.merchants.title')}
+        description={t('payouts.merchants.description')}
         actions={
           <>
             <Link href="/payouts" className="font-sans text-[0.8125rem] font-semibold text-muted-foreground hover:text-foreground">
-              Virements des livreurs
+              {t('payouts.merchants.couriersLink')}
             </Link>
             {can('payouts.run') && (
               <Button onClick={() => setConfirming(true)} disabled={!owed?.enabled || payable.length === 0 || running}>
                 <Send size={15} />
-                Payer les commerces
+                {t('payouts.merchants.runButton')}
               </Button>
             )}
           </>
@@ -216,7 +240,7 @@ export default function MerchantPayoutsPage() {
 
       {failed && (
         <Text variant="body" tone="destructive">
-          Impossible de charger les soldes des commerces. Rechargez la page.
+          {t('payouts.merchants.loadFailed')}
         </Text>
       )}
 
@@ -225,12 +249,10 @@ export default function MerchantPayoutsPage() {
           <CircleAlert size={18} className="mt-0.5 shrink-0 text-mustard-600" />
           <div>
             <Text variant="body" className="font-semibold">
-              Les versements aux commerces ne sont pas ouverts
+              {t('payouts.merchants.notOpen.title')}
             </Text>
             <Text variant="body" tone="muted" className="mt-0.5 max-w-3xl">
-              Aucun commerce n’est payé tant que la date de départ n’est pas fixée sur le serveur (variable MERCHANT_PAYOUTS_FROM). Les
-              commandes livrées avant cette date ne seront jamais payées par la plateforme : fixez-la au jour où les vrais paiements
-              commencent.
+              {t('payouts.merchants.notOpen.body')}
             </Text>
           </div>
         </Card>
@@ -240,34 +262,34 @@ export default function MerchantPayoutsPage() {
         <KpiCard
           loading={!owed}
           icon={Banknote}
-          label="À verser"
+          label={t('payouts.merchants.kpi.toPay')}
           value={formatCad(sum(payable))}
-          hint={`${payable.length} commerce${payable.length > 1 ? 's' : ''} avec un compte Stripe`}
+          hint={t('payouts.merchants.kpi.toPayHint', { count: payable.length })}
         />
         <KpiCard
           loading={!owed}
           icon={UserX}
           tone="terracotta"
-          label="Sans compte Stripe"
+          label={t('payouts.merchants.kpi.noAccount')}
           value={formatCad(sum(waiting))}
-          hint={`${waiting.length} commerce${waiting.length > 1 ? 's' : ''} en attente de leur compte bancaire`}
+          hint={t('payouts.merchants.kpi.noAccountHint', { count: waiting.length })}
         />
         <KpiCard
           loading={!owed}
           icon={CircleAlert}
           tone="mustard"
-          label="Dû par des commerces"
+          label={t('payouts.merchants.kpi.inDebt')}
           value={formatCad(Math.abs(sum(inDebt)))}
-          hint="Remboursements à retenir sur les prochains versements"
+          hint={t('payouts.merchants.kpi.inDebtHint')}
         />
       </div>
 
       <SectionCard
-        title="À verser"
+        title={t('payouts.merchants.owed.title')}
         subtitle={
           owed?.from
-            ? `Commandes livrées depuis le ${formatDate(`${owed.from}T12:00:00`)}, non encore versées. Versement automatique chaque vendredi.`
-            : 'Commandes livrées et non encore versées.'
+            ? t('payouts.merchants.owed.subtitleSince', { date: formatDate(`${owed.from}T12:00:00`) })
+            : t('payouts.merchants.owed.subtitle')
         }
       >
         <DataTable
@@ -277,18 +299,18 @@ export default function MerchantPayoutsPage() {
           onRowClick={(s) => router.push(`/merchants/${s.vendorId}`)}
           loading={!owed && !failed}
           emptyIcon={Banknote}
-          emptyTitle="Rien à verser"
+          emptyTitle={t('payouts.merchants.owed.emptyTitle')}
           emptyDescription={
             owed && !owed.enabled
-              ? 'Les soldes s’afficheront ici une fois les versements ouverts.'
-              : 'Aucun commerce n’a de commande livrée en attente de versement.'
+              ? t('payouts.merchants.owed.emptyNotOpen')
+              : t('payouts.merchants.owed.emptyBody')
           }
         />
       </SectionCard>
 
       <div>
         <Text variant="subtitle" className="mb-3">
-          Historique
+          {t('payouts.merchants.history.title')}
         </Text>
         <Card elevated>
           <DataTable
@@ -306,21 +328,21 @@ export default function MerchantPayoutsPage() {
               onSort: history.setSort,
             }}
             emptyIcon={Send}
-            emptyTitle="Aucun versement"
-            emptyDescription="Aucun commerce n’a encore été payé."
+            emptyTitle={t('payouts.merchants.history.emptyTitle')}
+            emptyDescription={t('payouts.merchants.history.emptyBody')}
           />
         </Card>
       </div>
 
       <ConfirmDialog
         open={confirming}
-        title="Payer les commerces ?"
-        description={`${formatCad(sum(payable))} seront virés maintenant à ${payable.length} commerce${payable.length > 1 ? 's' : ''} via Stripe. ${
+        title={t('payouts.merchants.confirm.title')}
+        description={`${t('payouts.merchants.confirm.amount', { count: payable.length, amount: formatCad(sum(payable)) })} ${
           waiting.length
-            ? `${waiting.length} sans compte Stripe (${formatCad(sum(waiting))}) seront ignorés et payés au premier lancement après leur inscription. `
+            ? `${t('payouts.merchants.confirm.skipped', { count: waiting.length, amount: formatCad(sum(waiting)) })} `
             : ''
-        }Un commerce dont Stripe n’a pas fini de vérifier le compte est ignoré lui aussi. Un versement envoyé ne peut pas être annulé ici.`}
-        confirmLabel="Payer les commerces"
+        }${t('payouts.merchants.confirm.notes')}`}
+        confirmLabel={t('payouts.merchants.runButton')}
         onConfirm={run}
         onCancel={() => setConfirming(false)}
         busy={running}

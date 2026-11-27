@@ -10,57 +10,63 @@ import { useToast } from '@/components/Toast';
 import { listAudit, type AuditEntry, type AuditSubject } from '@/lib/api/audit';
 import { usePagedList } from '@/lib/usePagedList';
 import { formatDateTime } from '@/lib/format';
+// `t` is already the name of a tab in the list below.
+import { t as translate } from '@/lib/i18n';
 import { PageHeader } from '@/components/insights/Insights';
 
 const SUBJECT_TABS: { key: AuditSubject | 'all'; label: string }[] = [
-  { key: 'all', label: 'Tout' },
-  { key: 'vendor', label: 'Commerçants' },
-  { key: 'courier', label: 'Livreurs' },
-  { key: 'user', label: 'Utilisateurs' },
-  { key: 'order', label: 'Commandes' },
-  { key: 'dispute', label: 'Litiges' },
-  { key: 'courier_issue', label: 'Incidents' },
-  { key: 'support', label: 'Support' },
-  { key: 'review', label: 'Avis' },
-  { key: 'coupon', label: 'Codes promo' },
-  { key: 'product', label: 'Produits' },
-  { key: 'admin_role', label: 'Rôles' },
-  { key: 'specialty', label: 'Spécialités' },
-  { key: 'payout', label: 'Virements' },
-  { key: 'settings', label: 'Paramètres' },
+  { key: 'all', label: translate('audit.tabs.all') },
+  { key: 'vendor', label: translate('audit.tabs.vendor') },
+  { key: 'courier', label: translate('audit.tabs.courier') },
+  { key: 'user', label: translate('audit.tabs.user') },
+  { key: 'order', label: translate('audit.tabs.order') },
+  { key: 'dispute', label: translate('audit.tabs.dispute') },
+  { key: 'courier_issue', label: translate('audit.tabs.courierIssue') },
+  { key: 'support', label: translate('audit.tabs.support') },
+  { key: 'review', label: translate('audit.tabs.review') },
+  { key: 'coupon', label: translate('audit.tabs.coupon') },
+  { key: 'product', label: translate('audit.tabs.product') },
+  { key: 'admin_role', label: translate('audit.tabs.adminRole') },
+  { key: 'specialty', label: translate('audit.tabs.specialty') },
+  { key: 'payout', label: translate('audit.tabs.payout') },
+  { key: 'settings', label: translate('audit.tabs.settings') },
 ];
 
-/** Every `AdminAction` the API audits, worded for a reader. An unknown one shows as written. */
+/**
+ * Every `AdminAction` the API audits, worded for a reader. An unknown one shows as written.
+ * The words are in the `audit` dictionary, keyed by the action with its dot as an underscore.
+ */
 const ACTION_LABELS: Record<string, { label: string; tone: Tone }> = {
-  'vendor.approve': { label: 'Commerce approuvé', tone: 'success' },
-  'vendor.reject': { label: 'Commerce refusé', tone: 'destructive' },
-  'vendor.suspend': { label: 'Commerce suspendu', tone: 'destructive' },
-  'courier.approve': { label: 'Livreur approuvé', tone: 'success' },
-  'courier.reject': { label: 'Livreur refusé', tone: 'destructive' },
-  'courier.suspend': { label: 'Livreur suspendu', tone: 'destructive' },
-  'user.block': { label: 'Compte bloqué', tone: 'destructive' },
-  'user.unblock': { label: 'Compte débloqué', tone: 'success' },
-  'dispute.resolve': { label: 'Litige résolu', tone: 'primary' },
-  'courier_issue.resolve': { label: 'Incident résolu', tone: 'primary' },
-  'order.refund': { label: 'Commande remboursée', tone: 'warning' },
-  'order.receipt_resend': { label: 'Reçu renvoyé', tone: 'secondary' },
-  'settings.update': { label: 'Paramètres modifiés', tone: 'secondary' },
-  'specialty.create': { label: 'Spécialité ajoutée', tone: 'success' },
-  'specialty.update': { label: 'Spécialité modifiée', tone: 'secondary' },
-  'support.reply': { label: 'Réponse au support', tone: 'primary' },
-  'support.resolve': { label: 'Support résolu', tone: 'success' },
-  'review.moderate': { label: 'Avis modéré', tone: 'warning' },
-  'coupon.deactivate': { label: 'Code promo désactivé', tone: 'destructive' },
-  'product.hide': { label: 'Produit masqué', tone: 'destructive' },
-  'product.unhide': { label: 'Produit réaffiché', tone: 'success' },
-  'admin.create': { label: 'Administrateur ajouté', tone: 'primary' },
-  'admin.revoke': { label: 'Administrateur retiré', tone: 'destructive' },
-  'admin.role_change': { label: 'Rôle changé', tone: 'warning' },
-  'role.create': { label: 'Rôle créé', tone: 'primary' },
-  'role.update': { label: 'Rôle modifié', tone: 'warning' },
-  'role.delete': { label: 'Rôle supprimé', tone: 'destructive' },
-  'payout.run': { label: 'Virements lancés', tone: 'warning' },
-  'payout.pay_merchant': { label: 'Commerce payé', tone: 'warning' },
+  'vendor.approve': { label: translate('audit.actions.vendor_approve'), tone: 'success' },
+  'vendor.reject': { label: translate('audit.actions.vendor_reject'), tone: 'destructive' },
+  'vendor.suspend': { label: translate('audit.actions.vendor_suspend'), tone: 'destructive' },
+  'courier.approve': { label: translate('audit.actions.courier_approve'), tone: 'success' },
+  'courier.reject': { label: translate('audit.actions.courier_reject'), tone: 'destructive' },
+  'courier.suspend': { label: translate('audit.actions.courier_suspend'), tone: 'destructive' },
+  'user.block': { label: translate('audit.actions.user_block'), tone: 'destructive' },
+  'user.unblock': { label: translate('audit.actions.user_unblock'), tone: 'success' },
+  'dispute.resolve': { label: translate('audit.actions.dispute_resolve'), tone: 'primary' },
+  'courier_issue.resolve': { label: translate('audit.actions.courier_issue_resolve'), tone: 'primary' },
+  'order.refund': { label: translate('audit.actions.order_refund'), tone: 'warning' },
+  'order.cancel': { label: translate('audit.actions.order_cancel'), tone: 'destructive' },
+  'order.receipt_resend': { label: translate('audit.actions.order_receipt_resend'), tone: 'secondary' },
+  'settings.update': { label: translate('audit.actions.settings_update'), tone: 'secondary' },
+  'specialty.create': { label: translate('audit.actions.specialty_create'), tone: 'success' },
+  'specialty.update': { label: translate('audit.actions.specialty_update'), tone: 'secondary' },
+  'support.reply': { label: translate('audit.actions.support_reply'), tone: 'primary' },
+  'support.resolve': { label: translate('audit.actions.support_resolve'), tone: 'success' },
+  'review.moderate': { label: translate('audit.actions.review_moderate'), tone: 'warning' },
+  'coupon.deactivate': { label: translate('audit.actions.coupon_deactivate'), tone: 'destructive' },
+  'product.hide': { label: translate('audit.actions.product_hide'), tone: 'destructive' },
+  'product.unhide': { label: translate('audit.actions.product_unhide'), tone: 'success' },
+  'admin.create': { label: translate('audit.actions.admin_create'), tone: 'primary' },
+  'admin.revoke': { label: translate('audit.actions.admin_revoke'), tone: 'destructive' },
+  'admin.role_change': { label: translate('audit.actions.admin_role_change'), tone: 'warning' },
+  'role.create': { label: translate('audit.actions.role_create'), tone: 'primary' },
+  'role.update': { label: translate('audit.actions.role_update'), tone: 'warning' },
+  'role.delete': { label: translate('audit.actions.role_delete'), tone: 'destructive' },
+  'payout.run': { label: translate('audit.actions.payout_run'), tone: 'warning' },
+  'payout.pay_merchant': { label: translate('audit.actions.payout_pay_merchant'), tone: 'warning' },
 };
 
 /** Where each kind of subject lives in this dashboard. Disputes and courier issues are keyed by their order. */
@@ -92,12 +98,12 @@ function subjectHref(entry: AuditEntry): string | null {
 /** `status: open → resolved`, one line per field. Values are shown as stored. */
 function describeChanges(changes: AuditEntry['changes']): string[] {
   if (!changes) return [];
-  return Object.entries(changes).map(([field, { from, to }]) => `${field} : ${show(from)} → ${show(to)}`);
+  return Object.entries(changes).map(([field, { from, to }]) => translate('audit.change', { field, from: show(from), to: show(to) }));
 }
 
 function show(value: unknown): string {
   if (value === null || value === undefined || value === '') return '—';
-  if (typeof value === 'boolean') return value ? 'oui' : 'non';
+  if (typeof value === 'boolean') return value ? translate('audit.values.yes') : translate('audit.values.no');
   return typeof value === 'object' ? JSON.stringify(value) : String(value);
 }
 
@@ -127,7 +133,7 @@ export default function AuditLogPage() {
   const columns: Column<AuditEntry>[] = [
     {
       key: 'createdAt',
-      header: 'Date',
+      header: translate('audit.columns.date'),
       render: (e) => (
         <Text variant="body" tone="muted" className="whitespace-nowrap">
           {formatDateTime(e.createdAt)}
@@ -136,7 +142,7 @@ export default function AuditLogPage() {
     },
     {
       key: 'actor',
-      header: 'Administrateur',
+      header: translate('audit.columns.admin'),
       render: (e) => (
         <Text variant="body" className="font-semibold">
           {e.actorName}
@@ -145,7 +151,7 @@ export default function AuditLogPage() {
     },
     {
       key: 'action',
-      header: 'Action',
+      header: translate('audit.columns.action'),
       render: (e) => {
         const meta = ACTION_LABELS[e.action] ?? { label: e.action, tone: 'neutral' as Tone };
         return <Badge tone={meta.tone}>{meta.label}</Badge>;
@@ -153,14 +159,14 @@ export default function AuditLogPage() {
     },
     {
       key: 'subject',
-      header: 'Concerne',
+      header: translate('audit.columns.subject'),
       render: (e) => (
-        <Text variant="body">{e.subjectType === 'settings' ? 'Paramètres de la plateforme' : (e.subjectLabel ?? '—')}</Text>
+        <Text variant="body">{e.subjectType === 'settings' ? translate('audit.platformSettings') : (e.subjectLabel ?? '—')}</Text>
       ),
     },
     {
       key: 'details',
-      header: 'Motif et changements',
+      header: translate('audit.columns.details'),
       render: (e) => {
         const lines = describeChanges(e.changes);
         if (!e.reason && lines.length === 0) {
@@ -172,7 +178,7 @@ export default function AuditLogPage() {
         }
         return (
           <div className="flex max-w-md flex-col gap-0.5">
-            {e.reason && <Text variant="body">« {e.reason} »</Text>}
+            {e.reason && <Text variant="body">{translate('audit.quotedReason', { reason: e.reason })}</Text>}
             {lines.map((line) => (
               <Text key={line} variant="caption" tone="muted">
                 {line}
@@ -188,11 +194,11 @@ export default function AuditLogPage() {
     <div className="mx-auto flex max-w-content flex-col gap-6">
       <PageHeader
         icon={ScrollText}
-        title="Journal d’audit"
-        description="Chaque décision prise depuis ce tableau de bord : qui, quand, sur quoi, et pourquoi. Il ne peut pas être modifié."
+        title={translate('audit.title')}
+        description={translate('audit.description')}
         actions={
           <span className="rounded-full bg-muted px-3 py-1.5 font-sans text-[0.8125rem] font-semibold tabular">
-            {total} entrée{total > 1 ? 's' : ''}
+            {translate('audit.entries', { count: total })}
           </span>
         }
       />
@@ -235,8 +241,8 @@ export default function AuditLogPage() {
             onSort: list.setSort,
           }}
           emptyIcon={ScrollText}
-          emptyTitle="Aucune entrée"
-          emptyDescription="Aucune décision n’a encore été enregistrée pour ce filtre."
+          emptyTitle={translate('audit.emptyTitle')}
+          emptyDescription={translate('audit.emptyDescription')}
         />
       </Card>
 

@@ -15,6 +15,7 @@ import { StatusBadge } from '@/components/data/StatusBadge';
 import { getSupportConversation, replySupport, resolveSupport, type SupportConversationDetail } from '@/lib/api/support';
 import { orderStatusMeta } from '@/lib/statusMeta';
 import { formatCad, formatDateTime } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import type { OrderStatus } from '@/lib/types';
 import { useAdmin } from '@/lib/permissions';
 
@@ -54,13 +55,13 @@ export default function SupportConversationPage() {
   if (conversation === null) {
     return (
       <div className="mx-auto max-w-content">
-        <Text variant="title">Conversation introuvable</Text>
+        <Text variant="title">{t('support.detail.notFound')}</Text>
       </div>
     );
   }
 
   const open = conversation.status === 'escalated';
-  const name = conversation.customer.fullName ?? 'Client';
+  const name = conversation.customer.fullName ?? t('support.customerFallback');
 
   async function send(e: FormEvent) {
     e.preventDefault();
@@ -70,9 +71,9 @@ export default function SupportConversationPage() {
     try {
       setConversation(await replySupport(id, content));
       setDraft('');
-      toast('success', 'Réponse envoyée.');
+      toast('success', t('support.detail.toasts.replySent'));
     } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'Envoi impossible.');
+      toast('error', error instanceof Error ? error.message : t('support.detail.toasts.replyFailed'));
       load();
     }
     setBusy(false);
@@ -82,9 +83,9 @@ export default function SupportConversationPage() {
     setBusy(true);
     try {
       setConversation(await resolveSupport(id));
-      toast('success', 'Conversation résolue.');
+      toast('success', t('support.detail.toasts.resolved'));
     } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'Action impossible.');
+      toast('error', error instanceof Error ? error.message : t('support.detail.toasts.resolveFailed'));
       load();
     }
     setBusy(false);
@@ -93,7 +94,7 @@ export default function SupportConversationPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <Breadcrumbs items={[{ label: 'Support', href: '/support' }, { label: name }]} />
+      <Breadcrumbs items={[{ label: t('support.title'), href: '/support' }, { label: name }]} />
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -103,24 +104,28 @@ export default function SupportConversationPage() {
             </Text>
             {open ? (
               conversation.awaitingTeam ? (
-                <Badge tone="destructive">Réponse attendue</Badge>
+                <Badge tone="destructive">{t('support.status.awaitingTeam')}</Badge>
               ) : (
-                <Badge tone="primary">Répondue</Badge>
+                <Badge tone="primary">{t('support.status.answered')}</Badge>
               )
             ) : (
-              <Badge tone="neutral">Résolue</Badge>
+              <Badge tone="neutral">{t('support.status.resolved')}</Badge>
             )}
           </div>
           <Text variant="body" tone="muted" className="mt-1">
-            {conversation.escalatedAt ? `Transmise à l’équipe le ${formatDateTime(conversation.escalatedAt)}` : ''}
+            {conversation.escalatedAt ? t('support.detail.escalatedOn', { date: formatDateTime(conversation.escalatedAt) }) : ''}
             {conversation.resolvedAt
-              ? ` · Résolue le ${formatDateTime(conversation.resolvedAt)}${conversation.resolvedByName ? ` par ${conversation.resolvedByName}` : ''}`
+              ? ` · ${
+                  conversation.resolvedByName
+                    ? t('support.detail.resolvedOnBy', { date: formatDateTime(conversation.resolvedAt), name: conversation.resolvedByName })
+                    : t('support.detail.resolvedOn', { date: formatDateTime(conversation.resolvedAt) })
+                }`
               : ''}
           </Text>
         </div>
         {open && can('support.reply') && (
           <Button variant="outline" onClick={() => setConfirmResolve(true)} disabled={busy}>
-            <CheckCircle2 size={16} /> Résoudre
+            <CheckCircle2 size={16} /> {t('support.detail.resolve')}
           </Button>
         )}
       </div>
@@ -128,12 +133,12 @@ export default function SupportConversationPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="flex flex-col p-5 lg:col-span-2">
           <Text variant="subtitle" className="mb-4">
-            Conversation
+            {t('support.detail.thread')}
           </Text>
           <ol className="flex flex-col gap-3">
             {conversation.messages.length === 0 && (
               <Text variant="body" tone="muted">
-                Le client a demandé l’équipe avant d’écrire. Vous pouvez lui écrire en premier.
+                {t('support.detail.noMessages')}
               </Text>
             )}
             {conversation.messages.map((m) => (
@@ -144,7 +149,7 @@ export default function SupportConversationPage() {
           {open && can('support.reply') ? (
             <form onSubmit={send} className="mt-5 flex flex-col gap-2 border-t border-border pt-4">
               <label htmlFor="reply" className="font-sans text-[0.8125rem] font-semibold">
-                Répondre à {name}
+                {t('support.detail.replyTo', { name })}
               </label>
               <textarea
                 id="reply"
@@ -152,18 +157,18 @@ export default function SupportConversationPage() {
                 onChange={(e) => setDraft(e.target.value)}
                 rows={4}
                 maxLength={2000}
-                placeholder="Votre réponse — le client la reçoit dans l’application, avec une notification."
+                placeholder={t('support.detail.replyPlaceholder')}
                 className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-sans text-[0.875rem] text-foreground outline-none focus:border-forest-600"
               />
               <Button type="submit" className="self-end" disabled={busy || !draft.trim()}>
-                <Send size={15} /> {busy ? 'Envoi…' : 'Envoyer'}
+                <Send size={15} /> {busy ? t('support.detail.sending') : t('common.actions.send')}
               </Button>
             </form>
           ) : (
             <Text variant="caption" tone="muted" className="mt-5 border-t border-border pt-4">
               {open
-                ? 'Lecture seule — votre rôle ne permet pas de répondre au support.'
-                : 'Conversation résolue. Si le client écrit de nouveau, une nouvelle conversation commence.'}
+                ? t('support.detail.readOnly')
+                : t('support.detail.closedNote')}
             </Text>
           )}
         </Card>
@@ -171,7 +176,7 @@ export default function SupportConversationPage() {
         <div className="flex flex-col gap-4">
           <Card className="p-5">
             <Text variant="subtitle" className="mb-3">
-              Client
+              {t('support.detail.customer')}
             </Text>
             <div className="flex flex-col gap-2">
               <Link href={`/users/${conversation.customer.id}`} className="font-sans text-[0.875rem] font-semibold text-primary hover:underline">
@@ -187,11 +192,11 @@ export default function SupportConversationPage() {
 
           <Card className="p-5">
             <Text variant="subtitle" className="mb-3">
-              Commandes récentes
+              {t('support.detail.recentOrders')}
             </Text>
             {conversation.recentOrders.length === 0 ? (
               <Text variant="body" tone="muted">
-                Aucune commande.
+                {t('support.detail.noOrders')}
               </Text>
             ) : (
               <ul className="flex flex-col gap-3">
@@ -221,9 +226,9 @@ export default function SupportConversationPage() {
 
       <ConfirmDialog
         open={confirmResolve}
-        title="Résoudre cette conversation ?"
-        description="Elle quitte la liste « À traiter ». Si le client écrit de nouveau, une nouvelle conversation commence avec l’assistant."
-        confirmLabel="Résoudre"
+        title={t('support.detail.confirm.title')}
+        description={t('support.detail.confirm.description')}
+        confirmLabel={t('support.detail.resolve')}
         busy={busy}
         onConfirm={resolve}
         onCancel={() => setConfirmResolve(false)}
@@ -244,10 +249,10 @@ function Message({
     message.role === 'user'
       ? customerName
       : message.role === 'assistant'
-        ? 'Assistant IA'
+        ? t('support.detail.authors.assistant')
         : message.role === 'agent'
-          ? (message.authorName ?? 'Équipe Sougouba')
-          : 'Système';
+          ? (message.authorName ?? t('support.detail.authors.team'))
+          : t('support.detail.authors.system');
   const Icon = message.role === 'assistant' ? Sparkles : UserRound;
   return (
     <li className={`flex ${fromCustomer ? 'justify-start' : 'justify-end'}`}>

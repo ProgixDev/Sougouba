@@ -14,6 +14,7 @@ import { useToast } from '@/components/Toast';
 import { getDispute, resolveDispute } from '@/lib/api/disputes';
 import { disputeStatusMeta, DISPUTE_REASON_LABELS } from '@/lib/statusMeta';
 import { formatDateTime } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import type { AdminDispute } from '@/lib/types';
 import { useAdmin } from '@/lib/permissions';
 
@@ -45,7 +46,7 @@ export default function DisputeDetailPage() {
   if (dispute === null) {
     return (
       <div className="mx-auto max-w-content">
-        <Text variant="title">Litige introuvable</Text>
+        <Text variant="title">{t('disputes.detail.notFound')}</Text>
       </div>
     );
   }
@@ -58,36 +59,36 @@ export default function DisputeDetailPage() {
     await resolveDispute(dispute!.orderId, note ?? '', dialog!);
     setBusy(false);
     setDialog(null);
-    toast('success', `Litige marqué comme ${dialog === 'resolved' ? 'résolu' : 'rejeté'}.`);
+    toast('success', dialog === 'resolved' ? t('disputes.detail.toast.resolved') : t('disputes.detail.toast.rejected'));
     load();
   }
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <Breadcrumbs items={[{ label: 'Litiges', href: '/disputes' }, { label: `#${dispute.orderId.slice(0, 8)}` }]} />
+      <Breadcrumbs items={[{ label: t('disputes.list.title'), href: '/disputes' }, { label: `#${dispute.orderId.slice(0, 8)}` }]} />
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <Text as="h1" variant="display">
-              Litige — {DISPUTE_REASON_LABELS[dispute.reason]}
+              {t('disputes.detail.title', { reason: DISPUTE_REASON_LABELS[dispute.reason] ?? dispute.reason })}
             </Text>
             <StatusBadge label={meta.label} tone={meta.tone} />
           </div>
           <Text variant="body" tone="muted" className="mt-1">
             {dispute.customerName} · {dispute.vendorName} ·{' '}
             <Link href={`/orders/${dispute.orderId}`} className="text-primary hover:underline">
-              Commande #{dispute.orderId}
+              {t('disputes.detail.orderLink', { id: dispute.orderId })}
             </Link>
           </Text>
         </div>
         {!settled && can('disputes.resolve') && (
           <div className="flex flex-wrap gap-2.5">
             <Button variant="primary" onClick={() => setDialog('resolved')} disabled={busy}>
-              <CheckCircle2 size={16} /> Marquer résolu
+              <CheckCircle2 size={16} /> {t('disputes.detail.markResolved')}
             </Button>
             <Button variant="outline" onClick={() => setDialog('rejected')} disabled={busy}>
-              <XCircle size={16} /> Rejeter la réclamation
+              <XCircle size={16} /> {t('disputes.detail.rejectClaim')}
             </Button>
           </div>
         )}
@@ -95,25 +96,25 @@ export default function DisputeDetailPage() {
 
       <Card className="p-5">
         <Text variant="subtitle" className="mb-4">
-          Fil de la réclamation
+          {t('disputes.detail.thread.title')}
         </Text>
         <div className="flex flex-col gap-3">
-          <ThreadMessage author="Client" at={dispute.openedAt} message={dispute.message} />
-          {dispute.merchantReply && <ThreadMessage author="Commerçant" at={dispute.answeredAt!} message={dispute.merchantReply} muted />}
+          <ThreadMessage author={t('disputes.detail.thread.customer')} at={dispute.openedAt} message={dispute.message} />
+          {dispute.merchantReply && <ThreadMessage author={t('disputes.detail.thread.merchant')} at={dispute.answeredAt!} message={dispute.merchantReply} muted />}
           {settled && dispute.merchantReply && (
-            <ThreadMessage author="Administrateur — décision" at={dispute.resolvedAt!} message={dispute.merchantReply} accent />
+            <ThreadMessage author={t('disputes.detail.thread.adminDecision')} at={dispute.resolvedAt!} message={dispute.merchantReply} accent />
           )}
         </div>
       </Card>
 
       <ConfirmDialog
         open={dialog !== null}
-        title={dialog === 'resolved' ? 'Marquer ce litige comme résolu ?' : 'Rejeter cette réclamation ?'}
-        description="Ajoutez une note de décision — elle reste dans le dossier de la commande pour référence."
-        confirmLabel={dialog === 'resolved' ? 'Marquer résolu' : 'Rejeter'}
+        title={dialog === 'resolved' ? t('disputes.detail.confirm.resolveTitle') : t('disputes.detail.confirm.rejectTitle')}
+        description={t('disputes.detail.confirm.description')}
+        confirmLabel={dialog === 'resolved' ? t('disputes.detail.markResolved') : t('disputes.detail.confirm.reject')}
         tone={dialog === 'resolved' ? 'primary' : 'destructive'}
         requireReason
-        reasonLabel="Note de décision"
+        reasonLabel={t('disputes.detail.confirm.noteLabel')}
         busy={busy}
         onConfirm={handleResolve}
         onCancel={() => setDialog(null)}

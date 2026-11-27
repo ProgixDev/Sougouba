@@ -5,6 +5,7 @@ import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
+import { t } from '@/lib/i18n';
 
 /**
  * The last line of defence for the back office.
@@ -35,17 +36,16 @@ export default function DashboardError({ error, reset }: { error: Error & { dige
         </div>
         <div>
           <Text as="h1" variant="title">
-            Cette page n&apos;a pas pu être chargée
+            {t('common.errors.pageFailedTitle')}
           </Text>
           <Text variant="body" tone="muted" className="mt-1">
-            Vérifiez que l&apos;API est démarrée, puis réessayez. Si le problème persiste, la console du navigateur
-            contient le détail de l&apos;erreur.
+            {t('common.errors.pageFailedBody')}
           </Text>
         </div>
         {/* `reset` re-renders the segment rather than reloading the page, so a
             transient failure recovers without losing the session. */}
         <Button variant="primary" onClick={reset}>
-          Réessayer
+          {t('common.actions.retry')}
         </Button>
       </Card>
     </div>

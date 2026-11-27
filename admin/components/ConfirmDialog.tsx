@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Text } from './ui/Text';
 import { cn } from '@/lib/cn';
+import { t } from '@/lib/i18n';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -26,7 +27,7 @@ export function ConfirmDialog({
   confirmLabel,
   tone = 'primary',
   requireReason = false,
-  reasonLabel = 'Motif',
+  reasonLabel = t('common.confirm.reason'),
   onConfirm,
   onCancel,
   busy = false,
@@ -56,7 +57,7 @@ export function ConfirmDialog({
       <div className="relative max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-card bg-card p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-floating sm:rounded-card sm:p-6">
         <button
           type="button"
-          aria-label="Fermer"
+          aria-label={t('common.actions.close')}
           onClick={onCancel}
           className="absolute right-4 top-4 cursor-pointer text-muted-foreground hover:text-foreground"
         >
@@ -87,7 +88,7 @@ export function ConfirmDialog({
         )}
         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
           <Button variant="ghost" onClick={onCancel} disabled={busy} className="w-full sm:w-auto">
-            Annuler
+            {t('common.actions.cancel')}
           </Button>
           <Button
             variant={tone === 'destructive' ? 'destructive' : 'primary'}
@@ -95,7 +96,7 @@ export function ConfirmDialog({
             onClick={() => onConfirm(requireReason ? reason.trim() : undefined)}
             disabled={disabled}
           >
-            {busy ? 'Un instant…' : confirmLabel}
+            {busy ? t('common.states.wait') : confirmLabel}
           </Button>
         </div>
       </div>

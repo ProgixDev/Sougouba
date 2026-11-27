@@ -1,6 +1,7 @@
 'use client';
 
 import { merchantSupabase, supabase } from '../supabase';
+import { t } from '../i18n';
 
 /**
  * The HTTP layer between this dashboard and the API (`api/`).
@@ -73,7 +74,8 @@ async function authHeaders(caller: Caller): Promise<Record<string, string>> {
   // is read per request rather than captured once at sign-in.
   const { data } = await (caller === 'merchant' ? merchantSupabase() : supabase()).auth.getSession();
   const token = data.session?.access_token;
-  if (!token) throw new ApiError(401, 'Session expirée. Reconnectez-vous.');
+  if (!token) throw new ApiError(401, t('common.errors.sessionExpired'));
+  // i18n-ignore: an HTTP header, not text.
   return { Authorization: `Bearer ${token}` };
 }
 
@@ -118,7 +120,7 @@ async function request<T>(
   } catch {
     // A network-level failure, which in development almost always means the
     // API is not running. Says so, rather than "Failed to fetch".
-    throw new ApiError(0, `Impossible de joindre l'API (${BASE}). Est-elle démarrée ?`);
+    throw new ApiError(0, t('common.errors.apiUnreachable', { url: BASE }));
   }
 
   if (res.status === 204) return undefined as T;
@@ -128,7 +130,7 @@ async function request<T>(
   if (!res.ok) {
     const raw = (payload as { message?: string | string[] } | null)?.message;
     const issues = Array.isArray(raw) ? raw : [];
-    const message = Array.isArray(raw) ? raw.join(' · ') : (raw ?? `Erreur ${res.status}`);
+    const message = Array.isArray(raw) ? raw.join(' · ') : (raw ?? t('common.errors.http', { status: res.status }));
     throw new ApiError(res.status, message, issues);
   }
 

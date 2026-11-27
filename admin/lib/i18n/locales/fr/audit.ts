@@ -1,0 +1,78 @@
+/** The audit log: its filters, its columns, and the wording of every action the API records. */
+export const audit = {
+  title: 'Journal d’audit',
+  description: 'Chaque décision prise depuis ce tableau de bord : qui, quand, sur quoi, et pourquoi. Il ne peut pas être modifié.',
+  entries: { one: '{count} entrée', other: '{count} entrées' },
+  /** The filter by kind of subject. */
+  tabs: {
+    all: 'Tout',
+    vendor: 'Commerçants',
+    courier: 'Livreurs',
+    user: 'Utilisateurs',
+    order: 'Commandes',
+    dispute: 'Litiges',
+    courierIssue: 'Incidents',
+    support: 'Support',
+    review: 'Avis',
+    coupon: 'Codes promo',
+    product: 'Produits',
+    adminRole: 'Rôles',
+    specialty: 'Spécialités',
+    payout: 'Virements',
+    settings: 'Paramètres',
+  },
+  /**
+   * An `AdminAction` of the API, worded for a reader. Keyed by the action with
+   * its dot turned into an underscore: `vendor.approve` → `vendor_approve`.
+   * Also read by « Mon compte » and by an administrator's page.
+   */
+  actions: {
+    vendor_approve: 'Commerce approuvé',
+    vendor_reject: 'Commerce refusé',
+    vendor_suspend: 'Commerce suspendu',
+    courier_approve: 'Livreur approuvé',
+    courier_reject: 'Livreur refusé',
+    courier_suspend: 'Livreur suspendu',
+    user_block: 'Compte bloqué',
+    user_unblock: 'Compte débloqué',
+    dispute_resolve: 'Litige résolu',
+    courier_issue_resolve: 'Incident résolu',
+    order_refund: 'Commande remboursée',
+    order_cancel: 'Commande annulée',
+    order_receipt_resend: 'Reçu renvoyé',
+    settings_update: 'Paramètres modifiés',
+    specialty_create: 'Spécialité ajoutée',
+    specialty_update: 'Spécialité modifiée',
+    support_reply: 'Réponse au support',
+    support_resolve: 'Support résolu',
+    review_moderate: 'Avis modéré',
+    coupon_deactivate: 'Code promo désactivé',
+    product_hide: 'Produit masqué',
+    product_unhide: 'Produit réaffiché',
+    admin_create: 'Administrateur ajouté',
+    admin_revoke: 'Administrateur retiré',
+    admin_role_change: 'Rôle changé',
+    role_create: 'Rôle créé',
+    role_update: 'Rôle modifié',
+    role_delete: 'Rôle supprimé',
+    payout_run: 'Virements lancés',
+    payout_pay_merchant: 'Commerce payé',
+  },
+  columns: {
+    date: 'Date',
+    admin: 'Administrateur',
+    action: 'Action',
+    subject: 'Concerne',
+    details: 'Motif et changements',
+  },
+  platformSettings: 'Paramètres de la plateforme',
+  quotedReason: '« {reason} »',
+  /** One changed field: `status : open → resolved`. The field and its values are shown as stored. */
+  change: '{field} : {from} → {to}',
+  values: {
+    yes: 'oui',
+    no: 'non',
+  },
+  emptyTitle: 'Aucune entrée',
+  emptyDescription: 'Aucune décision n’a encore été enregistrée pour ce filtre.',
+};

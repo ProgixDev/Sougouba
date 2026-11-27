@@ -11,15 +11,22 @@ import { KpiCard, KpiGrid, PageHeader } from '@/components/insights/Insights';
 import { formatHours, getSupportInsights, type SupportInsights } from '@/lib/api/insights';
 import { listSupport, type SupportInboxItem } from '@/lib/api/support';
 import { usePagedList } from '@/lib/usePagedList';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime, formatPercent } from '@/lib/format';
+// `translate`, not `t`: the tab loop below already calls its item `t`.
+import { t as translate } from '@/lib/i18n';
 
 const TABS: { key: 'escalated' | 'closed' | 'all'; label: string }[] = [
-  { key: 'escalated', label: 'À traiter' },
-  { key: 'closed', label: 'Résolues' },
-  { key: 'all', label: 'Toutes' },
+  { key: 'escalated', label: translate('support.list.tabs.escalated') },
+  { key: 'closed', label: translate('support.list.tabs.closed') },
+  { key: 'all', label: translate('support.list.tabs.all') },
 ];
 
-const ROLE_PREFIX: Record<string, string> = { user: 'Client', assistant: 'Assistant', agent: 'Équipe', system: '' };
+const ROLE_PREFIX: Record<string, string> = {
+  user: translate('support.list.roles.user'),
+  assistant: translate('support.list.roles.assistant'),
+  agent: translate('support.list.roles.agent'),
+  system: '',
+};
 
 /**
  * Conversations customers handed from the support assistant to the team.
@@ -49,31 +56,32 @@ export default function SupportInboxPage() {
   const columns: Column<SupportInboxItem>[] = [
     {
       key: 'customer',
-      header: 'Client',
+      header: translate('support.list.columns.customer'),
       render: (c) => (
         <Text variant="body" className="font-semibold">
-          {c.customer.fullName ?? 'Client'}
+          {c.customer.fullName ?? translate('support.customerFallback')}
         </Text>
       ),
     },
     {
       key: 'last',
-      header: 'Dernier message',
+      header: translate('support.list.columns.lastMessage'),
       render: (c) =>
         c.lastMessage ? (
           <Text variant="body" tone="muted" className="line-clamp-2 max-w-md">
-            {ROLE_PREFIX[c.lastMessage.role] ? `${ROLE_PREFIX[c.lastMessage.role]} : ` : ''}
-            {c.lastMessage.preview}
+            {ROLE_PREFIX[c.lastMessage.role]
+              ? translate('support.list.preview', { role: ROLE_PREFIX[c.lastMessage.role], preview: c.lastMessage.preview })
+              : c.lastMessage.preview}
           </Text>
         ) : (
           <Text variant="caption" tone="muted">
-            Aucun message pour l’instant
+            {translate('support.list.noMessage')}
           </Text>
         ),
     },
     {
       key: 'lastMessageAt',
-      header: 'Activité',
+      header: translate('support.list.columns.activity'),
       render: (c) => (
         <Text variant="body" tone="muted" className="whitespace-nowrap">
           {formatDateTime(c.lastMessageAt)}
@@ -82,14 +90,14 @@ export default function SupportInboxPage() {
     },
     {
       key: 'status',
-      header: 'Statut',
+      header: translate('support.list.columns.status'),
       render: (c) =>
         c.status === 'closed' ? (
-          <Badge tone="neutral">Résolue</Badge>
+          <Badge tone="neutral">{translate('support.status.resolved')}</Badge>
         ) : c.awaitingTeam ? (
-          <Badge tone="destructive">Réponse attendue</Badge>
+          <Badge tone="destructive">{translate('support.status.awaitingTeam')}</Badge>
         ) : (
-          <Badge tone="primary">Répondue</Badge>
+          <Badge tone="primary">{translate('support.status.answered')}</Badge>
         ),
     },
   ];
@@ -98,8 +106,8 @@ export default function SupportInboxPage() {
     <div className="mx-auto flex max-w-content flex-col gap-6">
       <PageHeader
         icon={Headset}
-        title="Support"
-        description="Conversations transmises de l’assistant à l’équipe. Votre réponse arrive dans l’application du client."
+        title={translate('support.title')}
+        description={translate('support.list.description')}
       />
 
       <KpiGrid>
@@ -107,36 +115,39 @@ export default function SupportInboxPage() {
           loading={!insights}
           icon={Headset}
           tone="terracotta"
-          label="En attente de l’équipe"
+          label={translate('support.list.kpi.waiting')}
           value={String(insights?.waiting ?? 0)}
-          hint="Conversations à traiter"
+          hint={translate('support.list.kpi.waitingHint')}
         />
         <KpiCard
           loading={!insights}
           icon={CheckCircle2}
-          label="Résolues · 30 j"
+          label={translate('support.list.kpi.resolved')}
           value={String(insights?.resolved30 ?? 0)}
-          hint={`${insights?.escalated30 ?? 0} transmises à l’équipe sur la période`}
+          hint={translate('support.list.kpi.resolvedHint', { count: insights?.escalated30 ?? 0 })}
         />
         <KpiCard
           loading={!insights}
           icon={Clock}
           tone="mustard"
-          label="Délai moyen de résolution"
+          label={translate('support.list.kpi.resolutionTime')}
           value={formatHours(insights?.avgResolutionHours)}
-          hint="De la demande d’un humain à la résolution"
+          hint={translate('support.list.kpi.resolutionTimeHint')}
         />
         <KpiCard
           loading={!insights}
           icon={Bot}
           tone="neutral"
-          label="Réglées par l’assistant · 30 j"
+          label={translate('support.list.kpi.assistant')}
           value={
             insights && insights.conversations30 > 0
-              ? `${Math.round(100 * (1 - insights.escalated30 / insights.conversations30))} %`
+              ? formatPercent(1 - insights.escalated30 / insights.conversations30)
               : '—'
           }
-          hint={`${insights?.conversations30 ?? 0} conversations, ${insights?.messages30 ?? 0} messages de clients`}
+          hint={translate('support.list.kpi.assistantHint', {
+            conversations: insights?.conversations30 ?? 0,
+            messages: insights?.messages30 ?? 0,
+          })}
         />
       </KpiGrid>
 
@@ -171,11 +182,11 @@ export default function SupportInboxPage() {
             onSort: list.setSort,
           }}
           emptyIcon={Headset}
-          emptyTitle={tab === 'escalated' ? 'Aucune conversation en attente' : 'Aucune conversation'}
+          emptyTitle={tab === 'escalated' ? translate('support.list.empty.escalatedTitle') : translate('support.list.empty.title')}
           emptyDescription={
             tab === 'escalated'
-              ? 'Quand un client demande à parler à l’équipe, sa conversation apparaît ici.'
-              : 'Aucune conversation ne correspond à ce filtre.'
+              ? translate('support.list.empty.escalatedBody')
+              : translate('support.list.empty.body')
           }
         />
       </Card>

@@ -9,6 +9,7 @@ import { useToast } from '@/components/Toast';
 import { getMyPayoutStatus, getMyPayouts, startPayoutOnboarding, type PayoutStatus, type PayoutSummary } from '@/lib/api/merchantBilling';
 import { failureMessage } from '@/lib/merchantForm';
 import { formatCad, formatDate } from '@/lib/format';
+import { t } from '@/lib/i18n';
 
 /**
  * When the shop is paid, how much, and into which account — the web twin of
@@ -22,21 +23,21 @@ import { formatCad, formatDate } from '@/lib/format';
 type State = 'unavailable' | 'setup' | 'review' | 'active';
 
 const STATE: Record<State, { label: string; tone: Tone; body: string }> = {
-  active: { label: 'Versements actifs', tone: 'success', body: 'Stripe dépose votre part des ventes sur votre compte bancaire, chaque vendredi.' },
+  active: { label: t('portalShop.payouts.state.active.label'), tone: 'success', body: t('portalShop.payouts.state.active.body') },
   review: {
-    label: 'Vérification en cours',
+    label: t('portalShop.payouts.state.review.label'),
     tone: 'warning',
-    body: 'Stripe vérifie vos informations. Vos ventes s’accumulent d’ici là et seront versées ensuite.',
+    body: t('portalShop.payouts.state.review.body'),
   },
   setup: {
-    label: 'Compte bancaire à ajouter',
+    label: t('portalShop.payouts.state.setup.label'),
     tone: 'warning',
-    body: 'Votre part des ventes reste en attente tant qu’aucun compte n’est relié. Stripe recueille vos coordonnées bancaires — Sougouba ne les voit jamais.',
+    body: t('portalShop.payouts.state.setup.body'),
   },
   unavailable: {
-    label: 'Statut indisponible',
+    label: t('portalShop.payouts.state.unavailable.label'),
     tone: 'neutral',
-    body: 'Impossible de joindre le service de paiement pour le moment. Vos ventes sont bien enregistrées.',
+    body: t('portalShop.payouts.state.unavailable.body'),
   },
 };
 
@@ -66,7 +67,7 @@ export function PayoutsCard() {
     try {
       window.location.href = await startPayoutOnboarding();
     } catch (error) {
-      toast('error', failureMessage(error, 'Ouverture de Stripe impossible. Veuillez réessayer.'));
+      toast('error', failureMessage(error, t('portalShop.payouts.stripeFailed')));
       setLeaving(false);
     }
   }
@@ -75,9 +76,9 @@ export function PayoutsCard() {
     <Card as="section" className="flex flex-col gap-4 p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Text variant="subtitle">Versements</Text>
+          <Text variant="subtitle">{t('portalShop.payouts.title')}</Text>
           <Text variant="body" tone="muted" className="mt-0.5 max-w-xl">
-            Chaque vendredi, pour les commandes livrées : vos produits et leurs taxes, moins la commission et vos codes promo.
+            {t('portalShop.payouts.intro')}
           </Text>
         </div>
         {state && <Badge tone={STATE[state].tone}>{STATE[state].label}</Badge>}
@@ -92,18 +93,19 @@ export function PayoutsCard() {
               {formatCad(summary.pendingCad)}
             </span>
             <span className="font-sans text-[0.875rem] text-muted-foreground">
-              prochain versement, le {day(summary.nextPayoutOn)}
-              {summary.orderCount > 0 ? ` · ${summary.orderCount} commande${summary.orderCount > 1 ? 's' : ''}` : ''}
+              {summary.orderCount > 0
+                ? t('portalShop.payouts.nextWithOrders', { date: day(summary.nextPayoutOn), count: summary.orderCount })
+                : t('portalShop.payouts.next', { date: day(summary.nextPayoutOn) })}
             </span>
           </div>
           {summary.pendingCad < 0 && (
             <Text variant="caption" tone="muted" className="mt-1">
-              Des remboursements dépassent vos ventes livrées depuis le dernier versement. La différence sera retenue sur les prochains.
+              {t('portalShop.payouts.negative')}
             </Text>
           )}
           {!summary.enabled && (
             <Text variant="caption" tone="muted" className="mt-1">
-              Les versements automatiques ne sont pas encore ouverts par Sougouba. Vos ventes sont enregistrées et figurent sur vos relevés.
+              {t('portalShop.payouts.notOpen')}
             </Text>
           )}
         </div>
@@ -118,7 +120,7 @@ export function PayoutsCard() {
       {(state === 'setup' || state === 'review') && (
         <div>
           <Button variant={state === 'setup' ? 'primary' : 'outline'} onClick={setUp} disabled={leaving}>
-            {leaving ? 'Ouverture…' : state === 'setup' ? 'Configurer mes versements' : 'Revoir mes informations'}
+            {leaving ? t('portalShop.payouts.opening') : state === 'setup' ? t('portalShop.payouts.setUp') : t('portalShop.payouts.review')}
           </Button>
         </div>
       )}
@@ -126,14 +128,15 @@ export function PayoutsCard() {
       {summary && summary.payouts.length > 0 && (
         <div className="border-t border-border pt-3">
           <Text variant="label" tone="muted">
-            Derniers versements
+            {t('portalShop.payouts.recent')}
           </Text>
           <ul className="mt-2 flex max-w-md flex-col gap-1.5 font-sans text-[0.875rem]">
             {summary.payouts.map((payout) => (
               <li key={payout.id} className="flex items-baseline justify-between gap-4">
                 <span className="text-muted-foreground">
-                  {payout.status === 'paid' && payout.paidAt ? formatDate(payout.paidAt) : 'En cours'}
-                  {` · ${payout.orderCount} commande${payout.orderCount > 1 ? 's' : ''}`}
+                  {payout.status === 'paid' && payout.paidAt
+                    ? t('portalShop.payouts.paidRow', { date: formatDate(payout.paidAt), count: payout.orderCount })
+                    : t('portalShop.payouts.pendingRow', { count: payout.orderCount })}
                 </span>
                 <span className="tabular font-medium">{formatCad(payout.amountCad)}</span>
               </li>

@@ -5,6 +5,7 @@ import { Banknote, LayoutDashboard, Package, ShoppingBasket, Store, TicketPercen
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { SidebarShell, type NavGroup } from '@/components/layout/SidebarShell';
 import { QueueBell, TopbarShell } from '@/components/layout/Topbar';
+import { t } from '@/lib/i18n';
 import { merchantSignOut, type MerchantSession } from '@/lib/merchantAuth';
 
 /**
@@ -21,24 +22,24 @@ export interface MerchantCounts {
 /** In the order a shop's day runs: the overview, the work, then the setup. */
 export const MERCHANT_NAV = (counts: MerchantCounts): NavGroup[] => [
   {
-    title: 'Pilotage',
+    title: t('nav.groups.steering'),
     boxed: false,
-    items: [{ href: '/merchant', label: 'Aperçu', icon: LayoutDashboard, count: 0 }],
+    items: [{ href: '/merchant', label: t('nav.merchant.overview'), icon: LayoutDashboard, count: 0 }],
   },
   {
-    title: 'Activité',
+    title: t('nav.groups.activity'),
     boxed: true,
     items: [
-      { href: '/merchant/orders', label: 'Commandes', icon: Package, count: counts.ordersToConfirm },
-      { href: '/merchant/products', label: 'Produits', icon: ShoppingBasket, count: 0 },
-      { href: '/merchant/coupons', label: 'Codes promo', icon: TicketPercent, count: 0 },
-      { href: '/merchant/statements', label: 'Versements', icon: Banknote, count: 0 },
+      { href: '/merchant/orders', label: t('nav.merchant.orders'), icon: Package, count: counts.ordersToConfirm },
+      { href: '/merchant/products', label: t('nav.merchant.products'), icon: ShoppingBasket, count: 0 },
+      { href: '/merchant/coupons', label: t('nav.merchant.coupons'), icon: TicketPercent, count: 0 },
+      { href: '/merchant/statements', label: t('nav.merchant.payouts'), icon: Banknote, count: 0 },
     ],
   },
   {
-    title: 'Configuration',
+    title: t('nav.groups.setup'),
     boxed: false,
-    items: [{ href: '/merchant/shop', label: 'Boutique', icon: Store, count: 0 }],
+    items: [{ href: '/merchant/shop', label: t('nav.merchant.shop'), icon: Store, count: 0 }],
   },
 ];
 
@@ -64,7 +65,7 @@ export function MerchantSidebar({
     <SidebarShell
       groups={MERCHANT_NAV(counts)}
       isActive={(href) => isMerchantPath(href, pathname)}
-      account={{ name: session.vendorName, caption: 'Commerçant', href: '/merchant/shop', hrefLabel: 'Ma boutique' }}
+      account={{ name: session.vendorName, caption: t('nav.merchant.caption'), href: '/merchant/shop', hrefLabel: t('nav.merchant.myShop') }}
       onSignOut={async () => {
         await merchantSignOut();
         router.push('/merchant/login');
@@ -77,9 +78,9 @@ export function MerchantSidebar({
 
 /** A shop that is not taking orders says so on every page, not only on its settings. */
 const STATUS: Partial<Record<MerchantSession['vendorStatus'], { label: string; tone: 'warning' | 'destructive' }>> = {
-  pending: { label: 'En cours de vérification', tone: 'warning' },
-  suspended: { label: 'Boutique suspendue', tone: 'destructive' },
-  rejected: { label: 'Demande non retenue', tone: 'destructive' },
+  pending: { label: t('nav.merchant.statusPending'), tone: 'warning' },
+  suspended: { label: t('nav.merchant.statusSuspended'), tone: 'destructive' },
+  rejected: { label: t('nav.merchant.statusRejected'), tone: 'destructive' },
 };
 
 export function MerchantTopbar({
@@ -106,8 +107,8 @@ export function MerchantTopbar({
       )}
       <QueueBell
         queues={groups.flatMap((g) => g.items).filter((i) => i.count > 0)}
-        pendingText="Des commandes attendent votre confirmation"
-        emptyText="Rien ne vous attend pour le moment."
+        pendingText={t('nav.merchant.bellPending')}
+        emptyText={t('nav.merchant.bellEmpty')}
       />
     </TopbarShell>
   );

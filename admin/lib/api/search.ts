@@ -1,4 +1,5 @@
 import { apiGet } from './client';
+import { t } from '../i18n';
 
 export interface SearchResult {
   type: 'vendor' | 'courier' | 'order' | 'user';
@@ -9,10 +10,10 @@ export interface SearchResult {
 }
 
 export const TYPE_LABELS: Record<SearchResult['type'], string> = {
-  vendor: 'Commerces',
-  courier: 'Livreurs',
-  order: 'Commandes',
-  user: 'Utilisateurs',
+  vendor: t('nav.search.vendors'),
+  courier: t('nav.search.couriers'),
+  order: t('nav.search.orders'),
+  user: t('nav.search.users'),
 };
 
 /**

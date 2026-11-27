@@ -10,18 +10,20 @@ import { Avatar, BarSeries, Breakdown, KpiCard, KpiGrid, PageHeader, Ranking, Se
 import { formatHours, getVendorInsights, shortDay, type VendorInsights } from '@/lib/api/insights';
 import { listVendors } from '@/lib/api/vendors';
 import { useDebounced, usePagedList } from '@/lib/usePagedList';
-import { formatCad } from '@/lib/format';
+import { formatCad, formatNumber } from '@/lib/format';
+// `translate`, not `t`: this page already names its loop variables `t`.
+import { t as translate } from '@/lib/i18n';
 import { vendorStatusMeta } from '@/lib/statusMeta';
 import { formatDate } from '@/lib/format';
 import type { AdminVendorListItem, AdminVendorStatus } from '@/lib/types';
 
 const TABS: { key: AdminVendorStatus; label: string }[] = [
-  { key: 'pending', label: 'En attente' },
-  { key: 'approved', label: 'Approuvés' },
-  { key: 'suspended', label: 'Suspendus' },
+  { key: 'pending', label: translate('merchants.list.statuses.pending') },
+  { key: 'approved', label: translate('merchants.list.statuses.approved') },
+  { key: 'suspended', label: translate('merchants.list.statuses.suspended') },
   // `rejected` is its own terminal state in the API — the mock folded it into
   // "suspended", which hid every refused application from the back office.
-  { key: 'rejected', label: 'Refusés' },
+  { key: 'rejected', label: translate('merchants.list.statuses.rejected') },
 ];
 
 export default function MerchantsPage() {
@@ -50,7 +52,7 @@ export default function MerchantsPage() {
   const columns: Column<AdminVendorListItem>[] = [
     {
       key: 'name',
-      header: 'Commerce',
+      header: translate('merchants.list.columns.shop'),
       sortable: true,
       render: (v) => (
         <div className="flex items-center gap-3">
@@ -68,13 +70,13 @@ export default function MerchantsPage() {
     },
     {
       key: 'vendorType',
-      header: 'Secteur',
-      render: (v) => <Text variant="body">{v.vendorType === 'restaurant' ? 'Restaurant' : 'Épicerie'}</Text>,
+      header: translate('merchants.list.columns.sector'),
+      render: (v) => <Text variant="body">{v.vendorType === 'restaurant' ? translate('common.vendorType.restaurant') : translate('common.vendorType.grocery')}</Text>,
     },
-    { key: 'city', header: 'Ville', sortable: true, render: (v) => <Text variant="body">{v.city}</Text> },
+    { key: 'city', header: translate('merchants.list.columns.city'), sortable: true, render: (v) => <Text variant="body">{v.city}</Text> },
     {
       key: 'date',
-      header: 'Soumis',
+      header: translate('merchants.list.columns.submitted'),
       sortable: true,
       render: (v) => (
         <Text variant="body" tone="muted">
@@ -84,7 +86,7 @@ export default function MerchantsPage() {
     },
     {
       key: 'status',
-      header: 'Statut',
+      header: translate('merchants.list.columns.status'),
       render: (v) => {
         const meta = vendorStatusMeta(v.status);
         return <StatusBadge label={meta.label} tone={meta.tone} />;
@@ -94,70 +96,70 @@ export default function MerchantsPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <PageHeader icon={Store} title="Commerçants" description="File d’approbation, annuaire des boutiques et leur activité." />
+      <PageHeader icon={Store} title={translate('merchants.list.title')} description={translate('merchants.list.description')} />
 
       <KpiGrid>
         <KpiCard
           loading={!insights}
           icon={Store}
-          label="Boutiques en ligne"
+          label={translate('merchants.list.kpi.online')}
           value={String(insights?.byStatus.approved ?? 0)}
-          hint={`${insights?.new30 ?? 0} inscriptions sur 30 jours`}
+          hint={translate('merchants.list.kpi.onlineHint', { count: insights?.new30 ?? 0 })}
         />
         <KpiCard
           loading={!insights}
           icon={Clock}
           tone="mustard"
-          label="Dossiers en attente"
+          label={translate('merchants.list.kpi.pending')}
           value={String(insights?.byStatus.pending ?? 0)}
-          hint={`Approbation en ${formatHours(insights?.avgApprovalHours)} en moyenne`}
+          hint={translate('merchants.list.kpi.pendingHint', { duration: formatHours(insights?.avgApprovalHours) })}
         />
         <KpiCard
           loading={!insights}
           icon={TrendingUp}
           tone="forest"
-          label="Ventes des boutiques · 30 j"
+          label={translate('merchants.list.kpi.sales')}
           value={formatCad(insights?.sales30 ?? 0)}
-          hint={`${insights?.orders30 ?? 0} commandes, hors annulées`}
+          hint={translate('merchants.list.kpi.salesHint', { count: insights?.orders30 ?? 0 })}
         />
         <KpiCard
           loading={!insights}
           icon={Star}
           tone="terracotta"
-          label="Note moyenne"
-          value={insights?.avgRating ? `${insights.avgRating.toLocaleString('fr-CA')} / 5` : '—'}
-          hint="Boutiques approuvées ayant des avis"
+          label={translate('merchants.list.kpi.rating')}
+          value={insights?.avgRating ? `${formatNumber(insights.avgRating)} / 5` : '—'}
+          hint={translate('merchants.list.kpi.ratingHint')}
         />
       </KpiGrid>
 
       {insights && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <SectionCard title="Inscriptions" subtitle="Nouvelles boutiques par semaine, 8 semaines">
+          <SectionCard title={translate('merchants.list.signups.title')} subtitle={translate('merchants.list.signups.subtitle')}>
             <BarSeries data={insights.signupsByWeek.map((w) => ({ label: shortDay(w.week), value: w.count }))} />
           </SectionCard>
-          <SectionCard title="Répartition" subtitle="Boutiques en ligne par secteur, et tous les dossiers par statut">
+          <SectionCard title={translate('merchants.list.breakdown.title')} subtitle={translate('merchants.list.breakdown.subtitle')}>
             <Breakdown
               items={[
-                { label: 'Épiceries', value: insights.byType.grocery ?? 0 },
-                { label: 'Restaurants', value: insights.byType.restaurant ?? 0 },
+                { label: translate('merchants.list.breakdown.groceries'), value: insights.byType.grocery ?? 0 },
+                { label: translate('merchants.list.breakdown.restaurants'), value: insights.byType.restaurant ?? 0 },
               ]}
             />
             <Breakdown
               items={[
-                { label: 'Approuvés', value: insights.byStatus.approved ?? 0 },
-                { label: 'En attente', value: insights.byStatus.pending ?? 0 },
-                { label: 'Suspendus', value: insights.byStatus.suspended ?? 0 },
-                { label: 'Refusés', value: insights.byStatus.rejected ?? 0 },
+                { label: translate('merchants.list.statuses.approved'), value: insights.byStatus.approved ?? 0 },
+                { label: translate('merchants.list.statuses.pending'), value: insights.byStatus.pending ?? 0 },
+                { label: translate('merchants.list.statuses.suspended'), value: insights.byStatus.suspended ?? 0 },
+                { label: translate('merchants.list.statuses.rejected'), value: insights.byStatus.rejected ?? 0 },
               ]}
             />
           </SectionCard>
-          <SectionCard title="Meilleures ventes · 30 j" subtitle="Sous-total des commandes, hors annulées">
+          <SectionCard title={translate('merchants.list.top.title')} subtitle={translate('merchants.list.top.subtitle')}>
             <Ranking
               items={insights.top.map((t) => ({
                 id: t.id,
                 label: t.name,
                 value: Number(t.sales),
-                display: `${formatCad(Number(t.sales))} · ${t.orders} cmd`,
+                display: translate('merchants.list.top.value', { amount: formatCad(Number(t.sales)), count: t.orders }),
                 href: `/merchants/${t.id}`,
               }))}
             />
@@ -184,7 +186,7 @@ export default function MerchantsPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher un commerce ou une ville…"
+            placeholder={translate('merchants.list.searchPlaceholder')}
             className="w-full min-w-0 bg-transparent font-sans sm:w-56 text-[0.8125rem] text-foreground outline-none placeholder:text-muted-foreground"
           />
         </div>
@@ -207,8 +209,8 @@ export default function MerchantsPage() {
             onSort: list.setSort,
           }}
           emptyIcon={Store}
-          emptyTitle="Aucun commerce"
-          emptyDescription="Aucun commerce ne correspond à ce filtre pour le moment."
+          emptyTitle={translate('merchants.list.emptyTitle')}
+          emptyDescription={translate('merchants.list.emptyDescription')}
         />
       </Card>
     </div>

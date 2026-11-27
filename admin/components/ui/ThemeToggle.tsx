@@ -1,6 +1,7 @@
 'use client';
 import { Moon, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { t } from '@/lib/i18n';
 
 export function ThemeToggle() {
   const [dark, setDark] = useState(false);
@@ -8,7 +9,7 @@ export function ThemeToggle() {
   return (
     <button
       type="button"
-      aria-label={dark ? 'Passer au thème clair' : 'Passer au thème sombre'}
+      aria-label={dark ? t('common.theme.toLight') : t('common.theme.toDark')}
       onClick={() => {
         const next = !dark;
         setDark(next);

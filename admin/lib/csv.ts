@@ -74,6 +74,7 @@ export function downloadCsv(filename: string, csv: string): void {
 
 /** `commandes-2026-11-23.csv` — the date of the export, in Montreal. */
 export function exportFilename(name: string): string {
+  // i18n-ignore: `en-CA` is used for its yyyy-mm-dd shape, in a file name — not for a reader.
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Montreal' }).format(new Date());
   return `${name}-${day}.csv`;
 }
@@ -83,6 +84,7 @@ export function csvDate(iso: string | null | undefined): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
+  // i18n-ignore: the same fixed, sortable shape in every language — it is what Excel reads as a date.
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Montreal',
     year: 'numeric',

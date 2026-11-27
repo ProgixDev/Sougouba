@@ -10,29 +10,36 @@ import { Avatar, BarSeries, Breakdown, KpiCard, KpiGrid, PageHeader, SectionCard
 import { getUserInsights, shortDay, type UserInsights } from '@/lib/api/insights';
 import { listUsers } from '@/lib/api/users';
 import { formatDate } from '@/lib/format';
+// `translate`, not `t`: this page already names a loop variable `t`.
+import { t as translate } from '@/lib/i18n';
 import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { ExportButton } from '@/components/data/ExportButton';
 import { csvDate, type CsvColumn } from '@/lib/csv';
 import { useToast } from '@/components/Toast';
 import type { AdminUserListItem, UserRole } from '@/lib/types';
 
-const ROLE_LABELS: Record<string, string> = { customer: 'Client', business: 'Commerçant', courier: 'Livreur', admin: 'Administrateur' };
+const ROLE_LABELS: Record<string, string> = {
+  customer: translate('users.roles.customer'),
+  business: translate('users.roles.business'),
+  courier: translate('users.roles.courier'),
+  admin: translate('users.roles.admin'),
+};
 const ROLE_TABS: { key: UserRole | 'all'; label: string }[] = [
-  { key: 'all', label: 'Tous' },
-  { key: 'customer', label: 'Clients' },
-  { key: 'business', label: 'Commerçants' },
-  { key: 'courier', label: 'Livreurs' },
+  { key: 'all', label: translate('users.list.allTab') },
+  { key: 'customer', label: translate('users.roleGroups.customer') },
+  { key: 'business', label: translate('users.roleGroups.business') },
+  { key: 'courier', label: translate('users.roleGroups.courier') },
 ];
 
 const USER_CSV: CsvColumn<AdminUserListItem>[] = [
-  { header: 'Identifiant', value: (u) => u.id },
-  { header: 'Nom', value: (u) => u.fullName },
-  { header: 'Courriel', value: (u) => u.email },
-  { header: 'Rôle', value: (u) => (u.role ? ROLE_LABELS[u.role] : '') },
-  { header: 'Membre depuis', value: (u) => csvDate(u.memberSince) },
-  { header: 'Dernière connexion', value: (u) => csvDate(u.lastSignInAt) },
-  { header: 'Commerce lié', value: (u) => u.vendorId },
-  { header: 'Livreur lié', value: (u) => u.courierId },
+  { header: translate('users.list.csv.id'), value: (u) => u.id },
+  { header: translate('users.fields.name'), value: (u) => u.fullName },
+  { header: translate('users.fields.email'), value: (u) => u.email },
+  { header: translate('users.fields.role'), value: (u) => (u.role ? ROLE_LABELS[u.role] : '') },
+  { header: translate('users.fields.memberSince'), value: (u) => csvDate(u.memberSince) },
+  { header: translate('users.fields.lastSignIn'), value: (u) => csvDate(u.lastSignInAt) },
+  { header: translate('users.list.csv.linkedShop'), value: (u) => u.vendorId },
+  { header: translate('users.list.csv.linkedCourier'), value: (u) => u.courierId },
 ];
 
 export default function UsersPage() {
@@ -69,7 +76,7 @@ export default function UsersPage() {
   const columns: Column<AdminUserListItem>[] = [
     {
       key: 'name',
-      header: 'Nom',
+      header: translate('users.fields.name'),
       sortable: true,
       render: (u) => (
         <div className="flex items-center gap-3">
@@ -80,15 +87,15 @@ export default function UsersPage() {
         </div>
       ),
     },
-    { key: 'email', header: 'Courriel', render: (u) => <Text variant="body" tone="muted">{u.email ?? '—'}</Text> },
+    { key: 'email', header: translate('users.fields.email'), render: (u) => <Text variant="body" tone="muted">{u.email ?? '—'}</Text> },
     {
       key: 'role',
-      header: 'Rôle',
+      header: translate('users.fields.role'),
       render: (u) => <Badge tone={u.role === 'business' ? 'secondary' : u.role === 'courier' ? 'primary' : 'neutral'}>{u.role ? ROLE_LABELS[u.role] : '—'}</Badge>,
     },
     {
       key: 'member_since',
-      header: 'Inscrit',
+      header: translate('users.list.columns.joined'),
       sortable: true,
       render: (u) => (
         <Text variant="body" tone="muted">
@@ -98,7 +105,7 @@ export default function UsersPage() {
     },
     {
       key: 'last_seen',
-      header: 'Dernière connexion',
+      header: translate('users.fields.lastSignIn'),
       sortable: true,
       render: (u) => (
         <Text variant="body" tone="muted">
@@ -108,7 +115,7 @@ export default function UsersPage() {
     },
     {
       key: 'linked',
-      header: 'Lié à',
+      header: translate('users.list.columns.linkedTo'),
       render: (u) => (
         <Text variant="caption" tone="muted">
           {u.vendorId ?? u.courierId ?? '—'}
@@ -121,8 +128,8 @@ export default function UsersPage() {
     <div className="mx-auto flex max-w-content flex-col gap-6">
       <PageHeader
         icon={UsersIcon}
-        title="Utilisateurs"
-        description="Tous les comptes de la plateforme : clients, commerçants et livreurs."
+        title={translate('users.list.title')}
+        description={translate('users.list.description')}
         actions={
           <ExportButton
             name="utilisateurs"
@@ -137,49 +144,49 @@ export default function UsersPage() {
         <KpiCard
           loading={!insights}
           icon={ShoppingBag}
-          label="Clients"
+          label={translate('users.roleGroups.customer')}
           value={String(insights?.byRole.customer ?? 0)}
-          hint={`${insights?.withOrders ?? 0} ont déjà commandé`}
+          hint={translate('users.list.kpi.customersHint', { count: insights?.withOrders ?? 0 })}
         />
         <KpiCard
           loading={!insights}
           icon={UserPlus}
           tone="forest"
-          label="Nouveaux comptes · 30 j"
+          label={translate('users.list.kpi.newAccounts')}
           value={String(insights?.new30 ?? 0)}
-          hint="Tous rôles confondus"
+          hint={translate('users.list.kpi.newAccountsHint')}
         />
         <KpiCard
           loading={!insights}
           icon={Store}
           tone="mustard"
-          label="Commerçants · livreurs"
+          label={translate('users.list.kpi.professionals')}
           value={`${insights?.byRole.business ?? 0} · ${insights?.byRole.courier ?? 0}`}
-          hint={`${insights?.byRole.none ?? 0} comptes sans rôle choisi`}
+          hint={translate('users.list.kpi.professionalsHint', { count: insights?.byRole.none ?? 0 })}
         />
         <KpiCard
           loading={!insights}
           icon={Ban}
           tone="terracotta"
-          label="Comptes bloqués"
+          label={translate('users.list.kpi.blocked')}
           value={String(insights?.blocked ?? 0)}
-          hint="Connexion et paiement refusés"
+          hint={translate('users.list.kpi.blockedHint')}
         />
       </KpiGrid>
 
       {insights && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <SectionCard title="Inscriptions" subtitle="Nouveaux comptes par semaine, 8 semaines" className="lg:col-span-2">
+          <SectionCard title={translate('users.list.signups.title')} subtitle={translate('users.list.signups.subtitle')} className="lg:col-span-2">
             <BarSeries data={insights.signupsByWeek.map((w) => ({ label: shortDay(w.week), value: w.count }))} />
           </SectionCard>
-          <SectionCard title="Par rôle">
+          <SectionCard title={translate('users.list.byRole')}>
             <Breakdown
               items={[
-                { label: 'Clients', value: insights.byRole.customer ?? 0 },
-                { label: 'Commerçants', value: insights.byRole.business ?? 0 },
-                { label: 'Livreurs', value: insights.byRole.courier ?? 0 },
-                { label: 'Sans rôle', value: insights.byRole.none ?? 0 },
-                { label: 'Administrateurs', value: insights.byRole.admin ?? 0 },
+                { label: translate('users.roleGroups.customer'), value: insights.byRole.customer ?? 0 },
+                { label: translate('users.roleGroups.business'), value: insights.byRole.business ?? 0 },
+                { label: translate('users.roleGroups.courier'), value: insights.byRole.courier ?? 0 },
+                { label: translate('users.roleGroups.none'), value: insights.byRole.none ?? 0 },
+                { label: translate('users.roleGroups.admin'), value: insights.byRole.admin ?? 0 },
               ]}
             />
           </SectionCard>
@@ -205,7 +212,7 @@ export default function UsersPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher un nom ou un courriel…"
+            placeholder={translate('users.list.searchPlaceholder')}
             className="w-full min-w-0 bg-transparent font-sans sm:w-56 text-[0.8125rem] text-foreground outline-none placeholder:text-muted-foreground"
           />
         </div>
@@ -228,8 +235,8 @@ export default function UsersPage() {
             onSort: list.setSort,
           }}
           emptyIcon={UsersIcon}
-          emptyTitle="Aucun utilisateur"
-          emptyDescription="Aucun utilisateur ne correspond à ce filtre pour le moment."
+          emptyTitle={translate('users.list.emptyTitle')}
+          emptyDescription={translate('users.list.emptyDescription')}
         />
       </Card>
     </div>

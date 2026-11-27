@@ -1,0 +1,80 @@
+import type { Shape } from '../../types';
+import type { portalProduct as fr } from '../fr/portalProduct';
+
+export const portalProduct: Shape<typeof fr> = {
+  shelf: {
+    grocery: 'Aisle',
+    restaurant: 'Menu section',
+  },
+  errors: {
+    name: 'Product name required',
+    description: 'Describe the product in a few words (at least 10 characters)',
+    section: 'Choose an aisle',
+    category: 'Choose a category',
+    price: 'Price required, for example 4.99',
+    compareAtInvalid: 'Invalid amount',
+    compareAtTooLow: 'The regular price must be higher than the selling price',
+    stock: 'Stock quantity required (0 if sold out)',
+    tags: 'Twenty tags at most',
+    calories: 'Whole number required',
+    grams: 'Value required, for example 12.5',
+  },
+  toast: {
+    fixFields: 'Fix the highlighted fields before saving.',
+    noChanges: 'No changes to save',
+    saved: 'Product saved',
+    added: 'Product added',
+    saveFailed: 'Could not save. Please try again.',
+    removed: 'Product deleted',
+    removeFailed: 'Could not delete. Please try again.',
+  },
+  noSections: {
+    title: 'Create an aisle first',
+    body: 'Every product goes in an aisle of your shop (“Spices”, “Drinks”…). Add at least one, then come back to add your products.',
+    link: 'Manage my aisles',
+  },
+  hidden: {
+    title: 'This product has been hidden by the Sougouba team',
+    reason: 'Reason: {reason}.',
+    noReason: 'Customers no longer see it.',
+    fix: 'Fix it, then contact support to have it shown again.',
+  },
+  details: {
+    title: 'The product',
+    name: 'Product name',
+    description: 'Description',
+    descriptionHelper: 'What it is, where it comes from, how it is used.',
+    choose: 'Choose…',
+    category: 'Sougouba category',
+    categoryHelper: 'Where customers find the product when they browse the app.',
+    tags: 'Tags',
+    tagsHelper: 'Separated by commas: halal, organic, gluten-free…',
+  },
+  photo: 'Photo',
+  pricing: {
+    title: 'Price and stock',
+    price: 'Price ($)',
+    compareAt: 'Regular price ($)',
+    compareAtHelper: 'The old price, for a promotion.',
+    stock: 'Stock quantity',
+    available: 'Listed',
+    availableHint: 'When off, the product stays in your catalogue but customers do not see it.',
+  },
+  nutrition: {
+    title: 'Nutrition facts',
+    hint: 'Optional. Shown on the product page.',
+    calories: 'Calories',
+    protein: 'Protein (g)',
+    fat: 'Fat (g)',
+    weight: 'Weight (g)',
+  },
+  actions: {
+    saving: 'Saving…',
+    add: 'Add product',
+    remove: 'Delete product',
+  },
+  remove: {
+    title: 'Delete this product?',
+    body: '“{name}” will be removed from your catalogue. Orders already placed are not affected.',
+  },
+};

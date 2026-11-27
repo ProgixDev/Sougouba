@@ -14,10 +14,16 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/data/Skeleton';
 import { blockUser, getUser, unblockUser } from '@/lib/api/users';
 import { formatDate } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import type { AdminUserDetail } from '@/lib/types';
 import { useAdmin } from '@/lib/permissions';
 
-const ROLE_LABELS: Record<string, string> = { customer: 'Client', business: 'Commerçant', courier: 'Livreur', admin: 'Administrateur' };
+const ROLE_LABELS: Record<string, string> = {
+  customer: t('users.roles.customer'),
+  business: t('users.roles.business'),
+  courier: t('users.roles.courier'),
+  admin: t('users.roles.admin'),
+};
 
 export default function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -50,7 +56,7 @@ export default function UserDetailPage() {
   if (user === null) {
     return (
       <div className="mx-auto max-w-content">
-        <Text variant="title">Utilisateur introuvable</Text>
+        <Text variant="title">{t('users.detail.notFound')}</Text>
       </div>
     );
   }
@@ -63,9 +69,9 @@ export default function UserDetailPage() {
     setBusy(true);
     try {
       setUser(blocking ? await blockUser(user!.id, reason ?? '') : await unblockUser(user!.id, reason));
-      toast(blocking ? 'info' : 'success', `${user!.fullName} a été ${blocking ? 'bloqué' : 'débloqué'}.`);
+      toast(blocking ? 'info' : 'success', t(blocking ? 'users.detail.toasts.blocked' : 'users.detail.toasts.unblocked', { name: user!.fullName }));
     } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'Action impossible.');
+      toast('error', error instanceof Error ? error.message : t('users.detail.toasts.failed'));
     }
     setBusy(false);
     setDialog(null);
@@ -73,7 +79,7 @@ export default function UserDetailPage() {
 
   return (
     <div className="mx-auto flex max-w-content flex-col gap-6">
-      <Breadcrumbs items={[{ label: 'Utilisateurs', href: '/users' }, { label: user.fullName }]} />
+      <Breadcrumbs items={[{ label: t('users.list.title'), href: '/users' }, { label: user.fullName }]} />
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -84,7 +90,7 @@ export default function UserDetailPage() {
             </Text>
             <div className="flex flex-wrap gap-2">
               {user.role && <Badge tone={user.role === 'business' ? 'secondary' : user.role === 'courier' ? 'primary' : 'neutral'}>{ROLE_LABELS[user.role]}</Badge>}
-              {blocked && <Badge tone="destructive">Bloqué</Badge>}
+              {blocked && <Badge tone="destructive">{t('users.detail.blockedBadge')}</Badge>}
             </div>
           </div>
         </div>
@@ -93,11 +99,11 @@ export default function UserDetailPage() {
           can('users.block') &&
           (blocked ? (
             <Button variant="primary" onClick={() => setDialog('unblock')} disabled={busy}>
-              <ShieldCheck size={16} /> Débloquer
+              <ShieldCheck size={16} /> {t('users.detail.actions.unblock')}
             </Button>
           ) : (
             <Button variant="destructive" onClick={() => setDialog('block')} disabled={busy}>
-              <Ban size={16} /> Bloquer
+              <Ban size={16} /> {t('users.detail.actions.block')}
             </Button>
           ))}
       </div>
@@ -105,8 +111,7 @@ export default function UserDetailPage() {
       {blocked && (
         <Card elevated={false} className="border-destructive/30 bg-destructive/5 p-4">
           <Text variant="body">
-            Ce compte ne peut plus se connecter ni commander. Ses commandes et son historique sont conservés. Le motif
-            figure dans le journal d’audit.
+            {t('users.detail.blockedNotice')}
           </Text>
         </Card>
       )}
@@ -114,17 +119,17 @@ export default function UserDetailPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card className="p-5">
           <Text variant="subtitle" className="mb-4">
-            Coordonnées
+            {t('users.detail.contact.title')}
           </Text>
           <dl className="flex flex-col gap-4">
-            <Field label="Courriel" value={user.email ?? '—'} icon={Mail} />
-            {user.memberSince && <Field label="Membre depuis" value={formatDate(user.memberSince)} icon={Star} />}
+            <Field label={t('users.fields.email')} value={user.email ?? '—'} icon={Mail} />
+            {user.memberSince && <Field label={t('users.fields.memberSince')} value={formatDate(user.memberSince)} icon={Star} />}
           </dl>
         </Card>
 
         <Card className="p-5">
           <Text variant="subtitle" className="mb-4">
-            Rattachement
+            {t('users.detail.link.title')}
           </Text>
           {user.vendor ? (
             <Link href={`/merchants/${user.vendor.id}`} className="font-sans text-[0.875rem] font-semibold text-primary hover:underline">
@@ -136,7 +141,7 @@ export default function UserDetailPage() {
             </Link>
           ) : (
             <div className="flex flex-col gap-4">
-              <Field label="Adresses enregistrées" value={String(user.addresses.length)} icon={MapPin} />
+              <Field label={t('users.detail.link.savedAddresses')} value={String(user.addresses.length)} icon={MapPin} />
             </div>
           )}
         </Card>
@@ -144,16 +149,16 @@ export default function UserDetailPage() {
 
       <ConfirmDialog
         open={dialog !== null}
-        title={dialog === 'block' ? 'Bloquer ce compte ?' : 'Débloquer ce compte ?'}
+        title={dialog === 'block' ? t('users.detail.dialog.blockTitle') : t('users.detail.dialog.unblockTitle')}
         description={
           dialog === 'block'
-            ? 'La personne ne pourra plus se connecter ni passer commande (au plus tard d’ici une heure pour une session déjà ouverte, immédiatement au paiement). Rien n’est supprimé. Précisez le motif.'
-            : 'La personne pourra de nouveau se connecter et commander.'
+            ? t('users.detail.dialog.blockDescription')
+            : t('users.detail.dialog.unblockDescription')
         }
-        confirmLabel={dialog === 'block' ? 'Bloquer' : 'Débloquer'}
+        confirmLabel={dialog === 'block' ? t('users.detail.actions.block') : t('users.detail.actions.unblock')}
         tone={dialog === 'block' ? 'destructive' : 'primary'}
         requireReason={dialog === 'block'}
-        reasonLabel="Motif"
+        reasonLabel={t('common.confirm.reason')}
         busy={busy}
         onConfirm={handleBlock}
         onCancel={() => setDialog(null)}

@@ -1,5 +1,6 @@
 import { apiGet, apiPost, type Page, type PageQuery } from './client';
 import type { ID } from '../types';
+import { t } from '../i18n';
 
 export type PayoutAttemptStatus = 'paid' | 'skipped' | 'failed';
 export type PayoutFailureReason = 'no_account' | 'stripe_error' | 'record_error';
@@ -103,9 +104,9 @@ export function runPayouts(): Promise<PayoutRunResult> {
 }
 
 export const FAILURE_REASON_LABELS: Record<PayoutFailureReason, string> = {
-  no_account: 'Pas de compte Stripe',
-  stripe_error: 'Refusé par Stripe',
-  record_error: 'Envoyé, non enregistré',
+  no_account: t('payouts.failureReason.no_account'),
+  stripe_error: t('payouts.failureReason.stripe_error'),
+  record_error: t('payouts.failureReason.record_error'),
 };
 
 // ── the shops ───────────────────────────────────────────────────────────────
@@ -179,11 +180,11 @@ export function runMerchantPayouts(): Promise<MerchantPayoutRunResult> {
 export type MerchantAccountState = 'not_started' | 'onboarding' | 'review' | 'active' | 'unavailable';
 
 export const MERCHANT_ACCOUNT_LABELS: Record<MerchantAccountState, string> = {
-  not_started: 'Compte bancaire non relié — le commerçant le fait depuis son espace',
-  onboarding: 'Formulaire Stripe commencé, non terminé',
-  review: 'Informations en cours de vérification par Stripe',
-  active: 'Compte Stripe actif — payé chaque vendredi',
-  unavailable: 'État Stripe indisponible pour le moment',
+  not_started: t('payouts.merchantAccount.not_started'),
+  onboarding: t('payouts.merchantAccount.onboarding'),
+  review: t('payouts.merchantAccount.review'),
+  active: t('payouts.merchantAccount.active'),
+  unavailable: t('payouts.merchantAccount.unavailable'),
 };
 
 export async function getMerchantAccountState(vendorId: ID): Promise<MerchantAccountState> {

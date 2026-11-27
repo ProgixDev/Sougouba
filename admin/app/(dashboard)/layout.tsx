@@ -5,8 +5,9 @@ import { Sidebar, type SidebarCounts } from '@/components/layout/Sidebar';
 import { Topbar } from '@/components/layout/Topbar';
 import { ToastProvider } from '@/components/Toast';
 import { Text } from '@/components/ui/Text';
-import { getCurrentAdmin, type CurrentAdmin } from '@/lib/api/admins';
+import { getCurrentAdmin, roleName, type CurrentAdmin } from '@/lib/api/admins';
 import { getSession, signOut, type AdminSession } from '@/lib/auth';
+import { t } from '@/lib/i18n';
 import { getQueueCounts } from '@/lib/api/stats';
 import { AdminProvider, permissionForPath } from '@/lib/permissions';
 
@@ -104,10 +105,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               ) : (
                 // Reached by URL — the sidebar would not have offered it.
                 <div className="mx-auto flex max-w-content flex-col gap-2 py-16 text-center">
-                  <Text variant="title">Accès restreint</Text>
+                  <Text variant="title">{t('common.errors.restrictedTitle')}</Text>
                   <Text variant="body" tone="muted">
-                    Votre rôle ({me.role?.name ?? '—'}) ne donne pas accès à cette section. Demandez-le à un
-                    administrateur qui gère les rôles.
+                    {t('common.errors.restrictedBody', { role: me.role ? roleName(me.role) : '—' })}
                   </Text>
                 </div>
               )}

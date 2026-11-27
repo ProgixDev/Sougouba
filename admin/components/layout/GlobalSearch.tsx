@@ -5,6 +5,7 @@ import { Search, Store, Bike, Package, User as UserIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Text } from '../ui/Text';
 import { searchAll, TYPE_LABELS, type SearchResult } from '@/lib/api/search';
+import { t } from '@/lib/i18n';
 
 const ICONS: Record<SearchResult['type'], typeof Search> = {
   vendor: Store,
@@ -102,8 +103,8 @@ export function GlobalSearch() {
               go(results[activeIndex]);
             }
           }}
-          placeholder="Rechercher un commerce, une commande…"
-          aria-label="Recherche globale"
+          placeholder={t('nav.search.placeholder')}
+          aria-label={t('nav.search.label')}
           className="w-full min-w-0 bg-transparent font-sans text-[0.8125rem] text-foreground outline-none placeholder:text-muted-foreground"
         />
         <kbd className="hidden shrink-0 rounded-md border border-border bg-muted px-1.5 py-0.5 font-sans text-[0.6875rem] font-semibold text-muted-foreground lg:inline">
@@ -115,7 +116,7 @@ export function GlobalSearch() {
         <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-96 overflow-y-auto rounded-card border border-border bg-card shadow-floating">
           {results.length === 0 ? (
             <Text variant="body" tone="muted" className="p-4">
-              Aucun résultat pour « {query} ».
+              {t('nav.search.noResults', { query })}
             </Text>
           ) : (
             <ul className="py-1.5">

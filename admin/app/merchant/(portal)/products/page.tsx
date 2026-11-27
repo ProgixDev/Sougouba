@@ -14,6 +14,7 @@ import { getMyShop, listMyProducts, mediaUrl, updateProduct, type Product, type 
 import { failureMessage } from '@/lib/merchantForm';
 import { useDebounced, usePagedList } from '@/lib/usePagedList';
 import { formatCad } from '@/lib/format';
+import { t } from '@/lib/i18n';
 
 /**
  * The shop's catalogue, on the web: every product, searchable, by shelf. A
@@ -41,7 +42,7 @@ export default function MerchantProductsPage() {
   );
 
   const sectionName = (id: string) => shop?.sections.find((section) => section.id === id)?.nameFr ?? '—';
-  const shelves = shop?.vendorType === 'restaurant' ? 'Toutes les sections' : 'Tous les rayons';
+  const shelves = shop?.vendorType === 'restaurant' ? t('portal.products.list.allSections') : t('portal.products.list.allShelves');
 
   async function setOnSale(product: Product, next: boolean) {
     setAvailable((current) => ({ ...current, [product.id]: next }));
@@ -49,14 +50,14 @@ export default function MerchantProductsPage() {
       await updateProduct(product.id, { isAvailable: next });
     } catch (error) {
       setAvailable((current) => ({ ...current, [product.id]: !next }));
-      toast('error', failureMessage(error, 'Modification impossible. Veuillez réessayer.'));
+      toast('error', failureMessage(error, t('portal.products.list.updateFailed')));
     }
   }
 
   const columns: Column<Product>[] = [
     {
       key: 'name',
-      header: 'Produit',
+      header: t('portal.products.list.columns.product'),
       render: (p) => {
         const src = mediaUrl(p.imageUrl);
         return (
@@ -74,7 +75,7 @@ export default function MerchantProductsPage() {
               </Text>
               {p.hiddenByAdmin && (
                 <span className="mt-0.5 inline-flex items-center gap-1 font-sans text-[0.75rem] font-medium text-destructive">
-                  <EyeOff size={12} /> Masqué par Sougouba
+                  <EyeOff size={12} /> {t('portal.products.list.hiddenByAdmin')}
                 </span>
               )}
             </div>
@@ -82,10 +83,10 @@ export default function MerchantProductsPage() {
         );
       },
     },
-    { key: 'section', header: shop?.vendorType === 'restaurant' ? 'Section' : 'Rayon', render: (p) => <Text variant="body" tone="muted">{sectionName(p.sectionId)}</Text> },
+    { key: 'section', header: shop?.vendorType === 'restaurant' ? t('portal.products.list.columns.section') : t('portal.products.list.columns.shelf'), render: (p) => <Text variant="body" tone="muted">{sectionName(p.sectionId)}</Text> },
     {
       key: 'price',
-      header: 'Prix',
+      header: t('portal.products.list.columns.price'),
       className: 'text-right',
       render: (p) => (
         <div className="text-right">
@@ -102,12 +103,12 @@ export default function MerchantProductsPage() {
     },
     {
       key: 'stock',
-      header: 'Stock',
+      header: t('portal.products.list.columns.stock'),
       className: 'text-right',
       render: (p) =>
         p.stockQty === 0 ? (
           <Badge tone="destructive" size="sm">
-            Épuisé
+            {t('portal.products.list.outOfStock')}
           </Badge>
         ) : (
           <Text variant="body" className="tabular text-right">
@@ -117,14 +118,14 @@ export default function MerchantProductsPage() {
     },
     {
       key: 'available',
-      header: 'En vente',
+      header: t('portal.products.list.columns.onSale'),
       render: (p) => (
         // The row opens the editor; the switch must not.
         <span onClick={(e) => e.stopPropagation()} className="inline-flex">
           <Switch
             checked={available[p.id] ?? p.isAvailable}
             onChange={(next) => void setOnSale(p, next)}
-            label={`${p.name} : en vente`}
+            label={t('portal.products.list.onSaleLabel', { name: p.name })}
           />
         </span>
       ),
@@ -135,14 +136,14 @@ export default function MerchantProductsPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         icon={ShoppingBasket}
-        title="Produits"
-        description="Votre catalogue : prix, stock, photos. Les changements sont visibles dans l’application tout de suite."
+        title={t('nav.merchant.products')}
+        description={t('portal.products.list.description')}
         actions={
           <Link
             href="/merchant/products/new"
             className="inline-flex h-11 items-center gap-2 rounded-full bg-primary px-5 font-sans text-[0.875rem] font-semibold text-primary-foreground shadow-cta-primary transition-[filter] hover:brightness-[0.96]"
           >
-            <Plus size={17} /> Nouveau produit
+            <Plus size={17} /> {t('portal.products.list.newProduct')}
           </Link>
         }
       />
@@ -151,7 +152,7 @@ export default function MerchantProductsPage() {
         <select
           value={sectionId}
           onChange={(e) => setSectionId(e.target.value)}
-          aria-label="Filtrer par rayon"
+          aria-label={t('portal.products.list.filterLabel')}
           className="cursor-pointer rounded-full border border-border bg-card px-4 py-2 font-sans text-[0.8125rem] font-medium text-foreground outline-none"
         >
           <option value="">{shelves}</option>
@@ -166,7 +167,7 @@ export default function MerchantProductsPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher un produit…"
+            placeholder={t('portal.products.list.searchPlaceholder')}
             className="w-full min-w-0 bg-transparent font-sans text-[0.8125rem] text-foreground outline-none placeholder:text-muted-foreground sm:w-56"
           />
         </div>
@@ -174,7 +175,7 @@ export default function MerchantProductsPage() {
 
       {list.error && (
         <Text variant="body" tone="destructive">
-          Impossible de charger vos produits. Vérifiez votre connexion et rechargez la page.
+          {t('portal.products.list.loadFailed')}
         </Text>
       )}
 
@@ -186,8 +187,8 @@ export default function MerchantProductsPage() {
           onRowClick={(p) => router.push(`/merchant/products/${p.id}`)}
           loading={list.rows === null && !list.error}
           emptyIcon={ShoppingBasket}
-          emptyTitle={debouncedSearch || sectionId ? 'Aucun produit ne correspond' : 'Aucun produit pour l’instant'}
-          emptyDescription={debouncedSearch || sectionId ? 'Essayez un autre mot ou un autre rayon.' : 'Ajoutez votre premier produit avec « Nouveau produit ».'}
+          emptyTitle={debouncedSearch || sectionId ? t('portal.products.list.empty.noMatchTitle') : t('portal.products.list.empty.noneTitle')}
+          emptyDescription={debouncedSearch || sectionId ? t('portal.products.list.empty.noMatchDescription') : t('portal.products.list.empty.noneDescription')}
           server={{
             page: list.page,
             pageSize: list.pageSize,

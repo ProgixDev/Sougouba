@@ -8,12 +8,13 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/data/Skeleton';
 import { useToast } from '@/components/Toast';
 import { createSpecialty, listSpecialties, updateSpecialty, type AdminSpecialty } from '@/lib/api/specialties';
+import { locale, pick, t } from '@/lib/i18n';
 import { useAdmin } from '@/lib/permissions';
 import { KpiCard, KpiGrid, PageHeader } from '@/components/insights/Insights';
 
 const LISTS: { type: AdminSpecialty['vendorType']; title: string; hint: string }[] = [
-  { type: 'grocery', title: 'Épiceries', hint: 'Le type de commerce : épicerie africaine, boucherie halal…' },
-  { type: 'restaurant', title: 'Restaurants', hint: 'La cuisine servie : sénégalaise, éthiopienne…' },
+  { type: 'grocery', title: t('specialties.lists.groceryTitle'), hint: t('specialties.lists.groceryHint') },
+  { type: 'restaurant', title: t('specialties.lists.restaurantTitle'), hint: t('specialties.lists.restaurantHint') },
 ];
 
 const INPUT =
@@ -36,7 +37,7 @@ export default function SpecialtiesPage() {
       .then(setRows)
       .catch((error: unknown) => {
         setRows([]);
-        toast('error', error instanceof Error ? error.message : 'Chargement impossible.');
+        toast('error', error instanceof Error ? error.message : t('common.errors.loadFailed'));
       });
   }, [toast]);
 
@@ -52,41 +53,41 @@ export default function SpecialtiesPage() {
     <div className="mx-auto flex max-w-content flex-col gap-6">
       <PageHeader
         icon={Tags}
-        title="Spécialités"
-        description="La liste proposée aux commerçants à l’inscription. Une spécialité retirée n’est plus proposée, mais les boutiques qui l’ont choisie la gardent."
+        title={t('specialties.title')}
+        description={t('specialties.description')}
       />
 
       <KpiGrid>
         <KpiCard
           loading={rows === null}
           icon={ShoppingBasket}
-          label="Épiceries · actives"
+          label={t('specialties.kpi.groceryActive')}
           value={String(rows?.filter((r) => r.vendorType === 'grocery' && r.isActive).length ?? 0)}
-          hint="Proposées aux épiceries"
+          hint={t('specialties.kpi.groceryActiveHint')}
         />
         <KpiCard
           loading={rows === null}
           icon={ChefHat}
           tone="mustard"
-          label="Restaurants · actives"
+          label={t('specialties.kpi.restaurantActive')}
           value={String(rows?.filter((r) => r.vendorType === 'restaurant' && r.isActive).length ?? 0)}
-          hint="Proposées aux restaurants"
+          hint={t('specialties.kpi.restaurantActiveHint')}
         />
         <KpiCard
           loading={rows === null}
           icon={Store}
           tone="forest"
-          label="Boutiques classées"
+          label={t('specialties.kpi.shopsClassified')}
           value={String(rows?.reduce((s, r) => s + r.vendorCount, 0) ?? 0)}
-          hint="Ayant choisi une spécialité de la liste"
+          hint={t('specialties.kpi.shopsClassifiedHint')}
         />
         <KpiCard
           loading={rows === null}
           icon={Archive}
           tone="neutral"
-          label="Retirées"
+          label={t('specialties.kpi.retired')}
           value={String(rows?.filter((r) => !r.isActive).length ?? 0)}
-          hint="Gardées par les boutiques qui les ont choisies"
+          hint={t('specialties.kpi.retiredHint')}
         />
       </KpiGrid>
 
@@ -141,7 +142,7 @@ function SpecialtyList({
       if (done) toast('success', done);
       return true;
     } catch (error) {
-      toast('error', error instanceof Error ? error.message : 'Action impossible.');
+      toast('error', error instanceof Error ? error.message : t('specialties.actionFailed'));
       return false;
     } finally {
       setBusyId(null);
@@ -150,7 +151,7 @@ function SpecialtyList({
 
   async function add(e: FormEvent) {
     e.preventDefault();
-    const ok = await run('new', () => createSpecialty({ vendorType: type, nameFr: nameFr.trim(), nameEn: nameEn.trim() }), `« ${nameFr.trim()} » ajoutée.`);
+    const ok = await run('new', () => createSpecialty({ vendorType: type, nameFr: nameFr.trim(), nameEn: nameEn.trim() }), t('specialties.toast.added', { name: pick(nameFr.trim(), nameEn.trim()) }));
     if (ok) {
       setNameFr('');
       setNameEn('');
@@ -166,7 +167,7 @@ function SpecialtyList({
       setEditing(null);
       return;
     }
-    const ok = await run(row.id, () => updateSpecialty(row.id, patch), 'Spécialité renommée.');
+    const ok = await run(row.id, () => updateSpecialty(row.id, patch), t('specialties.toast.renamed'));
     if (ok) setEditing(null);
   }
 
@@ -194,7 +195,7 @@ function SpecialtyList({
         {rows.length === 0 && (
           <li className="p-5">
             <Text variant="body" tone="muted">
-              Aucune spécialité.
+              {t('specialties.list.empty')}
             </Text>
           </li>
         )}
@@ -206,27 +207,27 @@ function SpecialtyList({
                   className={INPUT}
                   value={editing.nameFr}
                   maxLength={40}
-                  aria-label="Nom en français"
+                  aria-label={t('specialties.list.nameFr')}
                   onChange={(e) => setEditing({ ...editing, nameFr: e.target.value })}
                 />
                 <input
                   className={INPUT}
                   value={editing.nameEn}
                   maxLength={40}
-                  aria-label="Nom en anglais"
+                  aria-label={t('specialties.list.nameEn')}
                   onChange={(e) => setEditing({ ...editing, nameEn: e.target.value })}
                 />
                 {row.vendorCount > 0 && editing.nameFr.trim() !== row.nameFr && (
                   <Text variant="caption" tone="accent">
-                    Le nouveau nom s’affichera sur {row.vendorCount} boutique{row.vendorCount > 1 ? 's' : ''}.
+                    {t('specialties.list.renameReach', { count: row.vendorCount })}
                   </Text>
                 )}
                 <div className="flex gap-2">
                   <Button size="sm" onClick={() => saveEdit(row)} disabled={busyId === row.id}>
-                    Enregistrer
+                    {t('common.actions.save')}
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
-                    Annuler
+                    {t('common.actions.cancel')}
                   </Button>
                 </div>
               </div>
@@ -235,23 +236,23 @@ function SpecialtyList({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <Text variant="body" className={`font-semibold ${row.isActive ? '' : 'text-muted-foreground line-through'}`}>
-                      {row.nameFr}
+                      {pick(row.nameFr, row.nameEn)}
                     </Text>
-                    {!row.isActive && <Badge tone="neutral">Retirée</Badge>}
+                    {!row.isActive && <Badge tone="neutral">{t('specialties.list.retiredBadge')}</Badge>}
                   </div>
                   <Text variant="caption" tone="muted">
-                    {row.nameEn} · {row.vendorCount} boutique{row.vendorCount > 1 ? 's' : ''}
+                    {locale === 'en' ? row.nameFr : row.nameEn} · {t('specialties.list.shopCount', { count: row.vendorCount })}
                   </Text>
                 </div>
                 {manage && (
                 <div className="flex items-center gap-1">
-                  <IconButton label="Monter" disabled={index === 0 || busyId !== null} onClick={() => move(index, -1)}>
+                  <IconButton label={t('specialties.list.moveUp')} disabled={index === 0 || busyId !== null} onClick={() => move(index, -1)}>
                     <ArrowUp size={15} />
                   </IconButton>
-                  <IconButton label="Descendre" disabled={index === rows.length - 1 || busyId !== null} onClick={() => move(index, 1)}>
+                  <IconButton label={t('specialties.list.moveDown')} disabled={index === rows.length - 1 || busyId !== null} onClick={() => move(index, 1)}>
                     <ArrowDown size={15} />
                   </IconButton>
-                  <IconButton label="Renommer" disabled={busyId !== null} onClick={() => setEditing({ id: row.id, nameFr: row.nameFr, nameEn: row.nameEn })}>
+                  <IconButton label={t('specialties.list.rename')} disabled={busyId !== null} onClick={() => setEditing({ id: row.id, nameFr: row.nameFr, nameEn: row.nameEn })}>
                     <Pencil size={15} />
                   </IconButton>
                   <Button
@@ -262,11 +263,13 @@ function SpecialtyList({
                       run(
                         row.id,
                         () => updateSpecialty(row.id, { isActive: !row.isActive }),
-                        row.isActive ? `« ${row.nameFr} » retirée.` : `« ${row.nameFr} » réactivée.`
+                        row.isActive
+                          ? t('specialties.toast.retired', { name: pick(row.nameFr, row.nameEn) })
+                          : t('specialties.toast.reactivated', { name: pick(row.nameFr, row.nameEn) })
                       )
                     }
                   >
-                    {row.isActive ? 'Retirer' : 'Réactiver'}
+                    {row.isActive ? t('specialties.list.retire') : t('specialties.list.reactivate')}
                   </Button>
                 </div>
                 )}
@@ -278,13 +281,13 @@ function SpecialtyList({
 
       {manage && (
       <form onSubmit={add} className="mt-auto flex flex-col gap-2 border-t border-border bg-muted/40 p-5">
-        <Text variant="label">Ajouter</Text>
+        <Text variant="label">{t('common.actions.add')}</Text>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <input className={INPUT} required minLength={2} maxLength={40} placeholder="Nom en français" value={nameFr} onChange={(e) => setNameFr(e.target.value)} />
-          <input className={INPUT} required minLength={2} maxLength={40} placeholder="Nom en anglais" value={nameEn} onChange={(e) => setNameEn(e.target.value)} />
+          <input className={INPUT} required minLength={2} maxLength={40} placeholder={t('specialties.list.nameFr')} value={nameFr} onChange={(e) => setNameFr(e.target.value)} />
+          <input className={INPUT} required minLength={2} maxLength={40} placeholder={t('specialties.list.nameEn')} value={nameEn} onChange={(e) => setNameEn(e.target.value)} />
         </div>
         <Button type="submit" size="sm" className="self-start" disabled={busyId !== null}>
-          <Plus size={15} /> Ajouter
+          <Plus size={15} /> {t('common.actions.add')}
         </Button>
       </form>
       )}

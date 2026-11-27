@@ -1,6 +1,7 @@
 'use client';
 
 import { supabase } from './supabase';
+import { t } from './i18n';
 
 /**
  * The administrator's session — real Supabase Auth.
@@ -32,7 +33,7 @@ export interface AdminSession {
 
 /** Supabase stores `full_name` in user metadata; the seed sets it at creation. */
 function sessionFrom(user: { email?: string; user_metadata?: Record<string, unknown> }, signedInAt: string): AdminSession {
-  const name = typeof user.user_metadata?.full_name === 'string' ? user.user_metadata.full_name : (user.email ?? 'Administrateur');
+  const name = typeof user.user_metadata?.full_name === 'string' ? user.user_metadata.full_name : (user.email ?? t('nav.admin.administrator'));
   return { email: user.email ?? '', name, signedInAt };
 }
 
@@ -59,7 +60,7 @@ export async function signIn(
   if (error || !data.session) {
     // Supabase's own message is English and leaks whether the address exists;
     // both reasons to replace it with one line that says neither.
-    return { ok: false, error: 'Identifiants invalides.' };
+    return { ok: false, error: t('common.errors.invalidCredentials') };
   }
 
   return { ok: true, session: sessionFrom(data.session.user, new Date().toISOString()) };

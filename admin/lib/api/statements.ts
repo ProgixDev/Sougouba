@@ -1,5 +1,6 @@
 import { apiGet, apiUrl, merchantApiGet } from './client';
 import type { ID } from '../types';
+import { intlLocale } from '../i18n';
 
 /**
  * Merchant statements: what a month's orders were worth to the shop, what was
@@ -43,7 +44,7 @@ export interface Statement {
 
 /** `2026-11` → « novembre 2026 ». Mid-month, so no time zone tips it into a neighbour. */
 export function statementMonth(period: string): string {
-  return new Intl.DateTimeFormat('fr-CA', { month: 'long', year: 'numeric' }).format(new Date(`${period}-15T12:00:00`));
+  return new Intl.DateTimeFormat(intlLocale, { month: 'long', year: 'numeric' }).format(new Date(`${period}-15T12:00:00`));
 }
 
 // ── the merchant portal ─────────────────────────────────────────────────────
