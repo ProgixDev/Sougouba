@@ -1,10 +1,11 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { FileText } from 'lucide-react';
+import { Banknote, FileText } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/data/Skeleton';
+import { PageHeader } from '@/components/insights/Insights';
 import { PayoutsCard } from '@/components/merchant/PayoutsCard';
 import { getMyStatementUrl, listMyStatements, statementMonth, type Statement, type StatementTotals } from '@/lib/api/statements';
 import { formatCad } from '@/lib/format';
@@ -45,14 +46,11 @@ export default function MerchantStatementsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Text as="h1" variant="display">
-          Relevés et versements
-        </Text>
-        <Text variant="body" tone="muted" className="mt-1">
-          Votre part des ventes, ce qui vous a été versé et ce qui vous est dû. Un relevé est émis le 1er de chaque mois.
-        </Text>
-      </div>
+      <PageHeader
+        icon={Banknote}
+        title="Relevés et versements"
+        description="Votre part des ventes, ce qui vous a été versé et ce qui vous est dû. Un relevé est émis le 1er de chaque mois."
+      />
 
       <PayoutsCard />
 

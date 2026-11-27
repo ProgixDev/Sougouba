@@ -1,6 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { Store } from 'lucide-react';
 import { Text } from '@/components/ui/Text';
+import { PageHeader } from '@/components/insights/Insights';
 import { Skeleton } from '@/components/data/Skeleton';
 import { useToast } from '@/components/Toast';
 import { ShopHoursCard, ShopInfoCard, ShopSectionsCard } from '@/components/merchant/ShopSettings';
@@ -43,14 +45,7 @@ export default function MerchantShopPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Text as="h1" variant="display">
-          Boutique
-        </Text>
-        <Text variant="body" tone="muted" className="mt-1">
-          Votre page, vos horaires, vos rayons et votre abonnement.
-        </Text>
-      </div>
+      <PageHeader icon={Store} title="Boutique" description="Votre page, vos horaires, vos rayons et votre abonnement." />
 
       {failed ? (
         <Text variant="body" tone="destructive">

@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { TicketPercent } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { PageHeader } from '@/components/insights/Insights';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -154,14 +155,11 @@ export default function MerchantCouponsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Text as="h1" variant="display">
-          Codes promo
-        </Text>
-        <Text variant="body" tone="muted" className="mt-1">
-          Une réduction sur les produits de votre boutique, que vos clients saisissent au moment de payer.
-        </Text>
-      </div>
+      <PageHeader
+        icon={TicketPercent}
+        title="Codes promo"
+        description="Une réduction sur les produits de votre boutique, que vos clients saisissent au moment de payer."
+      />
 
       <Card as="section" className="p-5 sm:p-6">
         <form key={formKey} onSubmit={create} noValidate className="flex flex-col gap-5">

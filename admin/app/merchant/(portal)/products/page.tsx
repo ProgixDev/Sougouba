@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { EyeOff, ImageOff, Plus, Search, ShoppingBasket } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { PageHeader } from '@/components/insights/Insights';
 import { Text } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
 import { DataTable, type Column } from '@/components/data/DataTable';
@@ -132,22 +133,19 @@ export default function MerchantProductsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <Text as="h1" variant="display">
-            Produits
-          </Text>
-          <Text variant="body" tone="muted" className="mt-1">
-            Votre catalogue : prix, stock, photos. Les changements sont visibles dans l’application tout de suite.
-          </Text>
-        </div>
-        <Link
-          href="/merchant/products/new"
-          className="inline-flex h-11 items-center gap-2 rounded-full bg-primary px-5 font-sans text-[0.875rem] font-semibold text-primary-foreground shadow-cta-primary transition-[filter] hover:brightness-[0.96]"
-        >
-          <Plus size={17} /> Nouveau produit
-        </Link>
-      </div>
+      <PageHeader
+        icon={ShoppingBasket}
+        title="Produits"
+        description="Votre catalogue : prix, stock, photos. Les changements sont visibles dans l’application tout de suite."
+        actions={
+          <Link
+            href="/merchant/products/new"
+            className="inline-flex h-11 items-center gap-2 rounded-full bg-primary px-5 font-sans text-[0.875rem] font-semibold text-primary-foreground shadow-cta-primary transition-[filter] hover:brightness-[0.96]"
+          >
+            <Plus size={17} /> Nouveau produit
+          </Link>
+        }
+      />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <select

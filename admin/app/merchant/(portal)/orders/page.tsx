@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Package, Search } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { PageHeader } from '@/components/insights/Insights';
 import { Text } from '@/components/ui/Text';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { DataTable, type Column } from '@/components/data/DataTable';
@@ -70,14 +71,7 @@ export default function MerchantOrdersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Text as="h1" variant="display">
-          Commandes
-        </Text>
-        <Text variant="body" tone="muted" className="mt-1">
-          Toutes les commandes reçues par votre boutique.
-        </Text>
-      </div>
+      <PageHeader icon={Package} title="Commandes" description="Toutes les commandes reçues par votre boutique." />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <select

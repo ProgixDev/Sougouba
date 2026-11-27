@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Bell, ChevronRight, Menu, UserRound } from 'lucide-react';
 import { GlobalSearch } from './GlobalSearch';
 import { NAV_GROUPS, isActivePath, type SidebarCounts } from './Sidebar';
+import type { NavItem } from './SidebarShell';
 import { permissionForPath, useAdmin } from '@/lib/permissions';
 import type { AdminSession } from '@/lib/auth';
 
@@ -20,9 +21,22 @@ function useSection(counts: SidebarCounts) {
   return null;
 }
 
-/** The queues waiting on someone, behind one bell — each line opens its list. */
-function QueueBell({ counts }: { counts: SidebarCounts }) {
-  const { can } = useAdmin();
+/**
+ * What is waiting on someone, behind one bell — each line opens its list.
+ *
+ * Shared with the merchant portal: the entries are whichever navigation items
+ * carry a count, and the two sentences say whose turn it is.
+ */
+export function QueueBell({
+  queues,
+  pendingText,
+  emptyText,
+}: {
+  /** Navigation entries with something behind them (`count > 0`). */
+  queues: NavItem[];
+  pendingText: string;
+  emptyText: string;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
@@ -36,13 +50,6 @@ function QueueBell({ counts }: { counts: SidebarCounts }) {
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
-  const queues = NAV_GROUPS(counts)
-    .flatMap((g) => g.items)
-    .filter((i) => i.count > 0)
-    .filter((i) => {
-      const needed = permissionForPath(i.href);
-      return needed === null || can(needed);
-    });
   const total = queues.reduce((s, q) => s + q.count, 0);
 
   return (
@@ -66,7 +73,7 @@ function QueueBell({ counts }: { counts: SidebarCounts }) {
           <div className="border-b border-border px-4 py-3">
             <p className="font-sans text-[0.875rem] font-semibold">En attente</p>
             <p className="font-sans text-[0.75rem] text-muted-foreground">
-              {total > 0 ? 'Ce qui attend une décision de l’équipe' : 'Rien n’attend l’équipe pour le moment.'}
+              {total > 0 ? pendingText : emptyText}
             </p>
           </div>
           {queues.length > 0 && (
@@ -94,16 +101,20 @@ function QueueBell({ counts }: { counts: SidebarCounts }) {
   );
 }
 
-export function Topbar({
-  counts,
+/**
+ * The bar above every page: the menu button on a phone, where the reader is,
+ * and whatever the space puts on the right. Shared with the merchant portal.
+ */
+export function TopbarShell({
+  section,
   onOpenMenu,
+  children,
 }: {
-  session: AdminSession | null;
-  counts: SidebarCounts;
+  /** The current section's group and name, or null on a page outside the navigation. */
+  section: { group: string; label: string } | null;
   onOpenMenu?: () => void;
+  children?: React.ReactNode;
 }) {
-  const section = useSection(counts);
-
   return (
     <header className="flex h-16 shrink-0 items-center gap-3 px-4 sm:h-[76px] sm:gap-4 sm:px-5 md:px-8">
       <button
@@ -123,10 +134,38 @@ export function Topbar({
         </p>
       )}
 
-      <div className="flex min-w-0 flex-1 items-center justify-end gap-2.5 sm:ml-auto sm:flex-none">
-        <GlobalSearch />
-        <QueueBell counts={counts} />
-      </div>
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-2.5 sm:ml-auto sm:flex-none">{children}</div>
     </header>
+  );
+}
+
+export function Topbar({
+  counts,
+  onOpenMenu,
+}: {
+  session: AdminSession | null;
+  counts: SidebarCounts;
+  onOpenMenu?: () => void;
+}) {
+  const { can } = useAdmin();
+  const section = useSection(counts);
+  // The queues this administrator's role can open.
+  const queues = NAV_GROUPS(counts)
+    .flatMap((g) => g.items)
+    .filter((i) => i.count > 0)
+    .filter((i) => {
+      const needed = permissionForPath(i.href);
+      return needed === null || can(needed);
+    });
+
+  return (
+    <TopbarShell section={section} onOpenMenu={onOpenMenu}>
+      <GlobalSearch />
+      <QueueBell
+        queues={queues}
+        pendingText="Ce qui attend une décision de l’équipe"
+        emptyText="Rien n’attend l’équipe pour le moment."
+      />
+    </TopbarShell>
   );
 }
