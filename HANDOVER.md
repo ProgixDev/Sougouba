@@ -105,7 +105,7 @@ Tip: Debug + Metro can be flaky in the simulator; a Release build (`npx expo run
 | Vercel | project `sougouba-api` | API hosting, env vars, crons — **being transferred, see §6** |
 | Expo / EAS | owner `mohameddev7`, project `e6a4ddb9-c49d-45c6-a211-d34bc3f28113` | Builds, submit, OTA updates, **build-time env vars (`production` environment)** |
 | Apple | Team `89884BGNZR`, bundle id `pro.progix.sougouba`, App Store Connect app `6799634702` | TestFlight / App Store. Individual membership: only the account holder can manage certificates & identifiers |
-| Stripe | test account `acct_1UOJkMGYR2OmhlN6` | Payments, Connect, webhook → `https://sougouba-api.vercel.app/webhooks/stripe` (`payment_intent.succeeded`, `payment_intent.payment_failed`) |
+| Stripe | test account `acct_1UOJkMGYR2OmhlN6` | Payments, Connect, webhook → `https://sougouba-api.onrender.com/webhooks/stripe` (destination `sougouba-api-render` in the sandbox « environnement de test Sougpuba inc. », 11 events: payments, checkout, subscriptions, invoices, refunds, disputes, fraud warnings; first delivery answered 200 on 2026-11-27) |
 | Mapbox | account owning the tokens | Maps, Directions, geocoding |
 | Firebase | project behind `FIREBASE_SERVICE_ACCOUNT_JSON` | Android push (FCM) |
 | OpenAI | API key | Support assistant |
@@ -154,7 +154,8 @@ After the transfer, check:
 - [x] Test-phase switches and demo buttons removed from the code — delete the leftover env vars on the host
 - [ ] Stripe: switch to live keys, live webhook + new `whsec_`, finish Connect live verification
 - [ ] Apple Pay merchant ID (and Google Pay if wanted)
-- [ ] Subscription: point the Stripe webhook at the API that is actually live (it still targets `sougouba-api.vercel.app`) and add `checkout.session.completed`, `customer.subscription.created|updated|deleted`, `invoice.paid`, `invoice.payment_failed`, `charge.refunded`, `charge.dispute.created`, `radar.early_fraud_warning.created`; turn on customer emails for invoices in Stripe; decide whether an unpaid subscription suspends a shop; decide TPS/TVQ on the fee (no tax is charged today)
+- [x] Stripe webhook pointed at the live API on Render, with the subscription events (sandbox, 2026-11-27) — to be redone with the live account's own destination and `whsec_` at go-live
+- [ ] Subscription: turn on customer emails for invoices in Stripe; decide whether an unpaid subscription suspends a shop; decide TPS/TVQ on the fee (no tax is charged today)
 - [ ] Receipts: deploy the API, the back office and an app update; set `PLATFORM_LEGAL_NAME`, `PLATFORM_LEGAL_ADDRESS`, `PLATFORM_GST_NUMBER`, `PLATFORM_QST_NUMBER`, `SUPPORT_EMAIL` on the API host; register the sending domain with Apple's private email relay, or receipts to "Hide My Email" accounts bounce
 - [ ] Coupon creation in the admin + confirm coupon rules with the client
 - [x] Merchant portal on the real API + real auth (email-code sign-in, `/vendors/me/*`)
