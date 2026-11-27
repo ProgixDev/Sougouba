@@ -5,6 +5,7 @@ import { CheckCircle2, XCircle, Ban, Phone, Car, ShieldCheck, MapPin } from 'luc
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
+import { Avatar } from '@/components/insights/Insights';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { Skeleton } from '@/components/data/Skeleton';
@@ -92,6 +93,7 @@ export default function CourierDetailPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <Avatar name={courier.fullName} src={courier.account.avatarUrl} size={48} />
             <Text as="h1" variant="display">
               {courier.fullName}
             </Text>

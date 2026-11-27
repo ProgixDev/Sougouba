@@ -1,10 +1,12 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { CheckCircle2, XCircle, Ban, MapPin, Phone, FileText, Star, ExternalLink, Landmark, CreditCard } from 'lucide-react';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
+import { Avatar } from '@/components/insights/Insights';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { Skeleton } from '@/components/data/Skeleton';
@@ -140,6 +142,16 @@ export default function MerchantDetailPage() {
             {vendor.specialtyFr} ·{' '}
             {vendor.vendorType === 'restaurant' ? 'Restaurant' : 'Épicerie'}
           </Text>
+          {/* Who runs it — their account is one click away. */}
+          {vendor.owner && (
+            <Link href={`/users/${vendor.owner.id}`} className="mt-2.5 inline-flex items-center gap-2 hover:opacity-80">
+              <Avatar name={vendor.owner.fullName || '?'} src={vendor.owner.avatarUrl} size={26} />
+              <Text variant="body" tone="muted">
+                {vendor.owner.fullName || 'Propriétaire'}
+                {vendor.owner.email ? ` · ${vendor.owner.email}` : ''}
+              </Text>
+            </Link>
+          )}
         </div>
         {can('vendors.decide') && (
         <div className="flex flex-wrap gap-2.5">

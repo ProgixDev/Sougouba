@@ -73,7 +73,7 @@ export default function UsersPage() {
       sortable: true,
       render: (u) => (
         <div className="flex items-center gap-3">
-          <Avatar name={u.fullName || '?'} />
+          <Avatar name={u.fullName || '?'} src={u.avatarUrl} />
           <Text variant="body" className="font-semibold">
             {u.fullName}
           </Text>

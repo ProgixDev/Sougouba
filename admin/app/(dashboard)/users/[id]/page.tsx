@@ -8,6 +8,7 @@ import { useToast } from '@/components/Toast';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
+import { Avatar } from '@/components/insights/Insights';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/data/Skeleton';
@@ -76,9 +77,7 @@ export default function UserDetailPage() {
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-forest-100 font-display text-[1.1rem] font-bold text-forest-700 dark:bg-forest-900 dark:text-forest-200">
-            {user.fullName.slice(0, 1)}
-          </div>
+          <Avatar name={user.fullName || '?'} src={user.avatarUrl} size={48} />
           <div>
             <Text as="h1" variant="title">
               {user.fullName}

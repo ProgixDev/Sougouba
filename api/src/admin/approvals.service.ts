@@ -81,6 +81,12 @@ const DOCUMENT_URL_TTL_SECONDS = 10 * 60;
  * continue. Nothing else in the app ever set these statuses, which is why
  * `suspended` existed with no code path reaching it.
  */
+/** Put each account's photo on its row; a row with no photo gets `null`. Order and everything else untouched. */
+export function mergeAvatars(items: unknown[], rows: { id: string; avatar_url: string | null }[]): unknown[] {
+  const byId = new Map(rows.map((row) => [row.id, row.avatar_url]));
+  return items.map((item) => ({ ...(item as object), avatarUrl: byId.get((item as { id: string }).id) ?? null }));
+}
+
 @Injectable()
 export class ApprovalsService {
   private readonly logger = new Logger(ApprovalsService.name);
@@ -373,7 +379,8 @@ export class ApprovalsService {
         `id, fullName:full_name, phone, vehicle, plate, licenceNumber:licence_number, city,
          status, statusReason:status_reason, reviewedAt:reviewed_at, isOnline:is_online,
          deliveryCount:delivery_count, joinedAt:joined_at,
-         courier_insurance(insurerName:insurer_name, policyNumber:policy_number, insuranceExpiry:expiry)`,
+         courier_insurance(insurerName:insurer_name, policyNumber:policy_number, insuranceExpiry:expiry),
+         account:profiles!couriers_user_id_profiles_id_fk(avatarUrl:avatar_url)`,
         { count: 'exact' }
       );
     if (query.status) q = q.eq('status', query.status);
@@ -391,9 +398,11 @@ export class ApprovalsService {
         // Null for every bike courier by design — the card needs an empty
         // state, not a spinner.
         const ins = one<any>(r.courier_insurance);
-        const { courier_insurance: _drop, ...rest } = r;
+        const { courier_insurance: _drop, account, ...rest } = r;
         return {
           ...rest,
+          // The profile photo the courier set in the app, for the list's avatar.
+          avatarUrl: one<any>(account)?.avatarUrl ?? null,
           insurerName: ins?.insurerName ?? null,
           policyNumber: ins?.policyNumber ?? null,
           insuranceExpiry: ins?.insuranceExpiry ?? null,
@@ -580,7 +589,27 @@ export class ApprovalsService {
         p_dir: query.dir,
       })
     );
-    return { items: page.items, total: page.total, limit: query.limit, offset: query.offset };
+    return { items: await this.withAvatars(page.items), total: page.total, limit: query.limit, offset: query.offset };
+  }
+
+  /**
+   * Each listed account's profile photo.
+   *
+   * Read here, for the one page being shown, rather than added to
+   * `admin_list_users`: that function runs with its owner's rights, and a
+   * column for a list's avatars is not a reason to redefine it. A miss costs
+   * the photos, never the list.
+   */
+  private async withAvatars(items: unknown[]): Promise<unknown[]> {
+    const ids = items.map((item) => (item as { id?: string }).id).filter((id): id is string => typeof id === 'string');
+    if (ids.length === 0) return items;
+
+    const { data, error } = await this.db.from('profiles').select('id, avatar_url').in('id', ids);
+    if (error) {
+      this.logger.warn(`User list served without photos: ${error.message}`);
+      return items;
+    }
+    return mergeAvatars(items, data ?? []);
   }
 
   /**

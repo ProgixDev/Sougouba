@@ -8,6 +8,7 @@ import {
   type Page,
 } from './client';
 import type { ID } from '../types';
+import { mediaUrl } from '../media';
 
 /**
  * The merchant portal's shop and catalogue: everything a shop owner can change
@@ -22,18 +23,8 @@ import type { ID } from '../types';
 
 // ── images ──────────────────────────────────────────────────────────────────
 
-/**
- * Where an uploaded image is served from. The API stores and returns a
- * Storage *path* (`product-media/<shop>/<file>.jpg`); the buckets are public,
- * so the path only needs the project's base URL in front of it.
- */
-const PUBLIC_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public`;
-
-export function mediaUrl(path: string | null | undefined): string | null {
-  if (!path) return null;
-  if (/^https?:\/\//.test(path)) return path;
-  return `${PUBLIC_BASE}/${path.replace(/^\/+/, '')}`;
-}
+/** A stored image path as an address — shared with the back office (`lib/media.ts`). */
+export { mediaUrl };
 
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 /** Large enough for a phone photo, small enough that a mistaken 40 MB file is refused before it uploads. */

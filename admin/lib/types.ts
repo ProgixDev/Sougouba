@@ -314,6 +314,8 @@ export interface AdminVendorDetail {
 export interface AdminCourierListItem {
   id: ID;
   fullName: string;
+  /** The courier's own profile photo. Absent from an API that predates it. */
+  avatarUrl?: string | null;
   phone: string;
   vehicle: VehicleType;
   plate: string | null;
@@ -385,6 +387,8 @@ export interface AdminUserListItem {
   vendorId: ID | null;
   courierId: ID | null;
   lastSignInAt: string | null;
+  /** The profile photo, when the person has set one. Absent from an API that predates it. */
+  avatarUrl?: string | null;
 }
 
 /** `GET /admin/users/:id`. */

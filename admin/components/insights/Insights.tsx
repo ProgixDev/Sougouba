@@ -1,4 +1,5 @@
 'use client';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
@@ -7,6 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Skeleton } from '@/components/data/Skeleton';
 import { cn } from '@/lib/cn';
+import { mediaUrl } from '@/lib/media';
 
 /**
  * The building blocks every back-office section uses above its list: a page
@@ -246,8 +248,34 @@ const AVATAR_COLORS = [
   'bg-terracotta-100 text-terracotta-800 dark:bg-terracotta-900 dark:text-terracotta-100',
 ];
 
-/** Initials on a colour that stays the same for the same name. */
-export function Avatar({ name, size = 36 }: { name: string; size?: number }) {
+/**
+ * A person: their profile photo when they have set one, otherwise their
+ * initials on a colour that stays the same for the same name.
+ *
+ * `src` is what the API returns — a Storage path or a full address. A photo
+ * that will not load (deleted, or the network) falls back to the initials
+ * rather than leaving a broken image.
+ */
+export function Avatar({ name, src, size = 36 }: { name: string; src?: string | null; size?: number }) {
+  const url = mediaUrl(src);
+  const [failed, setFailed] = useState(false);
+  // A row reused for another person (a list re-sorted) gets a fresh try.
+  useEffect(() => setFailed(false), [url]);
+
+  if (url && !failed) {
+    return (
+      // Decorative: the name is always written beside it.
+      <img
+        src={url}
+        alt=""
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className="shrink-0 rounded-full bg-muted object-cover"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+
   const initials =
     name
       .split(/\s+/)

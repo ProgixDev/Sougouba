@@ -7,6 +7,7 @@ import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
+import { Avatar } from '@/components/insights/Insights';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { Skeleton } from '@/components/data/Skeleton';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -140,9 +141,12 @@ export default function OrderDetailPage() {
             </Text>
             <StatusBadge label={meta.label} tone={meta.tone} />
           </div>
-          <Text variant="body" tone="muted" className="mt-1">
-            {order.customerName ?? 'Client'} · {order.vendor.name} · {formatDateTime(order.createdAt)}
-          </Text>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <Avatar name={order.customerName ?? 'Client'} src={order.customer?.avatarUrl} size={26} />
+            <Text variant="body" tone="muted">
+              {order.customerName ?? 'Client'} · {order.vendor.name} · {formatDateTime(order.createdAt)}
+            </Text>
+          </div>
           {/* Absent against an API that predates receipts; the buttons still work without it. */}
           {order.receipt && (
             <Text variant="caption" tone="muted" className="mt-1">

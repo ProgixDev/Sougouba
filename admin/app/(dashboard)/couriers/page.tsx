@@ -53,7 +53,7 @@ export default function CouriersPage() {
       sortable: true,
       render: (c) => (
         <div className="flex items-center gap-3">
-          <Avatar name={c.fullName} />
+          <Avatar name={c.fullName} src={c.avatarUrl} />
           <Text variant="body" className="font-semibold">
             {c.fullName}
           </Text>
