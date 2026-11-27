@@ -866,7 +866,29 @@ export type Database = {
           reason?: string
           vendor_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "merchant_adjustments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchant_adjustments_payout_id_fkey"
+            columns: ["payout_id"]
+            isOneToOne: false
+            referencedRelation: "merchant_payouts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchant_adjustments_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       merchant_payouts: {
         Row: {
@@ -915,6 +937,13 @@ export type Database = {
           vendor_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "merchant_payouts_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "merchant_payouts_vendor_id_fkey"
             columns: ["vendor_id"]
@@ -1270,6 +1299,20 @@ export type Database = {
             columns: ["order_id"]
             isOneToOne: true
             referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_settlements_payout_id_fkey"
+            columns: ["payout_id"]
+            isOneToOne: false
+            referencedRelation: "merchant_payouts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_settlements_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
             referencedColumns: ["id"]
           },
         ]
@@ -2765,30 +2808,6 @@ export type Database = {
         Args: { p_days: number; p_vendor_id: string }
         Returns: Json
       }
-      order_advance_status: {
-        Args: { p_from: string; p_order_id: string; p_to: string }
-        Returns: undefined
-      }
-      order_cancel: {
-        Args: {
-          p_by: string
-          p_by_id?: string
-          p_from: string
-          p_note?: string
-          p_order_id: string
-          p_reason?: string
-        }
-        Returns: Json
-      }
-      order_cancel_refunded: {
-        Args: {
-          p_amount_cad: number
-          p_order_id: string
-          p_reason: string
-          p_stripe_refund_id: string
-        }
-        Returns: boolean
-      }
       merchant_balance_at: {
         Args: { p_at: string; p_from?: string; p_vendor_id: string }
         Returns: number
@@ -2837,6 +2856,30 @@ export type Database = {
           vendor_id: string
           vendor_name: string
         }[]
+      }
+      order_advance_status: {
+        Args: { p_from: string; p_order_id: string; p_to: string }
+        Returns: undefined
+      }
+      order_cancel: {
+        Args: {
+          p_by: string
+          p_by_id?: string
+          p_from: string
+          p_note?: string
+          p_order_id: string
+          p_reason?: string
+        }
+        Returns: Json
+      }
+      order_cancel_refunded: {
+        Args: {
+          p_amount_cad: number
+          p_order_id: string
+          p_reason: string
+          p_stripe_refund_id: string
+        }
+        Returns: boolean
       }
       order_place: {
         Args: {
@@ -2888,6 +2931,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      order_settlement_refund: {
+        Args: { p_order_id: string; p_refund_share: number }
+        Returns: string
+      }
       orders_awaiting_shop: {
         Args: { p_max_waiting_min?: number; p_min_waiting_min: number }
         Returns: {
@@ -2900,10 +2947,6 @@ export type Database = {
           waiting_min: number
           waiting_since: string
         }[]
-      }
-      order_settlement_refund: {
-        Args: { p_order_id: string; p_refund_share: number }
-        Returns: string
       }
       orders_missing_settlement: {
         Args: { p_limit?: number }
