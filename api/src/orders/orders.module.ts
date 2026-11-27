@@ -10,6 +10,7 @@ import { OrdersService } from './orders.service.js';
 import { PaymentsService } from './payments.service.js';
 import { OrderReceiptController, ReceiptDownloadController } from './receipts/receipts.controller.js';
 import { ReceiptsService } from './receipts/receipts.service.js';
+import { SettlementsService } from './settlements.service.js';
 import { StalledOrdersScheduler, StalledOrdersService } from './stalled-orders.service.js';
 import { VendorOrdersController } from './vendor-orders.controller.js';
 
@@ -55,13 +56,16 @@ import { VendorOrdersController } from './vendor-orders.controller.js';
     OrderCancellationService,
     StalledOrdersService,
     StalledOrdersScheduler,
+    SettlementsService,
   ],
   // `PaymentsService` is exported so Phase 6's refunds go back through the same
   // Stripe client that took the money, rather than a second one configured
   // separately. `ReceiptsService` likewise: a refund sends the shopper a
   // notice, and the back office resends a receipt.
   // The cancellation path and the stalled-order list are exported for the
-  // back office, the scheduler for the cron route.
+  // back office, the scheduler for the cron route. `SettlementsService` — the
+  // shop's side of each order — is written by the back office's refunds and
+  // read by the payout run in `BillingModule`.
   exports: [
     OrdersService,
     PaymentsService,
@@ -69,6 +73,7 @@ import { VendorOrdersController } from './vendor-orders.controller.js';
     OrderCancellationService,
     StalledOrdersService,
     StalledOrdersScheduler,
+    SettlementsService,
   ],
 })
 export class OrdersModule {}

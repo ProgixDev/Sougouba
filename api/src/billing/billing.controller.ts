@@ -12,6 +12,7 @@ import { CouriersService } from '../courier/couriers.service.js';
 import { PaymentsService } from '../orders/payments.service.js';
 import { AnalyticsService } from './analytics.service.js';
 import { ConnectService } from './connect.service.js';
+import { MerchantPayoutsService } from './merchant-payouts.service.js';
 import { SubscriptionsService } from './subscriptions.service.js';
 import {
   payoutAttemptQuerySchema,
@@ -52,6 +53,9 @@ type SubscribeInput = z.infer<typeof subscribeSchema>;
 const portalSchema = z.object({ returnUrl: z.url('URL de retour requise') });
 type PortalInput = z.infer<typeof portalSchema>;
 
+const merchantPayoutHistorySchema = paginationSchema.extend({ vendorId: z.uuid().optional() });
+type MerchantPayoutHistoryQuery = z.infer<typeof merchantPayoutHistorySchema>;
+
 @ApiTags('merchant')
 @ApiBearerAuth()
 @UseGuards(SupabaseAuthGuard)
@@ -60,7 +64,8 @@ export class MerchantBillingController {
   constructor(
     private readonly analytics: AnalyticsService,
     private readonly connect: ConnectService,
-    private readonly subscriptions: SubscriptionsService
+    private readonly subscriptions: SubscriptionsService,
+    private readonly merchantPayouts: MerchantPayoutsService
   ) {}
 
   /** The merchant dashboard's numbers, computed server-side instead of shipped as raw rows. */
@@ -83,6 +88,15 @@ export class MerchantBillingController {
   @Get('stripe/status')
   status(@CurrentUser() userId: string) {
     return this.connect.vendorStatus(userId);
+  }
+
+  /**
+   * What the shop will be paid next, when, and the last few payments — the
+   * « Versements » card. The Stripe account's own state is `stripe/status`.
+   */
+  @Get('payouts')
+  payouts(@CurrentUser() userId: string) {
+    return this.merchantPayouts.summaryFor(userId);
   }
 
   // ── the monthly subscription (CDC addendum §05) ───────────────────────────
@@ -149,6 +163,7 @@ export class CourierBillingController {
 export class AdminPayoutsController {
   constructor(
     private readonly payouts: PayoutsService,
+    private readonly merchantPayouts: MerchantPayoutsService,
     private readonly payments: PaymentsService
   ) {}
 
@@ -195,6 +210,39 @@ export class AdminPayoutsController {
       throw new ServiceUnavailableException('Stripe n’est pas configuré sur ce serveur : aucun virement possible');
     }
     return this.payouts.runBatch({ trigger: 'admin', actorId });
+  }
+
+  // ── the shops ─────────────────────────────────────────────────────────────
+
+  /** What each shop is owed, largest first, and whether paying has been switched on. */
+  @RequirePermission('payouts.view')
+  @Get('merchants/owed')
+  merchantsOwed() {
+    return this.merchantPayouts.owed();
+  }
+
+  /** Every payment to a shop, made or refused, newest first. `vendorId` narrows it to one shop. */
+  @RequirePermission('payouts.view')
+  @Get('merchants/history')
+  merchantsHistory(@Query(new ZodValidationPipe(merchantPayoutHistorySchema)) query: MerchantPayoutHistoryQuery) {
+    return this.merchantPayouts.history(query);
+  }
+
+  /**
+   * Pay the shops now rather than on Friday.
+   *
+   * For the same reason as the couriers' button: a run that failed for one
+   * shop needs finishing without waiting a week. Safe to press twice — a shop
+   * already paid has nothing left to claim, and a payout left open is finished
+   * rather than repeated.
+   */
+  @RequirePermission('payouts.run')
+  @Post('merchants/run')
+  runMerchants(@CurrentUser() actorId: string) {
+    if (!this.payments.isConfigured) {
+      throw new ServiceUnavailableException('Stripe n’est pas configuré sur ce serveur : aucun virement possible');
+    }
+    return this.merchantPayouts.runBatch({ trigger: 'admin', actorId });
   }
 }
 

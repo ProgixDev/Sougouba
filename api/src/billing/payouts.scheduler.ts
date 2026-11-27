@@ -5,6 +5,7 @@ import { Cron } from '@nestjs/schedule';
 import type { Env } from '../config/env.js';
 import { isServerless } from '../config/runtime.js';
 import { PaymentsService } from '../orders/payments.service.js';
+import { MerchantPayoutsService } from './merchant-payouts.service.js';
 import { PayoutsService } from './payouts.service.js';
 
 /**
@@ -29,6 +30,7 @@ export class PayoutsScheduler {
 
   constructor(
     private readonly payouts: PayoutsService,
+    private readonly merchantPayouts: MerchantPayoutsService,
     private readonly payments: PaymentsService,
     private readonly config: ConfigService<Env, true>
   ) {}
@@ -77,6 +79,15 @@ export class PayoutsScheduler {
       // Never let this kill the cron — a thrown error here would stop every
       // future payout for the life of the process.
       this.logger.error(`Weekly payout failed: ${String(error)}`);
+    }
+
+    // The shops, the same morning. Its own try: a courier run that failed must
+    // not be what keeps the shops unpaid, nor the other way round.
+    try {
+      const result = await this.merchantPayouts.runBatch({ trigger: 'schedule' });
+      this.logger.log(`Weekly shop payout complete: ${JSON.stringify(result)}`);
+    } catch (error) {
+      this.logger.error(`Weekly shop payout failed: ${String(error)}`);
     } finally {
       this.running = false;
     }

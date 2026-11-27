@@ -12,6 +12,7 @@ import {
   MerchantBillingController,
 } from './billing.controller.js';
 import { ConnectService } from './connect.service.js';
+import { MerchantPayoutsService } from './merchant-payouts.service.js';
 import { PayoutsScheduler } from './payouts.scheduler.js';
 import { PayoutsService } from './payouts.service.js';
 import { StripeWebhookController } from './stripe-webhook.controller.js';
@@ -52,6 +53,7 @@ import { StatementsService } from './statements/statements.service.js';
     AnalyticsService,
     ConnectService,
     PayoutsService,
+    MerchantPayoutsService,
     PayoutsScheduler,
     SubscriptionsService,
     StatementsService,

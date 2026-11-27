@@ -6,6 +6,7 @@ import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import { PaymentsService } from '../orders/payments.service.js';
 import { ReceiptsService } from '../orders/receipts/receipts.service.js';
 import { roundCad, toStripeAmount } from '../orders/pricing.js';
+import { SettlementsService } from '../orders/settlements.service.js';
 
 
 /**
@@ -34,7 +35,8 @@ export class RefundsService {
   constructor(
     @Inject(DB) private readonly db: Db,
     private readonly payments: PaymentsService,
-    private readonly receipts: ReceiptsService
+    private readonly receipts: ReceiptsService,
+    private readonly settlements: SettlementsService
   ) {}
 
   /**
@@ -106,6 +108,10 @@ export class RefundsService {
     );
 
     this.logger.log(`Admin ${adminId} refunded ${amountCad} CAD on order ${orderId} (stripe: ${stripeRefundId ?? 'none'})`);
+    // The shop gives back its part of what the shopper got back: off what it
+    // is owed for this order, or off its next payment if it was already paid.
+    // Only when money actually moved, for the same reason as the email below.
+    if (stripeRefundId) await this.settlements.refundRecorded(orderId, amountCad);
     // The shopper is told, with a receipt that now shows the money coming back.
     // Only when money actually moved: a decision recorded on seeded history
     // refunds nobody, and an email saying otherwise would be a lie.

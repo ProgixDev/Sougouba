@@ -55,6 +55,20 @@ const envSchema = z.object({
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
 
   /**
+   * The day paying shops starts, `YYYY-MM-DD` — unset, no shop is paid.
+   *
+   * A date rather than a switch: orders delivered before it are not owed
+   * through the weekly payout. On the day real payments begin the database
+   * still holds everything delivered while Stripe was in test mode, and a run
+   * that counted those would send real money for test orders. Set it to the
+   * day the live keys go in (`billing/merchant-payouts.service.ts`).
+   */
+  MERCHANT_PAYOUTS_FROM: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'MERCHANT_PAYOUTS_FROM must be a date, YYYY-MM-DD')
+    .optional(),
+
+  /**
    * Where the rate limiter keeps its counters when more than one instance of
    * the API runs. Unset: in each process's own memory, which is correct for a
    * single instance. `redis://` or `rediss://`.

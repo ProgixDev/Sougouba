@@ -838,6 +838,92 @@ export type Database = {
           },
         ]
       }
+      merchant_adjustments: {
+        Row: {
+          amount_cad: number
+          created_at: string
+          id: string
+          order_id: string | null
+          payout_id: string | null
+          reason: string
+          vendor_id: string
+        }
+        Insert: {
+          amount_cad: number
+          created_at?: string
+          id?: string
+          order_id?: string | null
+          payout_id?: string | null
+          reason: string
+          vendor_id: string
+        }
+        Update: {
+          amount_cad?: number
+          created_at?: string
+          id?: string
+          order_id?: string | null
+          payout_id?: string | null
+          reason?: string
+          vendor_id?: string
+        }
+        Relationships: []
+      }
+      merchant_payouts: {
+        Row: {
+          actor_id: string | null
+          adjustments_cad: number
+          amount_cad: number
+          created_at: string
+          error: string | null
+          id: string
+          order_count: number
+          paid_at: string | null
+          reason: string | null
+          status: string
+          stripe_transfer_id: string | null
+          trigger: string
+          vendor_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          adjustments_cad?: number
+          amount_cad?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          order_count?: number
+          paid_at?: string | null
+          reason?: string | null
+          status?: string
+          stripe_transfer_id?: string | null
+          trigger: string
+          vendor_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          adjustments_cad?: number
+          amount_cad?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          order_count?: number
+          paid_at?: string | null
+          reason?: string | null
+          status?: string
+          stripe_transfer_id?: string | null
+          trigger?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merchant_payouts_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       merchant_statements: {
         Row: {
           created_at: string
@@ -1149,6 +1235,41 @@ export type Database = {
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_settlements: {
+        Row: {
+          created_at: string
+          order_id: string
+          payout_id: string | null
+          refund_cad: number
+          share_cad: number
+          vendor_id: string
+        }
+        Insert: {
+          created_at?: string
+          order_id: string
+          payout_id?: string | null
+          refund_cad?: number
+          share_cad: number
+          vendor_id: string
+        }
+        Update: {
+          created_at?: string
+          order_id?: string
+          payout_id?: string | null
+          refund_cad?: number
+          share_cad?: number
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_settlements_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: true
+            referencedRelation: "orders"
             referencedColumns: ["id"]
           },
         ]
@@ -2668,6 +2789,37 @@ export type Database = {
         }
         Returns: boolean
       }
+      merchant_payout_claim: {
+        Args: {
+          p_actor_id?: string
+          p_from: string
+          p_trigger: string
+          p_vendor_id: string
+        }
+        Returns: {
+          amount_cad: number
+          claimed_at: string
+          order_count: number
+          payout_id: string
+          resumed: boolean
+        }[]
+      }
+      merchant_payout_release: {
+        Args: { p_error: string; p_payout_id: string }
+        Returns: boolean
+      }
+      merchant_payouts_owed: {
+        Args: { p_from: string; p_vendor_id?: string }
+        Returns: {
+          account_id: string
+          adjustments_cad: number
+          oldest_at: string
+          order_count: number
+          pending_cad: number
+          vendor_id: string
+          vendor_name: string
+        }[]
+      }
       order_place: {
         Args: {
           p_addr_city: string
@@ -2729,6 +2881,28 @@ export type Database = {
           vendor_name: string
           waiting_min: number
           waiting_since: string
+        }[]
+      }
+      order_settlement_refund: {
+        Args: { p_order_id: string; p_refund_share: number }
+        Returns: string
+      }
+      orders_missing_settlement: {
+        Args: { p_limit?: number }
+        Returns: {
+          commission_cad: number
+          coupon_discount_cad: number
+          delivery_fee_cad: number
+          gst_cad: number
+          id: string
+          points_discount_cad: number
+          qst_cad: number
+          refund_amount_cad: number
+          refunded_at: string
+          status: string
+          subtotal_cad: number
+          total_cad: number
+          vendor_id: string
         }[]
       }
       payout_run_start: {

@@ -43,7 +43,8 @@ export type AdminAction =
   | 'role.create'
   | 'role.update'
   | 'role.delete'
-  | 'payout.run';
+  | 'payout.run'
+  | 'payout.pay_merchant';
 
 export const ADMIN_ACTIONS: AdminAction[] = [
   'vendor.approve',
@@ -75,6 +76,7 @@ export const ADMIN_ACTIONS: AdminAction[] = [
   'role.update',
   'role.delete',
   'payout.run',
+  'payout.pay_merchant',
 ];
 
 export type AuditSubject = 'vendor' | 'courier' | 'order' | 'dispute' | 'courier_issue' | 'settings' | 'user' | 'specialty' | 'support' | 'review' | 'coupon' | 'product' | 'admin_role' | 'payout';

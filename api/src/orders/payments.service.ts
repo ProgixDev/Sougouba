@@ -334,6 +334,12 @@ export class PaymentsService {
     amountCents: number;
     idempotencyKey: string;
     description: string;
+    /**
+     * A name the transfer can be found by later (`findTransfer`). An
+     * idempotency key only protects a retry for a day; a payout left open
+     * longer than that needs to be able to ask "did this go?" another way.
+     */
+    transferGroup?: string;
   }): Promise<string> {
     const transfer = await this.client().transfers.create(
       {
@@ -341,11 +347,22 @@ export class PaymentsService {
         currency: 'cad',
         destination: input.accountId,
         description: input.description,
+        ...(input.transferGroup ? { transfer_group: input.transferGroup } : {}),
       },
       { idempotencyKey: input.idempotencyKey }
     );
     this.logger.log(`Transferred ${input.amountCents} to ${input.accountId} → ${transfer.id}`);
     return transfer.id;
+  }
+
+  /**
+   * The transfer made under this group, if one was — how a payout that was
+   * claimed but never marked paid finds out whether its money already left.
+   * Throws when Stripe cannot be asked: "unknown" must not be read as "no".
+   */
+  async findTransfer(transferGroup: string): Promise<string | null> {
+    const { data } = await this.client().transfers.list({ transfer_group: transferGroup, limit: 1 });
+    return data[0]?.id ?? null;
   }
 
   /**

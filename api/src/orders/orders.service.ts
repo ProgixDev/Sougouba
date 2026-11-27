@@ -29,6 +29,7 @@ import { assertTransition, isActiveStatus, type OrderStatus, type StatusActor } 
 import { priceOrder, roundCad, toStripeAmount, type PricedLine, type PricedOrder } from './pricing.js';
 import { PaymentsService } from './payments.service.js';
 import { ReceiptsService } from './receipts/receipts.service.js';
+import { SettlementsService } from './settlements.service.js';
 import { closedShopMessage, nextOpening, type ShopHours } from './shop-hours.js';
 import { CouponsService } from '../loyalty/coupons.service.js';
 import { LoyaltyService } from '../loyalty/loyalty.service.js';
@@ -52,7 +53,8 @@ export class OrdersService {
     private readonly settings: SettingsService,
     private readonly notify: NotifyService,
     private readonly receipts: ReceiptsService,
-    private readonly cancellation: OrderCancellationService
+    private readonly cancellation: OrderCancellationService,
+    private readonly settlements: SettlementsService
   ) {}
 
   // ── pricing ───────────────────────────────────────────────────────────────
@@ -197,33 +199,18 @@ export class OrdersService {
     // The last check before money moves: a closed shop is refused here.
     const { priced } = await this.quote(customerId, cart, { requireOpen: true });
 
-    // Phase 7's split. The commission is taken on the **subtotal**, not the
-    // order total: the CDC says "calculée sur le montant de la vente", and TPS,
-    // TVQ and the delivery fee are demonstrably not the merchant's sale — the
-    // taxes are collected for the government and the fee pays the courier.
-    // Taking 12 % of either would charge the merchant commission on money that
-    // was never theirs. (`lib/monetization.ts` in the mobile app flags this as
-    // the one line to change if the client reads "la vente" as the full total.)
-    const [settings, connect] = await Promise.all([
-      this.settings.all(),
-      unwrap<{ accountId: string | null } | null>(
-        this.db
-          .from('merchant_subscriptions')
-          .select('accountId:stripe_connect_account_id')
-          .eq('vendor_id', cart.vendorId)
-          .maybeSingle()
-      ),
-    ]);
-
-    const connectAccountId = connect?.accountId ?? null;
-    const applicationFeeCents = toStripeAmount(roundCad(priced.subtotalCad * settings.commissionRate));
-
+    // The whole payment comes to Sougouba. It used to be split with the shop
+    // here, at the moment of payment, whenever the shop had a Stripe account —
+    // which paid a shop for an order it might yet refuse, and could not pay it
+    // more than the shopper was charged (it is owed more whenever loyalty
+    // points were used). The shop is now paid by transfer once the order is
+    // delivered: its share is written down when the order is placed
+    // (`recordCommission`) and sent by the weekly run
+    // (`billing/merchant-payouts.service.ts`).
     const intent = await this.payments.createIntent({
       amountCents: toStripeAmount(priced.totalCad),
       customerId,
       vendorId: cart.vendorId,
-      // Only once the merchant can actually receive it — see `createIntent`.
-      ...(connectAccountId ? { split: { connectAccountId, applicationFeeCents } } : {}),
     });
 
     return { ...intent, quote: priced };
@@ -362,27 +349,32 @@ export class OrdersService {
       this.notify.orderPlaced(orderId),
       this.rememberDelivery(customerId, input),
       this.receipts.orderPlaced(orderId),
-      this.recordCommission(orderId, priced, payment),
+      this.recordCommission(orderId, input.vendorId, priced, payment),
     ]);
     return order;
   }
 
   /**
-   * What Sougouba keeps on this order and what Stripe has already sent the
-   * shop, written down while both are known — the shop's monthly statement is
-   * drawn from these months later (`billing/statements/`).
+   * What Sougouba keeps on this order and what the shop is owed for it,
+   * written down while the order's figures are in hand — the weekly payout and
+   * the shop's monthly statement are both drawn from these.
    *
-   * When the payment was split, the commission is the fee Stripe actually
-   * withheld and the shop has received the rest. When it was not — the shop has
-   * no Stripe account yet — the commission is the rate on the goods and nothing
-   * has been sent: the whole payment is on Sougouba's balance, owed to the shop.
+   * The commission is the rate on the goods (`splitOrder` is the rule). The
+   * shop's share goes to `order_settlements`; nothing has been sent to the
+   * shop at this point, and nothing is until the order is delivered.
+   *
+   * `payment.split` is only true for a payment made while the old behaviour
+   * was live — one routed to the shop's Stripe account at checkout. None was
+   * ever made (no shop had an account), but an intent created before a deploy
+   * and paid after it would be, so it is still read rather than assumed.
    *
    * Best effort, after the order exists: the order is paid and placed whether
-   * or not this lands, and a statement falls back to the current rate for an
-   * order with no record.
+   * or not this lands. A missing commission falls back to the current rate on
+   * a statement, and a missing share is filled in by the payout run.
    */
   private async recordCommission(
     orderId: string,
+    vendorId: string,
     priced: PricedOrder,
     payment: { split: boolean; applicationFeeCents: number }
   ): Promise<void> {
@@ -398,6 +390,9 @@ export class OrdersService {
         })
         .eq('id', orderId);
       if (error) this.logger.warn(`Commission of order ${orderId} not recorded: ${error.message}`);
+
+      // Already sent in full by Stripe: there is nothing left to owe.
+      if (!payment.split) await this.settlements.record({ id: orderId, vendorId, ...priced }, commissionCad);
     } catch (error) {
       this.logger.warn(`Commission of order ${orderId} not recorded: ${String(error)}`);
     }

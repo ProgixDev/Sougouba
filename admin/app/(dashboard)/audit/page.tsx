@@ -60,6 +60,7 @@ const ACTION_LABELS: Record<string, { label: string; tone: Tone }> = {
   'role.update': { label: 'Rôle modifié', tone: 'warning' },
   'role.delete': { label: 'Rôle supprimé', tone: 'destructive' },
   'payout.run': { label: 'Virements lancés', tone: 'warning' },
+  'payout.pay_merchant': { label: 'Commerce payé', tone: 'warning' },
 };
 
 /** Where each kind of subject lives in this dashboard. Disputes and courier issues are keyed by their order. */

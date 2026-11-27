@@ -84,7 +84,7 @@ export const PERMISSION_GROUPS = [
     area: 'Virements',
     permissions: [
       { key: 'payouts.view', label: 'Voir les montants dus et l’historique des virements' },
-      { key: 'payouts.run', label: 'Relancer les virements des livreurs' },
+      { key: 'payouts.run', label: 'Relancer les virements des livreurs et des commerçants' },
     ],
   },
   { area: 'Journal d’audit', permissions: [{ key: 'audit.view', label: 'Consulter le journal' }] },
