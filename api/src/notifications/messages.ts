@@ -43,18 +43,51 @@ interface OrderParams {
   vendor: string;
 }
 
-/** Shopper-facing: the order moved. Only the steps worth a buzz in a pocket. */
+/**
+ * Shopper-facing: the order moved. One push per step, as the cahier des charges
+ * asks (« notifications à chaque étape de la livraison ») — accepted, being
+ * prepared, ready, on its way, delivered.
+ *
+ * Each body says what is true at that step and nothing about the next one:
+ * `ready` does not promise a courier, because one may not have accepted yet.
+ */
 export const customerCopy = {
   confirmed: (({ ref, vendor }, l) =>
     pick(
       l,
       {
         title: 'Commande acceptée',
-        body: `${vendor} prépare votre commande ${ref}.`,
+        body: `${vendor} a accepté votre commande ${ref}.`,
       },
       {
         title: 'Order accepted',
+        body: `${vendor} accepted your order ${ref}.`,
+      },
+    )) as Copy<OrderParams>,
+
+  preparing: (({ ref, vendor }, l) =>
+    pick(
+      l,
+      {
+        title: 'Commande en préparation',
+        body: `${vendor} prépare votre commande ${ref}.`,
+      },
+      {
+        title: 'Order being prepared',
         body: `${vendor} is preparing your order ${ref}.`,
+      },
+    )) as Copy<OrderParams>,
+
+  ready: (({ ref, vendor }, l) =>
+    pick(
+      l,
+      {
+        title: 'Commande prête',
+        body: `Votre commande ${ref} est prête chez ${vendor}. Elle attend son livreur.`,
+      },
+      {
+        title: 'Order ready',
+        body: `Your order ${ref} is ready at ${vendor}. It is waiting for its courier.`,
       },
     )) as Copy<OrderParams>,
 

@@ -43,6 +43,24 @@ describe('copy', () => {
       'Commande acceptée',
     );
     expect(customerCopy.confirmed(params, 'en').title).toBe('Order accepted');
+    // Accepted and being prepared are two pushes now: the first must not
+    // announce what the second is for.
+    expect(customerCopy.confirmed(params, 'fr').body).toBe(
+      'Épicerie Dakar a accepté votre commande #A1B2.',
+    );
+    expect(customerCopy.preparing(params, 'fr')).toEqual({
+      title: 'Commande en préparation',
+      body: 'Épicerie Dakar prépare votre commande #A1B2.',
+    });
+    expect(customerCopy.preparing(params, 'en').title).toBe(
+      'Order being prepared',
+    );
+    expect(customerCopy.ready(params, 'fr').title).toBe('Commande prête');
+    // Ready says where the order is, not that a courier is coming: one may
+    // not have accepted yet.
+    expect(customerCopy.ready(params, 'en').body).toBe(
+      'Your order #A1B2 is ready at Épicerie Dakar. It is waiting for its courier.',
+    );
     expect(
       courierCopy.newOffer({ vendor: 'X', km: 2.345, earningsCad: 7 }, 'fr')
         .body,

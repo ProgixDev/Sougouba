@@ -45,13 +45,24 @@ export class NotifyService {
     private readonly push: PushService,
   ) {}
 
-  /** The shopper hears about the steps that change what they should do next. */
+  /**
+   * The shopper hears about every step their order takes — the cahier des
+   * charges asks for « notifications à chaque étape de la livraison ».
+   *
+   * `preparing` and `ready` used to be left out as the shop's internal steps.
+   * They are what the shopper is waiting on between paying and the courier
+   * leaving, so they are sent, under the same switch as the other order
+   * updates: someone who finds five pushes too many turns that one off.
+   * `pending` has none — the shopper has just placed the order themselves.
+   */
   async orderStatusChanged(
     orderId: string,
     status: OrderStatus,
   ): Promise<void> {
     const copy = {
       confirmed: { make: customerCopy.confirmed, category: 'orderUpdates' },
+      preparing: { make: customerCopy.preparing, category: 'orderUpdates' },
+      ready: { make: customerCopy.ready, category: 'orderUpdates' },
       out_for_delivery: {
         make: customerCopy.outForDelivery,
         category: 'deliveryAlerts',
@@ -59,8 +70,6 @@ export class NotifyService {
       delivered: { make: customerCopy.delivered, category: 'orderUpdates' },
       cancelled: { make: customerCopy.cancelled, category: 'orderUpdates' },
     } as const;
-    // `preparing` and `ready` are the shop's internal steps; a buzz for each
-    // would train the shopper to ignore the ones that matter.
     if (!(status in copy)) return;
     const { make, category } = copy[status as keyof typeof copy];
 

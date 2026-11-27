@@ -1,6 +1,25 @@
 import type { ExpoConfig } from 'expo/config';
 
 /**
+ * Where Firebase's client file for the Android app is, when there is one —
+ * `GOOGLE_SERVICES_JSON`, a path.
+ *
+ * Android only hands the app a push token if the build was registered with
+ * Firebase, and `google-services.json` is that registration: without it
+ * `getExpoPushTokenAsync` fails and an Android phone never appears in
+ * `push_tokens`. (iOS needs nothing here: its key is an EAS credential.)
+ *
+ * A path from the environment rather than a fixed one, for two reasons. On EAS
+ * Build the file can be a *file* environment variable, whose value is wherever
+ * EAS wrote it, so it need not be in git. And naming a file that is not there
+ * fails `expo prebuild` for everyone — including whoever is only building iOS —
+ * whereas leaving the key out builds an Android app that works and simply
+ * cannot receive pushes. Locally: put the file at the project root and set
+ * `GOOGLE_SERVICES_JSON=./google-services.json` in `.env` (see `.env.example`).
+ */
+const googleServicesFile = process.env.GOOGLE_SERVICES_JSON || undefined;
+
+/**
  * Config as code, not JSON.
  *
  * The Mapbox native SDK is fetched at build time behind a *secret* download
@@ -47,6 +66,7 @@ const config = {
   },
   android: {
     package: 'pro.progix.sougouba',
+    ...(googleServicesFile ? { googleServicesFile } : {}),
     adaptiveIcon: {
       backgroundColor: '#1C5439',
       foregroundImage: './assets/android-icon-foreground.png',
