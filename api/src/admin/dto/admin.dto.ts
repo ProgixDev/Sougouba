@@ -131,6 +131,13 @@ export const reviewQuerySchema = paginationSchema.extend({
 
 export type ReviewQuery = z.infer<typeof reviewQuerySchema>;
 
+/** The shop list filters on one status more: approved, but offline for its subscription. */
+export const vendorReviewQuerySchema = reviewQuerySchema.extend({
+  status: z.enum([...applicationStatusSchema.options, 'subscription_hold']).optional(),
+});
+
+export type VendorReviewQuery = z.infer<typeof vendorReviewQuerySchema>;
+
 /**
  * The note behind a decision.
  *
@@ -194,6 +201,14 @@ export const updateSettingsSchema = z
     /** CDC §05: 12 % commission + 70 $/month, cumulative. */
     commissionRate: z.number().min(0).max(1, 'Un taux, entre 0 et 1').optional(),
     monthlySubscriptionCad: z.number().min(0).max(99_999_999.99).optional(),
+    /**
+     * Whether a shop must have its subscription in order to sell, and how many
+     * days it keeps selling after a renewal fails. Turning the first on takes
+     * every unsubscribed shop offline at once — `GET settings/subscription-impact`
+     * says how many before anyone does.
+     */
+    subscriptionRequired: z.boolean().optional(),
+    subscriptionGraceDays: z.number().int().min(0).max(60, '60 jours au plus').optional(),
     /**
      * Retention periods, in days. Editable because the privacy policy publishes
      * them: a number the client cannot change without a migration is a number

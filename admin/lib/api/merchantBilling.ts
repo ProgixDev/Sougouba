@@ -50,6 +50,12 @@ export interface Subscription {
   cancelAt: string | null;
   /** False when the server cannot reach Stripe: there is nothing to subscribe with. */
   available: boolean;
+  /** True while a shop must be subscribed to sell. Absent from an API older than the rule. */
+  required?: boolean;
+  /** True while this shop is offline because of its subscription. */
+  offline?: boolean;
+  /** A failed renewal the shop still has time to settle: when it goes offline unless it does. */
+  offlineAt?: string | null;
 }
 
 export const getMySubscription = () => merchantApiGet<Subscription>('/vendors/me/subscription');

@@ -235,9 +235,17 @@ export const business: Widen<typeof reference> = {
     endsOn: 'Subscription cancelled, active until %{date}',
     active: 'Subscription active',
     pastDue: 'Payment declined. Update your card to pay the subscription.',
+    offline: 'Your shop is offline until the subscription is paid. It comes back online as soon as it is.',
+    offlineOn: 'Unless the payment is made, your shop will be taken offline on %{date}.',
+    required: 'The subscription is required for your shop to be online.',
     subscribe: 'Start the subscription',
     manage: 'Manage the subscription',
     updateCard: 'Update the card',
+  },
+  subscriptionHold: {
+    title: 'Your shop is offline',
+    body: 'Customers cannot see it and you receive no new orders until the subscription is paid. Orders you already received carry on.',
+    cta: 'Pay the subscription',
   },
   dispute: {
     reply: 'Reply to the customer',

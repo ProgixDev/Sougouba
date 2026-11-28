@@ -29,3 +29,23 @@ export async function getSettings(): Promise<PlatformSettings> {
 export async function updateSettings(patch: Partial<PlatformSettings>): Promise<PlatformSettings> {
   return apiPatch<PlatformSettings>('/admin/settings', patch);
 }
+
+/** What requiring the subscription would do today — see `getSubscriptionImpact`. */
+export interface SubscriptionImpact {
+  /** Shops that are live, or offline for their subscription. */
+  shops: number;
+  /** How many of them have no subscription in order. */
+  notInOrder: number;
+  /** False when requiring it would do nothing: no monthly amount is set, or the server cannot reach Stripe. */
+  enforceable: boolean;
+  graceDays: number;
+}
+
+/**
+ * How many shops would be offline if the subscription were required — asked
+ * before the switch is turned on, so nobody takes most of the catalogue down
+ * without having been told.
+ */
+export async function getSubscriptionImpact(): Promise<SubscriptionImpact> {
+  return apiGet<SubscriptionImpact>('/admin/settings/subscription-impact');
+}

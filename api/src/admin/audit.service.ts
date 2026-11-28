@@ -79,6 +79,15 @@ export const ADMIN_ACTIONS: AdminAction[] = [
   'payout.pay_merchant',
 ];
 
+/**
+ * What the platform does to a shop on its own, with no administrator behind
+ * it: taking it offline when its subscription is not in order, and bringing it
+ * back. Logged beside the administrators' actions so that "why did this shop
+ * disappear" has an answer in the one place people look — and kept out of
+ * `AdminAction`, which is the list of things a route can do.
+ */
+export const SYSTEM_ACTIONS = ['vendor.subscription_hold', 'vendor.subscription_release'] as const;
+
 export type AuditSubject = 'vendor' | 'courier' | 'order' | 'dispute' | 'courier_issue' | 'settings' | 'user' | 'specialty' | 'support' | 'review' | 'coupon' | 'product' | 'admin_role' | 'payout';
 
 export type AuditEntry = {

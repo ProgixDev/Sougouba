@@ -5,6 +5,7 @@ export const status = {
     approved: 'Approuvé',
     suspended: 'Suspendu',
     rejected: 'Refusé',
+    subscription_hold: 'Abonnement non réglé',
   },
   order: {
     pending: 'En attente',

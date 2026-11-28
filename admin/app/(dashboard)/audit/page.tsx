@@ -40,6 +40,9 @@ const ACTION_LABELS: Record<string, { label: string; tone: Tone }> = lazy(() => 
   'vendor.approve': { label: translate('audit.actions.vendor_approve'), tone: 'success' },
   'vendor.reject': { label: translate('audit.actions.vendor_reject'), tone: 'destructive' },
   'vendor.suspend': { label: translate('audit.actions.vendor_suspend'), tone: 'destructive' },
+  // Not an administrator's: the platform moves a shop on its subscription alone, and logs it here.
+  'vendor.subscription_hold': { label: translate('audit.actions.vendor_subscription_hold'), tone: 'warning' },
+  'vendor.subscription_release': { label: translate('audit.actions.vendor_subscription_release'), tone: 'success' },
   'courier.approve': { label: translate('audit.actions.courier_approve'), tone: 'success' },
   'courier.reject': { label: translate('audit.actions.courier_reject'), tone: 'destructive' },
   'courier.suspend': { label: translate('audit.actions.courier_suspend'), tone: 'destructive' },

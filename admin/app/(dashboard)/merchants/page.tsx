@@ -20,6 +20,8 @@ import type { AdminVendorListItem, AdminVendorStatus } from '@/lib/types';
 const TABS: { key: AdminVendorStatus; label: string }[] = lazy(() => ([
   { key: 'pending', label: translate('merchants.list.statuses.pending') },
   { key: 'approved', label: translate('merchants.list.statuses.approved') },
+  // Approved, but offline until the subscription is paid — beside the shops it will rejoin.
+  { key: 'subscription_hold', label: translate('merchants.list.statuses.subscription_hold') },
   { key: 'suspended', label: translate('merchants.list.statuses.suspended') },
   // `rejected` is its own terminal state in the API — the mock folded it into
   // "suspended", which hid every refused application from the back office.
@@ -148,6 +150,7 @@ export default function MerchantsPage() {
             <Breakdown
               items={[
                 { label: translate('merchants.list.statuses.approved'), value: insights.byStatus.approved ?? 0 },
+                { label: translate('merchants.list.statuses.subscription_hold'), value: insights.byStatus.subscription_hold ?? 0 },
                 { label: translate('merchants.list.statuses.pending'), value: insights.byStatus.pending ?? 0 },
                 { label: translate('merchants.list.statuses.suspended'), value: insights.byStatus.suspended ?? 0 },
                 { label: translate('merchants.list.statuses.rejected'), value: insights.byStatus.rejected ?? 0 },

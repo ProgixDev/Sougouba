@@ -19,6 +19,7 @@ import { AdminGuard } from '../auth/admin.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { SupabaseAuthGuard } from '../auth/supabase-auth.guard.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
+import { SubscriptionEnforcementService } from '../billing/subscription-enforcement.service.js';
 import { SettingsService } from '../loyalty/settings.service.js';
 import { AdminService } from './admin.service.js';
 import { ApprovalsService } from './approvals.service.js';
@@ -45,6 +46,7 @@ import {
   resolveDisputeSchema,
   reviewDecisionSchema,
   reviewQuerySchema,
+  vendorReviewQuerySchema,
   setAdminRoleSchema,
   supportQuerySchema,
   supportReplySchema,
@@ -70,6 +72,7 @@ import {
   type ResolveDisputeInput,
   type ReviewDecisionInput,
   type ReviewQuery,
+  type VendorReviewQuery,
   type SetAdminRoleInput,
   type SupportQuery,
   type SupportReplyInput,
@@ -98,6 +101,9 @@ function requireReason(body: ReviewDecisionInput): ReviewDecisionInput {
   return body;
 }
 
+/** The settings a change of which moves shops: the subscription rule, and the fee it rests on. */
+const SUBSCRIPTION_RULE_KEYS = ['subscriptionRequired', 'subscriptionGraceDays', 'monthlySubscriptionCad'] as const;
+
 /**
  * The back office. **Guard order matters**: `SupabaseAuthGuard` proves who is
  * calling and sets `request.userId`, then `AdminGuard` reads it. Reversed, the
@@ -124,7 +130,8 @@ export class AdminController {
     private readonly adminAccounts: AdminAccountsService,
     private readonly receipts: ReceiptsService,
     private readonly cancellation: OrderCancellationService,
-    private readonly stalledOrders: StalledOrdersService
+    private readonly stalledOrders: StalledOrdersService,
+    private readonly subscriptionEnforcement: SubscriptionEnforcementService
   ) {}
 
   @RequirePermission('dashboard.view')
@@ -253,7 +260,7 @@ export class AdminController {
 
   @RequirePermission('vendors.view')
   @Get('vendors')
-  vendors(@Query(new ZodValidationPipe(reviewQuerySchema)) query: ReviewQuery) {
+  vendors(@Query(new ZodValidationPipe(vendorReviewQuerySchema)) query: VendorReviewQuery) {
     return this.approvals.listVendors(query);
   }
 
@@ -659,11 +666,31 @@ export class AdminController {
    */
   @RequirePermission('settings.manage')
   @Patch('settings')
-  updateSettings(
+  async updateSettings(
     @CurrentUser() adminId: string,
     @Body(new ZodValidationPipe(updateSettingsSchema)) body: UpdateSettingsInput
   ) {
-    return this.platformSettings.update(adminId, body);
+    const before = await this.platformSettings.all();
+    const updated = await this.platformSettings.update(adminId, body);
+    // The rule on the subscription just changed, or the fee it rests on: every
+    // shop is settled now, so the form's answer is true the moment it is saved
+    // rather than an hour later. Compared, not assumed from the body: the
+    // settings form resends every field it shows on each save.
+    if (SUBSCRIPTION_RULE_KEYS.some((key) => before[key] !== updated[key])) {
+      await this.subscriptionEnforcement.sweep();
+    }
+    return updated;
+  }
+
+  /**
+   * What requiring the subscription would do today: how many shops are live,
+   * and how many of them have no subscription in order. Read by the settings
+   * form before it lets an administrator switch the rule on.
+   */
+  @RequirePermission('settings.view')
+  @Get('settings/subscription-impact')
+  subscriptionImpact() {
+    return this.subscriptionEnforcement.impact();
   }
 
   // ── audit trail ───────────────────────────────────────────────────────────

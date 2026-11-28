@@ -35,8 +35,9 @@ export default function BusinessStatementsScreen() {
   const t = useT();
   const colors = useThemeColors();
   const locale = useLanguageStore(selectLocale);
-  const { approved } = useOwnerVendor();
-  const payouts = useMerchantPayouts(approved);
+  // `accepted`, not `approved`: a shop offline for its subscription is still owed what it sold.
+  const { accepted } = useOwnerVendor();
+  const payouts = useMerchantPayouts(accepted);
   const [data, setData] = useState<Awaited<ReturnType<typeof vendorsApi.getMyStatements>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [openingId, setOpeningId] = useState<string | null>(null);
@@ -44,7 +45,7 @@ export default function BusinessStatementsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!approved) return;
+      if (!accepted) return;
       let active = true;
       vendorsApi
         .getMyStatements()
@@ -54,7 +55,7 @@ export default function BusinessStatementsScreen() {
       return () => {
         active = false;
       };
-    }, [approved])
+    }, [accepted])
   );
 
   async function open(statement: MerchantStatement) {
@@ -85,7 +86,7 @@ export default function BusinessStatementsScreen() {
           </View>
         ) : (
           <>
-            {approved ? <MerchantPayoutCard payouts={payouts} /> : null}
+            {accepted ? <MerchantPayoutCard payouts={payouts} /> : null}
 
             {data ? (
               <View className="rounded-[20px] bg-card p-4 gap-3">

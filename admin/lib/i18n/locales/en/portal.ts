@@ -196,6 +196,8 @@ export const portal: Shape<typeof fr> = {
       pending: 'Your shop is being verified. You can already prepare your catalogue; customers will see it once it is approved.',
       suspended: 'Your shop is suspended: customers can no longer see it. Contact Sougouba support to find out more.',
       rejected: 'Your application was not accepted. Contact Sougouba support to find out more.',
+      subscription_hold:
+        'Your shop is offline: customers cannot see it and you receive no new orders. Pay the subscription below to put it back online. Orders you already received carry on as usual.',
     },
   },
 };

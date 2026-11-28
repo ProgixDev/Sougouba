@@ -1002,6 +1002,7 @@ export type Database = {
           cancel_at: string | null
           created_at: string
           current_period_end: string | null
+          past_due_since: string | null
           price_cad: number | null
           status: Database["public"]["Enums"]["subscription_status"]
           stripe_connect_account_id: string | null
@@ -1014,6 +1015,7 @@ export type Database = {
           cancel_at?: string | null
           created_at?: string
           current_period_end?: string | null
+          past_due_since?: string | null
           price_cad?: number | null
           status?: Database["public"]["Enums"]["subscription_status"]
           stripe_connect_account_id?: string | null
@@ -1026,6 +1028,7 @@ export type Database = {
           cancel_at?: string | null
           created_at?: string
           current_period_end?: string | null
+          past_due_since?: string | null
           price_cad?: number | null
           status?: Database["public"]["Enums"]["subscription_status"]
           stripe_connect_account_id?: string | null
@@ -1622,6 +1625,8 @@ export type Database = {
           referral_reward_points: number
           shop_confirm_cancel_min: number
           shop_confirm_remind_min: number
+          subscription_grace_days: number
+          subscription_required: boolean
           updated_at: string
         }
         Insert: {
@@ -1645,6 +1650,8 @@ export type Database = {
           referral_reward_points?: number
           shop_confirm_cancel_min?: number
           shop_confirm_remind_min?: number
+          subscription_grace_days?: number
+          subscription_required?: boolean
           updated_at?: string
         }
         Update: {
@@ -1668,6 +1675,8 @@ export type Database = {
           referral_reward_points?: number
           shop_confirm_cancel_min?: number
           shop_confirm_remind_min?: number
+          subscription_grace_days?: number
+          subscription_required?: boolean
           updated_at?: string
         }
         Relationships: []
@@ -3044,6 +3053,8 @@ export type Database = {
           referral_reward_points: number
           shop_confirm_cancel_min: number
           shop_confirm_remind_min: number
+          subscription_grace_days: number
+          subscription_required: boolean
           updated_at: string
         }
         SetofOptions: {
@@ -3107,6 +3118,10 @@ export type Database = {
         Args: { p_vendor_id: string; p_week: Json }
         Returns: undefined
       }
+      vendor_subscription_hold: {
+        Args: { p_cause: string; p_hold: boolean; p_vendor_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       audit_subject:
@@ -3162,7 +3177,12 @@ export type Database = {
       support_conversation_status: "open" | "escalated" | "closed"
       support_message_role: "user" | "assistant" | "system" | "agent"
       vehicle_type: "bike" | "scooter" | "car"
-      vendor_status: "pending" | "approved" | "suspended" | "rejected"
+      vendor_status:
+        | "pending"
+        | "approved"
+        | "suspended"
+        | "rejected"
+        | "subscription_hold"
       vendor_type: "grocery" | "restaurant"
     }
     CompositeTypes: {
@@ -3349,7 +3369,13 @@ export const Constants = {
       support_conversation_status: ["open", "escalated", "closed"],
       support_message_role: ["user", "assistant", "system", "agent"],
       vehicle_type: ["bike", "scooter", "car"],
-      vendor_status: ["pending", "approved", "suspended", "rejected"],
+      vendor_status: [
+        "pending",
+        "approved",
+        "suspended",
+        "rejected",
+        "subscription_hold",
+      ],
       vendor_type: ["grocery", "restaurant"],
     },
   },

@@ -285,6 +285,10 @@ export interface AdminVendorDetail {
     currentPeriodEnd: string | null;
     cancelAt: string | null;
     priceCad: number | null;
+    /** True while a shop must be subscribed to sell. Absent before migration 0062. */
+    required?: boolean;
+    /** A failed renewal still within its grace: when the shop goes offline unless it is settled. */
+    offlineAt?: string | null;
   };
   /** The fields added with the client's 2026-09-27 list are null on files submitted before it. */
   registration: {
@@ -417,6 +421,13 @@ export interface AdminUserDetail {
 export interface PlatformSettings {
   commissionRate: number;
   monthlySubscriptionCad: number;
+  /**
+   * Whether a shop must have its subscription in order to sell, and how many
+   * days it keeps selling after a renewal fails. Absent from an API or a
+   * database older than migration 0062.
+   */
+  subscriptionRequired?: boolean;
+  subscriptionGraceDays?: number;
   pointsPerCad: number;
   pointsPerCadRedeemed: number;
   maxRedemptionShare: number;

@@ -24,7 +24,7 @@ function setup({
   const updateUserById = vi.fn(() => Promise.resolve({ data: {}, error: null }));
   const rpc = vi.fn(() => Promise.resolve({ data: null, error: auditError }));
   const db = { from: () => query, rpc, auth: { admin: { updateUserById } } } as unknown as Db;
-  const service = new ApprovalsService(db, undefined as never);
+  const service = new ApprovalsService(db, undefined as never, undefined as never);
   vi.spyOn(service, 'userDetail').mockResolvedValue({ id: USER } as never);
   return { service, updateUserById, rpc };
 }

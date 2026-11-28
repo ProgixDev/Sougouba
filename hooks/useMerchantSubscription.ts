@@ -28,7 +28,12 @@ export interface MerchantSubscriptionState {
  * route redirects to `sougouba://subscription-return`.
  *
  * `active` is false until the shop is approved: the API refuses to bill a shop
- * that cannot sell yet.
+ * that cannot sell yet. It stays true for a shop offline for its subscription
+ * — that shop is exactly who needs this.
+ *
+ * Reading the subscription is also what brings such a shop back: the server
+ * puts the shop where it belongs on every read, so the read that follows a
+ * payment is the one that puts it online.
  */
 export function useMerchantSubscription(active: boolean): MerchantSubscriptionState {
   const t = useT();

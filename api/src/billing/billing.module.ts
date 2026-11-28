@@ -16,6 +16,8 @@ import { MerchantPayoutsService } from './merchant-payouts.service.js';
 import { PayoutsScheduler } from './payouts.scheduler.js';
 import { PayoutsService } from './payouts.service.js';
 import { StripeWebhookController } from './stripe-webhook.controller.js';
+import { SubscriptionEnforcementScheduler } from './subscription-enforcement.scheduler.js';
+import { SubscriptionEnforcementService } from './subscription-enforcement.service.js';
 import { SubscriptionsService } from './subscriptions.service.js';
 import {
   AdminStatementsController,
@@ -56,9 +58,20 @@ import { StatementsService } from './statements/statements.service.js';
     MerchantPayoutsService,
     PayoutsScheduler,
     SubscriptionsService,
+    SubscriptionEnforcementService,
+    SubscriptionEnforcementScheduler,
     StatementsService,
     StatementsScheduler,
   ],
-  exports: [AnalyticsService, PayoutsService, PayoutsScheduler, SubscriptionsService, StatementsScheduler],
+  exports: [
+    AnalyticsService,
+    PayoutsService,
+    PayoutsScheduler,
+    SubscriptionsService,
+    // The back office moves shops too — an approval, a change of the rule.
+    SubscriptionEnforcementService,
+    SubscriptionEnforcementScheduler,
+    StatementsScheduler,
+  ],
 })
 export class BillingModule {}

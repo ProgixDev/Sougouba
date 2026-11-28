@@ -17,6 +17,7 @@ import {
   Truck,
   type LucideIcon,
 } from 'lucide-react-native';
+import { useEffect } from 'react';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { CounterHeader, DeliveryGrid } from '@/components/business';
@@ -55,9 +56,19 @@ export default function BusinessProfileScreen() {
   const user = useSessionStore((s) => s.user);
   const signOut = useSessionStore((s) => s.signOut);
   const { confirmDeleteAccount } = useDeleteAccount();
-  const { vendor, loading, missing, approved } = useOwnerVendor();
+  const { vendor, loading, missing, approved, accepted, reload: reloadVendor } = useOwnerVendor();
   const plan = usePlatformPlan();
-  const billing = useMerchantSubscription(approved);
+  // `accepted`: a shop offline for its subscription keeps this screen, which is where it pays.
+  const billing = useMerchantSubscription(accepted);
+
+  // Reading the subscription is when the server puts the shop where it belongs
+  // — online again right after a payment. When that is no longer where this
+  // screen has it, read the shop again.
+  const offline = billing.subscription?.offline;
+  const shopOnHold = vendor?.status === 'subscription_hold';
+  useEffect(() => {
+    if (offline !== undefined && offline !== shopOnHold) void reloadVendor();
+  }, [offline, shopOnHold, reloadVendor]);
 
   const preference = useThemeStore((s) => s.preference);
   const setPreference = useThemeStore((s) => s.setPreference);
@@ -84,7 +95,7 @@ export default function BusinessProfileScreen() {
             <Skeleton height={150} radius={20} />
             <Skeleton height={200} radius={20} />
           </View>
-        ) : approved && vendor ? (
+        ) : accepted && vendor ? (
           <>
             <Reveal className="mx-5 rounded-[20px] bg-card overflow-hidden">
               <CatalogImage id={vendor.id} kind="vendor" path={vendor.coverUrl} radius={0} height={130} />
@@ -188,6 +199,7 @@ export default function BusinessProfileScreen() {
               hint={t('business.shopEdit.rowHint')}
               onPress={() => router.push(routes.businessShopEdit)}
             />
+            {/* Promo codes are for a shop that is selling; the server refuses one otherwise. */}
             {approved ? (
               <>
                 <View className="h-px bg-border ml-16" />
@@ -197,6 +209,11 @@ export default function BusinessProfileScreen() {
                   hint={t('business.coupons.rowHint')}
                   onPress={() => router.push(routes.businessCoupons)}
                 />
+              </>
+            ) : null}
+            {/* Statements and payouts stay: a shop offline for its subscription is still owed what it sold. */}
+            {accepted ? (
+              <>
                 <View className="h-px bg-border ml-16" />
                 <MenuRow
                   icon={FileText}
@@ -212,7 +229,7 @@ export default function BusinessProfileScreen() {
         {/* What selling here costs, stated once where a merchant would look for
             it (CDC addendum v1.1, §05). Both charges apply — the subscription is
             not an alternative to the commission. */}
-        {approved && vendor ? (
+        {accepted && vendor ? (
           <Reveal delay={100} className="mt-4 mx-5 rounded-[20px] bg-card p-4 gap-3">
             <Text variant="label" tone="muted" className="text-[10px]">
               {t('business.shopProfile.yourPlan')}
@@ -245,6 +262,17 @@ export default function BusinessProfileScreen() {
                 >
                   {subscriptionLine(t, billing.subscription)}
                 </Text>
+                {/* What the subscription means for the shop being online — only while it is required to sell. */}
+                {subscriptionNotice(t, billing.subscription) ? (
+                  <Text
+                    variant="caption"
+                    tone={billing.subscription.offline || billing.subscription.offlineAt ? 'destructive' : 'muted'}
+                    weight="semibold"
+                    className="text-[12px] leading-[18px]"
+                  >
+                    {subscriptionNotice(t, billing.subscription)}
+                  </Text>
+                ) : null}
                 {billing.subscription.status === 'active' ? (
                   <Button
                     label={t('business.subscription.manage')}
@@ -418,6 +446,14 @@ function HoursRow({ entry, isToday }: { entry: VendorHours; isToday: boolean }) 
  * still "active" at Stripe until the month already paid for runs out, so the
  * end date is what is said — not a status the merchant would read as a mistake.
  */
+/** Offline, about to be, or simply required — null while the subscription has no bearing on the shop being online. */
+function subscriptionNotice(t: TFunction, subscription: MerchantSubscription): string | null {
+  if (subscription.offline) return t('business.subscription.offline');
+  if (subscription.offlineAt) return t('business.subscription.offlineOn', { date: formatDate(subscription.offlineAt) });
+  const subscribed = subscription.status === 'active' || subscription.status === 'past_due';
+  return subscription.required && !subscribed ? t('business.subscription.required') : null;
+}
+
 function subscriptionLine(t: TFunction, subscription: MerchantSubscription): string {
   switch (subscription.status) {
     case 'active':

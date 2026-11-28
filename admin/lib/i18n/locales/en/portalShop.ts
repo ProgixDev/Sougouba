@@ -89,6 +89,11 @@ export const portalShop: Shape<typeof fr> = {
       canceled: 'Your subscription has ended. You can subscribe again whenever you like.',
       inactive: 'You are not subscribed yet.',
     },
+    notice: {
+      offline: 'Your shop is offline until the subscription is paid. It comes back online as soon as it is.',
+      offlineOn: 'Unless the payment is made, your shop will be taken offline on {date}.',
+      required: 'The subscription is required for your shop to be online.',
+    },
   },
   payouts: {
     title: 'Payouts',

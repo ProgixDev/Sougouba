@@ -8,12 +8,15 @@ import { useToast } from '@/components/Toast';
 import { ShopHoursCard, ShopInfoCard, ShopSectionsCard } from '@/components/merchant/ShopSettings';
 import { SubscriptionCard } from '@/components/merchant/SubscriptionCard';
 import { getMyShop, type Shop } from '@/lib/api/merchantCatalog';
+import type { Subscription } from '@/lib/api/merchantBilling';
+import { useMerchantPortal } from '@/lib/merchantPortal';
 import { t, lazy, useLocale } from '@/lib/i18n';
 
 const STATUS_NOTE: Partial<Record<Shop['status'], string>> = lazy(() => ({
   pending: t('portal.shop.statusNote.pending'),
   suspended: t('portal.shop.statusNote.suspended'),
   rejected: t('portal.shop.statusNote.rejected'),
+  subscription_hold: t('portal.shop.statusNote.subscription_hold'),
 }));
 
 /**
@@ -27,10 +30,24 @@ export default function MerchantShopPage() {
   const [shop, setShop] = useState<Shop | null>(null);
   const [failed, setFailed] = useState(false);
   const [subscriptionKey, setSubscriptionKey] = useState(0);
+  const { refreshSession } = useMerchantPortal();
 
   useEffect(() => {
     getMyShop().then(setShop).catch(() => setFailed(true));
   }, []);
+
+  /**
+   * The subscription was just read, which is also when the server puts the
+   * shop where it belongs. If that is no longer where this page has it — it
+   * paid and is back online, or the reverse — read the shop again, and have
+   * the top bar do the same.
+   */
+  function onSubscription(subscription: Subscription) {
+    if (!shop || subscription.offline === undefined) return;
+    if ((shop.status === 'subscription_hold') === subscription.offline) return;
+    getMyShop().then(setShop).catch(() => undefined);
+    refreshSession();
+  }
 
   // Back from Stripe: say what happened, read the subscription again, and take
   // the marker out of the address so a reload does not say it twice. Read off
@@ -62,10 +79,16 @@ export default function MerchantShopPage() {
               <Text variant="body">{STATUS_NOTE[shop.status]}</Text>
             </div>
           )}
-          <ShopInfoCard shop={shop} onSaved={setShop} />
-          <ShopHoursCard shop={shop} onSaved={setShop} />
-          <ShopSectionsCard shop={shop} onChanged={(sections) => setShop({ ...shop, sections })} />
-          <SubscriptionCard reloadKey={subscriptionKey} />
+          <div className="flex flex-col gap-6">
+            <ShopInfoCard shop={shop} onSaved={setShop} />
+            <ShopHoursCard shop={shop} onSaved={setShop} />
+            <ShopSectionsCard shop={shop} onChanged={(sections) => setShop({ ...shop, sections })} />
+            {/* Moved first while it is what stands between the shop and its customers — moved, not
+                mounted elsewhere, so paying does not make the card read Stripe a second time. */}
+            <div className={shop.status === 'subscription_hold' ? 'order-first' : undefined}>
+              <SubscriptionCard reloadKey={subscriptionKey} onLoaded={onSubscription} />
+            </div>
+          </div>
         </>
       )}
     </div>

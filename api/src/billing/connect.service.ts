@@ -57,8 +57,9 @@ export class ConnectService {
     if (!vendor) throw new NotFoundException('This account has no shop');
     // An unapproved shop cannot take money, so there is nothing for a Connect
     // account to receive — and creating one would leave a real Stripe account
-    // attached to a file that may yet be rejected.
-    if (vendor.status !== 'approved') {
+    // attached to a file that may yet be rejected. A shop offline for its
+    // subscription was approved, and is still owed what it sold.
+    if (vendor.status !== 'approved' && vendor.status !== 'subscription_hold') {
       throw new ConflictException('Votre boutique doit être approuvée avant la configuration des paiements');
     }
 

@@ -11,4 +11,5 @@ export { ShopSignupForm } from './ShopSignupForm';
 export type { ShopSignupValues } from './ShopSignupForm';
 export { ProductForm } from './ProductForm';
 export { StatColumns } from './StatColumns';
+export { SubscriptionHoldBanner } from './SubscriptionHoldBanner';
 export type { StatColumn } from './StatColumns';

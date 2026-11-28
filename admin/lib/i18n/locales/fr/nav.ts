@@ -38,6 +38,7 @@ export const nav = {
     statusPending: 'En cours de vérification',
     statusSuspended: 'Boutique suspendue',
     statusRejected: 'Demande non retenue',
+    statusSubscriptionHold: 'Hors ligne : abonnement à régler',
     bellPending: 'Des commandes attendent votre confirmation',
     bellEmpty: 'Rien ne vous attend pour le moment.',
   },

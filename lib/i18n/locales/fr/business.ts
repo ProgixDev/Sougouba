@@ -240,9 +240,19 @@ export const business = {
     endsOn: 'Abonnement résilié, actif jusqu’au %{date}',
     active: 'Abonnement actif',
     pastDue: 'Paiement refusé. Mettez votre carte à jour pour régler l’abonnement.',
+    /** Under the standing, while the subscription is required to sell. */
+    offline: 'Votre boutique est hors ligne tant que l’abonnement n’est pas réglé. Elle revient en ligne dès le paiement.',
+    offlineOn: 'Sans règlement, votre boutique sera mise hors ligne le %{date}.',
+    required: 'L’abonnement est requis pour que votre boutique soit en ligne.',
     subscribe: 'Souscrire l’abonnement',
     manage: 'Gérer l’abonnement',
     updateCard: 'Mettre la carte à jour',
+  },
+  /** `SubscriptionHoldBanner` — an approved shop offline for its subscription. */
+  subscriptionHold: {
+    title: 'Votre boutique est hors ligne',
+    body: 'Les clients ne la voient pas et vous ne recevez pas de nouvelles commandes tant que l’abonnement n’est pas réglé. Les commandes déjà reçues se poursuivent.',
+    cta: 'Régler l’abonnement',
   },
   dispute: {
     reply: 'Répondre au client',

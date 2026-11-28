@@ -15,6 +15,36 @@ export const settings: Shape<typeof fr> = {
     commissionHelper: 'Calculated on the sales subtotal, excluding taxes and delivery.',
     monthlySubscription: 'Monthly subscription (CAD)',
   },
+  subscriptionRule: {
+    title: 'Subscription required to sell',
+    intro:
+      'When the subscription is required, an approved shop is shown to customers and receives orders only while its subscription is in order. Orders already placed are carried through. The shop comes back online by itself as soon as the subscription is paid.',
+    stateOff: 'The subscription is not required: every approved shop can sell.',
+    stateOn: 'The subscription is required.',
+    impact: {
+      one: '{notInOrder} of the {shops} approved shops has no subscription in order.',
+      other: '{notInOrder} of the {shops} approved shops have no subscription in order.',
+    },
+    impactNone: 'All {shops} approved shops have a subscription in order.',
+    notEnforceable:
+      'The subscription cannot be required for now: no monthly amount is set, or Stripe is not configured on this server.',
+    graceDays: 'Time allowed after a failed payment (days)',
+    graceHelper: 'The shop keeps selling during this time, while Stripe retries the card. 0 = offline at the first failure.',
+    saveGrace: 'Save the time allowed',
+    graceSaved: 'Time allowed saved.',
+    require: 'Require the subscription',
+    stopRequiring: 'Stop requiring the subscription',
+    requireTitle: 'Require the subscription?',
+    requireBody: {
+      one: '{count} shop will be taken offline right away, and its merchant will be told. It comes back online as soon as the subscription is paid.',
+      other: '{count} shops will be taken offline right away, and their merchants will be told. They come back online as soon as the subscription is paid.',
+    },
+    requireBodyNone: 'No shop will be taken offline: all of them have a subscription in order.',
+    stopTitle: 'Stop requiring the subscription?',
+    stopBody: 'Shops offline for their subscription come back online right away, paid or not.',
+    nowRequired: 'The subscription is now required.',
+    noLongerRequired: 'The subscription is no longer required.',
+  },
   loyalty: {
     title: 'Sougouba points (loyalty)',
     intro: 'Rules for the points program, coupons and referrals.',

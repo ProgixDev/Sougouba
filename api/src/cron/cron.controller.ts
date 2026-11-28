@@ -4,6 +4,7 @@ import { ApiExcludeController } from '@nestjs/swagger';
 import { RetentionScheduler } from '../admin/retention.scheduler.js';
 import { PayoutsScheduler } from '../billing/payouts.scheduler.js';
 import { StatementsScheduler } from '../billing/statements/statements.scheduler.js';
+import { SubscriptionEnforcementScheduler } from '../billing/subscription-enforcement.scheduler.js';
 import { DispatchScheduler } from '../courier/dispatch.scheduler.js';
 import { StalledOrdersScheduler } from '../orders/stalled-orders.service.js';
 import { CronGuard } from './cron.guard.js';
@@ -38,7 +39,8 @@ export class CronController {
     private readonly payouts: PayoutsScheduler,
     private readonly retention: RetentionScheduler,
     private readonly statements: StatementsScheduler,
-    private readonly stalled: StalledOrdersScheduler
+    private readonly stalled: StalledOrdersScheduler,
+    private readonly subscriptions: SubscriptionEnforcementScheduler
   ) {}
 
   /**
@@ -90,6 +92,22 @@ export class CronController {
 
   private async weeklyPayouts(): Promise<{ ok: true }> {
     await this.payouts.weekly();
+    return { ok: true };
+  }
+
+  /** The hourly pass over every shop's subscription: offline when it is not in order, back when it is. */
+  @Get('subscriptions')
+  subscriptionPassViaGet(): Promise<{ ok: true }> {
+    return this.subscriptionPass();
+  }
+
+  @Post('subscriptions')
+  subscriptionPassViaPost(): Promise<{ ok: true }> {
+    return this.subscriptionPass();
+  }
+
+  private async subscriptionPass(): Promise<{ ok: true }> {
+    await this.subscriptions.hourly();
     return { ok: true };
   }
 

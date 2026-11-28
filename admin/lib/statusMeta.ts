@@ -22,6 +22,10 @@ export function vendorStatusMeta(status: AdminVendorStatus): { label: string; to
     // see at a glance that there is no way back from this one.
     case 'rejected':
       return { label: t('status.vendor.rejected'), tone: 'destructive' };
+    // Approved, but offline until the monthly subscription is paid. Not a
+    // decision anyone made, and it lifts itself — so not the red of a suspension.
+    case 'subscription_hold':
+      return { label: t('status.vendor.subscription_hold'), tone: 'warning' };
   }
 }
 

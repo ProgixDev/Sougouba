@@ -4,7 +4,15 @@ import { useCallback, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CounterHeader, DayStrip, OrderQueueCard, PendingApproval, SlabMetric, StatColumns } from '@/components/business';
+import {
+  CounterHeader,
+  DayStrip,
+  OrderQueueCard,
+  PendingApproval,
+  SlabMetric,
+  StatColumns,
+  SubscriptionHoldBanner,
+} from '@/components/business';
 import { Reveal, SectionHeader, Skeleton, Text } from '@/components/ui';
 import { ordersApi, productsApi } from '@/data/api';
 import { usePlatformPlan } from '@/data/queries';
@@ -29,7 +37,7 @@ export default function BusinessDashboardScreen() {
   const t = useT();
   const tabBarInset = useTabBarInset();
   const colors = useThemeColors();
-  const { vendor, loading: vendorLoading, missing, pending } = useOwnerVendor();
+  const { vendor, loading: vendorLoading, missing, pending, onHold } = useOwnerVendor();
   const plan = usePlatformPlan();
 
   // Two weeks of orders: this week and the one before, for the comparison.
@@ -145,6 +153,13 @@ export default function BusinessDashboardScreen() {
           </View>
           {day ? <DayStrip day={day} orders={todayOrders} loading={busy} /> : null}
         </CounterHeader>
+
+        {/* Before the figures: an empty queue means something else when no customer can see the shop. */}
+        {onHold ? (
+          <View className="mt-5">
+            <SubscriptionHoldBanner />
+          </View>
+        ) : null}
 
         {busy ? (
           <View className="px-5 pt-6 gap-3">

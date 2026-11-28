@@ -82,6 +82,7 @@ const STATUS: Partial<Record<MerchantSession['vendorStatus'], { label: string; t
   pending: { label: t('nav.merchant.statusPending'), tone: 'warning' },
   suspended: { label: t('nav.merchant.statusSuspended'), tone: 'destructive' },
   rejected: { label: t('nav.merchant.statusRejected'), tone: 'destructive' },
+  subscription_hold: { label: t('nav.merchant.statusSubscriptionHold'), tone: 'destructive' },
 }));
 
 export function MerchantTopbar({

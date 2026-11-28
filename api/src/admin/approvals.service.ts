@@ -19,10 +19,20 @@ import { unwrap, unwrapRpc } from '../db/unwrap.js';
 import { MERCHANT_DOCUMENTS_BUCKET } from '../catalog/media-paths.js';
 import { type AdminAction } from './audit.service.js';
 import { num, type AdminCourierDetail, type AdminUserDetail, type AdminVendorDetail } from './dto/admin-detail.dto.js';
-import type { ReviewDecisionInput, ReviewQuery, UserQuery } from './dto/admin.dto.js';
+import type { ReviewDecisionInput, ReviewQuery, UserQuery, VendorReviewQuery } from './dto/admin.dto.js';
+import { SubscriptionEnforcementService } from '../billing/subscription-enforcement.service.js';
+import { subscriptionStanding } from '../billing/subscription-standing.js';
 import { NotifyService } from '../notifications/notify.service.js';
 
 export type ApplicationStatus = 'pending' | 'approved' | 'suspended' | 'rejected';
+
+/**
+ * A shop has one status more than an application does: approved, but offline
+ * until its monthly subscription is in order. No administrator puts a shop
+ * there or takes it out — `SubscriptionEnforcementService` does, on the
+ * subscription alone.
+ */
+export type VendorStatus = ApplicationStatus | 'subscription_hold';
 
 /**
  * Where a decision can land. `pending` is absent because nothing returns to it
@@ -61,9 +71,26 @@ export const ALLOWED_TRANSITIONS: Record<ApplicationStatus, ApplicationStatus[]>
   rejected: [],
 };
 
-export function assertDecision(from: ApplicationStatus, to: ApplicationStatus): void {
+/**
+ * The same table for a shop, with the one decision left open on a shop that is
+ * offline for its subscription: suspending it. A shop can misbehave whether or
+ * not it has paid.
+ *
+ * It cannot be *approved* out of that state — the way out is the subscription,
+ * and an administrator overriding it would be undone at the next pass anyway.
+ */
+export const VENDOR_TRANSITIONS: Record<VendorStatus, ApplicationStatus[]> = {
+  ...ALLOWED_TRANSITIONS,
+  subscription_hold: ['suspended'],
+};
+
+export function assertDecision(
+  from: VendorStatus,
+  to: ApplicationStatus,
+  allowed: Record<string, ApplicationStatus[]> = ALLOWED_TRANSITIONS
+): void {
   if (from === to) throw new BadRequestException(`This file is already "${from}"`);
-  if (!ALLOWED_TRANSITIONS[from].includes(to)) {
+  if (!allowed[from]?.includes(to)) {
     throw new BadRequestException(`A "${from}" file cannot be moved to "${to}"`);
   }
 }
@@ -93,12 +120,13 @@ export class ApprovalsService {
 
   constructor(
     @Inject(DB) private readonly db: Db,
-    private readonly notify: NotifyService
+    private readonly notify: NotifyService,
+    private readonly enforcement: SubscriptionEnforcementService
   ) {}
 
   // ── merchants ─────────────────────────────────────────────────────────────
 
-  async listVendors(query: ReviewQuery): Promise<Page<unknown>> {
+  async listVendors(query: VendorReviewQuery): Promise<Page<unknown>> {
     // `vendors` points at `profiles` twice (`owner_id`, and `reviewed_by` since
     // 0023), so the embed must name its foreign key: a bare `profiles` is
     // ambiguous and PostgREST refuses the whole query (PGRST201).
@@ -198,7 +226,7 @@ export class ApprovalsService {
     // Left, not inner: `vendor_registrations` is 1:1-optional.
     const reg = one<any>(row.registration);
 
-    const [ownerAuth, hours, sections, categoryRows, stats, subscription] = await Promise.all([
+    const [ownerAuth, hours, sections, categoryRows, stats, subscription, rule] = await Promise.all([
       // `auth.users` is reachable only through this one definer function now —
       // `service_role` holds no SELECT on it. See the migration.
       unwrap<{ id: string; email: string | null }[]>(
@@ -223,7 +251,14 @@ export class ApprovalsService {
       // The monthly subscription, as last recorded from Stripe. `*`, so this
       // read survives a database that migration 0052 has not reached.
       unwrap<any>(this.db.from('merchant_subscriptions').select('*').eq('vendor_id', id).maybeSingle()),
+      this.enforcement.rule(),
     ]);
+    // Read, not applied: opening a file must not move the shop it shows.
+    const standing = subscriptionStanding(
+      rule,
+      subscription ? { status: subscription.status, pastDueSince: subscription.past_due_since ?? null } : null,
+      new Date()
+    );
 
     const base = {
       ...row,
@@ -303,6 +338,8 @@ export class ApprovalsService {
         currentPeriodEnd: subscription?.current_period_end ?? null,
         cancelAt: subscription?.cancel_at ?? null,
         priceCad: subscription?.price_cad == null ? null : Number(subscription.price_cad),
+        required: rule.required,
+        offlineAt: standing.offlineAt,
       },
       registration: reg
         ? {
@@ -335,11 +372,11 @@ export class ApprovalsService {
   }
 
   async decideVendor(adminId: string, vendorId: string, to: ReviewDecision, input: ReviewDecisionInput) {
-    const vendor = await unwrap<{ id: string; status: ApplicationStatus; name: string } | null>(
+    const vendor = await unwrap<{ id: string; status: VendorStatus; name: string } | null>(
       this.db.from('vendors').select('id, status, name').eq('id', vendorId).maybeSingle()
     );
     if (!vendor) throw new NotFoundException('Vendor not found');
-    assertDecision(vendor.status, to);
+    assertDecision(vendor.status, to, VENDOR_TRANSITIONS);
 
     // The decision and its audit entry commit together or not at all — an
     // approval nobody is recorded as having made is the gap `admin_audit_log`
@@ -366,8 +403,15 @@ export class ApprovalsService {
     );
 
     this.logger.log(`Admin ${adminId} moved vendor ${vendorId} ("${vendor.name}") from ${vendor.status} to ${to}`);
-    if (to === 'approved') await this.notify.applicationApproved('vendor', vendorId);
-    return camelize(updated);
+    if (to !== 'approved') return camelize(updated);
+
+    // Approved is not yet live when the subscription is required: the shop is
+    // settled straight away rather than left selling until the next pass. Done
+    // silently — the approval message below says the same thing, once.
+    const { outcome } = await this.enforcement.apply(vendorId, { silent: true });
+    const awaitingSubscription = outcome === 'held';
+    await this.notify.applicationApproved('vendor', vendorId, { awaitingSubscription });
+    return { ...camelize<Record<string, unknown>>(updated), ...(awaitingSubscription ? { status: 'subscription_hold' } : {}) };
   }
 
   // ── couriers ──────────────────────────────────────────────────────────────

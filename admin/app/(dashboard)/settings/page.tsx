@@ -12,6 +12,7 @@ import { t, useLocale } from '@/lib/i18n';
 import type { PlatformSettings } from '@/lib/types';
 import { useAdmin } from '@/lib/permissions';
 import { PageHeader } from '@/components/insights/Insights';
+import { SubscriptionRuleCard } from './SubscriptionRuleCard';
 
 /**
  * Every numeric field is edited as a free-typed local string, not a value
@@ -88,11 +89,14 @@ export default function SettingsPage() {
   const { can } = useAdmin();
   const [loaded, setLoaded] = useState(false);
   const [fields, setFields] = useState<FieldState | null>(null);
+  /** The settings as last read or saved — what the subscription rule's own card shows and saves from. */
+  const [settings, setSettings] = useState<PlatformSettings | null>(null);
   const [doublePointsActive, setDoublePointsActive] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     getSettings().then((s) => {
+      setSettings(s);
       setFields(toFields(s));
       setDoublePointsActive(s.doublePointsActive);
       setLoaded(true);
@@ -120,6 +124,7 @@ export default function SettingsPage() {
     setSaving(true);
     try {
       const saved = await updateSettings(toPatch(fields, doublePointsActive));
+      setSettings(saved);
       setFields(toFields(saved));
       setDoublePointsActive(saved.doublePointsActive);
       toast('success', t('settings.saved'));
@@ -171,6 +176,11 @@ export default function SettingsPage() {
           <Input label={t('settings.monetization.monthlySubscription')} type="number" step="1" min={0} {...field('monthlySubscriptionCad')} />
         </div>
       </Card>
+
+      {/* Hidden against an API that does not know the rule yet, like the delay cards below. */}
+      {settings && settings.subscriptionRequired !== undefined && (
+        <SubscriptionRuleCard settings={settings} canManage={can('settings.manage')} onSaved={setSettings} />
+      )}
 
       <Card className="p-6">
         <Text variant="subtitle" className="mb-1">

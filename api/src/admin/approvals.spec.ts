@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
 
-import { ALLOWED_TRANSITIONS, assertDecision } from './approvals.service.js';
+import { ALLOWED_TRANSITIONS, VENDOR_TRANSITIONS, assertDecision } from './approvals.service.js';
 
 describe('assertDecision', () => {
   it('lets an administrator decide a waiting file', () => {
@@ -50,6 +50,31 @@ describe('assertDecision', () => {
     // it and why.
     for (const from of ['approved', 'suspended', 'rejected'] as const) {
       expect(ALLOWED_TRANSITIONS[from]).not.toContain('pending');
+    }
+  });
+});
+
+describe('a shop offline for its subscription', () => {
+  const decide = (from: Parameters<typeof assertDecision>[0], to: Parameters<typeof assertDecision>[1]) => () =>
+    assertDecision(from, to, VENDOR_TRANSITIONS);
+
+  it('can still be suspended — a shop can misbehave whether or not it has paid', () => {
+    expect(decide('subscription_hold', 'suspended')).not.toThrow();
+  });
+
+  it('cannot be approved back online by hand: the way out is the subscription', () => {
+    expect(decide('subscription_hold', 'approved')).toThrow(BadRequestException);
+    expect(decide('subscription_hold', 'rejected')).toThrow(BadRequestException);
+  });
+
+  it('is not a decision a courier file can be in', () => {
+    // The couriers' table has no such status; asked about one, it refuses rather than crashing.
+    expect(() => assertDecision('subscription_hold', 'suspended')).toThrow(BadRequestException);
+  });
+
+  it('leaves every other decision on a shop as it was', () => {
+    for (const from of ['pending', 'approved', 'suspended', 'rejected'] as const) {
+      expect(VENDOR_TRANSITIONS[from]).toEqual(ALLOWED_TRANSITIONS[from]);
     }
   });
 });

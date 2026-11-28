@@ -120,8 +120,12 @@ export interface VendorSection {
  * puts a human between "someone registered" and "the shop is on the platform"
  * (addendum v1.1, §02). `suspended` is modelled but unreachable from the app —
  * only the back-office is entitled to take a shop offline.
+ *
+ * `subscription_hold` is a fourth, and nobody's decision: approved, but offline
+ * until its monthly subscription is in order. The server moves a shop there
+ * and back on the subscription alone.
  */
-export type VendorStatus = 'pending' | 'approved' | 'suspended';
+export type VendorStatus = 'pending' | 'approved' | 'suspended' | 'subscription_hold';
 
 /**
  * The paperwork behind a shop, as submitted.

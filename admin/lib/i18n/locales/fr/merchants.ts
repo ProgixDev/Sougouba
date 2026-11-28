@@ -9,6 +9,7 @@ export const merchants = {
       approved: 'Approuvés',
       suspended: 'Suspendus',
       rejected: 'Refusés',
+      subscription_hold: 'Abonnement non réglé',
     },
     columns: {
       shop: 'Commerce',
@@ -62,6 +63,12 @@ export const merchants = {
       failed: 'Décision impossible.',
     },
     statusReason: 'Motif du refus / de la suspension',
+    subscriptionHold: {
+      title: 'Hors ligne : abonnement non réglé',
+      body: 'Ce commerce est approuvé, mais son abonnement mensuel n’est pas en règle. Les clients ne le voient plus et il ne reçoit plus de commandes. Il revient en ligne de lui-même dès que l’abonnement est payé.',
+      graceTitle: 'Paiement de l’abonnement en retard',
+      graceBody: 'Ce commerce vend encore. Sans règlement, il sera mis hors ligne le {date}.',
+    },
     registration: {
       title: "Dossier d'inscription",
       none: "Ce commerce n'a pas de dossier d'inscription (compte antérieur à l'inscription en ligne).",
@@ -104,6 +111,7 @@ export const merchants = {
       renewing: 'Actif, prochain prélèvement le {date}',
       active: 'Actif',
       pastDue: 'Paiement en retard',
+      pastDueUntil: 'Paiement en retard, hors ligne le {date} sans règlement',
       withPrice: '{state} — {price}/mois',
       ended: 'Terminé',
       none: 'Non souscrit',

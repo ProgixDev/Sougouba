@@ -197,6 +197,8 @@ export const portal = {
       pending: 'Votre boutique est en cours de vérification. Vous pouvez déjà préparer votre catalogue ; elle sera visible des clients une fois approuvée.',
       suspended: 'Votre boutique est suspendue : les clients ne la voient plus. Contactez le soutien Sougouba pour en savoir plus.',
       rejected: 'Votre demande d’inscription n’a pas été retenue. Contactez le soutien Sougouba pour en savoir plus.',
+      subscription_hold:
+        'Votre boutique est hors ligne : les clients ne la voient pas et vous ne recevez pas de nouvelles commandes. Réglez l’abonnement ci-dessous pour la remettre en ligne. Les commandes déjà reçues se poursuivent normalement.',
     },
   },
 };

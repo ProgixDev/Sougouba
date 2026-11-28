@@ -5,7 +5,7 @@ import { useCallback, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CounterHeader, OrderQueueCard, PendingApproval } from '@/components/business';
+import { CounterHeader, OrderQueueCard, PendingApproval, SubscriptionHoldBanner } from '@/components/business';
 import { Chip, EmptyState, ListFooter, Reveal, Skeleton, Text } from '@/components/ui';
 import { ordersApi } from '@/data/api';
 import type { ID, Order } from '@/data/types';
@@ -34,7 +34,7 @@ const FILTERS: Filter[] = [
 export default function BusinessOrdersScreen() {
   const t = useT();
   const tabBarInset = useTabBarInset();
-  const { vendor, loading: vendorLoading, missing, pending, reload } = useOwnerVendor();
+  const { vendor, loading: vendorLoading, missing, pending, onHold, reload } = useOwnerVendor();
   const [filter, setFilter] = useState<Filter>('active');
   const [advancingId, setAdvancingId] = useState<ID | null>(null);
 
@@ -100,6 +100,13 @@ export default function BusinessOrdersScreen() {
   return (
     <View className="flex-1 bg-background">
       <CounterHeader title={t('business.metrics.orders')} eyebrow={vendor?.name} />
+
+      {/* Above the queue, not instead of it: orders already received still have to be prepared. */}
+      {onHold ? (
+        <View className="pt-4">
+          <SubscriptionHoldBanner />
+        </View>
+      ) : null}
 
       <ScrollView
         horizontal

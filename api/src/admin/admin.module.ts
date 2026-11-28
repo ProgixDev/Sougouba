@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { BillingModule } from '../billing/billing.module.js';
 import { LoyaltyModule } from '../loyalty/loyalty.module.js';
 import { OrdersModule } from '../orders/orders.module.js';
 import { AdminController } from './admin.controller.js';
@@ -25,7 +26,9 @@ import { AdminAccountsService } from './admin-accounts.service.js';
  * reversal a refund triggers.
  */
 @Module({
-  imports: [OrdersModule, LoyaltyModule, AuditModule],
+  // `BillingModule` for `SubscriptionEnforcementService`: approving a shop and
+  // changing the subscription rule both decide whether shops are live.
+  imports: [OrdersModule, LoyaltyModule, AuditModule, BillingModule],
   controllers: [AdminController],
   providers: [
     AdminService,

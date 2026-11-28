@@ -10,6 +10,7 @@ export const merchants: Shape<typeof fr> = {
       approved: 'Approved',
       suspended: 'Suspended',
       rejected: 'Rejected',
+      subscription_hold: 'Subscription unpaid',
     },
     columns: {
       shop: 'Shop',
@@ -62,6 +63,12 @@ export const merchants: Shape<typeof fr> = {
       failed: 'The decision could not be recorded.',
     },
     statusReason: 'Reason for the rejection / suspension',
+    subscriptionHold: {
+      title: 'Offline: subscription unpaid',
+      body: 'This shop is approved, but its monthly subscription is not in order. Customers no longer see it and it receives no orders. It comes back online by itself as soon as the subscription is paid.',
+      graceTitle: 'Subscription payment overdue',
+      graceBody: 'This shop is still selling. Unless the payment is made, it will be taken offline on {date}.',
+    },
     registration: {
       title: 'Registration file',
       none: 'This shop has no registration file (the account predates online registration).',
@@ -102,6 +109,7 @@ export const merchants: Shape<typeof fr> = {
       renewing: 'Active, next charge on {date}',
       active: 'Active',
       pastDue: 'Payment overdue',
+      pastDueUntil: 'Payment overdue, offline on {date} unless paid',
       withPrice: '{state} — {price}/month',
       ended: 'Ended',
       none: 'Not subscribed',

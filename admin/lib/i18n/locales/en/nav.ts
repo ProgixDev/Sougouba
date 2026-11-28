@@ -40,6 +40,7 @@ export const nav: Shape<typeof fr> = {
     statusPending: 'Being verified',
     statusSuspended: 'Shop suspended',
     statusRejected: 'Application not accepted',
+    statusSubscriptionHold: 'Offline: subscription to pay',
     bellPending: 'Orders are waiting for your confirmation',
     bellEmpty: 'Nothing is waiting for you right now.',
   },

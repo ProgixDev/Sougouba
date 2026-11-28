@@ -1,0 +1,16 @@
+-- A shop the platform approved, taken offline because its monthly subscription
+-- is not in order (CDC addendum v1.1, §05) — see 0062 for the rule.
+--
+-- A status of its own rather than a reason on `suspended`: a suspension is an
+-- administrator's decision and stays until an administrator lifts it; this one
+-- is nobody's decision, and lifts itself the moment the subscription is paid.
+-- Keeping them apart is what lets the payment bring a shop back without ever
+-- undoing a suspension.
+--
+-- And a status rather than a flag beside it, because "is this shop live" is
+-- already asked as `status = 'approved'` by every catalogue query, policy and
+-- function. A shop that leaves `approved` leaves all of them at once.
+--
+-- Alone in its migration: Postgres does not let a new enum value be used in
+-- the transaction that adds it.
+alter type public.vendor_status add value if not exists 'subscription_hold';

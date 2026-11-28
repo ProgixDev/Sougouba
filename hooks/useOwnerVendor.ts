@@ -12,8 +12,16 @@ export interface OwnerVendorState {
   missing: boolean;
   /** A shop exists but nobody has cleared it yet. */
   pending: boolean;
-  /** Live on the platform. The only state the business screens are usable in. */
+  /** Live on the platform: customers see the shop and can order from it. */
   approved: boolean;
+  /** Approved, but offline until the monthly subscription is in order. */
+  onHold: boolean;
+  /**
+   * The platform approved this shop, whether it is selling or offline for its
+   * subscription. What a screen about the shop's money asks: the subscription
+   * can be paid, and what was sold is still owed, either way.
+   */
+  accepted: boolean;
   reload: () => Promise<void>;
 }
 
@@ -80,6 +88,8 @@ export function useOwnerVendor(): OwnerVendorState {
     missing: !loading && !vendor,
     pending: !loading && vendor?.status === 'pending',
     approved: !loading && vendor?.status === 'approved',
+    onHold: !loading && vendor?.status === 'subscription_hold',
+    accepted: !loading && (vendor?.status === 'approved' || vendor?.status === 'subscription_hold'),
     reload,
   };
 }

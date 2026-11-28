@@ -88,7 +88,7 @@ export interface Shop {
   isHalalCertified: boolean;
   hours: ShopHours[];
   sections: ShopSection[];
-  status: 'pending' | 'approved' | 'suspended' | 'rejected';
+  status: 'pending' | 'approved' | 'suspended' | 'rejected' | 'subscription_hold';
   isOpen: boolean;
 }
 

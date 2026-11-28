@@ -7,6 +7,7 @@ export const status: Shape<typeof fr> = {
     approved: 'Approved',
     suspended: 'Suspended',
     rejected: 'Rejected',
+    subscription_hold: 'Subscription unpaid',
   },
   order: {
     pending: 'Pending',

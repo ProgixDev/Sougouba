@@ -12,6 +12,9 @@ import { DEFAULT_LOYALTY_RATES, type LoyaltyRates } from './loyalty-rules.js';
 /** The camelCase shape `camelize` produces from a `platform_settings` row. */
 type SettingsRow = Record<string, any>;
 
+/** The column's own default (`0062`). */
+const DEFAULT_SUBSCRIPTION_GRACE_DAYS = 7;
+
 /**
  * The admin-editable rates, read from the `platform_settings` singleton.
  *
@@ -42,6 +45,10 @@ export class SettingsService {
       referralMinFirstOrderCad: Number(row.referralMinFirstOrderCad),
       commissionRate: Number(row.commissionRate),
       monthlySubscriptionCad: Number(row.monthlySubscriptionCad),
+      // Named, with what they mean when absent: against a database migration
+      // `0062` has not reached, the subscription is simply not required.
+      subscriptionRequired: row.subscriptionRequired === true,
+      subscriptionGraceDays: Number(row.subscriptionGraceDays ?? DEFAULT_SUBSCRIPTION_GRACE_DAYS),
     };
   }
 

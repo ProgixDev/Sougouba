@@ -41,7 +41,7 @@ export interface VendorResponse {
   hours: { day: number; open: string; close: string; closed: boolean }[];
   sections: { id: string; nameFr: string; position: number }[];
   ownerId: string;
-  status: 'pending' | 'approved' | 'suspended' | 'rejected';
+  status: 'pending' | 'approved' | 'suspended' | 'rejected' | 'subscription_hold';
   /** Computed server-side against the shop's posted hours in Montreal time. */
   isOpen: boolean;
 }
@@ -65,7 +65,7 @@ export interface VendorRow {
   deliveryEtaMin: number;
   isHalalCertified: boolean;
   ownerId: string;
-  status: 'pending' | 'approved' | 'suspended' | 'rejected';
+  status: 'pending' | 'approved' | 'suspended' | 'rejected' | 'subscription_hold';
   isOpen: boolean;
 }
 

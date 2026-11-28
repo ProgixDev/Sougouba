@@ -33,6 +33,15 @@ export function money(amountCad: number, locale: Locale): string {
   }).format(amountCad);
 }
 
+/** `12 décembre` / `December 12` — a date as a lock screen has room for, on Montréal's calendar. */
+export function day(iso: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale === 'fr' ? 'fr-CA' : 'en-CA', {
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'America/Montreal',
+  }).format(new Date(iso));
+}
+
 type Copy<P> = (params: P, locale: Locale) => PushContent;
 
 const pick = (locale: Locale, fr: PushContent, en: PushContent) =>
@@ -267,34 +276,78 @@ export const merchantCopy = {
       },
     )) as Copy<{ ref: string; minutesLeft: number | null }>,
 
-  subscriptionPaymentFailed: ((_params, l) =>
+  subscriptionPaymentFailed: (({ offlineAt }, l) =>
     pick(
       l,
       {
         title: 'Paiement de l’abonnement refusé',
-        body: 'Mettez votre carte à jour depuis votre profil pour régler l’abonnement Sougouba.',
+        body:
+          offlineAt === null
+            ? 'Mettez votre carte à jour depuis votre profil pour régler l’abonnement Sougouba.'
+            : `Mettez votre carte à jour avant le ${day(offlineAt, l)}, sinon votre boutique sera mise hors ligne.`,
       },
       {
         title: 'Subscription payment declined',
-        body: 'Update your card from your profile to pay the Sougouba subscription.',
+        body:
+          offlineAt === null
+            ? 'Update your card from your profile to pay the Sougouba subscription.'
+            : `Update your card before ${day(offlineAt, l)}, or your shop will be taken offline.`,
+      },
+    )) as Copy<{ offlineAt: string | null }>,
+
+  shopTakenOffline: (({ cause }, l) =>
+    pick(
+      l,
+      {
+        title: 'Votre boutique est hors ligne',
+        body: {
+          never_subscribed: 'Souscrivez l’abonnement Sougouba depuis votre profil pour la mettre en ligne.',
+          past_due: 'Le paiement de l’abonnement est en retard. Réglez-le depuis votre profil pour la remettre en ligne.',
+          canceled: 'Votre abonnement a pris fin. Réabonnez-vous depuis votre profil pour la remettre en ligne.',
+        }[cause],
+      },
+      {
+        title: 'Your shop is offline',
+        body: {
+          never_subscribed: 'Subscribe to Sougouba from your profile to put it online.',
+          past_due: 'The subscription payment is late. Pay it from your profile to put the shop back online.',
+          canceled: 'Your subscription has ended. Subscribe again from your profile to put the shop back online.',
+        }[cause],
+      },
+    )) as Copy<{ cause: 'never_subscribed' | 'past_due' | 'canceled' }>,
+
+  shopBackOnline: ((_params, l) =>
+    pick(
+      l,
+      {
+        title: 'Votre boutique est de nouveau en ligne',
+        body: 'Votre abonnement est en règle : vous pouvez recevoir des commandes.',
+      },
+      {
+        title: 'Your shop is back online',
+        body: 'Your subscription is in order — you can take orders again.',
       },
     )) as Copy<Record<string, never>>,
 };
 
 /** Merchant or courier: the back office approved their application. */
 export const applicationCopy = {
-  vendorApproved: (({ name }, l) =>
+  vendorApproved: (({ name, awaitingSubscription }, l) =>
     pick(
       l,
       {
         title: 'Votre boutique est approuvée',
-        body: `${name} est en ligne : vous pouvez recevoir des commandes.`,
+        body: awaitingSubscription
+          ? `Souscrivez l’abonnement depuis votre profil pour mettre ${name} en ligne.`
+          : `${name} est en ligne : vous pouvez recevoir des commandes.`,
       },
       {
         title: 'Your shop is approved',
-        body: `${name} is live — you can start taking orders.`,
+        body: awaitingSubscription
+          ? `Subscribe from your profile to put ${name} online.`
+          : `${name} is live — you can start taking orders.`,
       },
-    )) as Copy<{ name: string }>,
+    )) as Copy<{ name: string; awaitingSubscription: boolean }>,
 
   courierApproved: ((_, l) =>
     pick(

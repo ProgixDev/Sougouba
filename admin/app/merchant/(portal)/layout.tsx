@@ -1,10 +1,11 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { MerchantSidebar, MerchantTopbar, type MerchantCounts } from '@/components/layout/MerchantNav';
 import { ToastProvider } from '@/components/Toast';
 import { listMerchantOrders } from '@/lib/api/merchantOrders';
 import { getMerchantSession, type MerchantSession } from '@/lib/merchantAuth';
+import { MerchantPortalContext } from '@/lib/merchantPortal';
 import { useLocale } from '@/lib/i18n';
 
 /**
@@ -62,19 +63,29 @@ export default function MerchantPortalLayout({ children }: { children: React.Rea
     // badge the moment the merchant moves on — a convenience count, not a live feed.
   }, [session, pathname]);
 
+  /** Asked for by a page that just changed where the shop stands. A failure leaves the frame as it was. */
+  const refreshSession = useCallback(() => {
+    getMerchantSession()
+      .then((s) => s && setSession(s))
+      .catch(() => undefined);
+  }, []);
+  const portal = useMemo(() => ({ refreshSession }), [refreshSession]);
+
   if (!session) return null;
 
   return (
-    <ToastProvider>
-      <div className="flex h-dvh overflow-hidden bg-background">
-        <MerchantSidebar session={session} counts={counts} mobileOpen={mobileNavOpen} onCloseMobile={() => setMobileNavOpen(false)} />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <MerchantTopbar session={session} counts={counts} onOpenMenu={() => setMobileNavOpen(true)} />
-          <main className="flex-1 overflow-y-auto p-4 sm:p-5 md:p-8">
-            <div className="mx-auto max-w-content">{children}</div>
-          </main>
+    <MerchantPortalContext.Provider value={portal}>
+      <ToastProvider>
+        <div className="flex h-dvh overflow-hidden bg-background">
+          <MerchantSidebar session={session} counts={counts} mobileOpen={mobileNavOpen} onCloseMobile={() => setMobileNavOpen(false)} />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <MerchantTopbar session={session} counts={counts} onOpenMenu={() => setMobileNavOpen(true)} />
+            <main className="flex-1 overflow-y-auto p-4 sm:p-5 md:p-8">
+              <div className="mx-auto max-w-content">{children}</div>
+            </main>
+          </div>
         </div>
-      </div>
-    </ToastProvider>
+      </ToastProvider>
+    </MerchantPortalContext.Provider>
   );
 }

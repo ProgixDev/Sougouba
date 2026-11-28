@@ -95,6 +95,12 @@ export const portalShop = {
       canceled: 'Votre abonnement est terminé. Vous pouvez vous réabonner quand vous voulez.',
       inactive: 'Vous n’êtes pas encore abonné.',
     },
+    /** Shown under the description while the subscription is required to sell. */
+    notice: {
+      offline: 'Votre boutique est hors ligne tant que l’abonnement n’est pas réglé. Elle revient en ligne dès le paiement.',
+      offlineOn: 'Sans règlement, votre boutique sera mise hors ligne le {date}.',
+      required: 'L’abonnement est requis pour que votre boutique soit en ligne.',
+    },
   },
   /** `PayoutsCard`. */
   payouts: {

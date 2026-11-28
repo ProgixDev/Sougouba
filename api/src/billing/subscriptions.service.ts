@@ -7,6 +7,7 @@ import { unwrap, unwrapVoid } from '../db/unwrap.js';
 import { SettingsService } from '../loyalty/settings.service.js';
 import { NotifyService } from '../notifications/notify.service.js';
 import { PaymentsService, type BillingSubscription } from '../orders/payments.service.js';
+import { SubscriptionEnforcementService, type EnforcementResult } from './subscription-enforcement.service.js';
 
 export type SubscriptionStatus = Tables<'merchant_subscriptions'>['status'];
 
@@ -21,12 +22,21 @@ export interface MerchantSubscription {
   cancelAt: string | null;
   /** False when this deploy cannot reach Stripe: there is nothing to subscribe with. */
   available: boolean;
+  /** True while a shop must be subscribed to sell — an administrator's setting. */
+  required: boolean;
+  /** True while this shop is offline because of its subscription. */
+  offline: boolean;
+  /** A failed renewal the shop still has time to settle: when it goes offline unless it does. */
+  offlineAt: string | null;
 }
 
 type Row = Pick<
   Tables<'merchant_subscriptions'>,
   'vendor_id' | 'status' | 'stripe_customer_id' | 'stripe_subscription_id' | 'current_period_end' | 'cancel_at' | 'price_cad'
->;
+> & { past_due_since?: string | null };
+
+/** The shop statuses a merchant can subscribe from: selling, or offline until they do. */
+const CAN_SUBSCRIBE = ['approved', 'subscription_hold'];
 
 /**
  * `*` rather than the column list above, on purpose: against a database that
@@ -74,12 +84,11 @@ export function localStatus(status: Stripe.Subscription.Status): SubscriptionSta
  * late, twice or out of order cannot leave the copy wrong — it only causes one
  * more read of the truth.
  *
- * ⚠️ **Nothing here stops a shop from selling.** A shop that never subscribes,
- * or whose card fails, keeps taking orders; its standing is shown to the
- * merchant and to the back office and that is all. Whether an unpaid
- * subscription should suspend a shop, and after how long, is the client's
- * decision and has not been made — the plan doc has carried it as an open
- * question since Phase 7 was written.
+ * **Whether an unpaid subscription stops a shop from selling is not decided
+ * here.** This service records where the subscription stands; every time it
+ * does, it hands the shop to `SubscriptionEnforcementService`, which applies
+ * the administrator's rule — offline when the subscription is required and
+ * not in order, back online the moment it is.
  */
 @Injectable()
 export class SubscriptionsService {
@@ -89,7 +98,8 @@ export class SubscriptionsService {
     @Inject(DB) private readonly db: Db,
     private readonly payments: PaymentsService,
     private readonly settings: SettingsService,
-    private readonly notify: NotifyService
+    private readonly notify: NotifyService,
+    private readonly enforcement: SubscriptionEnforcementService
   ) {}
 
   // ── the merchant ──────────────────────────────────────────────────────────
@@ -97,7 +107,7 @@ export class SubscriptionsService {
   /** Where the caller's shop stands, re-read from Stripe when it has ever started a subscription. */
   async statusFor(userId: string): Promise<MerchantSubscription> {
     const vendor = await this.vendorOf(userId);
-    return this.view(vendor.id);
+    return this.view(vendor);
   }
 
   /**
@@ -106,12 +116,13 @@ export class SubscriptionsService {
    *
    * Refused for a shop that is not approved — it cannot sell yet, so there is
    * nothing to bill for — and for one already subscribed, which would otherwise
-   * be charged twice a month.
+   * be charged twice a month. A shop offline for its subscription is exactly
+   * who this is for.
    */
   async startCheckout(userId: string, urls: { successUrl: string; cancelUrl: string }): Promise<{ url: string }> {
     this.assertConfigured();
     const vendor = await this.vendorOf(userId);
-    if (vendor.status !== 'approved') {
+    if (!CAN_SUBSCRIBE.includes(vendor.status)) {
       throw new ConflictException('Votre boutique doit être approuvée avant de souscrire l’abonnement');
     }
 
@@ -160,10 +171,14 @@ export class SubscriptionsService {
 
     const before = row.status;
     const after = await this.sync(customerId);
+    // Paid, failed, ended: whichever it was, the shop goes where it now belongs.
+    const { outcome, standing } = await this.enforcement.apply(row.vendor_id);
+
     // Told once, as the subscription *becomes* overdue — not again on each of
     // Stripe's retries, which arrive as further events with the same standing.
-    if (after?.status === 'past_due' && before !== 'past_due') {
-      await this.notify.subscriptionPaymentFailed(row.vendor_id);
+    // And not when that failure took the shop offline: it was just told so.
+    if (after?.status === 'past_due' && before !== 'past_due' && outcome !== 'held') {
+      await this.notify.subscriptionPaymentFailed(row.vendor_id, standing.offlineAt);
     }
   }
 
@@ -213,19 +228,29 @@ export class SubscriptionsService {
   }
 
   /** The shop's standing: Stripe's answer if it can be had, the recorded one if not. */
-  private async view(vendorId: string): Promise<MerchantSubscription> {
-    const [row, { monthlySubscriptionCad }] = await Promise.all([this.row(vendorId), this.settings.all()]);
-    if (!row?.stripe_customer_id || !this.payments.isConfigured) return this.toView(row, monthlySubscriptionCad);
+  private async view(vendor: { id: string; status: string }): Promise<MerchantSubscription> {
+    const [row, { monthlySubscriptionCad }] = await Promise.all([this.row(vendor.id), this.settings.all()]);
+    if (row?.stripe_customer_id && this.payments.isConfigured) {
+      // A screen that fails because Stripe hiccupped is worse than one that shows
+      // what was true a moment ago.
+      await this.sync(row.stripe_customer_id).catch((error: unknown) => {
+        this.logger.warn(`Subscription of vendor ${vendor.id} not refreshed from Stripe: ${String(error)}`);
+      });
+    }
 
-    // A screen that fails because Stripe hiccupped is worse than one that shows
-    // what was true a moment ago.
-    await this.sync(row.stripe_customer_id).catch((error: unknown) => {
-      this.logger.warn(`Subscription of vendor ${vendorId} not refreshed from Stripe: ${String(error)}`);
-    });
-    return this.toView(await this.row(vendorId), monthlySubscriptionCad);
+    // This screen is where a merchant lands after paying. Whatever the read
+    // above found, the shop is put where it belongs now — a shop that just
+    // paid is back online before its owner has left the page.
+    const enforced = await this.enforcement.apply(vendor.id);
+    return this.toView(await this.row(vendor.id), monthlySubscriptionCad, vendor.status, enforced);
   }
 
-  private toView(row: Row | null, monthlySubscriptionCad: number): MerchantSubscription {
+  private toView(
+    row: Row | null,
+    monthlySubscriptionCad: number,
+    shopStatus: string,
+    enforced: EnforcementResult
+  ): MerchantSubscription {
     const subscribed = row !== null && row.status !== 'inactive';
     return {
       status: row?.status ?? 'inactive',
@@ -235,6 +260,10 @@ export class SubscriptionsService {
       currentPeriodEnd: subscribed ? row.current_period_end : null,
       cancelAt: subscribed ? (row.cancel_at ?? null) : null,
       available: this.payments.isConfigured,
+      required: enforced.required,
+      // Where the shop is after `apply`, which may just have moved it.
+      offline: enforced.outcome === 'unchanged' ? shopStatus === 'subscription_hold' : enforced.outcome === 'held',
+      offlineAt: enforced.standing.offlineAt,
     };
   }
 
@@ -278,6 +307,7 @@ export class SubscriptionsService {
   private async sync(customerId: string): Promise<{ status: SubscriptionStatus } | null> {
     const live: BillingSubscription | null = await this.payments.subscriptionOf(customerId);
     const status = live ? localStatus(live.status) : 'inactive';
+    const now = new Date().toISOString();
 
     await unwrapVoid(
       this.db
@@ -288,10 +318,26 @@ export class SubscriptionsService {
           current_period_end: live?.currentPeriodEnd ?? null,
           cancel_at: live?.cancelAt ?? null,
           price_cad: live?.priceCad ?? null,
-          updated_at: new Date().toISOString(),
+          past_due_since: status === 'past_due' ? await this.pastDueSince(customerId, now) : null,
+          updated_at: now,
         })
         .eq('stripe_customer_id', customerId)
     );
     return live ? { status } : null;
+  }
+
+  /**
+   * When an overdue subscription became overdue: the date already recorded, or
+   * now if this is the first time it is seen so.
+   *
+   * Kept here rather than read from Stripe, whose dates move — an unpaid
+   * subscription opens a new billing period every month, and the grace period
+   * a shop is given must not start over with each one.
+   */
+  private async pastDueSince(customerId: string, now: string): Promise<string> {
+    const row = await unwrap<Row | null>(
+      this.db.from('merchant_subscriptions').select(ROW).eq('stripe_customer_id', customerId).maybeSingle()
+    );
+    return row?.past_due_since ?? now;
   }
 }

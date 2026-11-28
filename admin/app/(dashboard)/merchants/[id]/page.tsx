@@ -159,7 +159,8 @@ export default function MerchantDetailPage() {
         </div>
         {can('vendors.decide') && (
         <div className="flex flex-wrap gap-2.5">
-          {vendor.status !== 'approved' && vendor.status !== 'rejected' && (
+          {/* Not for a shop offline for its subscription: the payment brings it back, not an administrator. */}
+          {(vendor.status === 'pending' || vendor.status === 'suspended') && (
             <Button variant="primary" onClick={handleApprove} disabled={busy}>
               <CheckCircle2 size={16} /> {t('merchants.detail.actions.approve')}
             </Button>
@@ -169,7 +170,7 @@ export default function MerchantDetailPage() {
               <XCircle size={16} /> {t('merchants.detail.actions.reject')}
             </Button>
           )}
-          {vendor.status === 'approved' && (
+          {(vendor.status === 'approved' || vendor.status === 'subscription_hold') && (
             <Button variant="destructive" onClick={() => setDialog('suspend')} disabled={busy}>
               <Ban size={16} /> {t('merchants.detail.actions.suspend')}
             </Button>
@@ -177,6 +178,25 @@ export default function MerchantDetailPage() {
         </div>
         )}
       </div>
+
+      {vendor.status === 'subscription_hold' ? (
+        <Card elevated={false} className="border-mustard-500/40 bg-mustard-50 p-4 dark:bg-mustard-950">
+          <Text variant="label">{t('merchants.detail.subscriptionHold.title')}</Text>
+          <Text variant="body" className="mt-1">
+            {t('merchants.detail.subscriptionHold.body')}
+          </Text>
+        </Card>
+      ) : (
+        vendor.status === 'approved' &&
+        vendor.subscription?.offlineAt && (
+          <Card elevated={false} className="border-mustard-500/40 bg-mustard-50 p-4 dark:bg-mustard-950">
+            <Text variant="label">{t('merchants.detail.subscriptionHold.graceTitle')}</Text>
+            <Text variant="body" className="mt-1">
+              {t('merchants.detail.subscriptionHold.graceBody', { date: formatDate(vendor.subscription.offlineAt) })}
+            </Text>
+          </Card>
+        )
+      )}
 
       {vendor.statusReason && (
         <Card elevated={false} className="border-destructive/30 bg-destructive/5 p-4">
@@ -393,7 +413,11 @@ function subscriptionLabel(subscription: NonNullable<AdminVendorDetail['subscrip
           : t('merchants.detail.subscription.active')
       );
     case 'past_due':
-      return withPrice(t('merchants.detail.subscription.pastDue'));
+      return withPrice(
+        subscription.offlineAt
+          ? t('merchants.detail.subscription.pastDueUntil', { date: formatDate(subscription.offlineAt) })
+          : t('merchants.detail.subscription.pastDue')
+      );
     case 'canceled':
       return t('merchants.detail.subscription.ended');
     default:

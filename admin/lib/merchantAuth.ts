@@ -21,8 +21,12 @@ export interface MerchantSession {
   userId: string;
   vendorId: string;
   vendorName: string;
-  /** `approved` is the only status that takes orders; the portal still opens for the others. */
-  vendorStatus: 'pending' | 'approved' | 'suspended' | 'rejected';
+  /**
+   * `approved` is the only status that takes orders; the portal still opens for
+   * the others. `subscription_hold` is approved but offline until the monthly
+   * subscription is paid.
+   */
+  vendorStatus: 'pending' | 'approved' | 'suspended' | 'rejected' | 'subscription_hold';
   contactName: string;
   email: string;
   signedInAt: string;

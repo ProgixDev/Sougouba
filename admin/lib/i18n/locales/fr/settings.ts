@@ -13,6 +13,36 @@ export const settings = {
     commissionHelper: 'Calculé sur le sous-total des ventes, hors taxes et livraison.',
     monthlySubscription: 'Abonnement mensuel (CAD)',
   },
+  subscriptionRule: {
+    title: 'Abonnement obligatoire pour vendre',
+    intro:
+      'Quand l’abonnement est exigé, un commerce approuvé n’apparaît aux clients et ne reçoit de commandes que si son abonnement est en règle. Les commandes déjà passées sont menées à terme. Le commerce revient en ligne de lui-même dès que l’abonnement est payé.',
+    stateOff: 'L’abonnement n’est pas exigé : tous les commerces approuvés peuvent vendre.',
+    stateOn: 'L’abonnement est exigé.',
+    impact: {
+      one: '{notInOrder} des {shops} commerces approuvés n’a pas d’abonnement en règle.',
+      other: '{notInOrder} des {shops} commerces approuvés n’ont pas d’abonnement en règle.',
+    },
+    impactNone: 'Les {shops} commerces approuvés ont tous un abonnement en règle.',
+    notEnforceable:
+      'L’abonnement ne peut pas être exigé pour le moment : aucun montant mensuel n’est défini, ou Stripe n’est pas configuré sur ce serveur.',
+    graceDays: 'Délai après un paiement échoué (jours)',
+    graceHelper: 'Le commerce continue de vendre pendant ce délai, le temps que Stripe réessaie la carte. 0 = hors ligne dès le premier échec.',
+    saveGrace: 'Enregistrer le délai',
+    graceSaved: 'Délai enregistré.',
+    require: 'Exiger l’abonnement',
+    stopRequiring: 'Ne plus exiger l’abonnement',
+    requireTitle: 'Exiger l’abonnement ?',
+    requireBody: {
+      one: '{count} commerce sera mis hors ligne tout de suite, et son commerçant en sera avisé. Il revient en ligne dès que l’abonnement est payé.',
+      other: '{count} commerces seront mis hors ligne tout de suite, et leurs commerçants en seront avisés. Ils reviennent en ligne dès que l’abonnement est payé.',
+    },
+    requireBodyNone: 'Aucun commerce ne sera mis hors ligne : tous ont un abonnement en règle.',
+    stopTitle: 'Ne plus exiger l’abonnement ?',
+    stopBody: 'Les commerces hors ligne pour leur abonnement reviennent en ligne tout de suite, payés ou non.',
+    nowRequired: 'L’abonnement est maintenant exigé.',
+    noLongerRequired: 'L’abonnement n’est plus exigé.',
+  },
   loyalty: {
     title: 'Points Sougouba (fidélité)',
     intro: 'Règles du programme de points, coupons et parrainage.',

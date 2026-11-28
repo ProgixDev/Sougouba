@@ -26,6 +26,8 @@ export const audit: Shape<typeof fr> = {
     vendor_approve: 'Shop approved',
     vendor_reject: 'Shop rejected',
     vendor_suspend: 'Shop suspended',
+    vendor_subscription_hold: 'Shop taken offline (subscription)',
+    vendor_subscription_release: 'Shop back online (subscription)',
     courier_approve: 'Courier approved',
     courier_reject: 'Courier rejected',
     courier_suspend: 'Courier suspended',

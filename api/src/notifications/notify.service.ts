@@ -11,8 +11,9 @@ import {
   customerCopy,
   merchantCopy,
   orderReference,
+  type Locale,
 } from './messages.js';
-import { PushService } from './push.service.js';
+import { PushService, type PushContent } from './push.service.js';
 
 interface OrderContext {
   id: string;
@@ -221,19 +222,37 @@ export class NotifyService {
   /**
    * The monthly subscription could not be charged. Stripe emails the merchant
    * too, and retries on its own; this is the nudge that reaches a phone.
+   *
+   * `offlineAt` is when the shop goes offline unless the payment is settled —
+   * null while the subscription is not required to sell.
    */
-  async subscriptionPaymentFailed(vendorId: string): Promise<void> {
+  async subscriptionPaymentFailed(vendorId: string, offlineAt: string | null = null): Promise<void> {
     await this.guard('subscriptionPaymentFailed', async () => {
-      const vendor = await unwrap<{ ownerId: string } | null>(
-        this.db.from('vendors').select('ownerId:owner_id').eq('id', vendorId).maybeSingle(),
-      );
-      if (!vendor) return;
-      await this.push.send([vendor.ownerId], {
-        content: (l) => merchantCopy.subscriptionPaymentFailed({}, l),
-        url: '/(business)/(tabs)/profile',
-        channel: 'orders',
-      });
+      await this.toShopOwner(vendorId, (l) => merchantCopy.subscriptionPaymentFailed({ offlineAt }, l));
     });
+  }
+
+  /** The shop left the catalogue because its subscription is not in order. */
+  async shopTakenOffline(vendorId: string, cause: 'never_subscribed' | 'past_due' | 'canceled'): Promise<void> {
+    await this.guard('shopTakenOffline', async () => {
+      await this.toShopOwner(vendorId, (l) => merchantCopy.shopTakenOffline({ cause }, l));
+    });
+  }
+
+  /** The subscription is in order again: the shop is back in the catalogue. */
+  async shopBackOnline(vendorId: string): Promise<void> {
+    await this.guard('shopBackOnline', async () => {
+      await this.toShopOwner(vendorId, (l) => merchantCopy.shopBackOnline({}, l));
+    });
+  }
+
+  /** A message about the shop's subscription, to its owner, opening the screen where it is managed. */
+  private async toShopOwner(vendorId: string, content: (locale: Locale) => PushContent): Promise<void> {
+    const vendor = await unwrap<{ ownerId: string } | null>(
+      this.db.from('vendors').select('ownerId:owner_id').eq('id', vendorId).maybeSingle(),
+    );
+    if (!vendor) return;
+    await this.push.send([vendor.ownerId], { content, url: '/(business)/(tabs)/profile', channel: 'orders' });
   }
 
   /** The shopper opened a dispute: the merchant is asked to answer it. */
@@ -310,6 +329,9 @@ export class NotifyService {
   async applicationApproved(
     kind: 'vendor' | 'courier',
     id: string,
+    // A shop approved while the subscription is required is not live yet: it
+    // is told what puts it online rather than that it is.
+    opts: { awaitingSubscription?: boolean } = {},
   ): Promise<void> {
     await this.guard('applicationApproved', async () => {
       if (kind === 'vendor') {
@@ -321,10 +343,11 @@ export class NotifyService {
             .maybeSingle(),
         );
         if (!vendor) return;
+        const awaitingSubscription = opts.awaitingSubscription === true;
         await this.push.send([vendor.ownerId], {
           content: (l) =>
-            applicationCopy.vendorApproved({ name: vendor.name }, l),
-          url: '/(business)/(tabs)/dashboard',
+            applicationCopy.vendorApproved({ name: vendor.name, awaitingSubscription }, l),
+          url: awaitingSubscription ? '/(business)/(tabs)/profile' : '/(business)/(tabs)/dashboard',
           channel: 'orders',
         });
         return;

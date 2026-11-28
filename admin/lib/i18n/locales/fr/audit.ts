@@ -30,6 +30,8 @@ export const audit = {
     vendor_approve: 'Commerce approuvé',
     vendor_reject: 'Commerce refusé',
     vendor_suspend: 'Commerce suspendu',
+    vendor_subscription_hold: 'Commerce mis hors ligne (abonnement)',
+    vendor_subscription_release: 'Commerce remis en ligne (abonnement)',
     courier_approve: 'Livreur approuvé',
     courier_reject: 'Livreur refusé',
     courier_suspend: 'Livreur suspendu',

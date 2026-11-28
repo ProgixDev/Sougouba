@@ -18,6 +18,10 @@ import { t, lazy, useLocale } from '@/lib/i18n';
  *
  * `reloadKey` changes when the merchant comes back from Stripe, so the status
  * is read again rather than assumed from the address they came back to.
+ *
+ * Reading it is also what brings an offline shop back once it has paid — the
+ * server settles the shop on every read — so `onLoaded` hands the page what
+ * came back, for it to notice that the shop is no longer where it thought.
  */
 
 const STATUS: Record<Subscription['status'], { label: string; tone: Tone }> = lazy(() => ({
@@ -27,7 +31,7 @@ const STATUS: Record<Subscription['status'], { label: string; tone: Tone }> = la
   canceled: { label: t('portalShop.subscription.status.canceled'), tone: 'neutral' },
 }));
 
-export function SubscriptionCard({ reloadKey }: { reloadKey: number }) {
+export function SubscriptionCard({ reloadKey, onLoaded }: { reloadKey: number; onLoaded?: (subscription: Subscription) => void }) {
   useLocale();
   const toast = useToast();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -36,7 +40,14 @@ export function SubscriptionCard({ reloadKey }: { reloadKey: number }) {
 
   useEffect(() => {
     setFailed(false);
-    getMySubscription().then(setSubscription).catch(() => setFailed(true));
+    getMySubscription()
+      .then((loaded) => {
+        setSubscription(loaded);
+        onLoaded?.(loaded);
+      })
+      .catch(() => setFailed(true));
+    // `onLoaded` is the page's to keep stable or not; a new one is no reason to ask Stripe again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadKey]);
 
   /** Off to Stripe, in this tab: it sends the merchant back here when they are done. */
@@ -51,6 +62,16 @@ export function SubscriptionCard({ reloadKey }: { reloadKey: number }) {
   }
 
   const subscribed = subscription?.status === 'active' || subscription?.status === 'past_due';
+  // What the subscription means for the shop being online — said only while it is required to sell.
+  const notice = !subscription
+    ? null
+    : subscription.offline
+      ? t('portalShop.subscription.notice.offline')
+      : subscription.offlineAt
+        ? t('portalShop.subscription.notice.offlineOn', { date: formatDate(subscription.offlineAt) })
+        : subscription.required && !subscribed
+          ? t('portalShop.subscription.notice.required')
+          : null;
 
   return (
     <Card as="section" className="flex flex-col gap-4 p-5 sm:p-6">
@@ -80,6 +101,11 @@ export function SubscriptionCard({ reloadKey }: { reloadKey: number }) {
           <Text variant="body" tone="muted">
             {describe(subscription)}
           </Text>
+          {notice && (
+            <Text variant="body" tone={subscription.offline || subscription.offlineAt ? 'destructive' : 'default'} className="font-medium">
+              {notice}
+            </Text>
+          )}
 
           {!subscription.available ? (
             <Text variant="body" tone="muted">

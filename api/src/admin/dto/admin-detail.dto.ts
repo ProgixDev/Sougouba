@@ -225,6 +225,10 @@ export interface AdminVendorDetail {
     currentPeriodEnd: Date | null;
     cancelAt: Date | null;
     priceCad: number | null;
+    /** True while a shop must be subscribed to sell. */
+    required: boolean;
+    /** A failed renewal still within its grace: when the shop goes offline unless it is settled. */
+    offlineAt: string | null;
   };
 
   /**

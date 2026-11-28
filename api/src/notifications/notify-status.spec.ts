@@ -79,3 +79,63 @@ describe('order status pushes to the shopper', () => {
     expect(send).not.toHaveBeenCalled();
   });
 });
+
+describe('pushes about the shop’s subscription', () => {
+  const SHOP = 'shop-1';
+  /** The one push a call produced: who it went to, where it opens, and what it says. */
+  async function pushed(act: (notify: NotifyService) => Promise<void>) {
+    // The shop's row, as `NotifyService` reads it: its name and who owns it.
+    const { notify, send } = service({ name: 'Épicerie Dakar', ownerId: 'owner-1' } as never);
+    await act(notify);
+    expect(send).toHaveBeenCalledTimes(1);
+    const [userIds, message] = send.mock.calls[0];
+    return { userIds, url: message.url, fr: message.content('fr'), en: message.content('en') };
+  }
+
+  it('tells the owner the shop is offline, and what brings it back — by cause', async () => {
+    const never = await pushed((n) => n.shopTakenOffline(SHOP, 'never_subscribed'));
+    expect(never.userIds).toEqual(['owner-1']);
+    expect(never.url).toBe('/(business)/(tabs)/profile');
+    expect(never.fr).toEqual({
+      title: 'Votre boutique est hors ligne',
+      body: 'Souscrivez l’abonnement Sougouba depuis votre profil pour la mettre en ligne.',
+    });
+    expect(never.en.title).toBe('Your shop is offline');
+
+    const late = await pushed((n) => n.shopTakenOffline(SHOP, 'past_due'));
+    expect(late.fr.body).toContain('en retard');
+    const ended = await pushed((n) => n.shopTakenOffline(SHOP, 'canceled'));
+    expect(ended.fr.body).toContain('a pris fin');
+  });
+
+  it('tells the owner when the shop is back', async () => {
+    const back = await pushed((n) => n.shopBackOnline(SHOP));
+    expect(back.fr.title).toBe('Votre boutique est de nouveau en ligne');
+    expect(back.en.title).toBe('Your shop is back online');
+  });
+
+  it('gives a failed payment its deadline when the shop will go offline, on Montréal’s calendar', async () => {
+    // 03:30 UTC on the 13th is still the evening of the 12th in Montréal.
+    const withDeadline = await pushed((n) => n.subscriptionPaymentFailed(SHOP, '2026-12-13T03:30:00.000Z'));
+    expect(withDeadline.fr.body).toBe('Mettez votre carte à jour avant le 12 décembre, sinon votre boutique sera mise hors ligne.');
+    expect(withDeadline.en.body).toBe('Update your card before December 12, or your shop will be taken offline.');
+
+    // No deadline while the subscription is not required to sell: the message is the one it always was.
+    const without = await pushed((n) => n.subscriptionPaymentFailed(SHOP));
+    expect(without.fr.body).toBe('Mettez votre carte à jour depuis votre profil pour régler l’abonnement Sougouba.');
+  });
+
+  it('tells a shop approved while the subscription is required what puts it online', async () => {
+    const live = await pushed((n) => n.applicationApproved('vendor', SHOP));
+    expect(live.fr.body).toBe('Épicerie Dakar est en ligne : vous pouvez recevoir des commandes.');
+    expect(live.url).toBe('/(business)/(tabs)/dashboard');
+
+    const waiting = await pushed((n) => n.applicationApproved('vendor', SHOP, { awaitingSubscription: true }));
+    expect(waiting.fr).toEqual({
+      title: 'Votre boutique est approuvée',
+      body: 'Souscrivez l’abonnement depuis votre profil pour mettre Épicerie Dakar en ligne.',
+    });
+    expect(waiting.en.body).toBe('Subscribe from your profile to put Épicerie Dakar online.');
+    expect(waiting.url).toBe('/(business)/(tabs)/profile');
+  });
+});
