@@ -1,7 +1,8 @@
 import { api } from '../http';
 
 /**
- * This device's push registration — the token Expo issued, plus what the
+ * This device's push registration — its Firebase Cloud Messaging token (or,
+ * from a build that predates Firebase, the one Expo issued), plus what the
  * server needs to write the notification without the app running: the
  * language to write it in, and which of the shopper's switches are on.
  */

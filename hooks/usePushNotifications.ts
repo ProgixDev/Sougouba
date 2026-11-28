@@ -2,7 +2,7 @@ import * as Notifications from 'expo-notifications';
 import { router, usePathname, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 
-import { syncPushRegistration, urlOf } from '@/lib/push';
+import { syncPushRegistration, urlOf, watchPushToken } from '@/lib/push';
 import { routes } from '@/lib/routes';
 import { useLanguageStore } from '@/store/useLanguageStore';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
@@ -31,6 +31,12 @@ export function usePushNotifications(): void {
     if (!userId || !role) return;
     void syncPushRegistration();
   }, [userId, role, preferences, locale]);
+
+  // The system can replace a device's token at any time; follow it.
+  useEffect(() => {
+    const watching = watchPushToken();
+    return () => watching.remove();
+  }, []);
 
   const response = Notifications.useLastNotificationResponse();
   const pathname = usePathname();

@@ -37,6 +37,12 @@ yarn-error.*
 .env*.local
 !.env.example
 
+# Firebase service-account keys (`<project>-firebase-adminsdk-<id>.json`). A
+# private key that can send notifications to every phone and reach the whole
+# Firebase project — unlike `firebase/google-services.json`, which only holds
+# public identifiers. Never committed, wherever it is dropped.
+*firebase-adminsdk*.json
+
 # typescript
 *.tsbuildinfo
 

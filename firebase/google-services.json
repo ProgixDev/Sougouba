@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "611132459115",
+    "project_id": "sougouba-c10b5",
+    "storage_bucket": "sougouba-c10b5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:611132459115:android:fdd9bdfb4a1abab353c92e",
+        "android_client_info": {
+          "package_name": "pro.progix.sougouba"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDMqAraHe532MpdDkLDXlPRk7Mpeb1G6MM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

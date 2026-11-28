@@ -6,12 +6,19 @@ import type { Db, Tables } from '../db/client.js';
 import { DB } from '../db/db.module.js';
 import { unwrap } from '../db/unwrap.js';
 import type { RegisterPushTokenInput } from './dto/push-token.dto.js';
+import { FcmClient, type FcmDevice } from './fcm.client.js';
 import type { Locale } from './messages.js';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
 /** Expo accepts at most 100 messages per request. */
 const EXPO_BATCH = 100;
+
+/** Firebase takes one message per request; this many are in flight at once. */
+const FCM_CONCURRENCY = 10;
+
+/** What `getExpoPushTokenAsync` returns — the token of a build made before Firebase was added. */
+const isExpoToken = (token: string) => /^Expo(nent)?PushToken\[/.test(token);
 
 /**
  * A push is a courtesy, never the request's real work — so it gets a short
@@ -60,27 +67,33 @@ interface ExpoTicket {
 }
 
 /**
- * Sends push notifications through Expo's push service, which forwards to FCM
- * on Android and APNs on iOS. The platform credentials (an FCM v1 service
- * account, an APNs key) live in the EAS project, not here — this process only
- * ever holds Expo tokens.
+ * Sends push notifications through **Firebase Cloud Messaging**, to Android
+ * and iOS alike (`fcm.client.ts`). Firebase reaches an iPhone through Apple,
+ * with the APNs key uploaded in the Firebase console; this server holds one
+ * credential, the project's service account.
+ *
+ * A build made before Firebase was added registers a token from Expo's push
+ * service instead. Those are still sent through Expo, exactly as before, so
+ * no phone goes quiet on the day this ships; that road closes by itself as the
+ * old builds are replaced, and `deliverThroughExpo` can then be deleted.
  *
  * **Never throws.** Every caller is in the middle of something that matters
  * more — an order being placed, a delivery being closed — and a failed push
  * must not fail it. Errors are logged and swallowed.
  *
- * Receipts are not polled. A ticket's `DeviceNotRegistered` is acted on (the
- * token is deleted); a delivery failure reported later, in the receipt, is not.
- * That is the gap to close if pushes ever need to be audited.
+ * A token Firebase (or Expo) reports gone is deleted. Whether a notification
+ * that was accepted actually reached the phone is not followed up.
  */
 @Injectable()
 export class PushService {
   private readonly logger = new Logger(PushService.name);
   private readonly accessToken: string | undefined;
+  private warnedNoFirebase = false;
 
   constructor(
     @Inject(DB) private readonly db: Db,
     config: ConfigService<Env, true>,
+    private readonly fcm: FcmClient,
   ) {
     // Only required once "Enhanced security for push notifications" is turned
     // on in the Expo project. Without it, anyone holding a token can push to
@@ -148,37 +161,89 @@ export class PushService {
     try {
       let query = this.db
         .from('push_tokens')
-        .select('token, locale')
+        .select('token, locale, platform')
         .in('user_id', recipients);
       if (message.category)
         query = query.eq(CATEGORY_COLUMN[message.category], true);
-      const devices = await unwrap<{ token: string; locale: string }[]>(query);
+      const devices = await unwrap<
+        { token: string; locale: string; platform: string }[]
+      >(query);
       if (devices.length === 0) return;
 
-      const payloads = devices.map((device) => {
-        const { title, body } = message.content(
-          device.locale === 'en' ? 'en' : 'fr',
-        );
-        return {
-          to: device.token,
+      const written = devices.map((device) => ({
+        token: device.token,
+        platform: device.platform === 'ios' ? ('ios' as const) : ('android' as const),
+        ...message.content(device.locale === 'en' ? 'en' : 'fr'),
+      }));
+
+      await this.deliverThroughFirebase(
+        written.filter((device) => !isExpoToken(device.token)),
+        message,
+      );
+
+      const legacy = written
+        .filter((device) => isExpoToken(device.token))
+        .map(({ token, title, body }) => ({
+          to: token,
           title,
           body,
           data: { url: message.url },
           sound: 'default',
           priority: 'high',
           channelId: message.channel,
-        };
-      });
-
-      for (let i = 0; i < payloads.length; i += EXPO_BATCH) {
-        await this.deliver(payloads.slice(i, i + EXPO_BATCH));
+        }));
+      for (let i = 0; i < legacy.length; i += EXPO_BATCH) {
+        await this.deliverThroughExpo(legacy.slice(i, i + EXPO_BATCH));
       }
     } catch (error) {
       this.logger.warn(`Push not sent: ${String(error)}`);
     }
   }
 
-  private async deliver(batch: { to: string }[]): Promise<void> {
+  /** One request per device, a few at a time; tokens Firebase no longer knows are forgotten. */
+  private async deliverThroughFirebase(
+    devices: (FcmDevice & { title: string; body: string })[],
+    message: PushMessage,
+  ): Promise<void> {
+    if (devices.length === 0) return;
+    if (!this.fcm.isConfigured) {
+      // Said once per process, not once per notification.
+      if (!this.warnedNoFirebase) {
+        this.warnedNoFirebase = true;
+        this.logger.error(
+          'Phones are registered with Firebase but FIREBASE_SERVICE_ACCOUNT_JSON is not set on this server: their notifications are not being sent.',
+        );
+      }
+      return;
+    }
+
+    const dead: string[] = [];
+    for (let i = 0; i < devices.length; i += FCM_CONCURRENCY) {
+      const outcomes = await Promise.all(
+        devices.slice(i, i + FCM_CONCURRENCY).map(async (device) => ({
+          token: device.token,
+          outcome: await this.fcm.send(device, {
+            title: device.title,
+            body: device.body,
+            url: message.url,
+            channel: message.channel,
+          }),
+        })),
+      );
+      dead.push(
+        ...outcomes.filter((o) => o.outcome === 'dead').map((o) => o.token),
+      );
+    }
+
+    // An uninstalled app, or a token the system replaced. Keeping it would
+    // mean paying a request per push for a device that will never show it.
+    if (dead.length > 0) {
+      await unwrap(this.db.from('push_tokens').delete().in('token', dead));
+    }
+  }
+
+  /** The road for builds that predate Firebase — see the note on the class. */
+  private async deliverThroughExpo(batch: { to: string }[]): Promise<void> {
     const response = await fetch(EXPO_PUSH_URL, {
       method: 'POST',
       headers: {

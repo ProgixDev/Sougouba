@@ -1,8 +1,10 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import * as pushApi from '@/data/api/push';
+import { exchangeApnsToken, fcmExchangeAvailable } from '@/modules/fcm-token';
 import { useLanguageStore } from '@/store/useLanguageStore';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 
@@ -13,8 +15,13 @@ import { usePreferencesStore } from '@/store/usePreferencesStore';
  * module only gets a token, tells the API where this device is and what it
  * wants, and gets out of the way. Every function here swallows its own
  * failures: a phone that refuses notifications, a simulator without APNs, or
- * Expo's token service being slow is a phone without pushes, never a crash or
- * a blocked sign-in.
+ * Firebase being slow is a phone without pushes, never a crash or a blocked
+ * sign-in.
+ *
+ * The token is a **Firebase Cloud Messaging** one on both platforms — the
+ * server sends through Firebase. `expo-notifications` still does everything
+ * else: the permission prompt, the Android channels, showing a notification,
+ * and knowing it was tapped.
  */
 
 /**
@@ -84,18 +91,99 @@ export async function syncPushRegistration(): Promise<void> {
     await ensureChannels();
     if (!(await ensurePermission())) return;
 
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
-    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
-
-    await pushApi.register({
-      token,
-      platform: Platform.OS,
-      locale: useLanguageStore.getState().locale,
-      preferences: usePreferencesStore.getState().notifications,
-    });
-    registeredToken = token;
+    await registerWith(await pushToken());
   } catch (error) {
     if (__DEV__) console.warn('[push] registration skipped:', error);
+  }
+}
+
+/**
+ * The system replaced this device's token — re-register under the new one.
+ *
+ * Takes the token the system just handed over rather than asking for it again:
+ * asking from inside the listener that reports a new token would loop.
+ */
+export function watchPushToken(): { remove: () => void } {
+  return Notifications.addPushTokenListener((device) => {
+    void (async () => {
+      try {
+        const token = await firebaseTokenFrom(device);
+        // Only a device that was registered re-registers: this fires at launch
+        // too, before anyone has signed in.
+        if (token && registeredToken && token !== registeredToken) await registerWith(token);
+      } catch (error) {
+        if (__DEV__) console.warn('[push] re-registration skipped:', error);
+      }
+    })();
+  });
+}
+
+async function registerWith(token: string): Promise<void> {
+  await pushApi.register({
+    token,
+    platform: Platform.OS === 'ios' ? 'ios' : 'android',
+    locale: useLanguageStore.getState().locale,
+    preferences: usePreferencesStore.getState().notifications,
+  });
+  registeredToken = token;
+  if (!isExpoToken(token)) void retireExpoToken();
+}
+
+// ── the token ───────────────────────────────────────────────────────────────
+
+const isExpoToken = (token: string) => /^Expo(nent)?PushToken\[/.test(token);
+
+/**
+ * The token to register: Firebase's, or — only in a build made before Firebase
+ * was added — the one Expo's service issues.
+ *
+ * That fallback is why an app update can still reach an old build: the server
+ * keeps sending to Expo tokens through Expo, and to Firebase tokens through
+ * Firebase, until the old builds are gone.
+ */
+async function pushToken(): Promise<string> {
+  // An iOS build without Firebase's library registers exactly as it always did.
+  if (Platform.OS === 'ios' && !fcmExchangeAvailable) return expoToken();
+  const fromFirebase = await firebaseTokenFrom(await Notifications.getDevicePushTokenAsync());
+  return fromFirebase ?? expoToken();
+}
+
+/**
+ * The Firebase token behind the system's own. On Android the system's token
+ * already is one. On iOS it is Apple's, and Firebase's library trades it for
+ * a Firebase token (`modules/fcm-token`). Null in an iOS build without that
+ * library.
+ */
+async function firebaseTokenFrom(device: Notifications.DevicePushToken): Promise<string | null> {
+  const value = typeof device.data === 'string' ? device.data : null;
+  if (!value) return null;
+  if (device.type === 'android') return value;
+  if (device.type === 'ios' && fcmExchangeAvailable) return exchangeApnsToken(value);
+  return null;
+}
+
+async function expoToken(): Promise<string> {
+  const projectId = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
+  return (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+}
+
+const EXPO_TOKEN_RETIRED = 'push.expoTokenRetired';
+
+/**
+ * Once, after this iPhone first registers a Firebase token: withdraw the Expo
+ * token an earlier build registered for it. Both lead to the same phone, and
+ * the server would send every notification twice — once down each road.
+ * Android never had one.
+ */
+async function retireExpoToken(): Promise<void> {
+  if (Platform.OS !== 'ios') return;
+  try {
+    if (await AsyncStorage.getItem(EXPO_TOKEN_RETIRED)) return;
+    await pushApi.unregister(await expoToken());
+    await AsyncStorage.setItem(EXPO_TOKEN_RETIRED, '1');
+  } catch {
+    // Tried again at the next registration. Until it works the cost is a
+    // doubled notification, not a missing one.
   }
 }
 
@@ -111,7 +199,7 @@ export async function withdrawPushRegistration(): Promise<void> {
   try {
     await pushApi.unregister(token);
   } catch {
-    // The server prunes a token Expo reports dead; a stale row costs one
+    // The server prunes a token Firebase reports dead; a stale row costs one
     // wasted send at worst, and sign-out must not wait on it.
   }
 }

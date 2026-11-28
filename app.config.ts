@@ -1,23 +1,34 @@
 import type { ExpoConfig } from 'expo/config';
 
 /**
- * Where Firebase's client file for the Android app is, when there is one —
- * `GOOGLE_SERVICES_JSON`, a path.
+ * Firebase's two client files, kept together in `firebase/`. Both belong to the
+ * Firebase project `sougouba-c10b5` and name this app (`pro.progix.sougouba`).
  *
+ * They are the source: each build copies them into the native projects
+ * (`android/app/google-services.json`, `ios/Sougouba/GoogleService-Info.plist`).
+ * Those two folders are generated and not kept in git, so a file placed only
+ * there is gone at the next build — which is why the originals live here.
+ *
+ * `google-services.json` is what makes Android notifications possible at all:
  * Android only hands the app a push token if the build was registered with
- * Firebase, and `google-services.json` is that registration: without it
+ * Firebase, and this file is that registration. Without it
  * `getExpoPushTokenAsync` fails and an Android phone never appears in
- * `push_tokens`. (iOS needs nothing here: its key is an EAS credential.)
+ * `push_tokens`. The other half is on the server: the project's
+ * service-account key (`FIREBASE_SERVICE_ACCOUNT_JSON` on the API host) — a
+ * secret, never in this repository.
  *
- * A path from the environment rather than a fixed one, for two reasons. On EAS
- * Build the file can be a *file* environment variable, whose value is wherever
- * EAS wrote it, so it need not be in git. And naming a file that is not there
- * fails `expo prebuild` for everyone — including whoever is only building iOS —
- * whereas leaving the key out builds an Android app that works and simply
- * cannot receive pushes. Locally: put the file at the project root and set
- * `GOOGLE_SERVICES_JSON=./google-services.json` in `.env` (see `.env.example`).
+ * `GoogleService-Info.plist` is its iOS counterpart: `modules/fcm-token` reads
+ * it to trade the iPhone's Apple token for a Firebase one, which is what the
+ * server sends to. Firebase then delivers to the phone through Apple, using
+ * the APNs key uploaded in the Firebase console.
+ *
+ * Neither file holds a secret — they are identifiers that ship inside every
+ * build — so both are committed, and a fresh clone or a cloud build finds them.
+ * The two variables only exist to point a build at files kept somewhere else
+ * (an EAS *file* variable holds the path EAS wrote the file to).
  */
-const googleServicesFile = process.env.GOOGLE_SERVICES_JSON || undefined;
+const googleServicesFile = process.env.GOOGLE_SERVICES_JSON || './firebase/google-services.json';
+const googleServiceInfoPlist = process.env.GOOGLE_SERVICE_INFO_PLIST || './firebase/GoogleService-Info.plist';
 
 /**
  * Config as code, not JSON.
@@ -57,6 +68,7 @@ const config = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'pro.progix.sougouba',
+    googleServicesFile: googleServiceInfoPlist,
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
     },
@@ -66,7 +78,7 @@ const config = {
   },
   android: {
     package: 'pro.progix.sougouba',
-    ...(googleServicesFile ? { googleServicesFile } : {}),
+    googleServicesFile,
     adaptiveIcon: {
       backgroundColor: '#1C5439',
       foregroundImage: './assets/android-icon-foreground.png',
@@ -100,6 +112,8 @@ const config = {
   },
   plugins: [
     './plugins/with-scene-lifecycle',
+    // Lets `modules/fcm-token` build, and keeps Firebase from hooking the app delegate.
+    './plugins/with-firebase-messaging',
     'expo-router',
     // Sets `CFBundleAllowMixedLocalizations`, which is what lets the app present
     // English strings on a device whose region is fr_CA.

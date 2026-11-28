@@ -1,14 +1,21 @@
 import { z } from 'zod';
 
-/** What `getExpoPushTokenAsync` returns — `ExponentPushToken[…]`. Mirrors the column's check constraint. */
-const expoToken = z
+/**
+ * A device's token: a Firebase Cloud Messaging registration token, or — from a
+ * build made before Firebase was added — the `ExponentPushToken[…]` Expo
+ * issues. Firebase documents no format and no length for its tokens, only that
+ * they are opaque, so the rule is loose on purpose: a single run of characters
+ * of a plausible size. Mirrors the column's check constraint (migration 0060).
+ */
+const pushToken = z
   .string()
   .trim()
-  .max(255)
-  .regex(/^Expo(nent)?PushToken\[.+\]$/, 'Jeton de notification invalide');
+  .min(20, 'Jeton de notification invalide')
+  .max(4096, 'Jeton de notification invalide')
+  .regex(/^\S+$/, 'Jeton de notification invalide');
 
 export const registerPushTokenSchema = z.object({
-  token: expoToken,
+  token: pushToken,
   platform: z.enum(['ios', 'android']),
   locale: z.enum(['fr', 'en']).default('fr'),
   /**
@@ -27,7 +34,7 @@ export const registerPushTokenSchema = z.object({
 
 export type RegisterPushTokenInput = z.infer<typeof registerPushTokenSchema>;
 
-export const unregisterPushTokenSchema = z.object({ token: expoToken });
+export const unregisterPushTokenSchema = z.object({ token: pushToken });
 
 export type UnregisterPushTokenInput = z.infer<
   typeof unregisterPushTokenSchema

@@ -105,10 +105,22 @@ const envSchema = z.object({
   CRON_SECRET: z.string().optional(),
 
   /**
-   * Push notifications go through Expo's push service, which forwards to FCM
-   * and APNs — so the FCM service account and APNs key are uploaded to the EAS
-   * project (`eas credentials`), not set here. This token is only needed once
-   * "Enhanced security for push notifications" is turned on in the Expo
+   * Push notifications go through Firebase Cloud Messaging, on Android and iOS
+   * (`notifications/fcm.client.ts`). This is the Firebase project's
+   * service-account file — Firebase console → Project settings → Service
+   * accounts → Generate new private key — pasted as it is, or base64-encoded
+   * where a host mangles multi-line values.
+   *
+   * **A secret**: it can notify every phone and reach the whole Firebase
+   * project. Without it, phones registered through Firebase get nothing, and
+   * the server says so in its log.
+   */
+  FIREBASE_SERVICE_ACCOUNT_JSON: z.string().optional(),
+
+  /**
+   * Only for builds made before Firebase was added, which still register a
+   * token from Expo's push service and are still sent to through it. Needed
+   * once "Enhanced security for push notifications" is turned on in the Expo
    * project; until then Expo accepts unauthenticated sends.
    */
   EXPO_ACCESS_TOKEN: z.string().optional(),
